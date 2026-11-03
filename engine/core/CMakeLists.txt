@@ -11,6 +11,7 @@ add_library(paperboat_core
   src/station.cpp
   src/graph.cpp
   src/run.cpp
+  src/executors.cpp
   src/session.cpp
   src/serve.cpp
   src/main.cpp

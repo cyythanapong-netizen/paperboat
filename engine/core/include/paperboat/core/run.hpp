@@ -10,6 +10,7 @@
 //   the result. Wires may carry lists, tables and text.
 
 #include <functional>
+#include <memory>
 #include <stop_token>
 #include <string>
 
@@ -26,6 +27,8 @@ struct RunSettings {
   bool real_time = true;   // pace emits at wall-clock speed (tests turn it off)
 };
 
+class Executor;  // executor.hpp: how a graph runs
+
 // What a backend is made of. A simple backend fills one and calls serve() (backend.hpp).
 struct Backend {
   std::string engine;                         // the name in `hello`
@@ -34,6 +37,9 @@ struct Backend {
   std::function<std::unique_ptr<toolkit::DomainState>()> state = {};
   json view = nullptr;                        // the scene's camera hint ({"mode": "2d", …})
   RunSettings run = {};
+  // Its own run style, if the core's three (clock, once, steps) don't fit: an executor for
+  // this graph. Empty: default_executor().
+  std::function<std::unique_ptr<Executor>(const Graph&, const RunSettings&)> executor = {};
 };
 
 using Emit = std::function<void(const json& message)>;

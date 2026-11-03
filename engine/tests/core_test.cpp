@@ -16,6 +16,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "paperboat/core/backend.hpp"
+#include "paperboat/core/executor.hpp"
 
 namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
@@ -415,4 +416,34 @@ import = ["step", "base", "dashboard"]
   Collected bad;
   CHECK(core::run("r", wrong, nullptr, backend, bad.emit(), nullptr, {}) == "failed");
   CHECK_THAT(logs(bad).back(), ContainsSubstring("check (compare) has no input \"in\""));
+}
+
+TEST_CASE("a backend can bring its own executor, driving the same run") {
+  // An executor that runs ten passes on a clock of its own, as an event-driven or
+  // external-solver run style would, and reports nothing but its frames.
+  class Ten final : public core::Executor {
+   public:
+    std::string execute(core::Run& run) override {
+      for (int k = 0; k < 10; ++k) {
+        if (run.cancelled()) return "cancelled";
+        run.at_time(k * 0.5);
+        run.frame(run.pass(), k / 9.0);
+      }
+      run.log("info", "ten passes");
+      return "done";
+    }
+  };
+  int asked = 0;
+  core::Backend backend{.engine = "test", .catalog = &cart_pole_catalog(), .run = {.real_time = false}};
+  backend.executor = [&asked](const core::Graph& g, const core::RunSettings&) -> std::unique_ptr<core::Executor> {
+    ++asked;
+    if (g.has_steps) return nullptr;  // not its kind of graph: the core's choice
+    return std::make_unique<Ten>();
+  };
+  Collected out;
+  CHECK(core::run("r", starter_graph(), starter_station(), backend, out.emit(), nullptr, {}) == "done");
+  CHECK(asked == 1);
+  const auto samples = std::ranges::count_if(out.messages, [](const json& m) { return m["type"] == "signal" && m["node"] == "graph-theta"; });
+  CHECK(samples == 10);
+  CHECK(std::ranges::any_of(out.messages, [](const json& m) { return m["type"] == "log" && m["text"] == "ten passes"; }));
 }
