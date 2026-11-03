@@ -93,9 +93,9 @@ edges = [
 '''
 
 
-def run_backend(tmp_path: Path) -> list[dict]:
-    (tmp_path / "server.py").write_text(textwrap.dedent(BACKEND))
-    (tmp_path / "descriptor.toml").write_text(textwrap.dedent(DESCRIPTOR))
+def run_backend(tmp_path: Path, backend: str = BACKEND, descriptor: str = DESCRIPTOR) -> list[dict]:
+    (tmp_path / "server.py").write_text(textwrap.dedent(backend))
+    (tmp_path / "descriptor.toml").write_text(textwrap.dedent(descriptor))
     env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
     proc = subprocess.run([sys.executable, "server.py", "--run"], cwd=tmp_path, env=env, capture_output=True,
                           text=True, timeout=120)
@@ -123,3 +123,48 @@ def test_a_bad_definition_is_reported(tmp_path: Path) -> None:
                           text=True, timeout=120)
     assert proc.returncode != 0
     assert "a Timed step needs a `seconds` param" in proc.stderr
+
+
+LOOP_BACKEND = '''
+import paperboat
+
+class Memory(paperboat.Block):
+    """Holds its input for a clock step: no feedthrough, so a loop through it is allowed."""
+    type, inputs, outputs, feedthrough = "memory", ["u"], ["y"], False
+    def __init__(self, params):
+        super().__init__(params)
+        self.x = 0.0
+    def current(self):
+        return {"y": self.x}
+    def step(self, ctx, inputs):
+        self.x = inputs.get("u", 0.0)
+        return {}
+
+class PlusOne(paperboat.Block):
+    type, inputs, outputs = "plus-one", ["u"], ["y"]
+    def step(self, ctx, inputs):
+        return {"y": inputs.get("u", 0.0) + 1}
+
+paperboat.serve(paperboat.Backend(engine="loop", descriptor="descriptor.toml", blocks=[Memory, PlusOne],
+                                  dt=0.1, duration=1.0, emit_every=1))
+'''
+
+LOOP_DESCRIPTOR = '''
+domain = "loop"
+import = ["dashboard"]
+
+[graph]
+nodes = [{ id = "m", type = "memory" }, { id = "p", type = "plus-one" }, { id = "count", type = "display" }]
+edges = [
+  { from = ["m", "y"], to = ["p", "u"] },
+  { from = ["p", "y"], to = ["m", "u"] },
+  { from = ["m", "y"], to = ["count", "in"] },
+]
+'''
+
+
+def test_a_python_block_without_feedthrough_closes_a_loop(tmp_path: Path) -> None:
+    msgs = run_backend(tmp_path, LOOP_BACKEND, LOOP_DESCRIPTOR)
+    assert msgs[-1]["status"] == "done"
+    counts = [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "count"]
+    assert counts == [float(k) for k in range(11)]  # one more each clock step, 0 to 10
