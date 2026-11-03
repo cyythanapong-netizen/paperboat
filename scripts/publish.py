@@ -3,11 +3,12 @@
   paperboat           (remote `origin`)    everything but examples/backends
   paperboat-examples  (remote `examples`)  examples/backends, at its root
 
-Each publish is one new commit on top of the remote `dev` (its tree is `main`'s as it is
-now), so neither repo ever gets `main`'s own history. It goes up as a pull request into
-`dev`, on a branch of its own (`publish/<date>-<title>`); its body lists the `main`
-commits since the last publish. Merge it on GitHub (squash: one commit on `dev`) once CI
-passes. Files git ignores (TODO.md, GUIDELINES.md, notes for assistants) are never in
+Each publish is a pull request into `dev`, on a branch of its own
+(`publish/<date>-<title>`), holding a copy of each `main` commit since the last publish
+(same message, author and date; its tree is that repo's part of `main`), so a feature's
+commits stay apart in the PR while `dev` never gets `main`'s own history. Merge it on
+GitHub once CI passes. A publish while an earlier one is still open stacks on it (its PR
+targets the earlier branch, and GitHub retargets it to `dev` when that one merges). Files git ignores (TODO.md, GUIDELINES.md, notes for assistants) are never in
 `main`'s tree; as a second guard, a commit holding any of them is refused.
 
     python3 scripts/publish.py "Route loop wires around blocks"   # a PR on both
@@ -52,16 +53,31 @@ def examples_tree(rev: str = "HEAD") -> str:
 
 
 def since_published(tree_of, paths: list[str], parent: str) -> list[str]:
-    """Subjects of main's commits touching `paths` since `parent` was published: back to the
-    one whose tree it is, or else to the last one made before it."""
+    """main's commits touching `paths` since `parent` was published, oldest first: back to
+    the one whose tree it is, or else to the last one made before it."""
     published, when = git("rev-parse", f"{parent}^{{tree}}"), int(git("log", "-1", "--format=%ct", parent))
     out = []
-    for line in git("log", "--format=%H %ct %s", "-n", "300", "HEAD", "--", *paths).splitlines():
-        sha, at, subject = line.split(" ", 2)
+    for line in git("log", "--format=%H %ct", "-n", "300", "HEAD", "--", *paths).splitlines():
+        sha, at = line.split(" ")
         if tree_of(sha) == published or int(at) <= when:
             break
-        out.append(subject)
-    return out
+        out.append(sha)
+    return out[::-1]
+
+
+def replay(sha: str, tree: str, parent: str | None) -> str:
+    """A copy of main's commit `sha` with this tree, on `parent`."""
+    name, email, date, message = git("log", "-1", "--format=%an%x00%ae%x00%ad%x00%B", sha).split("\0", 3)
+    env = {"GIT_AUTHOR_NAME": name, "GIT_AUTHOR_EMAIL": email, "GIT_AUTHOR_DATE": date}
+    return git("commit-tree", tree, "-m", message.strip(), *(["-p", parent] if parent else []), env=env)
+
+
+def open_publish(repo: str) -> str | None:
+    """The branch of a publish PR still open in `repo`, if any (the newest)."""
+    proc = subprocess.run(["gh", "pr", "list", "-R", repo, "--state", "open", "--json", "headRefName",
+                           "-q", ".[].headRefName"], capture_output=True, text=True)
+    branches = [b for b in proc.stdout.split() if b.startswith("publish/")]
+    return max(branches) if branches else None
 
 
 def check_clean(tree: str, name: str) -> None:
@@ -84,28 +100,40 @@ def repo_of(remote: str) -> str:
 def publish(name: str, remote: str, tree_of, paths: list[str], message: str, dry: bool) -> None:
     tree = tree_of("HEAD")
     check_clean(tree, name)
-    git("fetch", "-q", remote, "dev", check=False)
-    parent = git("rev-parse", "-q", "--verify", f"{remote}/dev", check=False)
+    repo = repo_of(remote)
+    base = open_publish(repo) or "dev"
+    git("fetch", "-q", remote, base, check=False)
+    parent = git("rev-parse", "-q", "--verify", f"{remote}/{base}", check=False)
     if parent and git("rev-parse", f"{parent}^{{tree}}") == tree:
-        print(f"{name}: dev is already up to date ({parent[:7]})")
+        print(f"{name}: {base} is already up to date ({parent[:7]})")
         return
-    args = ["commit-tree", tree, "-m", message] + (["-p", parent] if parent else [])
-    commit = git(*args)
-    changed = git("diff", "--stat", parent, commit).splitlines()[-1:] if parent else ["first commit"]
-    print(f"{name}: {commit[:7]} on {parent[:7] if parent else '(new)'}: {changed[0] if changed else ''}")
-    commits = since_published(tree_of, paths, parent) if parent else []
-    body = "\n".join(f"- {c}" for c in reversed(commits)) or message
+    if not parent:  # nothing to open a PR into yet: the first publish is dev itself
+        commit = git("commit-tree", tree, "-m", message)
+        if not dry:
+            git("push", remote, f"{commit}:refs/heads/dev")
+        print(f"{name}: {commit[:7]} pushed to {remote} dev")
+        return
+    head, subjects = parent, []
+    for sha in since_published(tree_of, paths, parent):
+        t = tree_of(sha)
+        if t == git("rev-parse", f"{head}^{{tree}}"):
+            continue  # nothing of this repo's changed
+        check_clean(t, name)
+        head = replay(sha, t, head)
+        subjects.append(git("log", "-1", "--format=%s", head))
+    if git("rev-parse", f"{head}^{{tree}}") != tree:  # what the log didn't reach
+        head = git("commit-tree", tree, "-m", message, "-p", head)
+        subjects.append(message)
+    changed = git("diff", "--stat", parent, head).splitlines()[-1:]
+    print(f"{name}: {len(subjects)} commits on {base} ({parent[:7]}): {changed[0] if changed else ''}")
+    body = "\n".join(f"- {c}" for c in subjects)
     if dry:
         print(body)
         return
-    if not parent:  # nothing to open a PR into yet: the first publish is dev itself
-        git("push", remote, f"{commit}:refs/heads/dev")
-        print(f"{name}: pushed to {remote} dev")
-        return
     slug = re.sub(r"[^a-z0-9]+", "-", message.lower()).strip("-")[:40]
     branch = f"publish/{datetime.date.today():%Y-%m-%d}-{slug}"
-    git("push", "-f", remote, f"{commit}:refs/heads/{branch}")
-    proc = subprocess.run(["gh", "pr", "create", "-R", repo_of(remote), "--base", "dev", "--head", branch,
+    git("push", "-f", remote, f"{head}:refs/heads/{branch}")
+    proc = subprocess.run(["gh", "pr", "create", "-R", repo, "--base", base, "--head", branch,
                            "--title", message, "--body", body], capture_output=True, text=True)
     if proc.returncode != 0:
         sys.exit(f"{name}: pushed {branch}, but gh pr create failed: {proc.stderr.strip()}")
@@ -114,7 +142,7 @@ def publish(name: str, remote: str, tree_of, paths: list[str], message: str, dry
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="Publish main as pull requests into the dev branches of paperboat and paperboat-examples")
-    ap.add_argument("message", help="the commit message (short, imperative)")
+    ap.add_argument("message", help="the PR title (short, imperative)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--only", choices=["paperboat", "examples"])
     args = ap.parse_args()
