@@ -25,6 +25,7 @@
 //   }
 
 #include "paperboat/core/backend.hpp"
+#include "paperboat/core/executor.hpp"
 #include "paperboat/toolkit/bases.hpp"
 #include "paperboat/toolkit/block.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
@@ -91,5 +92,13 @@ using core::Server;
 using core::main;
 using core::run_starter;
 using core::serve;
+
+// Run styles (executor.hpp): Backend::executor picks one per graph.
+using core::Executor;
+using core::Run;
+using core::clock_executor;
+using core::default_executor;
+using core::once_executor;
+using core::step_executor;
 
 }  // namespace paperboat

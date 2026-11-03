@@ -50,9 +50,15 @@ export const isBlock = (n: FlowNode): n is BlockNode => n.type === "block";
 export type Wire = Edge<{ type: string }, "wire">;
 
 /** What the last run said about blocks (`node.state`): where a Step flow is, which failed. */
-export const RunStates = createContext<{ active: ReadonlySet<string>; failed: ReadonlySet<string> }>({
+export const RunStates = createContext<{
+  active: ReadonlySet<string>;
+  failed: ReadonlySet<string>;
+  /** How far a block's long step has got (node.progress). */
+  progress: Readonly<Record<string, number>>;
+}>({
   active: new Set(),
   failed: new Set(),
+  progress: {},
 });
 
 /** A magic block's definition in the form its `form` param picks (its ports are that form's). */
@@ -72,6 +78,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { updateNodeData, deleteElements } = useReactFlow<BlockNode, Wire>();
   const states = useContext(RunStates);
   const active = states.active.has(id);
+  const progress = states.progress[id];
   const { params, missing } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
@@ -99,6 +106,11 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           </button>
         )}
       </div>
+      {active && progress !== undefined && progress < 1 && (
+        <div className="block-progress" title={`${Math.round(progress * 100)} %`}>
+          <div style={{ width: `${progress * 100}%` }} />
+        </div>
+      )}
       {def.inputs.map((p) => (
         <div key={p.id} className={`port in port-${p.type}`}>
           <Handle type="target" position={Position.Left} id={p.id} />

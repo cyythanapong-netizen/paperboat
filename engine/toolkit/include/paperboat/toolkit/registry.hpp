@@ -35,7 +35,7 @@ struct Template {
   std::function<std::unique_ptr<Step>(const Values& params, const Config& config)> make_step;
 };
 
-// A station template: a reusable station object type, such as "control/cart-pole".
+// A station template: a reusable station object type, such as "opencv/image".
 struct StationTemplate {
   std::string name;  // "<package>/<object>"
   ObjectDef def;
@@ -102,7 +102,7 @@ StationTemplate define_object(const std::string& package, ObjectDef def) {
 void register_base(Registry& registry);     // what every domain needs: values, key, logic (magic)
 void register_signal(Registry& registry);   // clock, sine, step, ramp, square; ease
 void register_math(Registry& registry);     // arithmetic on signals: gain, sum, threshold, saturation
-void register_control(Registry& registry);  // dynamics on a clock; station: cart-pole
+void register_control(Registry& registry);  // dynamics on a clock: pid, integrator, lag
 void register_dashboard(Registry& registry);  // monitors: graph, display
 void register_step(Registry& registry);     // a Step flow's path: start, when, wait, if, repeat, stop
 

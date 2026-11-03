@@ -7,52 +7,48 @@
 
 #include "paperboat/core/station.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
+#include "rig.hpp"
 
 namespace tk = paperboat::toolkit;
 using Catch::Matchers::ContainsSubstring;
 
 TEST_CASE("import brings a package's station objects and their linked blocks") {
-  const auto catalog = tk::load_descriptor("domain = \"d\"\nimport = [\"control\"]\n");
-  const auto* object = catalog.find_object("cart-pole");
+  const auto catalog = tk::load_descriptor("domain = \"d\"\nimport = [\"rig\"]\n", rig::registry());
+  const auto* object = catalog.find_object("slider");
   REQUIRE(object != nullptr);
-  CHECK(object->group == "control");
-  const auto* linked = catalog.find("cart-pole");
+  CHECK(object->group == "rig");
+  const auto* linked = catalog.find("slider");
   REQUIRE(linked != nullptr);
   CHECK(linked->linked);
   CHECK(linked->def.params.empty());  // its properties live on the station object
 
   const auto msg = nlohmann::json::parse(tk::catalog_message(catalog));
-  CHECK(msg["objects"][0]["type"] == "cart-pole");
-  CHECK(msg["objects"][0]["block"] == "cart-pole");
+  CHECK(msg["objects"][0]["type"] == "slider");
+  CHECK(msg["objects"][0]["block"] == "slider");
   bool flagged = false;
-  for (const auto& b : msg["blocks"]) flagged |= b["type"] == "cart-pole" && b.value("linked", false);
+  for (const auto& b : msg["blocks"]) flagged |= b["type"] == "slider" && b.value("linked", false);
   CHECK(flagged);
 }
 
-TEST_CASE("a cart-pole object starts at its initial conditions, falls, and is pushed") {
-  const auto catalog = tk::load_descriptor("domain = \"d\"\nimport = [\"control\"]\n");
-  const auto* entry = catalog.find_object("cart-pole");
-  auto still = entry->make({{"theta0", 0.0}});
-  auto tilted = entry->make({{"theta0", 0.1}, {"x0", 1.0}});
-  CHECK(tilted->read().at("x") == 1.0);
-  CHECK(tilted->read().at("theta") == 0.1);
+TEST_CASE("a station object starts at its initial conditions and moves under its inputs") {
+  const auto catalog = tk::load_descriptor("domain = \"rig\"\n", rig::registry());
+  const auto* entry = catalog.find_object("slider");
+  auto still = entry->make({{"mass", 1.0}, {"max_force", 50.0}});
+  auto pushed = entry->make({{"mass", 1.0}, {"max_force", 50.0}, {"x0", 1.0}});
+  CHECK(pushed->read().at("x") == 1.0);
 
   const tk::Context ctx{.t = 0, .dt = 0.01, .keys_down = nullptr};
   for (int i = 0; i < 50; ++i) {
     still->step(ctx, {});
-    tilted->step(ctx, {});
+    pushed->step(ctx, {{"force", 1000.0}});  // clamped to max_force
   }
-  CHECK(still->read().at("theta") == 0.0);   // balanced exactly: stays
-  CHECK(tk::get_or(tilted->read(), "theta") > 0.1);   // leaning: falls further
-
-  auto pushed = entry->make({{"theta0", 0.0}});
-  for (int i = 0; i < 50; ++i) pushed->step(ctx, {{"force", 1000.0}});  // clamped to max_force
+  CHECK(still->read().at("x") == 0.0);
   CHECK(tk::get_or(pushed->read(), "v") > 0);
   CHECK(tk::get_or(pushed->read(), "v") < 30.0);  // 50 N, not 1000 N: unclamped it would pass 400 m/s
 
-  const auto shapes = tilted->entities("cp-1", -1.0);
-  REQUIRE(shapes.size() == 4);
-  CHECK(shapes[0].id == "cp-1/rail");
+  const auto shapes = pushed->entities("s-1", -1.0);
+  REQUIRE(shapes.size() == 2);
+  CHECK(shapes[0].id == "s-1/rail");
   CHECK(shapes[1].pos[2] == -1.0);
 }
 
@@ -134,6 +130,6 @@ objects = [
   CHECK_THROWS_WITH(tk::load_descriptor("domain = \"crane\"\n[station]\nobjects = [{ id = \"t\", type = \"trolley\" }, "
                                         "{ id = \"r\", type = \"rope\", links = { hook = \"t\" } }]\n", registry),
                     ContainsSubstring("no link slot \"hook\""));
-  CHECK_THROWS_WITH(tk::load_descriptor("[[objects]]\nuse = \"control/cartpole\"\n"),
-                    ContainsSubstring("no station template \"control/cartpole\""));
+  CHECK_THROWS_WITH(tk::load_descriptor("[[objects]]\nuse = \"control/pdi\"\n"),
+                    ContainsSubstring("no station template \"control/pdi\""));
 }

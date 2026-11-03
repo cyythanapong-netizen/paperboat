@@ -165,9 +165,13 @@ struct BlockContext {
   nb::object state;  // the domain state object, or None
   std::string node;  // the block's id
   const tk::LogFn* log_fn = nullptr;  // the run's; valid while the run lasts
+  const tk::ProgressFn* progress_fn = nullptr;
 
   void log(const std::string& text, const std::string& level) const {
     if (log_fn) (*log_fn)(node, level, text);
+  }
+  void progress(double fraction) const {
+    if (progress_fn) (*progress_fn)(node, fraction);
   }
 };
 
@@ -178,7 +182,7 @@ nb::object context(const tk::Context& ctx) {
   nb::set keys;
   if (ctx.keys_down)
     for (const auto& k : *ctx.keys_down) keys.add(nb::str(k.c_str()));
-  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn});
+  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn, ctx.progress_fn});
 }
 
 // Runs `fn` with the GIL held; a Python error becomes a C++ error the run reports.
@@ -464,7 +468,7 @@ std::string read_file(const std::string& path) {
 // the built-in toolkit; then the descriptor loads against that registry.
 std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descriptor, nb::list blocks, nb::list objects,
                              nb::object state, const std::string& mode, double dt, double duration, int emit_every,
-                             nb::object view) {
+                             nb::object view, double speed) {
   auto h = std::make_unique<Hosted>();
   h->registry = tk::builtins();
   const std::string domain = tk::descriptor_domain(read_file(descriptor));
@@ -521,7 +525,8 @@ std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descr
            .dt = dt,
            .duration = duration,
            .emit_every = emit_every,
-           .real_time = true};
+           .real_time = true,
+           .speed = speed};
   if (!state.is_none()) {
     nb::handle factory = h->state;
     b.state = [factory]() -> std::unique_ptr<tk::DomainState> {
@@ -546,7 +551,9 @@ NB_MODULE(_engine, m) {
       .def_ro("state", &BlockContext::state, "the domain state for this run, or None")
       .def_ro("node", &BlockContext::node, "the id of the block (or station object) being called")
       .def("log", &BlockContext::log, nb::arg("text"), nb::arg("level") = "info",
-           "Write a line to the Console, tagged with this block's id (level: info, warn, error).");
+           "Write a line to the Console, tagged with this block's id (level: info, warn, error).")
+      .def("progress", &BlockContext::progress, nb::arg("fraction"),
+           "How far a long step has got, 0 to 1: the UI shows it on the block.");
 
   nb::class_<Hosted>(m, "Hosted", "A backend: the domain's package, its catalog and (once listening) a server.")
       .def("listen", &Hosted::listen, nb::arg("port"), "Serve the protocol (and a web station) on the port.")
@@ -556,7 +563,7 @@ NB_MODULE(_engine, m) {
 
   m.def("make", &make, nb::arg("engine"), nb::arg("descriptor"), nb::arg("blocks"), nb::arg("objects"),
         nb::arg("state").none(), nb::arg("mode"), nb::arg("dt"), nb::arg("duration"), nb::arg("emit_every"),
-        nb::arg("view").none(), "Register the domain's classes and load the descriptor.");
+        nb::arg("view").none(), nb::arg("speed") = 1.0, "Register the domain's classes and load the descriptor.");
 
   m.def(
       "options",

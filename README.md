@@ -22,9 +22,9 @@ examples/backends/        example backends, each a project of its own that uses 
                           (copy one anywhere and it still runs). Published separately, as
                           the paperboat-examples repository; clone it next to this one
   mass-spring-python/     simulation: a sine pushes a mass on a spring (Python)
-  cart-pole-cpp/          simulation, closed loop: PID balances a pole. C++ with no domain
-                          code: blocks and the Cart-pole station object come from the
-                          toolkit; add more cart-poles on the Station page
+  cart-pole-cpp/          simulation, closed loop: PID balances a pole. C++: the blocks
+                          come from the toolkit, the Cart-pole station object is its own
+                          code; add more cart-poles on the Station page
   parametric-python/      no simulation: a grid shaped by a wave and an attractor
                           becomes boxes in the scene, Grasshopper style (Python)
   runner-python/          2D game: jump crates and duck bars; the flow is the autopilot,

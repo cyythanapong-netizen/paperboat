@@ -10,6 +10,7 @@
 //   the result. Wires may carry lists, tables and text.
 
 #include <functional>
+#include <memory>
 #include <stop_token>
 #include <string>
 
@@ -24,7 +25,16 @@ struct RunSettings {
   double duration = 10.0;  // run length (a Step flow: its limit), s
   int emit_every = 4;      // send signals and scene patches every N steps
   bool real_time = true;   // pace emits at wall-clock speed (tests turn it off)
+  double speed = 1.0;      // times real time when paced; 0: as fast as it can
 };
+
+// `base` with a graph.run's `settings` on top (duration, dt, speed; never mode). Throws
+// std::invalid_argument for a value out of range.
+RunSettings with_overrides(RunSettings base, const json& settings);
+// As hello.run announces them: mode, duration, dt, speed.
+json settings_json(const RunSettings& settings);
+
+class Executor;  // executor.hpp: how a graph runs
 
 // What a backend is made of. A simple backend fills one and calls serve() (backend.hpp).
 struct Backend {
@@ -34,6 +44,9 @@ struct Backend {
   std::function<std::unique_ptr<toolkit::DomainState>()> state = {};
   json view = nullptr;                        // the scene's camera hint ({"mode": "2d", …})
   RunSettings run = {};
+  // Its own run style, if the core's three (clock, once, steps) don't fit: an executor for
+  // this graph. Empty: default_executor().
+  std::function<std::unique_ptr<Executor>(const Graph&, const RunSettings&)> executor = {};
 };
 
 using Emit = std::function<void(const json& message)>;
@@ -45,7 +58,8 @@ json scene_message(const Station& station, const toolkit::DomainState* state, co
 
 // Emits run.started, then scene, signal, scene.patch, node.state, run.progress and log
 // events, then run.finished. Returns the final status: "done", "failed" or "cancelled".
+// `settings`: graph.run's overrides of the backend's run settings, if any.
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,
-                const Emit& emit, const KeysNow& keys, const std::stop_token& stop);
+                const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings = nullptr);
 
 }  // namespace paperboat::core

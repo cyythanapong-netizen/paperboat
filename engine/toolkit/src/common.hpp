@@ -71,7 +71,6 @@ void add_flow(Registry& registry);  // start, when, wait, if, repeat, stop
 namespace control {
 void add_pid(Registry& registry);        // pid
 void add_simulator(Registry& registry);  // integrator, lag
-void add_cart_pole(Registry& registry);  // station: cart-pole
 }  // namespace control
 
 }  // namespace paperboat::toolkit

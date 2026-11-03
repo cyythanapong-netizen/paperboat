@@ -81,9 +81,7 @@ control
 -------
 
 Dynamics on a clock: ``pid`` (``e`` → ``u``; ``kp``, ``ki``, ``kd``), ``integrator`` (``u`` → ``y``;
-``initial``), ``lag`` (``u`` → ``y``; ``tau``). Station object ``cart-pole`` (props ``cart_mass``,
-``pole_mass``, ``pole_length``, ``max_force``, ``x0``, ``theta0``; linked block: in ``force``, out
-``x``, ``v``, ``theta``, ``omega``). C++ helpers ``rk4_step`` and ``euler_step`` in
+``initial``), ``lag`` (``u`` → ``y``; ``tau``). C++ helpers ``rk4_step`` and ``euler_step`` in
 ``paperboat/toolkit/control/simulator.hpp``.
 
 step

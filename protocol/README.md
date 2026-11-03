@@ -12,7 +12,7 @@ Default address: `ws://localhost:8765`.
 
 | `type`         | Fields                                      | Sent                         |
 | -------------- | ------------------------------------------- | ---------------------------- |
-| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }` | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
+| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults) | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
 | `catalog`      | `blocks: BlockDef[]`                        | on connect                   |
 | `scene`        | `entities: Entity[]`, `view?: View`         | on connect, and on reset     |
 | `graph.load`   | `graph: { nodes, edges }`                   | on connect (starter graph)   |
@@ -21,7 +21,8 @@ Default address: `ws://localhost:8765`.
 | `run.started`  | `run: string`                               | when a run starts            |
 | `run.progress` | `run: string`, `fraction: number` (0–1)     | during a run                 |
 | `signal`       | `node: string`, `t: number`, `v: number \| string` | per sample, for monitor nodes. `t` is the x value: time in a simulation, list index otherwise; `v` is text for a display or an image's data URL |
-| `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
+| `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them; any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
+| `node.progress` | `node: string`, `fraction: number` (0–1) | How far a block's long step has got (`Context::progress`), at most ~20 a second per block; the UI shows it on the running block |
 | `log`          | `level: "info" \| "warn" \| "error"`, `text`, `node?: string` | any time. `node`: the block or station object that wrote it, or that failed |
 | `run.finished` | `run: string`, `status: "done" \| "failed" \| "cancelled"` | when a run ends |
 
@@ -29,7 +30,7 @@ Default address: `ws://localhost:8765`.
 
 | `type`       | Fields                     |
 | ------------ | -------------------------- |
-| `graph.run`  | `graph: { nodes, edges }`, `station?: Station` (the backend's current one if absent) |
+| `graph.run`  | `graph: { nodes, edges }`, `station?: Station` (the backend's current one if absent), `settings?: RunSettings` (overrides the backend's defaults for this run) |
 | `station.set` | `station: Station`: an edit on the Station page; the backend checks it and answers with a `scene` (or a `log` error) |
 | `run.cancel` | —                          |
 | `input`      | `key: string` (a `KeyboardEvent.code`, e.g. `"Space"`), `down: boolean` |
@@ -70,6 +71,10 @@ Default address: `ws://localhost:8765`.
 { "mode": "3d" }
 { "mode": "2d", "center": [6, 5], "height": 11 }   // orthographic, looking down −z
 
+// RunSettings: hello.run (the backend's defaults) and graph.run.settings (this run's
+// changes; any but mode). A value out of range fails the run with a log, not the backend.
+{ "mode": "clock", "duration": 10, "dt": 0.01, "speed": 1 }   // mode: clock | once; speed: times real time, 0 as fast as it can
+
 // Graph: sent by the UI with graph.run, and by the backend with graph.load
 {
   "nodes": [{ "id": "sine-1", "type": "sine", "params": { "amplitude": 5, "frequency": 0.3 }, "pos": [0, 0] }],
@@ -100,7 +105,7 @@ pushes on the object through the block's inputs and reads it through its outputs
                "inputs": [{ "id": "force", "type": "signal" }],
                "outputs": [{ "id": "theta", "type": "signal" }], "params": [],
                "group": "control", "linked": true }],          // not in the palette
-  "objects": [{ "type": "cart-pole", "label": "Cart-pole", "role": "body", "group": "control",
+  "objects": [{ "type": "cart-pole", "label": "Cart-pole", "role": "body", "group": "cart-pole",
                 "props": [{ "id": "theta0", "type": "number", "default": 0.15 }],
                 "links": [], "block": "cart-pole" }]          // links: slots naming other objects
 }

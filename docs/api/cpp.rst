@@ -215,6 +215,12 @@ What runs
 
       Write a line to the Console (``info``, ``warn``, ``error``), tagged with ``node``.
 
+   .. cpp:function:: void progress(double fraction) const
+
+      How far a long step has got, 0 to 1 (a filter over a big image, a solve): the UI shows
+      it on the block. Optional; call it as often as is useful, the run sends at most ~20 a
+      second.
+
 .. cpp:class:: Block
 
    One instance of a block in a running graph. It owns its state; two instances never
@@ -536,6 +542,16 @@ Serving
 
       Pace at wall-clock speed (``--run`` and tests turn it off).
 
+   .. cpp:member:: double speed = 1.0
+
+      Times real time when paced; 0: as fast as it can. The UI may change it per run,
+      with ``duration`` and ``dt`` (``graph.run``'s ``settings``).
+
+.. cpp:function:: RunSettings with_overrides(RunSettings base, const json &settings)
+
+   ``base`` with a ``graph.run``'s ``settings`` on top (any but ``mode``). Throws
+   ``std::invalid_argument`` for a value out of range; a run with one fails before it starts.
+
 .. cpp:struct:: Backend
 
    What a backend is made of.
@@ -556,6 +572,11 @@ Serving
 
    .. cpp:member:: RunSettings run
 
+   .. cpp:member:: std::function<std::unique_ptr<Executor>(const Graph&, const RunSettings&)> executor
+
+      Optional: a run style of the backend's own for this graph (return ``nullptr`` to leave
+      it to :cpp:func:`default_executor`). Most backends leave it empty.
+
 .. cpp:function:: int main(const Backend &backend, int argc, char **argv, int default_port)
 
    What a backend's ``main()`` returns: ``--port N`` serves the protocol (and a web
@@ -575,3 +596,81 @@ Serving
 
    One run, without sockets: every event goes to ``emit``. Returns ``"done"``, ``"failed"``
    or ``"cancelled"``. For tests (with ``real_time = false``).
+
+Run styles
+----------
+
+``<paperboat/core/executor.hpp>``. A backend needn't know about these: the core picks the
+executor for each graph (:cpp:func:`default_executor`). They are for a backend whose runs
+fit none of the three, such as an event-driven one or an external solver. Its executor
+drives the same :cpp:class:`Run`, so blocks, monitors, the station and the UI work as
+always.
+
+.. cpp:class:: Executor
+
+   .. cpp:function:: virtual std::string execute(Run &run) = 0
+
+      Runs ``run`` to its end. Returns ``"done"``, or ``"cancelled"`` once
+      ``run.cancelled()`` said so. Throws to fail the run (a ``GraphError`` names the block
+      at fault).
+
+.. cpp:function:: std::unique_ptr<Executor> clock_executor()
+
+   A Signal flow on a clock: every block once per ``dt``, for ``duration``.
+
+.. cpp:function:: std::unique_ptr<Executor> once_executor()
+
+   A Signal flow evaluated once.
+
+.. cpp:function:: std::unique_ptr<Executor> step_executor()
+
+   A Step flow: hats start paths, each path is at one block.
+
+.. cpp:function:: std::unique_ptr<Executor> default_executor(const Graph &graph, const RunSettings &settings)
+
+   Steps if the graph has step blocks or stories, else once or clock by ``settings.mode``.
+
+.. cpp:class:: Run
+
+   A run in progress, as an executor sees it: the graph made, the station, the domain
+   state and the outputs so far.
+
+   .. cpp:function:: void at_time(double t)
+
+      Sets the run clock and reads the keys held in the UI now.
+
+   .. cpp:function:: json pass()
+
+      Every signal block once, in order. Returns the monitors' samples, for ``frame``.
+
+   .. cpp:function:: std::optional<std::string> advance()
+
+      Station objects, then the domain state, move on. A message if the domain ends the run.
+
+   .. cpp:function:: void frame(const json &samples, std::optional<double> progress)
+
+      Sends samples, the scene's changes and the run's progress; waits to keep real time.
+
+   .. cpp:function:: bool cancelled()
+
+   .. cpp:function:: void log(std::string_view level, std::string_view text)
+
+   .. cpp:function:: void node_state(std::string_view node, std::string_view state)
+
+   .. cpp:function:: const RunSettings &settings() const
+
+   A minimal executor:
+
+   .. code-block:: cpp
+
+      class TenPasses final : public paperboat::Executor {
+       public:
+        std::string execute(paperboat::Run& run) override {
+          for (int k = 0; k < 10; ++k) {
+            if (run.cancelled()) return "cancelled";
+            run.at_time(k * 0.5);
+            run.frame(run.pass(), k / 9.0);
+          }
+          return "done";
+        }
+      };

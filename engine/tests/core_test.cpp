@@ -16,6 +16,8 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "paperboat/core/backend.hpp"
+#include "paperboat/core/executor.hpp"
+#include "rig.hpp"
 
 namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
@@ -25,14 +27,9 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-const tk::Catalog& cart_pole_catalog() {
-  static const tk::Catalog catalog = tk::load_descriptor_file(PAPERBOAT_TEST_DATA "/cart-pole.toml");
-  return catalog;
-}
-
-// The descriptor's starters ([graph] and [station] in descriptor.toml).
-json starter_graph() { return json::parse(cart_pole_catalog().graph); }
-json starter_station() { return json::parse(cart_pole_catalog().station); }
+// The test domain's starters ([graph] and [station] in data/rig.toml).
+json starter_graph() { return json::parse(rig::catalog().graph); }
+json starter_station() { return json::parse(rig::catalog().station); }
 
 struct Collected {
   std::vector<json> messages;
@@ -49,35 +46,36 @@ struct Collected {
 
 }  // namespace
 
-TEST_CASE("the cart-pole starter run matches the reference result") {
+TEST_CASE("the starter run matches the reference result") {
   Collected out;
-  const core::Backend backend{.engine = "test", .catalog = &cart_pole_catalog(), .run = {.real_time = false}};
+  const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = {.real_time = false}};
   const auto status = core::run("run-1", starter_graph(), starter_station(), backend, out.emit(), nullptr, std::stop_token{});
   CHECK(status == "done");
   CHECK(out.messages.front()["type"] == "run.started");
   CHECK(out.messages.back()["type"] == "run.finished");
-  // The same numbers every version of this example has produced.
-  CHECK_THAT(out.last_signal("graph-theta"), WithinAbs(3.780e-07, 1e-10));
-  CHECK_THAT(out.last_signal("graph-x"), WithinAbs(6.415e-07, 1e-10));
+  // Frozen numbers. A PD loop on a 1 kg slider (poles -1.5 ± 1.32i): after 10 s it is
+  // within e^-15 ≈ 3e-7 of rest.
+  CHECK_THAT(out.last_signal("graph-x"), WithinAbs(3.597e-07, 1e-10));
+  CHECK_THAT(out.last_signal("graph-v"), WithinAbs(-4.420e-07, 1e-10));
 }
 
 TEST_CASE("a wire into a linked block is not a cycle; a missing station object fails") {
-  auto station = core::make_station(starter_station(), cart_pole_catalog());
-  const auto g = core::prepare_graph(starter_graph(), cart_pole_catalog(), station);
-  CHECK(g.order.front() == "cart-pole-1");  // read before anything uses it
+  auto station = core::make_station(starter_station(), rig::catalog());
+  const auto g = core::prepare_graph(starter_graph(), rig::catalog(), station);
+  CHECK(g.order.front() == "slider-1");  // read before anything uses it
 
   core::Station empty;
-  CHECK_THROWS_WITH(core::prepare_graph(starter_graph(), cart_pole_catalog(), empty),
+  CHECK_THROWS_WITH(core::prepare_graph(starter_graph(), rig::catalog(), empty),
                     ContainsSubstring("isn't there"));
 
   const json loop = {{"nodes", {{{"id", "a"}, {"type", "gain"}}, {{"id", "b"}, {"type", "gain"}}}},
                      {"edges", {{{"from", {"a", "y"}}, {"to", {"b", "u"}}}, {{"from", {"b", "y"}}, {"to", {"a", "u"}}}}}};
-  CHECK_THROWS_WITH(core::prepare_graph(loop, cart_pole_catalog(), station), ContainsSubstring("cycle"));
+  CHECK_THROWS_WITH(core::prepare_graph(loop, rig::catalog(), station), ContainsSubstring("cycle"));
 }
 
 TEST_CASE("a session sends the handshake, checks station edits and runs") {
   static const core::Backend backend{.engine = "test",
-                                     .catalog = &cart_pole_catalog(),
+                                     .catalog = &rig::catalog(),
                                      .run = {.dt = 0.01, .duration = 0.5, .emit_every = 10, .real_time = false}};
   std::vector<json> sent;
   std::mutex mutex;
@@ -178,7 +176,11 @@ struct Words final : tk::DomainState {
 struct Lengths final : tk::Block {
   tk::Values step(const tk::Context& ctx, const tk::Values&) override {
     tk::List out;
-    for (const auto& w : static_cast<Words*>(ctx.state)->words) out.push_back(static_cast<double>(w.size()));
+    const auto& words = static_cast<Words*>(ctx.state)->words;
+    for (const auto& w : words) {
+      out.push_back(static_cast<double>(w.size()));
+      ctx.progress(static_cast<double>(out.size()) / static_cast<double>(words.size()));
+    }
     ctx.log("measured " + std::to_string(out.size()) + " words");
     return {{"y", out}};
   }
@@ -253,6 +255,17 @@ edges = [{ from = ["l", "y"], to = ["t", "u"] }, { from = ["l", "y"], to = ["g",
   for (const auto& m : out.messages)
     if (m["type"] == "signal") plotted.push_back(m["v"]);
   CHECK(plotted == std::vector<double>{4, 6, 5});  // the list, by index
+  // Block by block, each running then done; a block's progress, throttled but always ending at 1.
+  std::vector<std::string> states;
+  std::vector<double> progress;
+  for (const auto& m : out.messages) {
+    if (m["type"] == "node.state") states.push_back(m["node"].get<std::string>() + ":" + m["state"].get<std::string>());
+    if (m["type"] == "node.progress" && m["node"] == "l") progress.push_back(m["fraction"]);
+  }
+  CHECK(states == std::vector<std::string>{"l:running", "l:done", "t:running", "t:done", "g:running", "g:done"});
+  REQUIRE(progress.size() >= 2);
+  CHECK_THAT(progress.front(), WithinAbs(1.0 / 3, 1e-9));
+  CHECK(progress.back() == 1.0);
   const auto text = logs(out);
   CHECK(std::ranges::find(text, "total 15") != text.end());
   // What a block logs reaches the Console tagged with its id.
@@ -415,4 +428,60 @@ import = ["step", "base", "dashboard"]
   Collected bad;
   CHECK(core::run("r", wrong, nullptr, backend, bad.emit(), nullptr, {}) == "failed");
   CHECK_THAT(logs(bad).back(), ContainsSubstring("check (compare) has no input \"in\""));
+}
+
+TEST_CASE("a backend can bring its own executor, driving the same run") {
+  // An executor that runs ten passes on a clock of its own, as an event-driven or
+  // external-solver run style would, and reports nothing but its frames.
+  class Ten final : public core::Executor {
+   public:
+    std::string execute(core::Run& run) override {
+      for (int k = 0; k < 10; ++k) {
+        if (run.cancelled()) return "cancelled";
+        run.at_time(k * 0.5);
+        run.frame(run.pass(), k / 9.0);
+      }
+      run.log("info", "ten passes");
+      return "done";
+    }
+  };
+  int asked = 0;
+  core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = {.real_time = false}};
+  backend.executor = [&asked](const core::Graph& g, const core::RunSettings&) -> std::unique_ptr<core::Executor> {
+    ++asked;
+    if (g.has_steps) return nullptr;  // not its kind of graph: the core's choice
+    return std::make_unique<Ten>();
+  };
+  Collected out;
+  CHECK(core::run("r", starter_graph(), starter_station(), backend, out.emit(), nullptr, {}) == "done");
+  CHECK(asked == 1);
+  const auto samples = std::ranges::count_if(out.messages, [](const json& m) { return m["type"] == "signal" && m["node"] == "graph-v"; });
+  CHECK(samples == 10);
+  CHECK(std::ranges::any_of(out.messages, [](const json& m) { return m["type"] == "log" && m["text"] == "ten passes"; }));
+}
+
+TEST_CASE("graph.run's settings override the backend's run settings") {
+  const core::RunSettings base{.duration = 10, .real_time = false};
+  const auto s = core::with_overrides(base, json{{"duration", 2.5}, {"dt", 0.05}, {"speed", 0}});
+  CHECK(s.duration == 2.5);
+  CHECK(s.dt == 0.05);
+  CHECK(s.speed == 0);
+  CHECK(s.mode == base.mode);  // the backend's to say
+  CHECK(core::with_overrides(base, nullptr).duration == 10);
+  CHECK_THROWS_WITH(core::with_overrides(base, json{{"dt", 0}}), ContainsSubstring("dt"));
+  CHECK_THROWS_WITH(core::with_overrides(base, json{{"duration", "long"}}), ContainsSubstring("duration"));
+  CHECK_THROWS_WITH(core::with_overrides(base, json{{"duration", 1e6}, {"dt", 1e-3}}), ContainsSubstring("10 million"));
+  CHECK(core::settings_json(base)["mode"] == "clock");
+
+  // A run takes them: a shorter clock run ends sooner, a bad one fails before it starts.
+  const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = base};
+  Collected out;
+  CHECK(core::run("r", starter_graph(), starter_station(), backend, out.emit(), nullptr, {}, json{{"duration", 0.5}}) == "done");
+  double last_t = 0;
+  for (const auto& m : out.messages)
+    if (m["type"] == "signal") last_t = m["t"];
+  CHECK_THAT(last_t, WithinAbs(0.5, 1e-9));
+  Collected bad;
+  CHECK(core::run("r", starter_graph(), starter_station(), backend, bad.emit(), nullptr, {}, json{{"dt", -1}}) == "failed");
+  CHECK(bad.messages.back()["status"] == "failed");
 }

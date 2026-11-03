@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include "paperboat/toolkit/descriptor.hpp"
+#include "rig.hpp"
 
 namespace tk = paperboat::toolkit;
 using Catch::Matchers::ContainsSubstring;
@@ -48,7 +49,7 @@ TEST_CASE("the fixture descriptors load, and their toolkit blocks can be made") 
     if (file.path().extension() != ".toml") continue;
     ++seen;
     INFO(file.path().string());
-    const auto catalog = tk::load_descriptor_file(file.path());
+    const auto catalog = tk::load_descriptor_file(file.path(), rig::registry());
     CHECK(catalog.domain == file.path().stem().string());
     CHECK_FALSE(catalog.entries.empty());
     CHECK(nlohmann::json::parse(catalog.graph).contains("nodes"));
@@ -67,13 +68,13 @@ TEST_CASE("starters: optional, in protocol shape, checked against the catalog") 
   CHECK(none.station.empty());
 
   const auto some = tk::load_descriptor(descriptor(R"(
-import = ["signal", "math", "control"]
+import = ["signal", "math", "rig"]
 [graph]
 nodes = [{ id = "g", type = "gain", params = { k = 2 }, pos = [0, 0] }, { id = "s", type = "sine" }]
 edges = [{ from = ["s", "y"], to = ["g", "u"] }]
 [station]
-objects = [{ id = "cp", type = "cart-pole", props = { theta0 = 0.1 } }]
-)"));
+objects = [{ id = "cp", type = "slider", props = { x0 = 0.1 } }]
+)"), rig::registry());
   const auto graph = nlohmann::json::parse(some.graph);
   CHECK(graph["nodes"][1]["params"] == nlohmann::json::object());  // filled in
   CHECK(graph["edges"][0]["to"] == nlohmann::json{"g", "u"});

@@ -133,6 +133,8 @@ struct Entity;
 
 // Where Context::log writes: the run sends it to the Console as a `log` event.
 using LogFn = std::function<void(std::string_view node, std::string_view level, std::string_view text)>;
+// Where Context::progress writes: the run sends it as a `node.progress` event.
+using ProgressFn = std::function<void(std::string_view node, double fraction)>;
 
 // What a block sees on each step.
 struct Context {
@@ -142,10 +144,16 @@ struct Context {
   DomainState* state = nullptr;       // the domain's shared state for this run, if it has one
   std::string_view node = {};         // the id of the block being stepped ("" outside a block)
   const LogFn* log_fn = nullptr;      // set by the run; null in tests that don't collect logs
+  const ProgressFn* progress_fn = nullptr;  // set by the run; null in tests
 
   // Write a line to the Console, tagged with the block's id: level "info", "warn" or "error".
   void log(std::string_view text, std::string_view level = "info") const {
     if (log_fn) (*log_fn)(node, level, text);
+  }
+  // How far a long step has got, 0 to 1 (a filter over a big image, a solve): the UI shows
+  // it on the block. Optional; call it as often as is useful, the run sends at most ~20 a second.
+  void progress(double fraction) const {
+    if (progress_fn) (*progress_fn)(node, fraction);
   }
 };
 

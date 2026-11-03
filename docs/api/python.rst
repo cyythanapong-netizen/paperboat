@@ -237,6 +237,10 @@ What a block sees
 
       Write a line to the Console (``info``, ``warn``, ``error``), tagged with this block.
 
+   .. py:method:: progress(fraction)
+
+      How far a long step has got, 0 to 1: the UI shows it on the block.
+
 .. py:class:: Handle
 
    Opaque data on a wire (an image…): pass it along as is. ``kind`` names what it holds.
@@ -280,6 +284,12 @@ Serving
 
    .. py:attribute:: emit_every
       :type: int
+
+   .. py:attribute:: speed
+      :type: float
+
+      Times real time (0: as fast as it can). The defaults here are what the UI shows; a user
+      may change ``duration`` and ``speed`` per run.
 
    .. py:attribute:: view
       :type: dict | None

@@ -222,6 +222,7 @@ class Backend:
     dt: float = 0.01                             # clock step, s
     duration: float = 10.0                       # run length (Step flow: its limit), s
     emit_every: int = 4                          # send signals and scene patches every N steps
+    speed: float = 1.0                           # times real time (0: as fast as it can); the UI may change it per run
     view: dict | None = None                     # the scene's camera hint, e.g. {"mode": "2d", …}
     port: int = 8765
 
@@ -236,7 +237,7 @@ def serve(backend: Backend) -> None:
         print(err, file=sys.stderr)
         sys.exit(2)
     hosted = make(backend.engine, str(backend.descriptor), list(backend.blocks), list(backend.objects), backend.state,
-                  backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view)
+                  backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view, backend.speed)
     if run:
         status = hosted.run_starter()
         sys.stdout.flush()

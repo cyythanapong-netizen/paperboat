@@ -38,8 +38,9 @@ async def recv(ws: ClientConnection) -> dict:
     return msg
 
 
-async def send(ws: ClientConnection, msg: dict) -> None:
-    conforms(TO_BACKEND, msg, "test would send")
+async def send(ws: ClientConnection, msg: dict, check_schema: bool = True) -> None:
+    if check_schema:  # off only to send a deliberately bad message
+        conforms(TO_BACKEND, msg, "test would send")
     await ws.send(json.dumps(msg))
 
 
@@ -66,8 +67,9 @@ def cycle_graph(blocks: list[dict]) -> dict:
     }
 
 
-async def run_until_finished(ws: ClientConnection, graph: dict, cancel_after: float | None = None) -> list[dict]:
-    await send(ws, {"type": "graph.run", "graph": graph})
+async def run_until_finished(ws: ClientConnection, graph: dict, cancel_after: float | None = None,
+                             settings: dict | None = None, check_schema: bool = True) -> list[dict]:
+    await send(ws, {"type": "graph.run", "graph": graph, **({"settings": settings} if settings else {})}, check_schema)
     if cancel_after is not None:
         async def cancel() -> None:
             await asyncio.sleep(cancel_after)
@@ -152,6 +154,13 @@ async def starter_and_cancel(ws: ClientConnection, starter: dict, monitors: set[
     status = msgs[-1]["status"]
     check(status in ("cancelled", "done"), f"cancel run status {status}")
     print("ok  cancel" if status == "cancelled" else "ok  cancel (run finished first)")
+
+    # The UI may change a run's length and speed; a bad value fails the run, not the backend.
+    msgs = await run_until_finished(ws, starter, settings={"duration": 0.1, "speed": 0})
+    check(msgs[-1]["status"] == "done", f"run with settings: status {msgs[-1]['status']}")
+    msgs = await run_until_finished(ws, starter, settings={"dt": 0}, check_schema=False)
+    check(msgs[-1]["status"] == "failed", "a run with dt = 0 did not fail")
+    print("ok  run settings")
 
 
 if __name__ == "__main__":

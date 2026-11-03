@@ -173,6 +173,18 @@ export type Form = {
   outputs: PortDef[];
 };
 
+/** How a run goes. The backend's defaults come in hello.run; graph.run may override any of them except mode. */
+export type RunSettings = {
+  /** clock: every step for duration (and every Step flow); once: a Signal flow evaluated a single time. */
+  mode?: "clock" | "once";
+  /** Run length, s (a Step flow: its limit). */
+  duration?: number;
+  /** Clock step, s. */
+  dt?: number;
+  /** Times real time (1: as the clock goes; 0: as fast as it can). */
+  speed?: number;
+};
+
 /** Every message a backend sends. */
 export type ServerMsg =
   | {
@@ -180,6 +192,7 @@ export type ServerMsg =
     protocol: "paperboat/0";
     engine: string;
     station?: StationView;
+    run?: RunSettings;
   }
   | {
     type: "catalog";
@@ -229,6 +242,11 @@ export type ServerMsg =
     state: NodeState;
   }
   | {
+    type: "node.progress";
+    node: string;
+    fraction: number;
+  }
+  | {
     type: "log";
     level: "info" | "warn" | "error";
     text: string;
@@ -241,6 +259,7 @@ export type ClientMsg =
     type: "graph.run";
     graph: Graph;
     station?: Station;
+    settings?: RunSettings;
   }
   | {
     type: "station.set";
