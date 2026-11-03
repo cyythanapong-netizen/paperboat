@@ -34,8 +34,7 @@ cd engine
 cmake --preset dev            # Debug + tests, in build/dev
 cmake --build --preset dev
 ctest --preset dev
-build/dev/tools/paperboat-catalog --templates
-build/dev/tools/paperboat-catalog --starters ../examples/backends/cart-pole-cpp/descriptor.toml
+build/dev/tools/paperboat-catalog --templates   # every toolkit template
 ```
 
 See `toolkit/README.md` for the templates and the descriptor format.

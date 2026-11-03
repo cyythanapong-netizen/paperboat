@@ -105,7 +105,7 @@ pushes on the object through the block's inputs and reads it through its outputs
                "inputs": [{ "id": "force", "type": "signal" }],
                "outputs": [{ "id": "theta", "type": "signal" }], "params": [],
                "group": "control", "linked": true }],          // not in the palette
-  "objects": [{ "type": "cart-pole", "label": "Cart-pole", "role": "body", "group": "control",
+  "objects": [{ "type": "cart-pole", "label": "Cart-pole", "role": "body", "group": "cart-pole",
                 "props": [{ "id": "theta0", "type": "number", "default": 0.15 }],
                 "links": [], "block": "cart-pole" }]          // links: slots naming other objects
 }

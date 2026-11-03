@@ -13,7 +13,7 @@ its plant).
 | `signal`  | Signals f(t): t is the block's input `t` when wired (a step's `progress`), else the run clock. C++: `clock`, and the abstract parent `generator` (f is an expression). TOML definitions on it (`src/signal/blocks.toml`): `sine`, `step`, `ramp`, `square`, `ease` (shape a 0–1 progress; `shape`: in-out, in, out, linear), `function` (f(t): type f on the block, over t, a, b, c) |
 | `math`    | Pointwise arithmetic on signals: `gain`, `sum`, `threshold`, `saturation` |
 | `dashboard` | Monitors, shown on the Dashboard as instruments: `graph` (plots its input over time), `display` (its latest value as a number or text) |
-| `control` | Dynamics that run on a clock in a Signal flow: `pid`, `integrator`, `lag`. Station: `cart-pole` (a station object; its linked block takes `force`, gives `x`, `v`, `theta`, `omega`; props `cart_mass`, `pole_mass`, `pole_length`, `max_force` and initial conditions `x0`, `theta0`) |
+| `control` | Dynamics that run on a clock in a Signal flow: `pid`, `integrator`, `lag`. |
 | `opencv`  | Optional, built when OpenCV is found (`paperboat::toolkit_opencv`, `register_opencv`). Image filters on `image` ports: `gray`, `blur`, `median`, `threshold`, `adaptive_threshold`, `hsv_range`, `canny`, `erode`, `dilate`, `open`, `close`, `invert`, `distance` · monitor: `view` (an image instrument) · station: `image` (a picture from a `file` prop; its linked block outputs it) |
 | `step`    | The path of a Step flow, with step ports. Hats: `start` (once), `when` (each time signal `cond` rises, e.g. a key; a path alongside the others). Then `wait` (`seconds`), `repeat` (leaves by `loop` `times` times, then `done`), `stop` (ends the whole run). Branch with a `base` logic block in its step form |
 
@@ -93,7 +93,7 @@ A descriptor lives next to the backend that serves it
 
 Top level: `domain` (name, also the palette group of its own blocks), `import` (list of
 packages: their blocks and station objects) and `[[objects]]` (station object types: a
-`use = "control/cart-pole"` with `defaults`, or the domain's own with `type`, `role`,
+`use = "opencv/image"` with `defaults`, or the domain's own with `type`, `role`,
 `props`, `links` and `block = { kind, inputs, outputs }` for its linked block).
 Domain objects are implemented by the backend (`StationObject`); toolkit ones by the
 toolkit.
@@ -147,13 +147,15 @@ Load one from C++ and turn it into the protocol's `catalog` message:
 #include <paperboat/toolkit/descriptor.hpp>
 namespace tk = paperboat::toolkit;
 
-auto catalog = tk::load_descriptor_file("../examples/backends/cart-pole-cpp/descriptor.toml");
+// `registry`: the toolkit (tk::builtins()) plus the domain's own blocks and station objects.
+auto catalog = tk::load_descriptor_file("descriptor.toml", registry);
 send(tk::catalog_message(catalog));                    // what the UI's palette shows
 auto pid = catalog.find("pid")->make({{"kp", 40}});    // an instance for a graph.run
 ```
 
-Or from the shell: `build/dev/tools/paperboat-catalog ../examples/backends/cart-pole-cpp/descriptor.toml`
-(`--starters` also prints the starter graph and station).
+Or from the shell, for a descriptor that uses only the toolkit:
+`build/dev/tools/paperboat-catalog descriptor.toml` (`--starters` also prints the starter
+graph and station).
 
 ## Adding a template
 

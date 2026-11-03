@@ -1,0 +1,27 @@
+# Test fixture (rig.hpp): a slider brought back to x = 0 by a PD loop. Frozen with the
+# reference run in core_test.cpp.
+domain = "rig"
+import = ["signal", "math", "control", "dashboard"]
+
+[[blocks]]
+use = "math/gain"
+defaults = { k = -1 }
+
+[station]
+objects = [{ id = "slider-1", type = "slider", props = { mass = 1, max_force = 50, x0 = 1 } }]
+
+[graph]
+nodes = [
+  { id = "slider-1", type = "slider", pos = [0, 120] },
+  { id = "pid-x", type = "pid", params = { kp = 4, ki = 0, kd = 3 }, pos = [260, 0] },
+  { id = "gain-1", type = "gain", pos = [520, 0] },
+  { id = "graph-x", type = "graph", pos = [260, 300] },
+  { id = "graph-v", type = "graph", pos = [520, 300] },
+]
+edges = [
+  { from = ["slider-1", "x"], to = ["pid-x", "e"] },
+  { from = ["pid-x", "u"], to = ["gain-1", "u"] },
+  { from = ["gain-1", "y"], to = ["slider-1", "force"] },
+  { from = ["slider-1", "x"], to = ["graph-x", "in"] },
+  { from = ["slider-1", "v"], to = ["graph-v", "in"] },
+]

@@ -17,6 +17,7 @@
 
 #include "paperboat/core/backend.hpp"
 #include "paperboat/core/executor.hpp"
+#include "rig.hpp"
 
 namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
@@ -26,14 +27,9 @@ using Catch::Matchers::WithinAbs;
 
 namespace {
 
-const tk::Catalog& cart_pole_catalog() {
-  static const tk::Catalog catalog = tk::load_descriptor_file(PAPERBOAT_TEST_DATA "/cart-pole.toml");
-  return catalog;
-}
-
-// The descriptor's starters ([graph] and [station] in descriptor.toml).
-json starter_graph() { return json::parse(cart_pole_catalog().graph); }
-json starter_station() { return json::parse(cart_pole_catalog().station); }
+// The test domain's starters ([graph] and [station] in data/rig.toml).
+json starter_graph() { return json::parse(rig::catalog().graph); }
+json starter_station() { return json::parse(rig::catalog().station); }
 
 struct Collected {
   std::vector<json> messages;
@@ -50,35 +46,36 @@ struct Collected {
 
 }  // namespace
 
-TEST_CASE("the cart-pole starter run matches the reference result") {
+TEST_CASE("the starter run matches the reference result") {
   Collected out;
-  const core::Backend backend{.engine = "test", .catalog = &cart_pole_catalog(), .run = {.real_time = false}};
+  const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = {.real_time = false}};
   const auto status = core::run("run-1", starter_graph(), starter_station(), backend, out.emit(), nullptr, std::stop_token{});
   CHECK(status == "done");
   CHECK(out.messages.front()["type"] == "run.started");
   CHECK(out.messages.back()["type"] == "run.finished");
-  // The same numbers every version of this example has produced.
-  CHECK_THAT(out.last_signal("graph-theta"), WithinAbs(3.780e-07, 1e-10));
-  CHECK_THAT(out.last_signal("graph-x"), WithinAbs(6.415e-07, 1e-10));
+  // Frozen numbers. A PD loop on a 1 kg slider (poles -1.5 ± 1.32i): after 10 s it is
+  // within e^-15 ≈ 3e-7 of rest.
+  CHECK_THAT(out.last_signal("graph-x"), WithinAbs(3.597e-07, 1e-10));
+  CHECK_THAT(out.last_signal("graph-v"), WithinAbs(-4.420e-07, 1e-10));
 }
 
 TEST_CASE("a wire into a linked block is not a cycle; a missing station object fails") {
-  auto station = core::make_station(starter_station(), cart_pole_catalog());
-  const auto g = core::prepare_graph(starter_graph(), cart_pole_catalog(), station);
-  CHECK(g.order.front() == "cart-pole-1");  // read before anything uses it
+  auto station = core::make_station(starter_station(), rig::catalog());
+  const auto g = core::prepare_graph(starter_graph(), rig::catalog(), station);
+  CHECK(g.order.front() == "slider-1");  // read before anything uses it
 
   core::Station empty;
-  CHECK_THROWS_WITH(core::prepare_graph(starter_graph(), cart_pole_catalog(), empty),
+  CHECK_THROWS_WITH(core::prepare_graph(starter_graph(), rig::catalog(), empty),
                     ContainsSubstring("isn't there"));
 
   const json loop = {{"nodes", {{{"id", "a"}, {"type", "gain"}}, {{"id", "b"}, {"type", "gain"}}}},
                      {"edges", {{{"from", {"a", "y"}}, {"to", {"b", "u"}}}, {{"from", {"b", "y"}}, {"to", {"a", "u"}}}}}};
-  CHECK_THROWS_WITH(core::prepare_graph(loop, cart_pole_catalog(), station), ContainsSubstring("cycle"));
+  CHECK_THROWS_WITH(core::prepare_graph(loop, rig::catalog(), station), ContainsSubstring("cycle"));
 }
 
 TEST_CASE("a session sends the handshake, checks station edits and runs") {
   static const core::Backend backend{.engine = "test",
-                                     .catalog = &cart_pole_catalog(),
+                                     .catalog = &rig::catalog(),
                                      .run = {.dt = 0.01, .duration = 0.5, .emit_every = 10, .real_time = false}};
   std::vector<json> sent;
   std::mutex mutex;
@@ -449,7 +446,7 @@ TEST_CASE("a backend can bring its own executor, driving the same run") {
     }
   };
   int asked = 0;
-  core::Backend backend{.engine = "test", .catalog = &cart_pole_catalog(), .run = {.real_time = false}};
+  core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = {.real_time = false}};
   backend.executor = [&asked](const core::Graph& g, const core::RunSettings&) -> std::unique_ptr<core::Executor> {
     ++asked;
     if (g.has_steps) return nullptr;  // not its kind of graph: the core's choice
@@ -458,7 +455,7 @@ TEST_CASE("a backend can bring its own executor, driving the same run") {
   Collected out;
   CHECK(core::run("r", starter_graph(), starter_station(), backend, out.emit(), nullptr, {}) == "done");
   CHECK(asked == 1);
-  const auto samples = std::ranges::count_if(out.messages, [](const json& m) { return m["type"] == "signal" && m["node"] == "graph-theta"; });
+  const auto samples = std::ranges::count_if(out.messages, [](const json& m) { return m["type"] == "signal" && m["node"] == "graph-v"; });
   CHECK(samples == 10);
   CHECK(std::ranges::any_of(out.messages, [](const json& m) { return m["type"] == "log" && m["text"] == "ten passes"; }));
 }
@@ -477,7 +474,7 @@ TEST_CASE("graph.run's settings override the backend's run settings") {
   CHECK(core::settings_json(base)["mode"] == "clock");
 
   // A run takes them: a shorter clock run ends sooner, a bad one fails before it starts.
-  const core::Backend backend{.engine = "test", .catalog = &cart_pole_catalog(), .run = base};
+  const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = base};
   Collected out;
   CHECK(core::run("r", starter_graph(), starter_station(), backend, out.emit(), nullptr, {}, json{{"duration", 0.5}}) == "done");
   double last_t = 0;

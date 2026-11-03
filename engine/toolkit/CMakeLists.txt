@@ -22,7 +22,6 @@ add_library(paperboat_toolkit
   # control: dynamics on a clock (PID, integrator, lag)
   src/control/pid.cpp
   src/control/simulator.cpp
-  src/control/cart_pole.cpp
   src/control/register.cpp
   # step: a Step flow's path (start, wait, if, repeat)
   src/step/flow.cpp
