@@ -182,6 +182,8 @@ json Run::pass_over(const std::vector<std::string>& order) {
     const auto call = calling(id);
     if (node.object) {
       outputs_[id] = node.object->read();
+    } else if (node.block && !node.def.feedthrough) {
+      outputs_[id] = node.block->outputs();  // its inputs come after the pass
     } else if (node.block) {
       outputs_[id] = node.block->step(ctx_, inputs_of(node));
     } else {  // a monitor: what it shows is its "value" output, or its input
@@ -198,6 +200,13 @@ json Run::pass_over(const std::vector<std::string>& order) {
                            {"v", toolkit::get_or(in, "in")}});
       }
     }
+  }
+  // Blocks without feedthrough take this pass's inputs now that every block has run.
+  for (const auto& id : order) {
+    auto& node = g_.nodes.at(id);
+    if (!node.block || node.def.feedthrough) continue;
+    const auto call = calling(id);
+    node.block->step(ctx_, inputs_of(node));
   }
   return samples;
 }

@@ -100,20 +100,30 @@ TEST_CASE("pid") {
   }
 }
 
-TEST_CASE("integrator and lag") {
+TEST_CASE("integrator, lag and delay: no feedthrough, outputs() before step()") {
   const double dt = 0.1;
+  // As a run calls one: read its outputs during the pass, then give it the step's input.
+  auto run = [dt](Block& b, int steps, double u) {
+    double y = 0;
+    for (int k = 0; k < steps; ++k) {
+      y = get_or(b.outputs(), "y");
+      b.step({.t = k * dt, .dt = dt}, {{"u", u}});
+    }
+    return y;
+  };
   auto integ = make("control/integrator", {{"initial", 1}});
-  double y = 0;
-  for (int k = 0; k <= 10; ++k) y = out(*integ, k * dt, {{"u", 2}}, "y", dt);
-  CHECK_THAT(y, WithinAbs(1 + 2 * 1.0, 1e-9));  // output lags its input by one step
+  CHECK_THAT(run(*integ, 11, 2), WithinAbs(1 + 2 * 1.0, 1e-9));  // at t = 1: the state before that step's input
 
   auto lag = make("control/lag", {{"tau", 0.5}});
-  double z = 0;
-  for (int k = 0; k < 100; ++k) z = out(*lag, k * dt, {{"u", 3}}, "y", dt);
-  CHECK_THAT(z, WithinAbs(3.0, 1e-6));
+  CHECK_THAT(run(*lag, 100, 3), WithinAbs(3.0, 1e-6));
 
-  auto none = make("control/lag", {{"tau", 0}});
-  CHECK(out(*none, 0, {{"u", 4}}) == 4.0);
+  auto none = make("control/lag", {{"tau", 0}});  // tau 0: a one-step delay
+  CHECK(run(*none, 1, 4) == 0.0);
+  CHECK(run(*none, 1, 4) == 4.0);
+
+  const auto catalog = load_descriptor("domain = \"d\"\nimport = [\"control\"]\n");
+  for (const char* type : {"integrator", "lag", "delay"}) CHECK_FALSE(catalog.find(type)->def.feedthrough);
+  CHECK(catalog.find("pid")->def.feedthrough);
 }
 
 TEST_CASE("rk4_step matches exp(-t)") {

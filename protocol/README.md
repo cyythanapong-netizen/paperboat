@@ -50,6 +50,8 @@ Default address: `ws://localhost:8765`.
   // { "type": "text" | "key" | "file", "default": "…" },
   // { "type": "enum", "options": ["in-out", "in"], "default": "in-out" } (a choice; the block gets its index)
   "group": "base",                 // optional palette group: the domain, or a toolkit package
+  "feedthrough": false,            // optional: its outputs don't depend on this step's inputs
+                                   // (an integrator, a delay), so a feedback loop may pass through it
   // optional, a magic block: one form per way to use it, each with its own ports. Its enum
   // param "form" picks one (the first by default); inputs/outputs are the first form's.
   // A node takes the ports of its form, and the engine makes the block that form needs.

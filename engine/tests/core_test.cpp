@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <map>
 #include <optional>
 #include <stdexcept>
@@ -484,4 +485,53 @@ TEST_CASE("graph.run's settings override the backend's run settings") {
   Collected bad;
   CHECK(core::run("r", starter_graph(), starter_station(), backend, bad.emit(), nullptr, {}, json{{"dt", -1}}) == "failed");
   CHECK(bad.messages.back()["status"] == "failed");
+}
+
+TEST_CASE("a feedback loop through a block without feedthrough runs; an algebraic loop fails, naming a block") {
+  // x' = -k x as a loop: integrator → gain (k = -2) → back into the integrator. No station
+  // object closes it: the integrator gives its state before it reads its input.
+  const json loop = {
+      {"nodes",
+       {{{"id", "int"}, {"type", "integrator"}, {"params", {{"initial", 1.0}}}},
+        {{"id", "k"}, {"type", "gain"}, {"params", {{"k", -2.0}}}},
+        {{"id", "plot"}, {"type", "graph"}}}},
+      {"edges",
+       {{{"from", {"int", "y"}}, {"to", {"k", "u"}}},
+        {{"from", {"k", "y"}}, {"to", {"int", "u"}}},
+        {{"from", {"int", "y"}}, {"to", {"plot", "in"}}}}}};
+  const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = {.dt = 0.01, .duration = 1, .emit_every = 1, .real_time = false}};
+  Collected out;
+  REQUIRE(core::run("r", loop, nullptr, backend, out.emit(), nullptr, {}) == "done");
+  // Forward Euler of x' = -2x from 1: (1 - 0.02)^100 at t = 1; e^-2 ≈ 0.1353 in the limit.
+  CHECK_THAT(out.last_signal("plot"), WithinAbs(std::pow(0.98, 100), 1e-12));
+
+  const json algebraic = {{"nodes", {{{"id", "a"}, {"type", "gain"}}, {{"id", "b"}, {"type", "gain"}}}},
+                          {"edges", {{{"from", {"a", "y"}}, {"to", {"b", "u"}}}, {{"from", {"b", "y"}}, {"to", {"a", "u"}}}}}};
+  Collected bad;
+  CHECK(core::run("r", algebraic, nullptr, backend, bad.emit(), nullptr, {}) == "failed");
+  CHECK(std::ranges::any_of(bad.messages, [](const json& m) {
+    return m["type"] == "node.state" && m["state"] == "failed" && (m["node"] == "a" || m["node"] == "b");
+  }));
+  CHECK(std::ranges::any_of(bad.messages, [](const json& m) {
+    return m["type"] == "log" && m["text"].get<std::string>().find("algebraic loop") != std::string::npos;
+  }));
+}
+
+TEST_CASE("a delay gives its input from n clock steps ago, any value") {
+  const json graph = {{"nodes",
+                       {{{"id", "clock"}, {"type", "clock"}},
+                        {{"id", "d"}, {"type", "delay"}, {"params", {{"steps", 3.0}, {"initial", -1.0}}}},
+                        {{"id", "plot"}, {"type", "graph"}}}},
+                      {"edges", {{{"from", {"clock", "t"}}, {"to", {"d", "u"}}}, {{"from", {"d", "y"}}, {"to", {"plot", "in"}}}}}};
+  const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = {.dt = 0.1, .duration = 1, .emit_every = 1, .real_time = false}};
+  Collected out;
+  REQUIRE(core::run("r", graph, nullptr, backend, out.emit(), nullptr, {}) == "done");
+  std::vector<double> v;
+  for (const auto& m : out.messages)
+    if (m["type"] == "signal") v.push_back(m["v"]);
+  REQUIRE(v.size() == 11);
+  CHECK(v[0] == -1.0);
+  CHECK(v[2] == -1.0);
+  CHECK_THAT(v[3], WithinAbs(0.0, 1e-12));   // t = 0, three steps late
+  CHECK_THAT(v[10], WithinAbs(0.7, 1e-12));  // t = 1.0 shows t = 0.7
 }
