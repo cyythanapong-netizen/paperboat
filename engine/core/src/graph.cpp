@@ -30,7 +30,18 @@ std::vector<std::string> sorted(const std::vector<std::string>& ids, std::map<st
       if (done.contains(id)) continue;
       if (std::ranges::all_of(deps[id], [&](const std::string& d) { return done.contains(d); })) ready.push_back(id);
     }
-    if (ready.empty()) throw GraphError("graph has a cycle" + where);
+    if (ready.empty()) {
+      // What's left is in a loop, or waits for one: name a block that is in it.
+      std::string in_loop;
+      for (const auto& id : ids)
+        if (!done.contains(id) && std::ranges::any_of(deps[id], [&](const std::string& d) { return !done.contains(d); })) {
+          in_loop = id;
+          break;
+        }
+      throw GraphError(in_loop, "graph has a cycle" + where + (in_loop.empty() ? "" : " through " + in_loop) +
+                                    ": an algebraic loop. Break it with a block that doesn't pass its input straight through "
+                                    "(a delay, an integrator)");
+    }
     for (const auto& id : ready) {
       done.insert(id);
       order.push_back(id);
@@ -173,8 +184,11 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
       return it == out.story_of.end() ? std::string() : it->second;
     };
     // A step's signal outputs are read as they were after the last clock step (like a
-    // linked block's), so a wire from one never makes a cycle.
-    if (!src.step && !dst.object && !dst.step && story(from.first) == story(to.first)) deps[to.first].push_back(from.first);
+    // linked block's), so a wire from one never makes a cycle. A block without feedthrough
+    // (an integrator, a delay) gives its outputs before it reads its inputs: a wire into
+    // one doesn't make it wait, so a loop through it is allowed.
+    const bool waits = !dst.object && !dst.step && dst.def.feedthrough;
+    if (!src.step && waits && story(from.first) == story(to.first)) deps[to.first].push_back(from.first);
   }
 
   std::vector<std::string> outside;

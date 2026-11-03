@@ -43,6 +43,8 @@ export type BlockDef = {
   instrument?: string;
   /** A magic block's forms; its inputs and outputs are the first's, and its form param (an enum) picks one. */
   forms?: Form[];
+  /** false: its outputs this step don't depend on its inputs this step (an integrator, a delay), so a feedback loop may pass through it. Absent: true. */
+  feedthrough?: boolean;
 };
 
 /** A station object type: a thing on the Station page whose props are edited only there. */
