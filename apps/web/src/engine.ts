@@ -54,6 +54,21 @@ const initial: EngineState = {
 
 type Action = ServerMsg | { type: "reset" } | { type: "connection"; value: EngineState["connection"] };
 
+/** Samples kept per plotted signal: past this, the history is thinned, not cut. */
+export const MAX_POINTS = 20000;
+
+/**
+ * A series with one more sample. A long run keeps its whole history: once a series has
+ * MAX_POINTS samples, every other one is dropped, so the plot still spans the run at half
+ * the resolution (memory and the cost of an update stay bounded).
+ */
+export function append(prev: Series | undefined, t: number, v: number): Series {
+  const series = { t: [...(prev?.t ?? []), t], v: [...(prev?.v ?? []), v] };
+  if (series.t.length <= MAX_POINTS) return series;
+  const keep = (_: number, i: number) => i % 2 === 0 || i === series.t.length - 1; // always the latest
+  return { t: series.t.filter(keep), v: series.v.filter(keep) };
+}
+
 function reduce(s: EngineState, m: Action): EngineState {
   switch (m.type) {
     case "reset":
@@ -97,8 +112,7 @@ function reduce(s: EngineState, m: Action): EngineState {
     case "signal": {
       const latest = { ...s.latest, [m.node]: m.v };
       if (typeof m.v !== "number") return { ...s, latest };
-      const prev = s.signals[m.node] ?? { t: [], v: [] };
-      return { ...s, latest, signals: { ...s.signals, [m.node]: { t: [...prev.t, m.t], v: [...prev.v, m.v] } } };
+      return { ...s, latest, signals: { ...s.signals, [m.node]: append(s.signals[m.node], m.t, m.v) } };
     }
     case "log":
       return { ...s, logs: [...s.logs.slice(-199), { level: m.level, text: m.text, node: m.node }] };
