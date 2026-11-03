@@ -15,6 +15,8 @@ export type GroupData = {
   label: string;
   collapsed: boolean;
   seconds: number;
+  /** A story's blocks start afresh each time a path arrives. */
+  reset: boolean;
   /** Its size when open. */
   size: { w: number; h: number };
   /** Filled for display: the ports a collapsed group shows (`node::port` ids). */
@@ -83,6 +85,12 @@ export function GroupBox({ id, data, selected }: NodeProps<GroupNode>) {
               onChange={(e) => update(id, { seconds: Math.max(0, e.target.valueAsNumber || 0) })}
             />
             s
+          </label>
+        )}
+        {story && (
+          <label className="frame-seconds" title="Start its blocks afresh each time a path arrives (a story in a loop starts over)">
+            <input className="nodrag" type="checkbox" checked={data.reset} onChange={(e) => update(id, { reset: e.target.checked })} />
+            fresh
           </label>
         )}
         <button className="remove nodrag" title="Ungroup (keeps the blocks)" onClick={() => ungroup(id)}>
@@ -178,7 +186,7 @@ export function frameAround<N extends AnyNode>(
   id: string,
   kind: GroupData["kind"],
   children: N[],
-  options: { label?: string; collapsed?: boolean; seconds?: number; pos?: [number, number] } = {},
+  options: { label?: string; collapsed?: boolean; seconds?: number; reset?: boolean; pos?: [number, number] } = {},
 ): { frame: GroupNode; children: N[] } {
   const xs = children.map((n) => n.position.x);
   const ys = children.map((n) => n.position.y);
@@ -199,6 +207,7 @@ export function frameAround<N extends AnyNode>(
       label: options.label ?? (kind === "story" ? "Story" : "Group"),
       collapsed: options.collapsed ?? false,
       seconds: options.seconds ?? (kind === "story" ? 1 : 0),
+      reset: options.reset ?? false,
       size,
     },
   };
@@ -236,6 +245,6 @@ export function toGroups(nodes: AnyNode[]): GraphGroup[] {
     nodes: nodes.filter((n) => n.parentId === g.id).map((n) => n.id),
     collapsed: g.data.collapsed,
     pos: [Math.round(g.position.x), Math.round(g.position.y)],
-    ...(g.data.kind === "story" ? { params: { seconds: g.data.seconds } } : {}),
+    ...(g.data.kind === "story" ? { params: { seconds: g.data.seconds, reset: g.data.reset } } : {}),
   }));
 }

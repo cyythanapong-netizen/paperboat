@@ -44,6 +44,7 @@ inline Template make_template(const std::string& package, std::string type, std:
 namespace base {
 void add_values(Registry& registry);    // constant (Number), text, boolean
 void add_key(Registry& registry);       // key
+void add_logic(Registry& registry);     // if, and, or, not, compare: magic (signal | step)
 }  // namespace base
 
 // signal: generators driven by the run clock.

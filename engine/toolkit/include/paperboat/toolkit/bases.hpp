@@ -56,6 +56,11 @@ class Timed : public Step {
   bool first_ = true;
 };
 
+// A magic block's definition: these forms (the first is the default), picked by an enum
+// param `form` added in front of `params`. Its template sets both `make` (signal forms)
+// and `make_step` (forms with step ports); the engine makes the one its form needs.
+BlockDef magic_def(std::string type, std::string label, std::vector<Form> forms, std::vector<ParamDef> params = {});
+
 // A timed step's definition: ports in, curve → next, progress; params `seconds` (1, if
 // `params` doesn't have it) and these.
 BlockDef timed_def(std::string type, std::string label, std::vector<ParamDef> params = {}, Kind kind = Kind::Function);

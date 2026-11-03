@@ -27,14 +27,31 @@ struct PortDef {
 // A setting on a block or a station object, edited in the UI. Number types reach a block
 // as numbers (default_value): "number", and "boolean" (1 or 0, a checkbox). Text types
 // reach it as text (default_text, through Config): "text", "key" (a KeyboardEvent.code,
-// which key a Key block reads) and "file" (a path, relative to the descriptor's folder).
+// which key a Key block reads), "file" (a path, relative to the descriptor's folder) and
+// "enum" (one of `options`, a dropdown; a block also gets its index in `options` as a
+// number, so an expression can use it).
 struct ParamDef {
   std::string id = {};
   double default_value = 0.0;
   std::string type = "number";
   std::string default_text = {};
+  std::vector<std::string> options = {};  // an enum's choices
 
   bool is_number() const { return type == "number" || type == "boolean"; }
+  // An enum's choice by name, or -1.
+  int option(std::string_view name) const {
+    for (std::size_t i = 0; i < options.size(); ++i)
+      if (options[i] == name) return static_cast<int>(i);
+    return -1;
+  }
+};
+
+// One form of a magic block: the ports it has in that form, such as "signal" (values in
+// and out) and "step" (a step on a Step flow's path). A block's `form` param picks one.
+struct Form {
+  std::string name = {};
+  std::vector<PortDef> inputs = {};
+  std::vector<PortDef> outputs = {};
 };
 
 // Matches the protocol's BlockDef.kind.
@@ -51,7 +68,13 @@ struct BlockDef {
   std::vector<ParamDef> params = {};
   // A monitor's instrument on the Dashboard: "graph", "display", "image"…
   std::string instrument = {};
+  // A magic block's forms (its inputs and outputs are the first's); its `form` param picks one.
+  std::vector<Form> forms = {};
 };
+
+// The definition in form `form` (that form's ports); `def` itself if it has no forms, or
+// no form of that name.
+BlockDef in_form(const BlockDef& def, std::string_view form);
 
 // True for a block on a Step flow's path: one with a step port.
 bool has_step_ports(const BlockDef& def);

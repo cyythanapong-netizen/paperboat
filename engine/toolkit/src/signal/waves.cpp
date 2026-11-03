@@ -38,7 +38,7 @@ class Expression final : public Generator {
   static std::vector<std::string> names(const BlockDef& def) {
     std::vector<std::string> out{"t"};
     for (const auto& p : def.params)
-      if (p.is_number()) out.push_back(p.id);
+      if (p.is_number() || p.type == "enum") out.push_back(p.id);  // an enum by its index
     return out;
   }
   static std::string text_of(const Config& config) {

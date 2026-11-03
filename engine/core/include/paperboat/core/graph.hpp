@@ -20,10 +20,13 @@ using PortRef = std::pair<std::string, std::string>;  // (node id, port id)
 struct Node {
   std::string id;
   const toolkit::CatalogEntry* entry = nullptr;
+  toolkit::BlockDef def = {};                 // its entry's, in the form it is in (a magic block)
   std::unique_ptr<toolkit::Block> block;      // signal blocks (none for monitors)
   std::unique_ptr<toolkit::Step> step;        // step blocks
   toolkit::StationObject* object = nullptr;   // linked blocks: the station object they act on
   std::unique_ptr<toolkit::Block> monitor;    // monitors that convert what they show
+  toolkit::Values params = {};                // what it was made with, to make it again
+  toolkit::Config text = {};
 };
 
 // A story group's step: when a path arrives it runs the story's blocks (`pass`, set by
@@ -33,7 +36,11 @@ class StoryStep final : public toolkit::Step {
  public:
   explicit StoryStep(double seconds) : seconds_(seconds) {}
   std::function<void()> pass;
-  void enter(const toolkit::Context&, const toolkit::Values&) override { elapsed_ = 0; }
+  std::function<void()> on_enter;  // set by the run for a story that starts afresh
+  void enter(const toolkit::Context&, const toolkit::Values&) override {
+    elapsed_ = 0;
+    if (on_enter) on_enter();
+  }
   std::string tick(const toolkit::Context& ctx, const toolkit::Values&) override {
     if (pass) pass();
     elapsed_ += ctx.dt;
@@ -49,6 +56,7 @@ class StoryStep final : public toolkit::Step {
 struct Story {
   std::vector<std::string> order;  // its blocks, dependencies first
   StoryStep* step = nullptr;       // owned by its node
+  bool reset = false;              // params.reset: its blocks start afresh each time a path arrives
 };
 
 struct Graph {
@@ -65,8 +73,8 @@ struct Graph {
 
 // Check `graph` against the catalog and the station; make its blocks. `groups` (optional):
 // a "visual" group only tidies the canvas and changes nothing here; a "story" group
-// becomes one step node (same id as the group, step ports in → next, param `seconds`)
-// whose blocks run only while a path is at it.
+// becomes one step node (same id as the group, step ports in → next, params `seconds` and
+// `reset`) whose blocks run only while a path is at it.
 // Wires must join ports of one type (step, signal, image…); a step output leads to one block;
 // signal wires may not loop (linked blocks have no feedthrough, so wires into them don't
 // count). Throws GraphError.

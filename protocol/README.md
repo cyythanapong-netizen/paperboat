@@ -46,8 +46,17 @@ Default address: `ws://localhost:8765`.
   "outputs": [{ "id": "y", "type": "signal" }],
   "params":  [{ "id": "amplitude", "type": "number", "default": 5 }],
   // other param types: { "type": "boolean", "default": true } (a checkbox; 1 or 0 to the block),
-  // { "type": "text" | "key" | "file", "default": "…" }
-  "group": "base"                  // optional palette group: the domain, or a toolkit package
+  // { "type": "text" | "key" | "file", "default": "…" },
+  // { "type": "enum", "options": ["in-out", "in"], "default": "in-out" } (a choice; the block gets its index)
+  "group": "base",                 // optional palette group: the domain, or a toolkit package
+  // optional, a magic block: one form per way to use it, each with its own ports. Its enum
+  // param "form" picks one (the first by default); inputs/outputs are the first form's.
+  // A node takes the ports of its form, and the engine makes the block that form needs.
+  "forms": [
+    { "name": "signal", "inputs": [{ "id": "cond" }, { "id": "a" }, { "id": "b" }], "outputs": [{ "id": "y" }] },
+    { "name": "step", "inputs": [{ "id": "in", "type": "step" }, { "id": "cond" }],
+      "outputs": [{ "id": "yes", "type": "step" }, { "id": "no", "type": "step" }] }
+  ]
 }
 
 // Entity: one thing in the 3D setup view
@@ -134,7 +143,7 @@ A graph whose blocks have `step` ports is a Step flow (see `examples/backends/an
 ## Groups
 
 A graph may carry `groups`: `{ id, kind: "visual" | "story", label?, nodes: [ids],
-collapsed?, pos?, params?: { seconds } }`. A block is in at most one group.
+collapsed?, pos?, params?: { seconds, reset } }`. A block is in at most one group.
 
 - **visual** tidies the canvas: the backend runs its blocks as if ungrouped. Collapsed,
   the UI draws it as one block whose ports are the wires crossing its edge; the wires
@@ -143,8 +152,9 @@ collapsed?, pos?, params?: { seconds } }`. A block is in at most one group.
   (wire Start → a story → the next story). When a path arrives, the story's blocks (signal
   blocks only) run once per clock step for `params.seconds` (0: once), then the path
   leaves by `next`. Its blocks don't run at any other time; what they computed stays on
-  their outputs, so later stories read the results. `node.state` reports the story like
-  any step block.
+  their outputs, so later stories read the results. With `params.reset` its blocks start
+  afresh each time a path arrives (a story in a loop starts over). `node.state` reports
+  the story like any step block.
 
 ## Web station
 
@@ -168,8 +178,8 @@ runs each example's starter headless (`--run`) and compares the results with its
   devtools, and it maps directly to TypeScript types and `nlohmann::json` in C++.
 - **Bulk data (CFD fields, meshes): binary WebSocket frames** with a small JSON header
   message announcing them. Not needed in v0.
-- **Source of truth for types: JSON Schema** (`schema/`). Next: generate the TypeScript
-  types and C++ structs from it.
+- **Source of truth for types: JSON Schema** (`schema/`). The TypeScript types are
+  generated from it (`gen_ts.py`); C++ structs could be next.
 - **Authoring block definitions:** in code, next to what the block does (C++
   `define_block`, Python class attributes); the descriptor picks and customises them and
   holds the starters. The engine emits them as this JSON.

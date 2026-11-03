@@ -9,6 +9,7 @@ import {
   MarkerType,
   Position,
   ReactFlow,
+  useInternalNode,
   useReactFlow,
   type Connection,
   type Edge,
@@ -54,6 +55,15 @@ export const RunStates = createContext<{ active: ReadonlySet<string>; failed: Re
   failed: new Set(),
 });
 
+/** A magic block's definition in the form its `form` param picks (its ports are that form's). */
+export function inForm(def: BlockDef, params: Record<string, ParamValue>): BlockDef {
+  const form = def.forms?.find((f) => f.name === params.form);
+  return form ? { ...def, inputs: form.inputs, outputs: form.outputs } : def;
+}
+
+/** A block's ports as they are now (a magic block's: its form's). */
+export const portsOf = (n: BlockNode) => inForm(n.data.def, n.data.params);
+
 const portType = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs") =>
   def?.[side].find((p) => p.id === port)?.type;
 
@@ -62,7 +72,8 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { updateNodeData, deleteElements } = useReactFlow<BlockNode, Wire>();
   const states = useContext(RunStates);
   const active = states.active.has(id);
-  const { def, params, missing } = data;
+  const { params, missing } = data;
+  const def = inForm(data.def, params);
   const failed = states.failed.has(id);
   const classes = ["block", `kind-${def.kind}`, active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
   return (
@@ -138,6 +149,15 @@ export function ParamInput({
       />
     );
   }
+  if (def.type === "enum") {
+    return (
+      <select className="nodrag enum-param" disabled={disabled} value={String(value)} onChange={(e) => set(e.target.value)}>
+        {def.options.map((o) => (
+          <option key={o}>{o}</option>
+        ))}
+      </select>
+    );
+  }
   if (def.type === "file" || def.type === "text") {
     return (
       <input
@@ -177,11 +197,59 @@ export function ParamInput({
   );
 }
 
-/** A wire: a curve for signals, a right-angled arrow for steps, and × when selected. */
-function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire>) {
+/** The bottom edge of a node on the canvas (inside a group or not). */
+function useBottom(id: string): number | undefined {
+  const node = useInternalNode(id);
+  if (!node) return undefined;
+  return node.internals.positionAbsolute.y + (node.measured.height ?? 0);
+}
+
+/**
+ * A wire that runs back (its target left of its source, as in a loop: Rotate → Repeat)
+ * goes around the blocks instead of under them: out to the right, down below both blocks,
+ * back left, and into the target from the left, with rounded corners.
+ */
+function loopPath(sx: number, sy: number, tx: number, ty: number, below: number): [string, number, number] {
+  const out = 24;  // how far it leaves a port before turning
+  const r = 10;    // corner radius
+  const pts: [number, number][] = [
+    [sx, sy],
+    [sx + out, sy],
+    [sx + out, below],
+    [tx - out, below],
+    [tx - out, ty],
+    [tx, ty],
+  ];
+  let d = `M ${pts[0][0]},${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [px, py] = pts[i - 1];
+    const [cx, cy] = pts[i];
+    const [nx, ny] = pts[i + 1];
+    const ra = Math.min(r, Math.hypot(cx - px, cy - py) / 2, Math.hypot(nx - cx, ny - cy) / 2);
+    const a = [cx - Math.sign(cx - px) * ra, cy - Math.sign(cy - py) * ra];
+    const b = [cx + Math.sign(nx - cx) * ra, cy + Math.sign(ny - cy) * ra];
+    d += ` L ${a[0]},${a[1]} Q ${cx},${cy} ${b[0]},${b[1]}`;
+  }
+  d += ` L ${tx},${ty}`;
+  return [d, (sx + tx) / 2, below];
+}
+
+/** A wire: a curve for signals, a right-angled arrow for steps, around the blocks when it runs back, and × when selected. */
+function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }: EdgeProps<Wire>) {
   const { deleteElements } = useReactFlow();
   const step = data?.type === "step";
-  const [path, x, y] = (step ? getSmoothStepPath : getBezierPath)(geometry);
+  const sourceBottom = useBottom(source);
+  const targetBottom = useBottom(target);
+  const back = geometry.targetX < geometry.sourceX + 8;
+  const [path, x, y] = back
+    ? loopPath(
+        geometry.sourceX,
+        geometry.sourceY,
+        geometry.targetX,
+        geometry.targetY,
+        Math.max(sourceBottom ?? geometry.sourceY, targetBottom ?? geometry.targetY, geometry.sourceY, geometry.targetY) + 28,
+      )
+    : (step ? getSmoothStepPath : getBezierPath)(geometry);
   return (
     <>
       <BaseEdge id={id} path={path} markerEnd={markerEnd} className={`wire-${data?.type ?? "signal"}`} />
@@ -312,7 +380,7 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
     const node = makeNode(missingDef(n.type, n.params ?? {}, wires, n.id), n.id, x, y, n.params);
     return { ...node, data: { ...node.data, missing: true } };
   });
-  const byId = new Map<string, BlockDef>(nodes.map((n) => [n.id, n.data.def]));
+  const byId = new Map<string, BlockDef>(nodes.map((n) => [n.id, inForm(n.data.def, n.data.params)]));
   // Groups: frames around their blocks (parents before children, as React Flow wants).
   let all: FlowNode[] = nodes;
   const frames: FlowNode[] = [];
@@ -323,6 +391,7 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
       label: g.label,
       collapsed: g.collapsed,
       seconds: g.params?.seconds,
+      reset: g.params?.reset,
       pos: g.pos,
     });
     if (g.kind === "story") byId.set(g.id, STORY_DEF);
@@ -392,7 +461,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   const defOf = (id: string): BlockDef | undefined => {
     const n = nodes.find((x) => x.id === id);
     if (!n) return undefined;
-    if (isBlock(n)) return n.data.def;
+    if (isBlock(n)) return portsOf(n);
     return n.data.kind === "story" ? STORY_DEF : undefined;
   };
   // A wire drawn to a collapsed group's port is a wire to the block inside it.
@@ -423,7 +492,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   // signal blocks only: it is itself the step.
   const selected = nodes.filter((n): n is BlockNode => isBlock(n) && !!n.selected && !n.parentId);
   const selectedFrame = nodes.find((n) => isFrame(n) && n.selected);
-  const canStory = selected.length > 0 && selected.every((n) => !hasStepPorts(n.data.def));
+  const canStory = selected.length > 0 && selected.every((n) => !hasStepPorts(portsOf(n)));
   const group = (kind: GroupData["kind"]) =>
     setNodes((ns) => {
       const picked = ns.filter((n): n is BlockNode => isBlock(n) && !!n.selected && !n.parentId);
@@ -516,7 +585,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       </ReactFlow>
       <p className="hint muted">
         Click a block or wire, then Delete or ×. Shift-drag to select several; Ctrl-click to add one. Drag a wire's end
-        off its port to remove it. Group or Story the selected blocks; ▾ collapses a group.
+        off its port to remove it. Group or Story the selected blocks; ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
       </p>
     </div>
     </GroupActions.Provider>

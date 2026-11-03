@@ -262,6 +262,23 @@ TEST_CASE("descriptor mistakes are reported with where they are") {
   CHECK_THROWS_AS(tk::load_descriptor_file("/no/such/descriptor.toml"), tk::DescriptorError);
 }
 
+TEST_CASE("an enum param: one of its options, in the catalog with them") {
+  const auto catalog = tk::load_descriptor(descriptor(R"toml(
+[[blocks]]
+use = "signal/generator"
+type = "pick"
+params = { which = { default = "b", type = "enum", options = ["a", "b", "c"] } }
+config = { f = "which * 10" }
+)toml"));
+  const auto msg = nlohmann::json::parse(tk::catalog_message(catalog));
+  CHECK(msg["blocks"][0]["params"][0] ==
+        nlohmann::json{{"id", "which"}, {"type", "enum"}, {"default", "b"}, {"options", {"a", "b", "c"}}});
+  CHECK(tk::get_or(catalog.find("pick")->make()->step({}, {{"t", 0.0}}), "y") == 10.0);  // b is index 1
+  CHECK(tk::get_or(catalog.find("pick")->make({}, {{"which", "c"}})->step({}, {{"t", 0.0}}), "y") == 20.0);
+  CHECK_THROWS_WITH(tk::load_descriptor(descriptor("[[blocks]]\nuse = \"signal/ease\"\ndefaults = { shape = \"wobbly\" }\n")),
+                    ContainsSubstring("must be one of its options"));
+}
+
 TEST_CASE("a boolean param is a number to the block and true or false in the catalog") {
   const auto catalog = tk::load_descriptor(descriptor("[[blocks]]\nuse = \"base/boolean\"\ndefaults = { value = false }\n"));
   const auto msg = nlohmann::json::parse(tk::catalog_message(catalog));

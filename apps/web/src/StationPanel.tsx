@@ -74,7 +74,7 @@ export function StationPanel({ objects, station, taken, onChange, locked }: Prop
                     {p.id}
                     <ParamInput
                       def={p}
-                      value={o.props[p.id] ?? p.default}
+                      value={o.props?.[p.id] ?? p.default}
                       disabled={locked}
                       set={(v) => update(o.id, (x) => ({ ...x, props: { ...x.props, [p.id]: v } }))}
                     />

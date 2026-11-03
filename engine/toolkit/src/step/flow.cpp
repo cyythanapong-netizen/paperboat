@@ -72,11 +72,6 @@ class Wait final : public Step {
   double until_ = 0.0;
 };
 
-// Branches on a signal: yes while cond is positive (a threshold or key gives 1 or 0).
-struct If final : Step {
-  std::string tick(const Context&, const Values& in) override { return get_or(in, "cond") > 0 ? "yes" : "no"; }
-};
-
 // Leaves by `loop` `times` times, then by `done`, counting how often the run arrives.
 // Wire the end of the loop back to its input. After `done` it counts from zero again.
 class Repeat final : public Step {
@@ -111,8 +106,6 @@ void add_flow(Registry& registry) {
                                   [](const Values& p, const Config&) {
                                     return std::make_unique<Wait>(get_or(p, "seconds"));
                                   }));
-  registry.add(make_step_template("if", "If", {step_port("in"), {"cond"}}, {step_port("yes"), step_port("no")}, {},
-                                  [](const Values&, const Config&) { return std::make_unique<If>(); }));
   registry.add(make_step_template("repeat", "Repeat", {step_port("in")}, {step_port("loop"), step_port("done")},
                                   {{"times", 3.0}}, [](const Values& p, const Config&) {
                                     return std::make_unique<Repeat>(get_or(p, "times"));

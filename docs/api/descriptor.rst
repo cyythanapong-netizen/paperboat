@@ -23,11 +23,13 @@ Top level
    ``type`` (a new type id; the default type stays too), ``label``, ``defaults`` (new param
    defaults: numbers, ``true``/``false`` for booleans, text for ``text``, ``key`` and ``file``
    params), ``config`` (fixed text settings), ``params`` (new params, on an extendable
-   parent only). An entry with the same type as an imported one replaces it.
+   parent only). An entry with the same type as an imported one replaces it. An enum's
+   default is one of its options.
 
    **Defining a block on a C++ parent.** An extendable template (``signal/generator``) is a
    parent: an entry that ``use``\ s it may add ``params`` (``{ size = 2, fast = true, name =
-   "x", key = { default = "Space", type = "key" } }``) and set any ``config``; the parent
+   "x", key = { default = "Space", type = "key" }, mode = { default = "a", type = "enum",
+   options = ["a", "b"] } }``; in an expression an enum is its index) and set any ``config``; the parent
    checks the definition at load (an expression that doesn't compile fails here, with where).
    The new block belongs to the domain.
 

@@ -192,6 +192,10 @@ struct Total final : tk::Block {
     return {{"y", sum}};
   }
 };
+struct Count final : tk::Block {  // counts its own passes
+  tk::Values step(const tk::Context&, const tk::Values&) override { return {{"y", ++n}}; }
+  double n = 0;
+};
 struct Boom final : tk::Block {
   tk::Values step(const tk::Context&, const tk::Values&) override { throw std::runtime_error("boom"); }
 };
@@ -215,6 +219,7 @@ const tk::Registry& registry() {
     tk::Registry out = tk::builtins();
     out.add(tk::define_block<Lengths>("words", {.type = "lengths", .label = "Lengths", .outputs = {{"y", "numbers"}}}));
     out.add(tk::define_block<Total>("words", {.type = "total", .label = "Total", .inputs = {{"u", "numbers"}}, .outputs = {{"y"}}}));
+    out.add(tk::define_block<Count>("words", {.type = "count", .label = "Count", .outputs = {{"y"}}}));
     out.add(tk::define_block<Boom>("words", {.type = "boom", .label = "Boom", .outputs = {{"y"}}}));
     out.add(tk::define_block<Slide>("words", {.type = "slide", .label = "Slide", .inputs = {{"in", "step"}, {"curve"}},
                                               .outputs = {{"next", "step"}, {"progress"}}}));
@@ -353,4 +358,61 @@ TEST_CASE("a step's signal output feeds signal blocks, and back into it, a clock
   CHECK(core::run("r", graph, nullptr, backend, out.emit(), nullptr, {}) == "done");
   // The last pass saw the progress after the clock step before the last: 0.9, halved.
   CHECK_THAT(out.last_signal("g"), WithinAbs(0.45, 1e-9));
+}
+
+TEST_CASE("a story with reset starts its blocks afresh each time a path arrives") {
+  static const tk::Catalog catalog = tk::load_descriptor("domain = \"words\"\nimport = [\"step\", \"dashboard\"]\n",
+                                                         words::registry());
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.1, .duration = 5, .emit_every = 1, .real_time = false}};
+  // Start → Repeat ×2 → [count, 0.3 s] → back to Repeat: the story runs twice, 3 passes each.
+  auto graph = [](bool reset) {
+    return json{
+        {"nodes", {{{"id", "start"}, {"type", "start"}}, {{"id", "rep"}, {"type", "repeat"}, {"params", {{"times", 2}}}},
+                   {{"id", "c"}, {"type", "count"}}, {{"id", "shown"}, {"type", "display"}}}},
+        {"edges", {{{"from", {"start", "next"}}, {"to", {"rep", "in"}}},
+                   {{"from", {"rep", "loop"}}, {"to", {"story", "in"}}},
+                   {{"from", {"story", "next"}}, {"to", {"rep", "in"}}},
+                   {{"from", {"c", "y"}}, {"to", {"shown", "in"}}}}},
+        {"groups", {{{"id", "story"}, {"kind", "story"}, {"nodes", {"c", "shown"}},
+                     {"params", {{"seconds", 0.3}, {"reset", reset}}}}}}};
+  };
+  Collected kept, fresh;
+  CHECK(core::run("r", graph(false), nullptr, backend, kept.emit(), nullptr, {}) == "done");
+  CHECK(core::run("r", graph(true), nullptr, backend, fresh.emit(), nullptr, {}) == "done");
+  CHECK(kept.last_signal("shown") == 6.0);   // the same block, counting on
+  CHECK(fresh.last_signal("shown") == 3.0);  // a fresh block the second time
+}
+
+TEST_CASE("a magic block takes the ports of its form in a run") {
+  const auto& catalog = catalog_of(R"(
+domain = "magic"
+import = ["step", "base", "dashboard"]
+)");
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.1, .duration = 2, .emit_every = 1, .real_time = false}};
+  // Step form: Start → Compare(1 > 0) → yes → Stop. Signal form: If chooses 7 or 9.
+  const json graph = {
+      {"nodes", {{{"id", "start"}, {"type", "start"}},
+                 {{"id", "check"}, {"type", "compare"}, {"params", {{"form", "step"}, {"op", ">"}}}},
+                 {{"id", "one"}, {"type", "constant"}, {"params", {{"value", 1}}}},
+                 {{"id", "stop"}, {"type", "stop"}},
+                 {{"id", "seven"}, {"type", "constant"}, {"params", {{"value", 7}}}},
+                 {{"id", "pick"}, {"type", "if"}},
+                 {{"id", "shown"}, {"type", "display"}}}},
+      {"edges", {{{"from", {"start", "next"}}, {"to", {"check", "in"}}},
+                 {{"from", {"one", "y"}}, {"to", {"check", "a"}}},
+                 {{"from", {"check", "yes"}}, {"to", {"stop", "in"}}},
+                 {{"from", {"one", "y"}}, {"to", {"pick", "cond"}}},
+                 {{"from", {"seven", "y"}}, {"to", {"pick", "a"}}},
+                 {{"from", {"pick", "y"}}, {"to", {"shown", "in"}}}}}};
+  Collected out;
+  CHECK(core::run("r", graph, nullptr, backend, out.emit(), nullptr, {}) == "done");
+  CHECK_THAT(logs(out).back(), ContainsSubstring("stopped by stop"));
+  CHECK(out.last_signal("shown") == 7.0);
+
+  // A wire to a port its form doesn't have fails, naming the block.
+  json wrong = graph;
+  wrong["nodes"][1]["params"]["form"] = "signal";
+  Collected bad;
+  CHECK(core::run("r", wrong, nullptr, backend, bad.emit(), nullptr, {}) == "failed");
+  CHECK_THAT(logs(bad).back(), ContainsSubstring("check (compare) has no input \"in\""));
 }

@@ -23,7 +23,7 @@ type LinkEdge = Edge;
 /** A station object as a node: its link slots on the left, itself on the right. */
 function ObjectBox({ data }: NodeProps<ObjectNode>) {
   const { object, def } = data;
-  const props = Object.entries(object.props);
+  const props = Object.entries(object.props ?? {});
   return (
     <div className={`block station-node role-${def?.role ?? "body"}${def ? "" : " missing"}`}>
       <div className="block-title">

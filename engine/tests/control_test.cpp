@@ -1,5 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include "paperboat/toolkit/descriptor.hpp"
 #include "paperboat/toolkit/expression.hpp"
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -150,16 +151,20 @@ TEST_CASE("base values: number, text and boolean") {
 TEST_CASE("ease shapes a progress (a definition on signal/generator)") {
   const auto* ease = paperboat::toolkit::builtins().find("signal/ease");
   REQUIRE(ease != nullptr);
-  // A template's make() takes its config too (a catalog entry passes it; here, by hand).
-  auto at = [&](double in, double out, double u) {
-    return get_or(ease->make({{"ease_in", in}, {"ease_out", out}}, ease->config)->step({}, {{"t", u}}), "y");
+  // A catalog entry makes it: the shape (an enum) by name, the block gets its index too.
+  const auto catalog = load_descriptor("domain = \"e\"\nimport = [\"signal\"]\n");
+  const auto* entry = catalog.find("ease");
+  REQUIRE(entry->def.params.at(0).type == "enum");
+  auto at = [&](const char* shape, double u) {
+    return get_or(entry->make({}, {{"shape", shape}})->step({}, {{"t", u}}), "y");
   };
-  CHECK(at(1, 1, 0.5) == 0.5);  // smoothstep is symmetric
-  CHECK(at(1, 1, 0.25) < 0.25);
-  CHECK(at(1, 0, 0.5) == 0.25);
-  CHECK(at(0, 1, 0.5) == 0.75);
-  CHECK(at(0, 0, 0.3) == 0.3);
-  CHECK(at(1, 1, 2.0) == 1.0);  // clamped
+  CHECK(at("in-out", 0.5) == 0.5);  // smoothstep is symmetric
+  CHECK(at("in-out", 0.25) < 0.25);
+  CHECK(at("in", 0.5) == 0.25);
+  CHECK(at("out", 0.5) == 0.75);
+  CHECK(at("linear", 0.3) == 0.3);
+  CHECK(at("in-out", 2.0) == 1.0);  // clamped
+  CHECK_THROWS_WITH(entry->make({}, {{"shape", "bouncy"}}), Catch::Matchers::ContainsSubstring("not one of: in-out, in, out, linear"));
 }
 
 TEST_CASE("signal blocks are TOML definitions on a C++ parent; its f is an expression") {

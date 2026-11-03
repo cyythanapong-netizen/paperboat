@@ -47,7 +47,9 @@ crossing its edge.
 **Story groups** are steps. A story's id is a node with step ports ``in`` and ``next``, and
 its blocks (signal blocks only) run only while a path is at it: once per clock step for
 ``params.seconds`` (``0``: once), then the path leaves by ``next``. What they computed stays
-on their outputs, so the next story reads the results. A test procedure reads as
+on their outputs, so the next story reads the results. With ``params.reset`` its blocks
+are made afresh each time a path arrives, so a story in a loop starts over. A test
+procedure reads as
 ``Start → Pull test (6 s) → Check (once)`` (``examples/backends/chain-python``); an
 animation as ``Start → Walk a square → Spin (2 s) → Report (once)``
 (``examples/backends/animation-python``, where Walk a square is a visual group of step
