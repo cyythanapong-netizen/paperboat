@@ -115,7 +115,10 @@ export function App() {
   }, [send]);
 
   const running = state.run?.status === "running";
-  const runStates = useMemo(() => ({ active: new Set(state.active), failed: new Set(state.failed) }), [state.active, state.failed]);
+  const runStates = useMemo(
+    () => ({ active: new Set(state.active), failed: new Set(state.failed), progress: state.progress }),
+    [state.active, state.failed, state.progress],
+  );
 
   // A Console line names a block: select it and bring it into view.
   const showBlock = (id: string) => {

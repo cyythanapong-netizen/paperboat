@@ -26,6 +26,8 @@ export type EngineState = {
   active: string[];
   /** Blocks the last run named as failing it. */
   failed: string[];
+  /** How far each block's long step has got (node.progress), 0 to 1. */
+  progress: Record<string, number>;
   /** Console lines; `node` is the block (or station object) that wrote it or failed. */
   logs: { level: string; text: string; node?: string }[];
 };
@@ -46,6 +48,7 @@ const initial: EngineState = {
   latest: {},
   active: [],
   failed: [],
+  progress: {},
   logs: [],
 };
 
@@ -79,7 +82,7 @@ function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, entities };
     }
     case "run.started":
-      return { ...s, run: { id: m.run, progress: 0, status: "running" }, signals: {}, latest: {}, active: [], failed: [] };
+      return { ...s, run: { id: m.run, progress: 0, status: "running" }, signals: {}, latest: {}, active: [], failed: [], progress: {} };
     case "run.progress":
       return s.run?.id === m.run ? { ...s, run: { ...s.run, progress: m.fraction } } : s;
     case "run.finished":
@@ -89,6 +92,8 @@ function reduce(s: EngineState, m: Action): EngineState {
       const failed = m.state === "failed" ? [...s.failed.filter((id) => id !== m.node), m.node] : s.failed;
       return { ...s, active: m.state === "running" ? [...active, m.node] : active, failed };
     }
+    case "node.progress":
+      return { ...s, progress: { ...s.progress, [m.node]: m.fraction } };
     case "signal": {
       const latest = { ...s.latest, [m.node]: m.v };
       if (typeof m.v !== "number") return { ...s, latest };

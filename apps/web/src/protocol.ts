@@ -242,6 +242,11 @@ export type ServerMsg =
     state: NodeState;
   }
   | {
+    type: "node.progress";
+    node: string;
+    fraction: number;
+  }
+  | {
     type: "log";
     level: "info" | "warn" | "error";
     text: string;

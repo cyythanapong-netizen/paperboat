@@ -45,7 +45,13 @@ class Once final : public Executor {
  public:
   std::string execute(Run& run) override {
     run.at_time(0);
-    const json samples = run.pass();
+    // Block by block, each reported running then done: a long pipeline shows where it is.
+    json samples = json::array();
+    for (const auto& id : run.graph().order) {
+      run.node_state(id, "running");
+      for (auto& sample : run.pass_over({id})) samples.push_back(std::move(sample));
+      run.node_state(id, "done");
+    }
     for (const auto& s : samples) run.emit(s);
     run.emit(run.scene(true));
     run.log("info", "evaluated " + std::to_string(run.graph().order.size()) + " blocks");

@@ -106,3 +106,5 @@ header form { display: flex; gap: 4px; }
 
 .run-options { display: inline-flex; align-items: center; gap: 4px; color: #888; font-size: 0.9em; }
 .run-options input { width: 4.5em; }
+.block-progress { height: 3px; background: #0001; }
+.block-progress > div { height: 100%; background: #c2410c; transition: width 0.1s linear; }

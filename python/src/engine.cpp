@@ -165,9 +165,13 @@ struct BlockContext {
   nb::object state;  // the domain state object, or None
   std::string node;  // the block's id
   const tk::LogFn* log_fn = nullptr;  // the run's; valid while the run lasts
+  const tk::ProgressFn* progress_fn = nullptr;
 
   void log(const std::string& text, const std::string& level) const {
     if (log_fn) (*log_fn)(node, level, text);
+  }
+  void progress(double fraction) const {
+    if (progress_fn) (*progress_fn)(node, fraction);
   }
 };
 
@@ -178,7 +182,7 @@ nb::object context(const tk::Context& ctx) {
   nb::set keys;
   if (ctx.keys_down)
     for (const auto& k : *ctx.keys_down) keys.add(nb::str(k.c_str()));
-  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn});
+  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn, ctx.progress_fn});
 }
 
 // Runs `fn` with the GIL held; a Python error becomes a C++ error the run reports.
@@ -547,7 +551,9 @@ NB_MODULE(_engine, m) {
       .def_ro("state", &BlockContext::state, "the domain state for this run, or None")
       .def_ro("node", &BlockContext::node, "the id of the block (or station object) being called")
       .def("log", &BlockContext::log, nb::arg("text"), nb::arg("level") = "info",
-           "Write a line to the Console, tagged with this block's id (level: info, warn, error).");
+           "Write a line to the Console, tagged with this block's id (level: info, warn, error).")
+      .def("progress", &BlockContext::progress, nb::arg("fraction"),
+           "How far a long step has got, 0 to 1: the UI shows it on the block.");
 
   nb::class_<Hosted>(m, "Hosted", "A backend: the domain's package, its catalog and (once listening) a server.")
       .def("listen", &Hosted::listen, nb::arg("port"), "Serve the protocol (and a web station) on the port.")

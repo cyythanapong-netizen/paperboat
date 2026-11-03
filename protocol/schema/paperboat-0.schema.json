@@ -745,6 +745,7 @@
             "run.finished",
             "signal",
             "node.state",
+            "node.progress",
             "log"
           ]
         }
@@ -880,6 +881,18 @@
           },
           "then": {
             "$ref": "#/$defs/node.state"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "node.progress"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/node.progress"
           }
         },
         {
@@ -1230,6 +1243,29 @@
           "description": "Times real time (1: as the clock goes; 0: as fast as it can)."
         }
       },
+      "additionalProperties": false
+    },
+    "node.progress": {
+      "description": "How far a block's long step has got (Context::progress), at most ~20 a second per block.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "node.progress"
+        },
+        "node": {
+          "type": "string"
+        },
+        "fraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "type",
+        "node",
+        "fraction"
+      ],
       "additionalProperties": false
     }
   },

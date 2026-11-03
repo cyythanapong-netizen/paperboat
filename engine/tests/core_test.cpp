@@ -179,7 +179,11 @@ struct Words final : tk::DomainState {
 struct Lengths final : tk::Block {
   tk::Values step(const tk::Context& ctx, const tk::Values&) override {
     tk::List out;
-    for (const auto& w : static_cast<Words*>(ctx.state)->words) out.push_back(static_cast<double>(w.size()));
+    const auto& words = static_cast<Words*>(ctx.state)->words;
+    for (const auto& w : words) {
+      out.push_back(static_cast<double>(w.size()));
+      ctx.progress(static_cast<double>(out.size()) / static_cast<double>(words.size()));
+    }
     ctx.log("measured " + std::to_string(out.size()) + " words");
     return {{"y", out}};
   }
@@ -254,6 +258,17 @@ edges = [{ from = ["l", "y"], to = ["t", "u"] }, { from = ["l", "y"], to = ["g",
   for (const auto& m : out.messages)
     if (m["type"] == "signal") plotted.push_back(m["v"]);
   CHECK(plotted == std::vector<double>{4, 6, 5});  // the list, by index
+  // Block by block, each running then done; a block's progress, throttled but always ending at 1.
+  std::vector<std::string> states;
+  std::vector<double> progress;
+  for (const auto& m : out.messages) {
+    if (m["type"] == "node.state") states.push_back(m["node"].get<std::string>() + ":" + m["state"].get<std::string>());
+    if (m["type"] == "node.progress" && m["node"] == "l") progress.push_back(m["fraction"]);
+  }
+  CHECK(states == std::vector<std::string>{"l:running", "l:done", "t:running", "t:done", "g:running", "g:done"});
+  REQUIRE(progress.size() >= 2);
+  CHECK_THAT(progress.front(), WithinAbs(1.0 / 3, 1e-9));
+  CHECK(progress.back() == 1.0);
   const auto text = logs(out);
   CHECK(std::ranges::find(text, "total 15") != text.end());
   // What a block logs reaches the Console tagged with its id.

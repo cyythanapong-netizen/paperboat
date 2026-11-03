@@ -2,6 +2,7 @@
 
 #include "paperboat/core/executor.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <exception>
@@ -62,6 +63,16 @@ Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit
     emit_(msg);
   };
   ctx_.log_fn = &log_;
+  progress_ = [this](std::string_view node, double fraction) {
+    if (node.empty() || !std::isfinite(fraction)) return;
+    fraction = std::clamp(fraction, 0.0, 1.0);
+    const auto now = std::chrono::steady_clock::now();
+    auto last = progress_sent_.find(node);
+    if (last != progress_sent_.end() && fraction < 1 && now - last->second < std::chrono::milliseconds(50)) return;
+    progress_sent_.insert_or_assign(std::string(node), now);
+    emit_({{"type", "node.progress"}, {"node", node}, {"fraction", fraction}});
+  };
+  ctx_.progress_fn = &progress_;
 }
 
 std::string Run::go(const json& graph_json, const json& station_json) {

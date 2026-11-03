@@ -8,6 +8,8 @@
 // A backend with another run style (event-driven, a long job, an external solver) sets
 // Backend::executor and drives the same Run; it never touches the socket.
 
+#include <chrono>
+#include <map>
 #include <memory>
 #include <optional>
 #include <stop_token>
@@ -89,6 +91,8 @@ class Run {
   toolkit::KeySet keys_;
   std::string failed_;  // the block that threw, if one did
   toolkit::LogFn log_;
+  toolkit::ProgressFn progress_;
+  std::map<std::string, std::chrono::steady_clock::time_point, std::less<>> progress_sent_;  // node → last node.progress
   toolkit::Context ctx_;
   Station station_;
   std::unique_ptr<toolkit::DomainState> state_;

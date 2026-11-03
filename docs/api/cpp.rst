@@ -215,6 +215,12 @@ What runs
 
       Write a line to the Console (``info``, ``warn``, ``error``), tagged with ``node``.
 
+   .. cpp:function:: void progress(double fraction) const
+
+      How far a long step has got, 0 to 1 (a filter over a big image, a solve): the UI shows
+      it on the block. Optional; call it as often as is useful, the run sends at most ~20 a
+      second.
+
 .. cpp:class:: Block
 
    One instance of a block in a running graph. It owns its state; two instances never

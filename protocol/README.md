@@ -21,7 +21,8 @@ Default address: `ws://localhost:8765`.
 | `run.started`  | `run: string`                               | when a run starts            |
 | `run.progress` | `run: string`, `fraction: number` (0–1)     | during a run                 |
 | `signal`       | `node: string`, `t: number`, `v: number \| string` | per sample, for monitor nodes. `t` is the x value: time in a simulation, list index otherwise; `v` is text for a display or an image's data URL |
-| `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
+| `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them; any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
+| `node.progress` | `node: string`, `fraction: number` (0–1) | How far a block's long step has got (`Context::progress`), at most ~20 a second per block; the UI shows it on the running block |
 | `log`          | `level: "info" \| "warn" \| "error"`, `text`, `node?: string` | any time. `node`: the block or station object that wrote it, or that failed |
 | `run.finished` | `run: string`, `status: "done" \| "failed" \| "cancelled"` | when a run ends |
 
