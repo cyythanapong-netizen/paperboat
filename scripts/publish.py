@@ -44,7 +44,7 @@ def framework_tree(rev: str = "HEAD") -> str:
     with tempfile.TemporaryDirectory() as tmp:
         env = {"GIT_INDEX_FILE": os.path.join(tmp, "index")}
         git("read-tree", rev, env=env)
-        git("rm", "-r", "-q", "--cached", "--ignore-unmatch", EXAMPLES, env=env)
+        git("rm", "-r", "-q", "-f", "--cached", "--ignore-unmatch", EXAMPLES, env=env)
         return git("write-tree", env=env)
 
 
