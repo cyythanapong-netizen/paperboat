@@ -13,6 +13,30 @@ Values of each datatype: ``constant`` (Number: a float, param ``value``), ``text
 string) and ``boolean`` (Boolean: a checkbox, 1 or 0 on the wire); all output ``y``. And
 ``key`` (out ``pressed``: 1 while its ``key`` param's key is held in the UI).
 
+Logic, as **magic blocks**: each has two forms, picked by its ``form`` param, and takes the
+ports of the one picked. In the **signal** form it computes; in the **step** form it sits on
+a Step flow's path (``in``) and branches, leaving by ``yes`` when its test holds, else ``no``.
+A value holds when it is positive (a key held, a threshold over its level).
+
+.. list-table::
+   :header-rows: 1
+
+   * - Block
+     - signal form
+     - step form
+   * - ``if``
+     - ``cond``, ``a``, ``b`` → ``y``: ``a`` while ``cond`` holds, else ``b`` (any value)
+     - ``in``, ``cond`` → ``yes``, ``no``
+   * - ``and``, ``or``
+     - ``a``, ``b`` → ``y``: 1 or 0
+     - ``in``, ``a``, ``b`` → ``yes``, ``no``
+   * - ``not``
+     - ``u`` → ``y``
+     - ``in``, ``u`` → ``yes``, ``no``
+   * - ``compare``
+     - ``a``, ``b`` → ``y``; ``op``: > >= < <= == !=
+     - ``in``, ``a``, ``b`` → ``yes``, ``no``
+
 signal
 ------
 
@@ -34,7 +58,7 @@ C++: ``clock``, and ``generator``, the abstract parent: f is an expression (conf
    config = { f = "offset + amplitude * sin(2 * pi * frequency * t + phase)" }
 
 ``sine``, ``step`` (``at``, ``value``), ``ramp`` (``start``, ``slope``), ``square`` (``amplitude``,
-``frequency``), ``ease`` (shapes a 0–1 progress; booleans ``ease_in``, ``ease_out``) and
+``frequency``), ``ease`` (shapes a 0–1 progress; ``shape``: in-out, in, out or linear) and
 ``function`` (f(t): its ``f`` is a text param, typed on the block, over ``t``, ``a``, ``b``,
 ``c``). A descriptor defines more the same way. Expressions: numbers, names, ``+ - * / % ^``,
 comparisons (1 or 0), ``&& || !``, ``c ? a : b``, ``pi``, ``e`` and ``sin cos tan asin acos atan
@@ -66,8 +90,8 @@ step
 ----
 
 A Step flow's path: ``start`` (a hat: once), ``when`` (a hat: each time signal ``cond`` rises),
-``wait`` (``seconds``), ``if`` (leaves by ``yes`` while ``cond`` is positive, else ``no``),
-``repeat`` (leaves by ``loop`` ``times`` times, then ``done``), ``stop`` (ends the run).
+``wait`` (``seconds``), ``repeat`` (leaves by ``loop`` ``times`` times, then ``done``), ``stop``
+(ends the run). To branch, use a ``base`` logic block in its step form.
 
 opencv
 ------

@@ -47,6 +47,19 @@ void Timed::go(const Context& ctx, double p) {
 
 Values Timed::outputs() const { return {{"progress", seconds_ > 0 ? std::min(done_ / seconds_, 1.0) : 1.0}}; }
 
+BlockDef magic_def(std::string type, std::string label, std::vector<Form> forms, std::vector<ParamDef> params) {
+  ParamDef form{.id = "form", .type = "enum", .default_text = forms.at(0).name};
+  for (const auto& f : forms) form.options.push_back(f.name);
+  params.insert(params.begin(), form);
+  return {.type = std::move(type),
+          .label = std::move(label),
+          .kind = Kind::Function,
+          .inputs = forms.at(0).inputs,
+          .outputs = forms.at(0).outputs,
+          .params = std::move(params),
+          .forms = std::move(forms)};
+}
+
 BlockDef timed_def(std::string type, std::string label, std::vector<ParamDef> params, Kind kind) {
   if (std::ranges::find(params, std::string("seconds"), &ParamDef::id) == params.end())
     params.push_back({.id = "seconds", .default_value = 1});

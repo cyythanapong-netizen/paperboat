@@ -7,11 +7,11 @@ namespace paperboat::core {
 
 namespace {
 
-const std::string& port_type(const toolkit::CatalogEntry& entry, const std::string& port, bool output) {
-  const auto& ports = output ? entry.def.outputs : entry.def.inputs;
+const std::string& port_type(const Node& node, const std::string& port, bool output) {
+  const auto& ports = output ? node.def.outputs : node.def.inputs;
   auto it = std::ranges::find(ports, port, &toolkit::PortDef::id);
   if (it == ports.end())
-    throw GraphError(entry.def.type + " has no " + (output ? "output" : "input") + " \"" + port + "\"");
+    throw GraphError(node.id, node.id + " (" + node.def.type + ") has no " + (output ? "output" : "input") + " \"" + port + "\"");
   return it->type;
 }
 
@@ -56,33 +56,38 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
 
   // Story groups first: which blocks belong to which story.
   std::map<std::string, double> story_seconds;
+  std::map<std::string, bool> story_reset;
   for (const auto& g : graph.value("groups", json::array())) {
     if (g.value("kind", std::string{"visual"}) != "story") continue;
     const auto gid = g.at("id").get<std::string>();
-    if (!story_seconds.emplace(gid, g.value("params", json::object()).value("seconds", 0.0)).second)
+    const json gp = g.value("params", json::object());
+    if (!story_seconds.emplace(gid, number_param(gp, "seconds", 0.0)).second)
       throw GraphError(gid, "two groups are called " + gid);
+    story_reset[gid] = number_param(gp, "reset", 0.0) != 0;
     for (const auto& n : g.value("nodes", json::array())) {
       if (!out.story_of.emplace(n.get<std::string>(), gid).second)
         throw GraphError(n.get<std::string>(), "block " + n.get<std::string>() + " is in two story groups");
     }
   }
   for (const auto& n : graph.at("nodes")) {
-    Node node{.id = n.at("id").get<std::string>(), .entry = nullptr, .block = nullptr, .step = nullptr, .object = nullptr, .monitor = nullptr};
+    Node node{.id = n.at("id").get<std::string>(), .entry = nullptr, .def = {}, .block = nullptr, .step = nullptr,
+              .object = nullptr, .monitor = nullptr};
     if (out.nodes.contains(node.id)) throw GraphError(node.id, "two blocks are called " + node.id);
     const auto type = n.at("type").get<std::string>();
     node.entry = catalog.find(type);
     if (!node.entry)
       throw GraphError(node.id, "block " + node.id + " has the unknown type \"" + type +
                                     "\": this backend doesn't offer it (anymore); replace or remove it");
-    const auto& def = node.entry->def;
-
     toolkit::Values params;
     toolkit::Config text;
     const json given = n.value("params", json::object());
-    for (const auto& p : def.params) {
+    for (const auto& p : node.entry->def.params) {
       if (p.is_number()) params[p.id] = number_param(given, p.id, p.default_value);  // a boolean reads as 1 or 0
       else text[p.id] = given.value(p.id, p.default_text);
     }
+    // A magic block's ports are those of its form.
+    node.def = toolkit::in_form(node.entry->def, text.contains("form") ? text.at("form") : "");
+    const auto& def = node.def;
 
     // Making a block can fail (a param it can't use, an expression that doesn't compile):
     // the error names the block.
@@ -115,6 +120,8 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
       if (!node.entry->from || !node.entry->from->make) throw GraphError(node.id, "no implementation for block type: " + type);
       node.block = made([&] { return node.entry->make(params, text); });
     }
+    node.params = std::move(params);
+    node.text = std::move(text);
     ids.push_back(node.id);
     out.nodes.emplace(node.id, std::move(node));
   }
@@ -125,8 +132,9 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     out.own.push_back({.def = story_def(), .from = nullptr, .config = {}, .group = {}, .linked = false});
     auto step = std::make_unique<StoryStep>(seconds);
     out.stories[gid].step = step.get();
-    out.nodes.emplace(gid, Node{.id = gid, .entry = &out.own.back(), .block = nullptr, .step = std::move(step),
-                                .object = nullptr, .monitor = nullptr});
+    out.stories[gid].reset = story_reset[gid];
+    out.nodes.emplace(gid, Node{.id = gid, .entry = &out.own.back(), .def = story_def(), .block = nullptr,
+                                .step = std::move(step), .object = nullptr, .monitor = nullptr});
     out.has_steps = true;
   }
   for (const auto& [block, gid] : out.story_of) {
@@ -143,10 +151,10 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     const auto& src = out.nodes.at(from.first);
     const auto& dst = out.nodes.at(to.first);
     // A wire joins ports of one type: step to step, signal to signal, image to image…
-    const auto& type = port_type(*src.entry, from.second, true);
-    if (type != port_type(*dst.entry, to.second, false))
+    const auto& type = port_type(src, from.second, true);
+    if (type != port_type(dst, to.second, false))
       throw GraphError(to.first, "wire " + from.first + "." + from.second + " -> " + to.first + "." + to.second + " joins a " +
-                       type + " port to a " + port_type(*dst.entry, to.second, false) + " port");
+                       type + " port to a " + port_type(dst, to.second, false) + " port");
     const bool step = type == "step";
     if (step) {
       if (!out.nexts.emplace(from, to.first).second)

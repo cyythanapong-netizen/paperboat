@@ -11,7 +11,8 @@
           "type": "string"
         },
         "type": {
-          "type": "string"
+          "type": "string",
+          "description": "signal (a value), step (control, in a Step flow) or a value shape (image, points, numbers...). A wire joins ports of one type."
         }
       },
       "required": [
@@ -85,8 +86,36 @@
               "type": "string"
             }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "type",
+            "default",
+            "options"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "enum"
+            },
+            "default": {
+              "type": "string"
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         }
-      ]
+      ],
+      "description": "A setting on a block, or a property of a station object. number and boolean reach the block as numbers (boolean: a checkbox, 1 or 0); text, key (a KeyboardEvent.code, picked by pressing it) and file (a path, relative to the descriptor) as text; enum (one of options, a dropdown) as its name (and to an expression, its index)."
     },
     "BlockDef": {
       "type": "object",
@@ -103,7 +132,8 @@
             "probe",
             "function",
             "monitor"
-          ]
+          ],
+          "description": "source pushes into the domain, probe reads it, function computes, monitor shows a value on the Dashboard."
         },
         "inputs": {
           "type": "array",
@@ -124,13 +154,23 @@
           }
         },
         "group": {
-          "type": "string"
+          "type": "string",
+          "description": "Palette group: the domain for its own blocks, else the toolkit package."
         },
         "linked": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Spawned by a station object (same id): not in the palette, no params, removed with it."
         },
         "instrument": {
-          "type": "string"
+          "type": "string",
+          "description": "A monitor's instrument on the Dashboard: graph (default), display (the latest value) or image."
+        },
+        "forms": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Form"
+          },
+          "description": "A magic block's forms; its inputs and outputs are the first's, and its form param (an enum) picks one."
         }
       },
       "required": [
@@ -171,10 +211,12 @@
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Slots naming other station objects (a spring's a and b)."
         },
         "block": {
-          "type": "string"
+          "type": "string",
+          "description": "The linked block type it spawns on the Flow page, if any."
         }
       },
       "required": [
@@ -184,7 +226,8 @@
         "props",
         "links"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "A station object type: a thing on the Station page whose props are edited only there."
     },
     "Entity": {
       "type": "object",
@@ -201,134 +244,79 @@
           ]
         },
         "pos": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          },
-          "minItems": 3,
-          "maxItems": 3
+          "$ref": "#/$defs/Vec3"
         },
         "size": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          },
-          "minItems": 3,
-          "maxItems": 3
+          "$ref": "#/$defs/Vec3"
         },
         "rot": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          },
-          "minItems": 3,
-          "maxItems": 3
+          "$ref": "#/$defs/Vec3",
+          "description": "Radians, applied in x, y, z order."
         },
         "scale": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          },
-          "minItems": 3,
-          "maxItems": 3
+          "$ref": "#/$defs/Vec3",
+          "description": "Factors on top of size."
         },
         "to": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          },
-          "minItems": 3,
-          "maxItems": 3
+          "$ref": "#/$defs/Vec3"
         },
         "color": {
           "type": "string"
         },
         "src": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "id"
-      ],
-      "additionalProperties": false
-    },
-    "View": {
-      "type": "object",
-      "properties": {
-        "mode": {
-          "enum": [
-            "2d",
-            "3d"
-          ]
-        },
-        "center": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          }
-        },
-        "height": {
-          "type": "number"
-        }
-      },
-      "required": [
-        "mode"
-      ],
-      "additionalProperties": false
-    },
-    "Node": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "params": {
-          "type": "object"
-        },
-        "pos": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          }
-        },
-        "group": {
-          "type": "string"
+          "type": "string",
+          "description": "An image's picture: a URL or a data: URL."
         }
       },
       "required": [
         "id",
-        "type"
+        "shape",
+        "pos"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "One shape on the Station's scene. shape: box, sphere (size[0] = radius), line (pos to `to`), image (a size[0] x size[1] picture facing +z, from src)."
     },
-    "Edge": {
-      "type": "object",
-      "properties": {
-        "from": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "minItems": 2,
-          "maxItems": 2
+    "View": {
+      "description": "Camera hint sent with a scene. 2d: orthographic, looking down -z at center, height units tall.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "const": "3d"
+            }
+          }
         },
-        "to": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "minItems": 2,
-          "maxItems": 2
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "center",
+            "height"
+          ],
+          "properties": {
+            "mode": {
+              "const": "2d"
+            },
+            "center": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "height": {
+              "type": "number"
+            }
+          }
         }
-      },
-      "required": [
-        "from",
-        "to"
-      ],
-      "additionalProperties": false
+      ]
     },
     "Graph": {
       "type": "object",
@@ -336,19 +324,19 @@
         "nodes": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Node"
+            "$ref": "#/$defs/GraphNode"
           }
         },
         "edges": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Edge"
+            "$ref": "#/$defs/GraphEdge"
           }
         },
         "groups": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Group"
+            "$ref": "#/$defs/GraphGroup"
           }
         }
       },
@@ -368,16 +356,26 @@
           "type": "string"
         },
         "props": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ParamValue"
+          }
         },
         "links": {
-          "type": "object"
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Link slot to the id of the station object filling it."
         },
         "pos": {
           "type": "array",
           "items": {
             "type": "number"
-          }
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Where it sits in the Station's graph view."
         }
       },
       "required": [
@@ -405,7 +403,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "hello"
         },
         "protocol": {
           "const": "paperboat/0"
@@ -414,23 +412,7 @@
           "type": "string"
         },
         "station": {
-          "type": "object",
-          "properties": {
-            "view": {
-              "enum": [
-                "scene",
-                "graph",
-                "web"
-              ]
-            },
-            "page": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "view"
-          ],
-          "additionalProperties": false
+          "$ref": "#/$defs/StationView"
         }
       },
       "required": [
@@ -444,7 +426,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "catalog"
         },
         "blocks": {
           "type": "array",
@@ -469,7 +451,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "scene"
         },
         "entities": {
           "type": "array",
@@ -491,12 +473,12 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "scene.patch"
         },
         "entities": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/Entity"
+            "$ref": "#/$defs/EntityPatch"
           }
         }
       },
@@ -510,7 +492,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "graph.load"
         },
         "graph": {
           "$ref": "#/$defs/Graph"
@@ -526,7 +508,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "station.load"
         },
         "station": {
           "$ref": "#/$defs/Station"
@@ -542,7 +524,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "run.started"
         },
         "run": {
           "type": "string"
@@ -558,7 +540,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "run.progress"
         },
         "run": {
           "type": "string"
@@ -580,17 +562,13 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "run.finished"
         },
         "run": {
           "type": "string"
         },
         "status": {
-          "enum": [
-            "done",
-            "failed",
-            "cancelled"
-          ]
+          "$ref": "#/$defs/RunStatus"
         }
       },
       "required": [
@@ -604,7 +582,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "signal"
         },
         "node": {
           "type": "string"
@@ -631,17 +609,13 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "node.state"
         },
         "node": {
           "type": "string"
         },
         "state": {
-          "enum": [
-            "running",
-            "done",
-            "failed"
-          ]
+          "$ref": "#/$defs/NodeState"
         }
       },
       "required": [
@@ -655,7 +629,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "log"
         },
         "level": {
           "enum": [
@@ -682,7 +656,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "graph.run"
         },
         "graph": {
           "$ref": "#/$defs/Graph"
@@ -701,7 +675,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "station.set"
         },
         "station": {
           "$ref": "#/$defs/Station"
@@ -717,7 +691,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "run.cancel"
         }
       },
       "required": [
@@ -729,7 +703,7 @@
       "type": "object",
       "properties": {
         "type": {
-          "type": "string"
+          "const": "input"
         },
         "key": {
           "type": "string"
@@ -914,7 +888,8 @@
             "$ref": "#/$defs/log"
           }
         }
-      ]
+      ],
+      "description": "Every message a backend sends."
     },
     "toBackend": {
       "title": "UI → Backend",
@@ -981,9 +956,69 @@
             "$ref": "#/$defs/input"
           }
         }
-      ]
+      ],
+      "description": "Every message the UI sends."
     },
-    "Group": {
+    "GraphNode": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/ParamValue"
+          }
+        },
+        "pos": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Its place on the Flow canvas; backends ignore it."
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "GraphEdge": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[node, port]"
+        },
+        "to": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[node, port]"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "additionalProperties": false
+    },
+    "GraphGroup": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -991,7 +1026,7 @@
         "kind",
         "nodes"
       ],
-      "description": "A group of blocks. visual: tidies the canvas only. story: runs as one step of a Step flow (ports in → next), its blocks once per clock step for params.seconds (0: once).",
+      "description": "A group of blocks. visual: tidies the canvas only. story: runs as one step of a Step flow (ports in -> next): its blocks once per clock step for params.seconds (0: once), fresh each time if params.reset.",
       "properties": {
         "id": {
           "type": "string"
@@ -1018,15 +1053,146 @@
           "type": "array",
           "items": {
             "type": "number"
-          }
+          },
+          "minItems": 2,
+          "maxItems": 2
         },
         "params": {
           "type": "object",
+          "additionalProperties": false,
           "properties": {
             "seconds": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "description": "How long the story runs when a path arrives (0: once)."
+            },
+            "reset": {
+              "type": "boolean",
+              "description": "Its blocks start afresh each time a path arrives (a story in a loop starts over)."
             }
+          }
+        }
+      }
+    },
+    "Vec3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "ParamValue": {
+      "description": "A param's value: a number, true / false (a boolean param), or text (text, key and file params).",
+      "type": [
+        "number",
+        "boolean",
+        "string"
+      ]
+    },
+    "RunStatus": {
+      "enum": [
+        "done",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "NodeState": {
+      "description": "What a run says about a block. A Step flow sends running (a path arrived) and done (it left); any run sends failed for the block at fault.",
+      "enum": [
+        "running",
+        "done",
+        "failed"
+      ]
+    },
+    "StationView": {
+      "description": "How the Station page shows the station: the built-in scene, a graph of station objects, or the backend's own page (web; page is its path on the backend's port).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "view"
+      ],
+      "properties": {
+        "view": {
+          "enum": [
+            "scene",
+            "graph",
+            "web"
+          ]
+        },
+        "page": {
+          "type": "string"
+        }
+      }
+    },
+    "EntityPatch": {
+      "description": "A changed entity in scene.patch: its id and what changed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "shape": {
+          "enum": [
+            "box",
+            "sphere",
+            "line",
+            "image"
+          ]
+        },
+        "pos": {
+          "$ref": "#/$defs/Vec3"
+        },
+        "size": {
+          "$ref": "#/$defs/Vec3"
+        },
+        "rot": {
+          "$ref": "#/$defs/Vec3",
+          "description": "Radians, applied in x, y, z order."
+        },
+        "scale": {
+          "$ref": "#/$defs/Vec3",
+          "description": "Factors on top of size."
+        },
+        "to": {
+          "$ref": "#/$defs/Vec3"
+        },
+        "color": {
+          "type": "string"
+        },
+        "src": {
+          "type": "string",
+          "description": "An image's picture: a URL or a data: URL."
+        }
+      }
+    },
+    "Form": {
+      "description": "One form of a magic block: the ports it has in that form (signal: computes; step: branches on a Step flow's path). The block's form param picks one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "inputs",
+        "outputs"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortDef"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PortDef"
           }
         }
       }

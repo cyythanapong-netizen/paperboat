@@ -29,11 +29,13 @@ TEST_CASE("step templates have step ports, math and control ones don't") {
   CHECK(has_step_ports(builtins().find("step/start")->def));
   CHECK_FALSE(has_step_ports(builtins().find("math/threshold")->def));
   CHECK_FALSE(has_step_ports(builtins().find("control/pid")->def));
-  // If reads its condition from a signal port.
-  const auto& in = builtins().find("step/if")->def.inputs;
-  REQUIRE(in.size() == 2);
-  CHECK(in[1].id == "cond");
-  CHECK(in[1].type == "signal");
+  // If (base, magic) in its step form reads its condition from a signal port.
+  const auto step_if = in_form(builtins().find("base/if")->def, "step");
+  CHECK(has_step_ports(step_if));
+  REQUIRE(step_if.inputs.size() == 2);
+  CHECK(step_if.inputs[1].id == "cond");
+  CHECK(step_if.inputs[1].type == "signal");
+  CHECK_FALSE(has_step_ports(builtins().find("base/if")->def));  // its default form: signal
 }
 
 TEST_CASE("step/start starts one path, once") {
@@ -68,11 +70,30 @@ TEST_CASE("step/wait stays for its seconds") {
   CHECK(ticks == 5);
 }
 
-TEST_CASE("step/if branches on a positive condition") {
-  auto branch = make("step/if");
-  CHECK(branch->tick({}, {{"cond", 1.0}}) == "yes");
-  CHECK(branch->tick({}, {{"cond", 0.0}}) == "no");
-  CHECK(branch->tick({}, {}) == "no");  // unwired reads as 0
+TEST_CASE("logic blocks are magic: they compute in a signal flow and branch on a path") {
+  const auto catalog = load_descriptor("domain = \"l\"\nimport = [\"base\"]\n");
+  auto step = [&](const char* type, const Values& in, const Config& text = {}) {
+    Config t = text;
+    t["form"] = "step";
+    return catalog.find(type)->make_step({}, t)->tick({}, in);
+  };
+  auto value = [&](const char* type, const Values& in, const Config& text = {}) {
+    return catalog.find(type)->make({}, text)->step({}, in);
+  };
+  CHECK(step("if", {{"cond", 1.0}}) == "yes");
+  CHECK(step("if", {{"cond", 0.0}}) == "no");
+  CHECK(step("if", {}) == "no");  // unwired reads as 0
+  CHECK(get_text(value("if", {{"cond", 1.0}, {"a", "fold"}, {"b", "launch"}}), "y") == "fold");  // any value
+  CHECK(get_or(value("if", {{"cond", 0.0}, {"a", 1.0}, {"b", 2.0}}), "y") == 2.0);
+  CHECK(get_or(value("and", {{"a", 1.0}, {"b", 1.0}}), "y") == 1.0);
+  CHECK(step("and", {{"a", 1.0}, {"b", 0.0}}) == "no");
+  CHECK(step("or", {{"a", 0.0}, {"b", 1.0}}) == "yes");
+  CHECK(get_or(value("not", {{"u", 0.0}}), "y") == 1.0);
+  CHECK(get_or(value("compare", {{"a", 2.0}, {"b", 3.0}}, {{"op", "<"}}), "y") == 1.0);
+  CHECK(step("compare", {{"a", 2.0}, {"b", 3.0}}, {{"op", ">="}}) == "no");
+  const auto& form = catalog.find("if")->def.params.at(0);
+  CHECK(form.id == "form");
+  CHECK(form.options == std::vector<std::string>{"signal", "step"});
 }
 
 TEST_CASE("step/stop ends the run") {

@@ -7,6 +7,7 @@ add_library(paperboat_toolkit
   # base: what every domain needs (values: number, text, boolean; key)
   src/base/values.cpp
   src/base/key.cpp
+  src/base/logic.cpp
   src/base/register.cpp
   # signal: generators on the run clock (clock, sine, step, ramp, square)
   src/signal/waves.cpp

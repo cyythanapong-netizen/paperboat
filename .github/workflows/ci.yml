@@ -1,0 +1,76 @@
+# Paperboat CI: the engine and its tests, the Python bindings, the web app and the docs.
+# The example backends live in paperboat-examples and are tested there.
+name: ci
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: Engine (C++ build and tests)
+    runs-on: ubuntu-24.04
+    env:
+      CXX: g++-14
+      CC: gcc-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OpenCV (the optional opencv toolkit package)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libopencv-dev ninja-build
+      - name: Configure
+        run: cmake -S engine -B engine/build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPAPERBOAT_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build engine/build
+      - name: Test
+        run: ctest --test-dir engine/build --output-on-failure
+
+  python:
+    name: Python bindings and protocol schema
+    runs-on: ubuntu-24.04
+    env:
+      CXX: g++-14
+      CC: gcc-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test tools
+        run: pip install pytest jsonschema
+      - name: Build the extension (paperboat._engine)
+        run: cmake -S python -B python/build -DCMAKE_BUILD_TYPE=Release -DPython_EXECUTABLE="$(which python)" && cmake --build python/build -j 4
+      - name: Test the bindings
+        run: python -m pytest -q python/tests
+      - name: Check the protocol schema is a valid JSON Schema
+        run: python -c "import json, jsonschema; jsonschema.Draft202012Validator.check_schema(json.load(open('protocol/schema/paperboat-0.schema.json')))"
+
+  web:
+    name: Web app (typecheck and build)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: The protocol types are generated from the schema, and current
+        run: python3 protocol/gen_ts.py --check
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  docs:
+    name: API reference (Sphinx, warnings as errors)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install sphinx
+      - run: sphinx-build -W -b html docs/api docs/api/_build

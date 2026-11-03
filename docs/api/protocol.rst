@@ -4,7 +4,9 @@ Protocol
 One WebSocket between the UI and a backend; every message is a JSON object with a
 ``type``. The source of truth for shapes is the JSON Schema
 ``protocol/schema/paperboat-0.schema.json`` (``$defs/toUI``, ``$defs/toBackend``);
-``protocol/README.md`` explains each message. A backend on the engine speaks it already.
+``protocol/README.md`` explains each message, and the web app's types
+(``apps/web/src/protocol.ts``) are generated from the schema (``npm run gen:protocol``). A
+backend on the engine speaks it already.
 
 Backend → UI
 ------------

@@ -87,6 +87,18 @@ class Runner {
           for (const auto& sample : pass_over(*order)) latest[sample["node"]].push_back(sample);
           for (auto& [node, list] : latest) story_samples_[node] = std::move(list);
         };
+        if (story.reset) {
+          // Fresh blocks each time a path arrives: a story run twice (in a loop) starts over.
+          story.step->on_enter = [this, order = &story.order] {
+            for (const auto& id : *order) {
+              auto& node = g_.nodes.at(id);
+              const At at(ctx_, id, failed_);
+              if (node.block) node.block = node.entry->make(node.params, node.text);
+              if (node.monitor) node.monitor = node.entry->make(node.params, node.text);
+              outputs_.erase(id);
+            }
+          };
+        }
       }
     } catch (const GraphError& err) {
       fail(err.node, std::string("invalid graph: ") + err.what());
@@ -141,7 +153,7 @@ class Runner {
 
   toolkit::Values inputs_of(const Node& node) {
     toolkit::Values in;  // unconnected inputs stay absent and read as 0
-    for (const auto& port : node.entry->def.inputs) {
+    for (const auto& port : node.def.inputs) {
       auto wire = g_.wires.find({node.id, port.id});
       if (wire == g_.wires.end()) continue;
       const auto& from = outputs_[wire->second.first];

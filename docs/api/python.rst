@@ -21,10 +21,11 @@ Definitions
    A port with a type other than ``"signal"``: ``Port("points", "points")``,
    ``Port("in", "step")``. Plain strings are signal ports.
 
-.. py:class:: Param(default, type="number")
+.. py:class:: Param(default, type="number", options=())
 
    A param (or property) whose type its default doesn't say: ``Param("Space", "key")``,
-   ``Param("data/a.png", "file")``. Plain defaults say it: a number (``number``), a bool
+   ``Param("data/a.png", "file")``, ``Param("fast", "enum", ["slow", "fast"])`` (a dropdown:
+   the block gets the name). Plain defaults say it: a number (``number``), a bool
    (``boolean``, a checkbox, 1.0 or 0.0 to the block), text (``text``).
 
 .. py:class:: Linked(inputs=(), outputs=(), kind="probe", label="")

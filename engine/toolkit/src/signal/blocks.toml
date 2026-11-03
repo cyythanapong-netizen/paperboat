@@ -32,16 +32,17 @@ params = { amplitude = 1, frequency = 1 }
 config = { f = "frac(frequency * t) < 0.5 ? amplitude : -amplitude" }
 
 # Ease: shapes a progress (0 to 1) so it starts and/or ends gently. Feed it a step's
-# `progress` and wire it back into the step's `curve`.
+# `progress` and wire it back into the step's `curve`. `shape` is an enum: in f it is its
+# index in the options (0 in-out, 1 in, 2 out, 3 linear).
 [[blocks]]
 use = "signal/generator"
 type = "ease"
 label = "Ease"
-params = { ease_in = true, ease_out = true }
+params = { shape = { default = "in-out", type = "enum", options = ["in-out", "in", "out", "linear"] } }
 config = { f = """
-  ease_in && ease_out ? clamp(t, 0, 1)^2 * (3 - 2 * clamp(t, 0, 1))
-  : ease_in ? clamp(t, 0, 1)^2
-  : ease_out ? 1 - (1 - clamp(t, 0, 1))^2
+  shape == 0 ? clamp(t, 0, 1)^2 * (3 - 2 * clamp(t, 0, 1))
+  : shape == 1 ? clamp(t, 0, 1)^2
+  : shape == 2 ? 1 - (1 - clamp(t, 0, 1))^2
   : clamp(t, 0, 1)""" }
 
 # f(t): type the function on the block (a text param), over t and a, b, c.

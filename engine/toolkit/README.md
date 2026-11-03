@@ -9,13 +9,13 @@ its plant).
 
 | Package   | Templates |
 | --------- | --------- |
-| `base`    | What every domain needs, in every flow type. Values of each datatype: `constant` (Number, a float), `text` (Text), `boolean` (Boolean: 1 or 0) · input: `key` (1 while its `key` param's key is held, from the UI's `input` messages) |
-| `signal`  | Signals f(t): t is the block's input `t` when wired (a step's `progress`), else the run clock. C++: `clock`, and the abstract parent `generator` (f is an expression). TOML definitions on it (`src/signal/blocks.toml`): `sine`, `step`, `ramp`, `square`, `ease` (shape a 0–1 progress; `ease_in`, `ease_out`), `function` (f(t): type f on the block, over t, a, b, c) |
+| `base`    | What every domain needs, in every flow type. Values of each datatype: `constant` (Number, a float), `text` (Text), `boolean` (Boolean: 1 or 0) · input: `key` (1 while its `key` param's key is held, from the UI's `input` messages) · logic, as magic blocks (two forms, picked by the `form` param: `signal` computes `y`, `step` branches `in` → `yes`/`no`): `if` (signal: `a` while `cond` holds, else `b`), `and`, `or`, `not`, `compare` (`op`) |
+| `signal`  | Signals f(t): t is the block's input `t` when wired (a step's `progress`), else the run clock. C++: `clock`, and the abstract parent `generator` (f is an expression). TOML definitions on it (`src/signal/blocks.toml`): `sine`, `step`, `ramp`, `square`, `ease` (shape a 0–1 progress; `shape`: in-out, in, out, linear), `function` (f(t): type f on the block, over t, a, b, c) |
 | `math`    | Pointwise arithmetic on signals: `gain`, `sum`, `threshold`, `saturation` |
 | `dashboard` | Monitors, shown on the Dashboard as instruments: `graph` (plots its input over time), `display` (its latest value as a number or text) |
 | `control` | Dynamics that run on a clock in a Signal flow: `pid`, `integrator`, `lag`. Station: `cart-pole` (a station object; its linked block takes `force`, gives `x`, `v`, `theta`, `omega`; props `cart_mass`, `pole_mass`, `pole_length`, `max_force` and initial conditions `x0`, `theta0`) |
 | `opencv`  | Optional, built when OpenCV is found (`paperboat::toolkit_opencv`, `register_opencv`). Image filters on `image` ports: `gray`, `blur`, `median`, `threshold`, `adaptive_threshold`, `hsv_range`, `canny`, `erode`, `dilate`, `open`, `close`, `invert`, `distance` · monitor: `view` (an image instrument) · station: `image` (a picture from a `file` prop; its linked block outputs it) |
-| `step`    | The path of a Step flow, with step ports. Hats: `start` (once), `when` (each time signal `cond` rises, e.g. a key; a path alongside the others). Then `wait` (`seconds`), `if` (leaves by `yes` while `cond` is positive, else `no`), `repeat` (leaves by `loop` `times` times, then `done`), `stop` (ends the whole run) |
+| `step`    | The path of a Step flow, with step ports. Hats: `start` (once), `when` (each time signal `cond` rises, e.g. a key; a path alongside the others). Then `wait` (`seconds`), `repeat` (leaves by `loop` `times` times, then `done`), `stop` (ends the whole run). Branch with a `base` logic block in its step form |
 
 Step templates make a `Step` (`enter`, then `tick` once per clock step until it names the
 step output to leave by; a hat is ticked while idle and has `may_start()`) instead of a `Block`: use `CatalogEntry::make_step()` for them

@@ -1,13 +1,14 @@
 import { useEdgesState, useNodesState, useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "./engine";
-import { FlowEditor, fromGraph, isBlock, resolveBlocks, RunStates, syncLinked, toGraph, type FlowNode, type Wire } from "./FlowEditor";
+import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toGraph, type FlowNode, type Wire } from "./FlowEditor";
 import { absolute, isFrame } from "./groups";
 import type { Station } from "./protocol";
 import { RunPanel } from "./RunPanel";
 import { SceneView } from "./SceneView";
 import { StationGraph } from "./StationGraph";
 import { StationPanel } from "./StationPanel";
+import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
 
 const DEFAULT_URL =
@@ -53,11 +54,19 @@ export function App() {
   useEffect(() => {
     setNodes((ns) => syncLinked(ns, station, state.objects, state.blocks));
   }, [station, state.objects, state.blocks, setNodes]);
-  // Wires to a block that's gone (its station object was removed) go too.
+  // Wires to a block that's gone (its station object was removed), or to a port it no
+  // longer has (a magic block switched form), go too.
   useEffect(() => {
-    const ids = new Set(nodes.map((n) => n.id));
+    const ports = new Map<string, Set<string> | null>(
+      nodes.map((n) => [n.id, isBlock(n) && !n.data.missing ? new Set([...portsOf(n).inputs, ...portsOf(n).outputs].map((p) => p.id)) : null]),
+    );
+    const has = (id: string, port: string | null | undefined) => {
+      if (!ports.has(id)) return false;
+      const p = ports.get(id);
+      return p === null || p === undefined || p.has(port ?? "");  // groups and missing blocks keep their wires
+    };
     setEdges((es) => {
-      const kept = es.filter((e) => ids.has(e.source) && ids.has(e.target));
+      const kept = es.filter((e) => has(e.source, e.sourceHandle) && has(e.target, e.targetHandle));
       return kept.length === es.length ? es : kept;
     });
   }, [nodes, setEdges]);
@@ -81,6 +90,9 @@ export function App() {
     canvas.current = { ...canvas.current, engine: state.engine, graph: JSON.stringify(toGraph(g.nodes, g.edges)) };
     requestAnimationFrame(() => fitView());
   }, [state.loaded, state.blocks, state.engine, setNodes, setEdges, fitView]);
+
+  // Ctrl+Z / Ctrl+Shift+Z on the Flow canvas; a new graph from the backend starts afresh.
+  useUndo(nodes, edges, setNodes, setEdges, state.loaded);
 
   // Forward the keyboard to the backend (e.g. a Key block). Typing in a field is not input.
   useEffect(() => {

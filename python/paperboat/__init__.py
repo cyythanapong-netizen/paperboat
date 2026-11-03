@@ -52,10 +52,13 @@ class Port(NamedTuple):
 
 class Param(NamedTuple):
     """A param with a type its default doesn't say: Param("Space", "key"), Param("data/a.png",
-    "file"). Plain defaults say it: a number, a bool (a "boolean", a checkbox), text ("text")."""
+    "file"), Param("fast", "enum", ["slow", "fast"]) (a dropdown; the block gets the name in
+    its params, and an expression its index). Plain defaults say it: a number, a bool (a
+    "boolean", a checkbox), text ("text")."""
 
     default: float | str
     type: str = "number"
+    options: tuple | list = ()
 
 
 class Block:

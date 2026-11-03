@@ -71,12 +71,18 @@ std::vector<ParamDef> new_params(const json& obj, const std::string& at) {
     else if (v.is_number()) out.push_back({.id = id, .default_value = v.get<double>()});
     else if (v.is_string()) out.push_back({.id = id, .type = "text", .default_text = v.get<std::string>()});
     else if (v.is_object()) {
-      only_fields(v, {"default", "type"}, at + ".params." + id);
+      only_fields(v, {"default", "type", "options"}, at + ".params." + id);
       ParamDef p{.id = id, .type = v.value("type", std::string{"number"})};
       if (p.is_number()) p.default_value = number_of(v.at("default"));
       else p.default_text = v.at("default").get<std::string>();
-      if (p.type != "number" && p.type != "boolean" && p.type != "text" && p.type != "key" && p.type != "file")
-        throw DescriptorError(at + ": param " + id + " has type \"" + p.type + "\" (number, boolean, text, key or file)");
+      if (p.type != "number" && p.type != "boolean" && p.type != "text" && p.type != "key" && p.type != "file" && p.type != "enum")
+        throw DescriptorError(at + ": param " + id + " has type \"" + p.type + "\" (number, boolean, text, key, file or enum)");
+      if (p.type == "enum") {
+        p.options = v.value("options", std::vector<std::string>{});
+        if (p.options.empty()) throw DescriptorError(at + ": enum param " + id + " needs options");
+        if (p.option(p.default_text) < 0)
+          throw DescriptorError(at + ": enum param " + id + "'s default \"" + p.default_text + "\" isn't one of its options");
+      }
       out.push_back(p);
     } else {
       throw DescriptorError(at + ": param " + id + " needs a default: a number, true / false, text or { default, type }");
@@ -115,6 +121,8 @@ CatalogEntry from_template(const json& e, const std::string& at, const Registry&
     if (p == entry.def.params.end()) throw DescriptorError(at + ": " + name + " has no param \"" + id + "\"");
     if (p->is_number()) p->default_value = number_of(value);
     else p->default_text = value.get<std::string>();
+    if (p->type == "enum" && p->option(p->default_text) < 0)
+      throw DescriptorError(at + ": " + id + " must be one of its options, not \"" + p->default_text + "\"");
   }
   for (const auto& [key, value] : config.items()) {
     if (!t->config.contains(key) && !t->extendable) throw DescriptorError(at + ": " + name + " has no config \"" + key + "\"");
@@ -255,16 +263,39 @@ Config resolve_text(const BlockDef& def, const Config& config, const Config& tex
 
 }  // namespace
 
+namespace {
+
+// Numbers for every number param, and each enum's index in its options (an enum's name
+// is in `text`). A name that isn't an option is an error.
+Values with_enums(const BlockDef& def, Values values, const Config& text) {
+  for (const auto& p : def.params) {
+    if (p.type != "enum") continue;
+    const auto name = text.at(p.id);
+    const int i = p.option(name);
+    if (i < 0) {
+      std::string known;
+      for (const auto& o : p.options) known += (known.empty() ? "" : ", ") + o;
+      throw std::invalid_argument(p.id + " is \"" + name + "\", not one of: " + known);
+    }
+    values[p.id] = static_cast<double>(i);
+  }
+  return values;
+}
+
+}  // namespace
+
 std::unique_ptr<Block> CatalogEntry::make(const Values& params, const Config& text) const {
   if (!from) throw std::logic_error("\"" + def.type + "\" is a linked block: its station object acts for it");
-  if (!from->make) throw std::logic_error("\"" + def.type + "\" is a step block: use make_step()");
-  return from->make(resolve(def, params), resolve_text(def, config, text));
+  if (!from->make) throw std::logic_error("\"" + def.type + "\" is a step block: use make()");
+  const Config t = resolve_text(def, config, text);
+  return from->make(with_enums(def, resolve(def, params), t), t);
 }
 
 std::unique_ptr<Step> CatalogEntry::make_step(const Values& params, const Config& text) const {
   if (!from) throw std::logic_error("\"" + def.type + "\" is a linked block: its station object acts for it");
   if (!from->make_step) throw std::logic_error("\"" + def.type + "\" is a signal block: use make()");
-  return from->make_step(resolve(def, params), resolve_text(def, config, text));
+  const Config t = resolve_text(def, config, text);
+  return from->make_step(with_enums(def, resolve(def, params), t), t);
 }
 
 std::unique_ptr<StationObject> ObjectEntry::make(const Values& props) const {
@@ -439,6 +470,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     for (const auto& p : list) {
       if (p.type == "number") out.push_back({{"id", p.id}, {"type", "number"}, {"default", p.default_value}});
       else if (p.type == "boolean") out.push_back({{"id", p.id}, {"type", "boolean"}, {"default", p.default_value != 0}});
+      else if (p.type == "enum") out.push_back({{"id", p.id}, {"type", "enum"}, {"default", p.default_text}, {"options", p.options}});
       else out.push_back({{"id", p.id}, {"type", p.type}, {"default", p.default_text}});
     }
     return out;
@@ -455,6 +487,12 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.group.empty()) block["group"] = e.group;
     if (e.linked) block["linked"] = true;
     if (!e.def.instrument.empty()) block["instrument"] = e.def.instrument;
+    if (!e.def.forms.empty()) {
+      json forms = json::array();
+      for (const auto& f : e.def.forms)
+        forms.push_back({{"name", f.name}, {"inputs", ports(f.inputs)}, {"outputs", ports(f.outputs)}});
+      block["forms"] = std::move(forms);
+    }
     blocks.push_back(std::move(block));
   }
   json msg = {{"type", "catalog"}, {"blocks", blocks}};

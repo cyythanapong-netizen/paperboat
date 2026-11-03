@@ -40,7 +40,12 @@ initializers may leave any out.
 
       Number types (to the block as ``Values``): ``"number"``, ``"boolean"`` (a checkbox; 1
       or 0). Text types (through ``Config``): ``"text"``, ``"key"`` (a ``KeyboardEvent.code``,
-      picked by pressing it), ``"file"`` (a path, relative to the descriptor's folder).
+      picked by pressing it), ``"file"`` (a path, relative to the descriptor's folder),
+      ``"enum"`` (one of ``options``, a dropdown; the block also gets its index in ``Values``).
+
+   .. cpp:member:: std::vector<std::string> options
+
+      An enum's choices.
 
    .. cpp:member:: std::string default_text
 
@@ -85,6 +90,27 @@ initializers may leave any out.
    .. cpp:member:: std::string instrument
 
       A monitor's instrument: ``"graph"``, ``"display"`` or ``"image"``.
+
+   .. cpp:member:: std::vector<Form> forms
+
+      A magic block's forms. Its ``inputs`` and ``outputs`` are the first form's; its enum
+      param ``form`` picks one (see :cpp:func:`magic_def`).
+
+.. cpp:struct:: Form
+
+   One form of a magic block: the ports it has in that form, such as ``"signal"`` (values in
+   and out) or ``"step"`` (a step on a Step flow's path).
+
+   .. cpp:member:: std::string name
+
+   .. cpp:member:: std::vector<PortDef> inputs
+
+   .. cpp:member:: std::vector<PortDef> outputs
+
+.. cpp:function:: BlockDef in_form(const BlockDef &def, std::string_view form)
+
+   The definition in form ``form``: that form's ports. ``def`` itself if it has no forms, or no
+   form of that name.
 
 .. cpp:struct:: ObjectDef
 
@@ -341,6 +367,27 @@ particular. Python has the same (:py:class:`paperboat.Generator`, :py:class:`pap
 .. cpp:function:: BlockDef timed_def(std::string type, std::string label, std::vector<ParamDef> params = {}, Kind kind = Kind::Function)
 
    Ports ``in``, ``curve`` → ``next``, ``progress``; adds ``seconds`` (1) if ``params`` lacks it.
+
+.. cpp:function:: BlockDef magic_def(std::string type, std::string label, std::vector<Form> forms, std::vector<ParamDef> params = {})
+
+   A magic block: one block type that changes its ports with its ``form`` param, an enum of
+   the forms' names (the first is the default) added in front of ``params``. Its template sets
+   both ``make`` (for a form of signal ports) and ``make_step`` (for a form with step ports);
+   the engine makes the one the node's form needs. The ``base`` logic blocks are built this
+   way:
+
+   .. code-block:: cpp
+
+      Template t;
+      t.name = "base/if";
+      t.def = magic_def("if", "If", {
+          {.name = "signal", .inputs = {{"cond"}, {"a"}, {"b"}}, .outputs = {{"y"}}},
+          {.name = "step", .inputs = {{"in", "step"}, {"cond"}},
+           .outputs = {{"yes", "step"}, {"no", "step"}}},
+      });
+      t.make = [](const Values&, const Config&) { return std::make_unique<Choose>(); };
+      t.make_step = [](const Values& p, const Config&) { return std::make_unique<Branch>(p); };
+      registry.add(std::move(t));
 
 .. cpp:class:: Expression
 
