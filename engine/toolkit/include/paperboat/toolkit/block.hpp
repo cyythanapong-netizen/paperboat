@@ -1,0 +1,194 @@
+#pragma once
+
+// The runtime face of a toolkit block: its definition (what the UI shows) and an
+// instance (what runs in a graph). No domain code lives in the toolkit.
+
+#include <functional>
+#include <map>
+#include <memory>
+#include <optional>
+#include <set>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <variant>
+#include <vector>
+
+namespace paperboat::toolkit {
+
+// A port's type: "signal" carries a value; "step" carries control in a Step flow (the
+// run passes along a step wire from one block to the next). Others ("points", …) carry
+// values of that shape.
+struct PortDef {
+  std::string id = {};
+  std::string type = "signal";
+};
+
+// A setting on a block or a station object, edited in the UI. Number types reach a block
+// as numbers (default_value): "number", and "boolean" (1 or 0, a checkbox). Text types
+// reach it as text (default_text, through Config): "text", "key" (a KeyboardEvent.code,
+// which key a Key block reads) and "file" (a path, relative to the descriptor's folder).
+struct ParamDef {
+  std::string id = {};
+  double default_value = 0.0;
+  std::string type = "number";
+  std::string default_text = {};
+
+  bool is_number() const { return type == "number" || type == "boolean"; }
+};
+
+// Matches the protocol's BlockDef.kind.
+enum class Kind { Source, Probe, Function, Monitor };
+
+std::string_view to_string(Kind kind);
+
+struct BlockDef {
+  std::string type = {};  // unique within a catalog, e.g. "pid" or "pid-theta"
+  std::string label = {};
+  Kind kind = Kind::Function;
+  std::vector<PortDef> inputs = {};
+  std::vector<PortDef> outputs = {};
+  std::vector<ParamDef> params = {};
+  // A monitor's instrument on the Dashboard: "graph", "display", "image"…
+  std::string instrument = {};
+};
+
+// True for a block on a Step flow's path: one with a step port.
+bool has_step_ports(const BlockDef& def);
+
+// A station object type: a thing on the Station page (a body, a joint) whose properties
+// are edited only there. A toolkit package can offer these as well as blocks. An object
+// may spawn a **linked block**: a block on the Flow page tied to it (same id), through
+// which a flow pushes on or reads the object. ISA-88 split: the station is the physical
+// model (equipment and its parameters); the flow is the procedure that acts through the
+// equipment's linked blocks and never sets its parameters.
+struct ObjectDef {
+  std::string type = {};                // unique among a catalog's objects, e.g. "hinge"
+  std::string label = {};
+  std::string role = "body";            // "body" or "joint"
+  std::vector<ParamDef> props = {};     // edited on the Station page only
+  std::vector<std::string> links = {};  // slots that name other objects, e.g. {"parent", "child"}
+  std::optional<BlockDef> block = {};   // the linked block it spawns (its type names it), if any
+};
+
+// Data the core passes along without knowing what it is: an image, a mesh, a set of
+// records. Packages agree on `kind` (the opencv package uses "image"), which matches the
+// ports' type. Shared and immutable, so one output can feed many inputs.
+struct Handle {
+  std::string kind;
+  std::shared_ptr<const void> data;
+};
+
+template <class T>
+Handle make_handle(std::string kind, T value) {
+  return {std::move(kind), std::make_shared<const T>(std::move(value))};
+}
+
+// What a wire carries. Most blocks pass numbers; others pass a list of numbers, a table
+// (a list of rows, such as points as [x, z]), text, or a handle. The port's type says which.
+using List = std::vector<double>;
+using Table = std::vector<std::vector<double>>;
+struct Value : std::variant<double, List, Table, std::string, Handle> {
+  using variant::variant;
+  // Any number is a double, so {"k", 5} works as well as {"k", 5.0}.
+  template <class T>
+    requires std::is_arithmetic_v<T> && (!std::is_same_v<T, double>) && (!std::is_same_v<T, bool>)
+  Value(T number) : variant(static_cast<double>(number)) {}
+  Value(const char* text) : variant(std::string(text)) {}
+
+  friend bool operator==(const Value& v, double number) {
+    const double* own = std::get_if<double>(&v);
+    return own && *own == number;
+  }
+};
+using Values = std::map<std::string, Value, std::less<>>;        // port or param id → value
+using Config = std::map<std::string, std::string, std::less<>>;  // set once in a descriptor
+using KeySet = std::set<std::string, std::less<>>;               // KeyboardEvent.code values
+
+class DomainState;
+struct Entity;
+
+// Where Context::log writes: the run sends it to the Console as a `log` event.
+using LogFn = std::function<void(std::string_view node, std::string_view level, std::string_view text)>;
+
+// What a block sees on each step.
+struct Context {
+  double t = 0.0;   // run clock, s (0 in a run that evaluates once)
+  double dt = 0.0;  // step size, s
+  const KeySet* keys_down = nullptr;  // from the UI's `input` messages; null when none
+  DomainState* state = nullptr;       // the domain's shared state for this run, if it has one
+  std::string_view node = {};         // the id of the block being stepped ("" outside a block)
+  const LogFn* log_fn = nullptr;      // set by the run; null in tests that don't collect logs
+
+  // Write a line to the Console, tagged with the block's id: level "info", "warn" or "error".
+  void log(std::string_view text, std::string_view level = "info") const {
+    if (log_fn) (*log_fn)(node, level, text);
+  }
+};
+
+// One instance of a block in a running graph. It owns its state (an integral, the
+// previous error), so two PIDs in one graph never share anything.
+class Block {
+ public:
+  virtual ~Block() = default;
+  // Compute outputs from inputs. An unconnected input is absent from `in`.
+  virtual Values step(const Context& ctx, const Values& in) = 0;
+  // What it draws on the Station after a step (a result to show); most blocks draw nothing.
+  virtual std::vector<Entity> entities() const;
+};
+
+// One instance of a block on a Step flow's path (a block with step ports). A path is at
+// one block at a time: when it arrives, the engine calls enter(), then tick() once per
+// clock step until tick() names the step output to leave by. Signal inputs (a condition)
+// arrive in `in`, sampled once per clock step.
+//
+// A block with step outputs and no step input is a **hat**: it starts paths. The engine
+// ticks an idle hat every clock step (no enter()), and when it names an output a new path
+// starts there, alongside any others. Start fires once; When fires each time `cond` rises.
+class Step {
+ public:
+  virtual ~Step() = default;
+  // Its signal outputs (BlockDef outputs of a type other than "step"), such as how far it
+  // is through its work. Read after each clock step; signal blocks see them in the next
+  // pass, so a wire from a step's output back into it is not a cycle.
+  virtual Values outputs() const { return {}; }
+  virtual void enter(const Context& /*ctx*/, const Values& /*in*/) {}
+  // The step output to leave by, or "" to stay another clock step (a wait, a move).
+  virtual std::string tick(const Context& ctx, const Values& in) = 0;
+  // For a hat: whether it may still start a path. A run ends when no path is running
+  // and no hat may start one.
+  virtual bool may_start() const { return false; }
+  // True for a block that ends the whole run when a path arrives (Stop).
+  virtual bool ends_run() const { return false; }
+};
+
+// The number at `id`, or `fallback` when absent or not a number (an unconnected input
+// reads as 0).
+inline double get_or(const Values& values, std::string_view id, double fallback = 0.0) {
+  auto it = values.find(id);
+  if (it == values.end()) return fallback;
+  const double* number = std::get_if<double>(&it->second);
+  return number ? *number : fallback;
+}
+
+// The list, table or text at `id`, or null when absent or of another kind.
+template <class T>
+const T* get_if(const Values& values, std::string_view id) {
+  auto it = values.find(id);
+  return it == values.end() ? nullptr : std::get_if<T>(&it->second);
+}
+
+// The object behind a handle of `kind` at `id`, or null.
+template <class T>
+const T* get_handle(const Values& values, std::string_view id, std::string_view kind) {
+  const Handle* h = get_if<Handle>(values, id);
+  return h && h->kind == kind ? static_cast<const T*>(h->data.get()) : nullptr;
+}
+
+// Text at `id` (a text param, such as a file name), or `fallback`.
+inline std::string get_text(const Values& values, std::string_view id, std::string fallback = {}) {
+  const std::string* text = get_if<std::string>(values, id);
+  return text ? *text : fallback;
+}
+
+}  // namespace paperboat::toolkit

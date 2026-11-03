@@ -1,0 +1,184 @@
+#include "paperboat/core/graph.hpp"
+
+#include <algorithm>
+#include <set>
+
+namespace paperboat::core {
+
+namespace {
+
+const std::string& port_type(const toolkit::CatalogEntry& entry, const std::string& port, bool output) {
+  const auto& ports = output ? entry.def.outputs : entry.def.inputs;
+  auto it = std::ranges::find(ports, port, &toolkit::PortDef::id);
+  if (it == ports.end())
+    throw GraphError(entry.def.type + " has no " + (output ? "output" : "input") + " \"" + port + "\"");
+  return it->type;
+}
+
+}  // namespace
+
+namespace {
+
+// Sort `ids` so each comes after the ones it depends on. Throws on a cycle.
+std::vector<std::string> sorted(const std::vector<std::string>& ids, std::map<std::string, std::vector<std::string>>& deps,
+                                const std::string& where) {
+  std::vector<std::string> order;
+  std::set<std::string> done;
+  while (order.size() < ids.size()) {
+    std::vector<std::string> ready;
+    for (const auto& id : ids) {
+      if (done.contains(id)) continue;
+      if (std::ranges::all_of(deps[id], [&](const std::string& d) { return done.contains(d); })) ready.push_back(id);
+    }
+    if (ready.empty()) throw GraphError("graph has a cycle" + where);
+    for (const auto& id : ready) {
+      done.insert(id);
+      order.push_back(id);
+    }
+  }
+  return order;
+}
+
+toolkit::BlockDef story_def() {
+  return {.type = "story",
+          .label = "Story",
+          .kind = toolkit::Kind::Function,
+          .inputs = {{"in", "step"}},
+          .outputs = {{"next", "step"}},
+          .params = {{.id = "seconds", .default_value = 0}}};
+}
+
+}  // namespace
+
+Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station& station) {
+  Graph out;
+  std::vector<std::string> ids;  // in graph order, so ties sort the same way every run
+
+  // Story groups first: which blocks belong to which story.
+  std::map<std::string, double> story_seconds;
+  for (const auto& g : graph.value("groups", json::array())) {
+    if (g.value("kind", std::string{"visual"}) != "story") continue;
+    const auto gid = g.at("id").get<std::string>();
+    if (!story_seconds.emplace(gid, g.value("params", json::object()).value("seconds", 0.0)).second)
+      throw GraphError(gid, "two groups are called " + gid);
+    for (const auto& n : g.value("nodes", json::array())) {
+      if (!out.story_of.emplace(n.get<std::string>(), gid).second)
+        throw GraphError(n.get<std::string>(), "block " + n.get<std::string>() + " is in two story groups");
+    }
+  }
+  for (const auto& n : graph.at("nodes")) {
+    Node node{.id = n.at("id").get<std::string>(), .entry = nullptr, .block = nullptr, .step = nullptr, .object = nullptr, .monitor = nullptr};
+    if (out.nodes.contains(node.id)) throw GraphError(node.id, "two blocks are called " + node.id);
+    const auto type = n.at("type").get<std::string>();
+    node.entry = catalog.find(type);
+    if (!node.entry)
+      throw GraphError(node.id, "block " + node.id + " has the unknown type \"" + type +
+                                    "\": this backend doesn't offer it (anymore); replace or remove it");
+    const auto& def = node.entry->def;
+
+    toolkit::Values params;
+    toolkit::Config text;
+    const json given = n.value("params", json::object());
+    for (const auto& p : def.params) {
+      if (p.is_number()) params[p.id] = number_param(given, p.id, p.default_value);  // a boolean reads as 1 or 0
+      else text[p.id] = given.value(p.id, p.default_text);
+    }
+
+    // Making a block can fail (a param it can't use, an expression that doesn't compile):
+    // the error names the block.
+    const auto made = [&](auto make) {
+      try {
+        return make();
+      } catch (const GraphError&) {
+        throw;
+      } catch (const std::exception& err) {
+        throw GraphError(node.id, node.id + ": " + err.what());
+      }
+    };
+    if (node.entry->linked) {
+      // A linked block is its station object's handle: same id, and the object must exist.
+      auto it = std::ranges::find(station, node.id, &StationItem::id);
+      if (it == station.end() || !it->entry->def.block || it->entry->def.block->type != type)
+        throw GraphError(node.id, "block " + node.id + " is linked to a station object that isn't there; add it on the Station page");
+      node.object = it->instance.get();
+    } else if (def.kind == toolkit::Kind::Monitor) {
+      // The core samples monitors; one from a template may turn its input into what it
+      // shows (output "value", such as an image as a picture).
+      if (node.entry->from && node.entry->from->make) node.monitor = made([&] { return node.entry->make(params, text); });
+    } else if (toolkit::has_step_ports(def)) {
+      if (!node.entry->from || !node.entry->from->make_step) throw GraphError(node.id, "no implementation for step block type: " + type);
+      node.step = made([&] { return node.entry->make_step(params, text); });
+      out.has_steps = true;
+      const bool has_step_input = std::ranges::any_of(def.inputs, [](const auto& p) { return p.type == "step"; });
+      if (!has_step_input) out.hats.push_back(node.id);
+    } else {
+      if (!node.entry->from || !node.entry->from->make) throw GraphError(node.id, "no implementation for block type: " + type);
+      node.block = made([&] { return node.entry->make(params, text); });
+    }
+    ids.push_back(node.id);
+    out.nodes.emplace(node.id, std::move(node));
+  }
+
+  // Each story becomes a step node of its own.
+  for (const auto& [gid, seconds] : story_seconds) {
+    if (out.nodes.contains(gid)) throw GraphError(gid, "group " + gid + " has the id of a block");
+    out.own.push_back({.def = story_def(), .from = nullptr, .config = {}, .group = {}, .linked = false});
+    auto step = std::make_unique<StoryStep>(seconds);
+    out.stories[gid].step = step.get();
+    out.nodes.emplace(gid, Node{.id = gid, .entry = &out.own.back(), .block = nullptr, .step = std::move(step),
+                                .object = nullptr, .monitor = nullptr});
+    out.has_steps = true;
+  }
+  for (const auto& [block, gid] : out.story_of) {
+    auto it = out.nodes.find(block);
+    if (it == out.nodes.end()) throw GraphError(gid, "story " + gid + " lists " + block + ", which isn't a block of the graph");
+    if (it->second.step) throw GraphError(block, "step block " + block + " can't be inside a story: a story runs signal blocks");
+  }
+
+  std::map<std::string, std::vector<std::string>> deps;
+  for (const auto& e : graph.at("edges")) {
+    PortRef from{e.at("from")[0], e.at("from")[1]}, to{e.at("to")[0], e.at("to")[1]};
+    if (!out.nodes.contains(from.first) || !out.nodes.contains(to.first))
+      throw GraphError("edge refers to an unknown node: " + from.first + " -> " + to.first);
+    const auto& src = out.nodes.at(from.first);
+    const auto& dst = out.nodes.at(to.first);
+    // A wire joins ports of one type: step to step, signal to signal, image to image…
+    const auto& type = port_type(*src.entry, from.second, true);
+    if (type != port_type(*dst.entry, to.second, false))
+      throw GraphError(to.first, "wire " + from.first + "." + from.second + " -> " + to.first + "." + to.second + " joins a " +
+                       type + " port to a " + port_type(*dst.entry, to.second, false) + " port");
+    const bool step = type == "step";
+    if (step) {
+      if (!out.nexts.emplace(from, to.first).second)
+        throw GraphError(from.first, "step output " + from.first + "." + from.second + " has two wires; it can lead to one block");
+      continue;
+    }
+    out.wires[to] = from;
+    // A linked block's outputs come from its object's state, not its inputs (they push the
+    // object after the pass), so a wire into one closes the loop through the station. Step
+    // blocks read their signal inputs after the pass too.
+    // Within one story, or outside every story, blocks wait for what feeds them. Across a
+    // story's edge they don't: a story's results are read as they last were, and what
+    // flows into a story was computed earlier in the clock step.
+    const auto story = [&](const std::string& id) {
+      auto it = out.story_of.find(id);
+      return it == out.story_of.end() ? std::string() : it->second;
+    };
+    // A step's signal outputs are read as they were after the last clock step (like a
+    // linked block's), so a wire from one never makes a cycle.
+    if (!src.step && !dst.object && !dst.step && story(from.first) == story(to.first)) deps[to.first].push_back(from.first);
+  }
+
+  std::vector<std::string> outside;
+  std::map<std::string, std::vector<std::string>> inside;
+  for (const auto& id : ids) {
+    if (out.nodes.at(id).step) continue;
+    if (auto it = out.story_of.find(id); it != out.story_of.end()) inside[it->second].push_back(id);
+    else outside.push_back(id);
+  }
+  out.order = sorted(outside, deps, "");
+  for (auto& [gid, story] : out.stories) story.order = sorted(inside[gid], deps, " in story " + gid);
+  return out;
+}
+
+}  // namespace paperboat::core

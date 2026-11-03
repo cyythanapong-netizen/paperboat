@@ -1,0 +1,43 @@
+# --- Notes for AI assistants and the working notes kept next to the code (not published) ---
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+.claude/
+.remember/
+.cursor/
+.aider*
+TODO.md
+GUIDELINES.md
+
+# --- Builds ---
+build/
+dist/
+docs/api/_build/
+*.egg-info/
+python/paperboat/_engine*.so
+*.so
+*.o
+*.a
+*.tsbuildinfo
+
+# --- Dependencies and environments ---
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.env
+.env.local
+
+# --- Editors, OS and sync clients ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+.~*
+*.insyncdl
+*.log

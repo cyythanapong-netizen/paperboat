@@ -1,0 +1,24 @@
+{
+  "name": "paperboat",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @paperboat/web --",
+    "build": "npm run build -w @paperboat/web",
+    "typecheck": "npm run typecheck -w @paperboat/web",
+    "backend:mass-spring": "npm run build:python --silent && PYTHONPATH=python python3 examples/backends/mass-spring-python/server.py",
+    "backend:cart-pole": "cmake -S examples/backends/cart-pole-cpp -B examples/backends/cart-pole-cpp/build > /dev/null && cmake --build examples/backends/cart-pole-cpp/build && examples/backends/cart-pole-cpp/build/paperboat-cart-pole",
+    "backend:parametric": "npm run build:python --silent && PYTHONPATH=python python3 examples/backends/parametric-python/server.py",
+    "backend:runner": "npm run build:python --silent && PYTHONPATH=python python3 examples/backends/runner-python/server.py",
+    "backend:animation": "npm run build:python --silent && PYTHONPATH=python python3 examples/backends/animation-python/server.py",
+    "smoke": "python3 protocol/smoke_test.py --port",
+    "backend:parts": "cmake -S examples/backends/parts-cpp -B examples/backends/parts-cpp/build > /dev/null && cmake --build examples/backends/parts-cpp/build && examples/backends/parts-cpp/build/paperboat-parts",
+    "backend:chain": "npm run build:python --silent && PYTHONPATH=python python3 examples/backends/chain-python/server.py",
+    "backend:supply": "npm run build:python --silent && PYTHONPATH=python python3 examples/backends/supply-python/server.py",
+    "build:python": "cmake -S python -B python/build > /dev/null && cmake --build python/build",
+    "golden": "npm run build:python --silent && python3 protocol/golden.py",
+    "docs": "sphinx-build -W -b html docs/api docs/api/_build"
+  }
+}

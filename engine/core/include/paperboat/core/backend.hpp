@@ -1,0 +1,74 @@
+#pragma once
+
+// The server that speaks the protocol for a Backend (run.hpp). A backend's main() fills a
+// Backend and returns paperboat::core::main(backend, argc, argv, port); see GUIDELINES §6.
+
+#include <filesystem>
+#include <functional>
+#include <ostream>
+#include <memory>
+#include <string>
+
+#include "paperboat/core/run.hpp"
+
+namespace paperboat::core {
+
+// One connection's protocol state. Thread-safe: messages arrive on the socket's thread,
+// runs execute on their own. `send` must be safe to call from any thread.
+class Session {
+ public:
+  using Send = std::function<void(const std::string& text)>;
+  Session(const Backend& backend, Send send);  // sends the handshake
+  ~Session();
+  Session(const Session&) = delete;
+  Session& operator=(const Session&) = delete;
+
+  void on_message(const std::string& text);
+
+ private:
+  struct State;
+  std::unique_ptr<State> state_;
+};
+
+json load_json(const std::filesystem::path& path);
+
+// A backend's command line: `--port N` (serve there) and `--run` (run the starter graph on
+// the starter station once, headless and as fast as it can, print every protocol message
+// as one JSON line, and exit: 0 when the run is done, 1 when it failed).
+struct Options {
+  int port = 0;
+  bool run = false;
+};
+Options parse_options(int argc, char** argv, int default_port);  // throws std::invalid_argument
+
+// The starter run of `--run`: every message to `out`, one JSON line each. Returns the
+// run's final status ("done", "failed").
+std::string run_starter(const Backend& backend, std::ostream& out);
+
+// What a backend's main() returns: parse the options, then serve or run the starter.
+int main(const Backend& backend, int argc, char** argv, int default_port);
+
+// `--port N` from the command line, or `fallback` (parse_options reads every option).
+int port_arg(int argc, char** argv, int fallback);
+
+// Serve the protocol on ws://127.0.0.1:port until the process ends. Returns non-zero if
+// it can't listen.
+int serve(const Backend& backend, int port);
+
+// The same server, started and stopped by the caller (a host such as the Python
+// bindings, which must keep its own main loop for Ctrl+C).
+class Server {
+ public:
+  Server(const Backend& backend, int port);
+  ~Server();
+  Server(const Server&) = delete;
+  Server& operator=(const Server&) = delete;
+  std::string start();  // "" when listening, else why not
+  void stop();
+
+ private:
+  struct State;
+  std::unique_ptr<State> state_;
+};
+
+}  // namespace paperboat::core

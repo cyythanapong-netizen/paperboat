@@ -1,0 +1,105 @@
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; font: 13px/1.4 system-ui, sans-serif; }
+button { font: inherit; }
+.muted { color: #888; }
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template: "head head" auto "scene flow" 1fr "run run" minmax(220px, 34vh) / 1fr 1fr;
+}
+header { grid-area: head; display: flex; gap: 12px; align-items: center; padding: 6px 10px; border-bottom: 1px solid #ddd; }
+header form { display: flex; gap: 4px; }
+.conn-open { color: green; }
+.conn-closed { color: crimson; }
+
+.station { grid-area: scene; position: relative; min-height: 0; overflow: hidden; border-right: 1px solid #ddd; }
+.scene { width: 100%; height: 100%; }
+.station-panel { position: absolute; top: 8px; left: 8px; width: 230px; max-height: calc(100% - 16px); overflow: auto; background: rgb(255 255 255 / 0.92); border: 1px solid #ccc; border-radius: 4px; font-size: 11px; }
+.station-head { width: 100%; text-align: left; border: 0; background: #eee; padding: 4px 6px; font-weight: 600; cursor: pointer; }
+.station-add { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; }
+.station-object { border-top: 1px solid #ddd; }
+.linked-tag { font-weight: 400; color: #64748b; }
+.block.linked { border-style: dashed; border-color: #2f5d62; }
+.flow { grid-area: flow; min-height: 0; display: flex; flex-direction: column; }
+.palette { display: flex; flex-direction: column; gap: 3px; padding: 6px; border-bottom: 1px solid #ddd; flex-shrink: 0; max-height: 40%; overflow: auto; }
+.palette-group { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.palette-group > span { width: 76px; font-size: 11px; }
+.palette .step-block { border-left: 3px solid #1e293b; }
+
+.block { background: #fff; border: 1px solid #999; border-radius: 4px; min-width: 140px; font-size: 11px; }
+.block-title { padding: 3px 6px; background: #eee; font-weight: 600; }
+.kind-source .block-title, .kind-probe .block-title { background: #dcebea; }
+.kind-monitor .block-title { background: #fbe6da; }
+.port { position: relative; padding: 2px 10px; }
+.port.out { text-align: right; }
+.param { display: flex; justify-content: space-between; gap: 6px; padding: 2px 6px; }
+.param input { width: 60px; font-size: 11px; }
+.param .key-param { cursor: pointer; background: #f8fafc; text-align: center; }
+.param .key-param:focus { outline: 2px solid #f59e0b; background: #fffbeb; }
+.block-title { display: flex; justify-content: space-between; align-items: center; }
+.block.active { outline: 3px solid #f59e0b; outline-offset: 1px; }
+.remove { border: 1px solid #bbb; border-radius: 50%; background: #fff; width: 18px; height: 18px; padding: 0; line-height: 14px; cursor: pointer; pointer-events: all; position: relative; }
+.remove:hover { background: #fee2e2; border-color: crimson; color: crimson; }
+.block-title .remove { margin-left: 6px; width: 16px; height: 16px; line-height: 12px; }
+.react-flow__edgelabel-renderer .remove { position: absolute; }
+
+/* Step ports and wires carry control (Step flow); signal ports and wires carry values. */
+.port-step { font-weight: 600; }
+.port-step .react-flow__handle { width: 9px; height: 9px; border-radius: 1px; background: #1e293b; }
+.wire-step { stroke: #1e293b !important; stroke-width: 2px !important; }
+.wire-image { stroke: #7c3aed !important; stroke-width: 2px !important; }
+.port-image .react-flow__handle { background: #7c3aed; }
+.param .text-param { width: 110px; font-size: 11px; }
+.react-flow__edge.selected .react-flow__edge-path { stroke: #f59e0b !important; }
+.hint { margin: 0; padding: 4px 8px; font-size: 11px; border-top: 1px solid #eee; }
+
+.run { grid-area: run; display: grid; grid-template-columns: 2fr 1fr; border-top: 1px solid #ddd; min-height: 0; }
+/* Dashboard: readouts in a strip, then pictures and plots as tiles that wrap to the width. */
+.dashboard { display: flex; flex-direction: column; gap: 8px; padding: 8px; overflow: auto; min-width: 0; }
+.readouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 6px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; align-items: start; }
+.instrument { margin: 0; min-width: 0; }
+.instrument figcaption { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.instrument.display { padding: 4px 8px; border: 1px solid #ddd; }
+.instrument.display output { display: block; font: 600 26px/1.2 ui-monospace, monospace; overflow-wrap: anywhere; }
+.instrument.image img { display: block; width: 100%; height: 170px; object-fit: contain; background: #fafafa; border: 1px solid #ddd; }
+.instrument.graph svg { display: block; width: 100%; height: 100px; border: 1px solid #ddd; }
+.logs { margin: 0; padding: 8px 8px 8px 28px; overflow: auto; font-family: ui-monospace, monospace; font-size: 11px; border-left: 1px solid #ddd; }
+.log-warn { color: #b45309; }
+.log-error { color: crimson; }
+
+/* A block the backend doesn't have (kept, with its params and wires), and one a run failed on. */
+.block.missing { background: #fff1f2; border: 1.5px dashed #dc2626; color: #7f1d1d; }
+.block.failed { outline: 3px solid #dc2626; outline-offset: 1px; }
+.missing-tag { font-size: 10px; font-weight: 600; color: #fff; background: #dc2626; border-radius: 3px; padding: 0 4px; }
+.log-node { font: inherit; margin-right: 6px; padding: 0 4px; border: 1px solid #cbd5e1; border-radius: 3px; background: #f8fafc; color: #1d4ed8; cursor: pointer; }
+.log-node:hover { background: #dbeafe; }
+
+/* Station views: the backend's page, and the station as a graph. */
+.web-station { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+.station-graph { position: absolute; inset: 0; }
+.station-node { min-width: 140px; }
+.station-node.role-joint { border-style: dashed; }
+.station-node-props { font-size: 10px; padding: 2px 8px 4px; max-width: 180px; }
+.port-link .react-flow__handle { background: #b45309; }
+.station-link .react-flow__edge-path { stroke: #b45309; stroke-width: 2px; }
+.station.view-graph .station-panel, .station.view-web .station-panel { left: auto; right: 8px; }
+
+/* Groups on the Flow page: a frame around blocks (visual), or a story (one step of a Step flow). */
+.frame { width: 100%; height: 100%; box-sizing: border-box; border: 1.5px dashed #94a3b8; border-radius: 6px; background: rgb(148 163 184 / 0.07); }
+.frame.collapsed { min-width: 190px; height: auto; background: #fff; border-style: solid; }
+.frame-story { border-color: #7c3aed; background: rgb(124 58 237 / 0.05); }
+.frame-story.collapsed { background: #faf5ff; }
+.frame.active { outline: 3px solid #f59e0b; outline-offset: 1px; }
+.frame-head { position: relative; display: flex; align-items: center; gap: 4px; padding: 0 8px; font-size: 12px; border-bottom: 1px solid rgb(148 163 184 / 0.35); }
+.frame-label { flex: 1; min-width: 50px; border: 0; background: transparent; font: 600 12px ui-sans-serif, system-ui, sans-serif; }
+.frame-kind { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; padding: 0 4px; border-radius: 3px; background: #e2e8f0; color: #475569; }
+.frame-kind.kind-story { background: #ede9fe; color: #6d28d9; }
+.frame-seconds { display: flex; align-items: center; gap: 2px; font-size: 11px; color: #6d28d9; }
+.frame-seconds input { width: 44px; font-size: 11px; }
+.frame-toggle { border: 0; background: transparent; cursor: pointer; padding: 0 2px; font-size: 12px; }
+.frame-ports { padding: 4px 0; }
+.frame-empty { font-size: 10px; padding: 2px 8px; }
+.frame-head .step-handle { width: 9px; height: 9px; border-radius: 1px; background: #1e293b; }
+.group-tools button:disabled { opacity: 0.45; }

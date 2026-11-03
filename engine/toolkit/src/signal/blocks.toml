@@ -1,0 +1,52 @@
+# The signal package's blocks that are only definitions: each `use`s the C++ parent
+# signal/generator (f(t) as an expression, waves.cpp) and adds its params and its f.
+# t is the block's input `t` when wired (a step's progress, say), else the run clock.
+# Embedded in the engine at build time; a backend's descriptor can define more the same way.
+
+[[blocks]]
+use = "signal/generator"
+type = "sine"
+label = "Sine"
+params = { amplitude = 1, frequency = 1, phase = 0, offset = 0 }
+config = { f = "offset + amplitude * sin(2 * pi * frequency * t + phase)" }
+
+[[blocks]]
+use = "signal/generator"
+type = "step"
+label = "Step"
+params = { at = 1, value = 1 }
+config = { f = "t >= at ? value : 0" }
+
+[[blocks]]
+use = "signal/generator"
+type = "ramp"
+label = "Ramp"
+params = { start = 0, slope = 1 }
+config = { f = "slope * max(0, t - start)" }
+
+[[blocks]]
+use = "signal/generator"
+type = "square"
+label = "Square"
+params = { amplitude = 1, frequency = 1 }
+config = { f = "frac(frequency * t) < 0.5 ? amplitude : -amplitude" }
+
+# Ease: shapes a progress (0 to 1) so it starts and/or ends gently. Feed it a step's
+# `progress` and wire it back into the step's `curve`.
+[[blocks]]
+use = "signal/generator"
+type = "ease"
+label = "Ease"
+params = { ease_in = true, ease_out = true }
+config = { f = """
+  ease_in && ease_out ? clamp(t, 0, 1)^2 * (3 - 2 * clamp(t, 0, 1))
+  : ease_in ? clamp(t, 0, 1)^2
+  : ease_out ? 1 - (1 - clamp(t, 0, 1))^2
+  : clamp(t, 0, 1)""" }
+
+# f(t): type the function on the block (a text param), over t and a, b, c.
+[[blocks]]
+use = "signal/generator"
+type = "function"
+label = "f(t)"
+params = { f = "a * sin(b * t) + c", a = 1, b = 1, c = 0 }

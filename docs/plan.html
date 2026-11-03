@@ -1,0 +1,632 @@
+<title>Paperboat Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (~68ch) with wide breakouts for the pipeline diagram, domain grid and milestone track. */
+:root {
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --fg: #1c2321;
+  --muted: #5b6662;
+  --line: #d6dbd8;
+  --accent: #c2410c;      /* signal orange: load arrows, stress */
+  --accent-soft: #fbe6da;
+  --steel: #2f5d62;       /* setup / structure */
+  --steel-soft: #dcebea;
+  --code-bg: #eef1ef;
+  --ok: #2e7d4f;
+  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141917; --surface: #1c2220; --fg: #e4e9e6; --muted: #9aa6a1; --line: #2e3734;
+    --accent: #f08a4b; --accent-soft: #3a2418; --steel: #7fb8bc; --steel-soft: #1f3134;
+    --code-bg: #212825; --ok: #6cc391; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141917; --surface: #1c2220; --fg: #e4e9e6; --muted: #9aa6a1; --line: #2e3734;
+  --accent: #f08a4b; --accent-soft: #3a2418; --steel: #7fb8bc; --steel-soft: #1f3134;
+  --code-bg: #212825; --ok: #6cc391; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 400 1.0625rem/1.6 var(--font-body);
+  padding-inline: 16px; padding-block: 0 4rem;
+}
+.wrap { max-width: 68ch; margin-inline: auto; }
+.wide { max-width: 1080px; margin-inline: auto; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; line-height: 1.15; margin: 0; }
+h1 { font-size: clamp(2.2rem, 6vw, 3.4rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.6rem; font-weight: 700; }
+h3 { font-size: 1.15rem; font-weight: 500; }
+p { margin: 0; }
+code, pre { font-family: var(--font-mono); font-size: 0.86em; }
+:not(pre) > code { background: var(--code-bg); padding: 0.1em 0.35em; border-radius: 4px; }
+pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.1rem; overflow-x: auto; line-height: 1.5; margin: 0; }
+a { color: var(--steel); }
+.eyebrow { font: 500 0.75rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+section { display: grid; gap: 1rem; padding-block: 2.5rem 0; }
+section > .wrap, section > .wide { display: grid; gap: 1rem; width: 100%; }
+ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.35rem; }
+.muted { color: var(--muted); }
+
+/* header */
+header { padding-block: 3.5rem 1rem; }
+header .wrap { display: grid; gap: 1rem; }
+.lede { font-size: 1.2rem; color: var(--muted); }
+.meta { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; font: 400 0.85rem/1.4 var(--font-mono); color: var(--muted); }
+.meta b { color: var(--fg); font-weight: 500; }
+
+/* three pages diagram */
+.pages { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 0.75rem; align-items: stretch; }
+.page { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; display: grid; gap: 0.6rem; align-content: start; min-width: 0; }
+.page .tag { font: 500 0.72rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.page.setup .tag { color: var(--steel); }
+.page.flow .tag { color: var(--fg); }
+.page.run .tag { color: var(--accent); }
+.page p { font-size: 0.95rem; color: var(--muted); }
+.arrow { align-self: center; color: var(--muted); font: 500 1.2rem var(--font-mono); }
+.page svg { width: 100%; height: auto; max-width: 100%; display: block; }
+@media (max-width: 760px) {
+  .pages { grid-template-columns: 1fr; }
+  .arrow { justify-self: center; transform: rotate(90deg); }
+}
+
+/* contrast table */
+.contrast { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.contrast > div { border: 1px solid var(--line); border-radius: 8px; padding: 0.9rem 1rem; background: var(--surface); display: grid; gap: 0.4rem; min-width: 0; }
+.contrast .no { border-style: dashed; }
+.contrast .yes { border-color: var(--steel); }
+@media (max-width: 640px) { .contrast { grid-template-columns: 1fr; } }
+
+/* pipeline strip */
+.pipe { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.pipe > div { padding: 0.9rem 1rem; border-right: 1px solid var(--line); display: grid; gap: 0.3rem; min-width: 0; }
+.pipe > div:last-child { border-right: 0; }
+.pipe b { font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; }
+.pipe span { font-size: 0.9rem; color: var(--muted); }
+@media (max-width: 640px) { .pipe { grid-template-columns: 1fr 1fr; } .pipe > div:nth-child(2) { border-right: 0; } .pipe > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); } }
+
+/* layers */
+.layers { display: grid; gap: 0.5rem; }
+.layer { display: grid; grid-template-columns: 9rem 1fr; gap: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.layer b { font-family: var(--font-display); font-weight: 500; }
+.layer span { color: var(--muted); font-size: 0.95rem; min-width: 0; }
+.layer.wire { background: transparent; border-style: dashed; }
+@media (max-width: 560px) { .layer { grid-template-columns: 1fr; gap: 0.2rem; } }
+
+/* domain cards */
+.domains { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.9rem; }
+.domain { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem; display: grid; gap: 0.75rem; align-content: start; min-width: 0; }
+.domain .stress { font: 500 0.75rem/1.3 var(--font-mono); color: var(--accent); background: var(--accent-soft); padding: 0.3rem 0.5rem; border-radius: 4px; justify-self: start; }
+.domain dl { margin: 0; display: grid; gap: 0.55rem; }
+.domain dt { font: 500 0.72rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.domain dd { margin: 0.2rem 0 0; font-size: 0.95rem; }
+@media (max-width: 900px) { .domains { grid-template-columns: 1fr; } }
+
+/* events table */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.93rem; }
+th, td { text-align: left; padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 500 0.72rem/1.2 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+
+/* milestones */
+.track { display: grid; gap: 0; border-left: 2px solid var(--line); margin-left: 0.4rem; }
+.ms { position: relative; padding: 0 0 1.6rem 1.4rem; display: grid; gap: 0.45rem; }
+.ms::before { content: ""; position: absolute; left: -7px; top: 0.35rem; width: 12px; height: 12px; border-radius: 50%; background: var(--bg); border: 2px solid var(--steel); }
+.ms:last-child { padding-bottom: 0; }
+.ms .id { font: 500 0.78rem/1 var(--font-mono); color: var(--steel); }
+.ms .done { font-size: 0.93rem; color: var(--muted); }
+.ms .done b { color: var(--fg); font-weight: 600; }
+
+.tree { font-size: 0.82rem; }
+.flowfig { padding: 0.75rem; }
+.flowfig svg { display: block; width: 100%; min-width: 560px; height: auto; }
+</style>
+
+<header>
+  <div class="wrap">
+    <span class="eyebrow">Project plan · v2 · 3 Nov 2026</span>
+    <h1>Paperboat</h1>
+    <p class="lede">A framework for building systems from simple blocks and watching them run: a station where things sit, a flow where blocks are wired, a dashboard where the run shows itself. Fold an idea, set it on the water, see what it does.</p>
+    <div class="meta">
+      <span>Handle <b>paperboatlab</b></span>
+      <span>Repo <b>~/Onedrive/Projects/rigflow</b></span>
+      <span>Engine <b>C++20</b></span>
+      <span>Frontend <b>TypeScript + React</b></span>
+      <span>Targets <b>Browser · Desktop (Electron)</b></span>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Status · 3 Nov 2026</span>
+    <h2>What exists today</h2>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Part</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td><b>Web app</b></td><td>Station (2D/3D), Flow (React Flow), Dashboard plots and Console in one screen; backend switching and auto-reconnect. Wires are typed (signal or step) and deletable (Delete, ×, drag off); a Step flow lights up the block it is at.</td></tr>
+          <tr><td><b>Protocol v0</b></td><td>JSON over one WebSocket, with <code>graph.load</code>, a 2D/3D <code>view</code> and keyboard <code>input</code>. A domain-neutral smoke test checks any backend.</td></tr>
+          <tr><td><b>Toolkit (C++)</b></td><td>Packages <code>base</code> (constant, key), <code>signal</code> (waves), <code>math</code> (arithmetic), <code>dashboard</code> (graph, display), <code>control</code> (dynamics) and <code>step</code> (start, when, wait, if, repeat, stop); station templates next to blocks (the <code>control/cart-pole</code> station object, with a linked block); TOML descriptors that <code>import</code> whole packages into the palette; <code>paperboat-catalog</code>; 23 Catch2 tests. Python backends run on the same engine through nanobind bindings and load the same descriptors.</td></tr>
+          <tr><td><b>Example backends</b></td><td>Signal flow: mass-spring, parametric geometry and a runner game (jump and duck) in Python; cart-pole in C++ with no domain code (blocks and the Cart-pole station object from the toolkit; spawn several on the Station page). Step flow: a 3D animation (move, rotate, scale) in Python. All pass the smoke test.</td></tr>
+          <tr><td><b>Engine core</b></td><td><code>engine/core</code>: protocol session, WebSocket server, station and graph checking, Signal flow runs. The cart-pole backend is a few lines on it. Next: caching, node events, Step flow in C++.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Day-to-day work is tracked in <code>TODO.md</code> (priorities P0–P3); rules, names and lessons live in <code>GUIDELINES.md</code>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">The shape</span>
+    <h2>Three pages, one app</h2>
+    <p>Every app built on Paperboat has the same three pages, plus a Console for logs. A domain only defines the things that live on each page; the pages themselves are generic.</p>
+  </div>
+  <div class="wide">
+    <div class="pages">
+      <div class="page setup">
+        <span class="tag">1 · Station</span>
+        <h3>Scene of things and connections</h3>
+        <svg viewBox="0 0 200 90" aria-label="A truss frame with supports and a load arrow">
+          <g stroke="var(--steel)" stroke-width="2.2" fill="none">
+            <path d="M20 70 L70 25 L120 70 L170 25 M20 70 L170 70 M70 25 L170 25 M70 25 L120 70"/>
+          </g>
+          <g fill="var(--steel)"><circle cx="20" cy="70" r="4"/><circle cx="70" cy="25" r="4"/><circle cx="120" cy="70" r="4"/><circle cx="170" cy="25" r="4"/><circle cx="170" cy="70" r="4"/></g>
+          <path d="M14 82 L20 72 L26 82 Z M164 82 L170 72 L176 82 Z" fill="var(--muted)"/>
+          <g stroke="var(--accent)" stroke-width="2.2" fill="var(--accent)"><line x1="120" y1="4" x2="120" y2="16"/><path d="M115 14 L120 22 L125 14 Z"/></g>
+        </svg>
+        <p>2D or 3D. Entities have a position, typed settings, and ports. Connections here are physical: a member between two joints, a motor on a cart, an inlet on a wall.</p>
+      </div>
+      <span class="arrow" aria-hidden="true">→</span>
+      <div class="page flow">
+        <span class="tag">2 · Flow</span>
+        <h3>Blocks and wires</h3>
+        <svg viewBox="0 0 200 90" aria-label="A flow with four blocks">
+          <g fill="var(--surface)" stroke="var(--line)" stroke-width="1.5">
+            <rect x="4" y="30" width="44" height="26" rx="4"/><rect x="66" y="8" width="52" height="26" rx="4"/><rect x="66" y="54" width="52" height="26" rx="4"/><rect x="140" y="30" width="56" height="26" rx="4"/>
+          </g>
+          <g stroke="var(--muted)" stroke-width="1.5" fill="none"><path d="M48 43 C57 43 57 21 66 21"/><path d="M48 43 C57 43 57 67 66 67"/><path d="M118 21 C129 21 129 43 140 43"/><path d="M118 67 C129 67 129 43 140 43"/></g>
+          <g font-family="JetBrains Mono, monospace" font-size="8" fill="var(--fg)"><text x="7" y="46">Station</text><text x="72" y="24">Mesh</text><text x="72" y="70">Loads×3</text><text x="146" y="46">Solve</text></g>
+        </svg>
+        <p>Grasshopper / DaVinci style. Sources and probes from the station show up as blocks. You drive sources with functions, route probes to monitors, and fan lists out into sweeps.</p>
+      </div>
+      <span class="arrow" aria-hidden="true">→</span>
+      <div class="page run">
+        <span class="tag">3 · Dashboard</span>
+        <h3>Instruments</h3>
+        <svg viewBox="0 0 200 90" aria-label="A falling residual curve and progress bars">
+          <g stroke="var(--line)" stroke-width="1"><line x1="8" y1="62" x2="120" y2="62"/><line x1="8" y1="8" x2="8" y2="62"/></g>
+          <path d="M8 12 C20 18 26 30 40 34 S70 44 85 50 S110 55 120 56" stroke="var(--accent)" stroke-width="2" fill="none"/>
+          <g fill="var(--line)"><rect x="132" y="12" width="62" height="7" rx="3"/><rect x="132" y="30" width="62" height="7" rx="3"/><rect x="132" y="48" width="62" height="7" rx="3"/></g>
+          <g fill="var(--steel)"><rect x="132" y="12" width="62" height="7" rx="3"/><rect x="132" y="30" width="40" height="7" rx="3"/><rect x="132" y="48" width="12" height="7" rx="3"/></g>
+          <g font-family="JetBrains Mono, monospace" font-size="7.5" fill="var(--muted)"><text x="8" y="76">residual vs iteration</text><text x="132" y="76">per-node</text></g>
+        </svg>
+        <p>Built from the monitor blocks in the flow (scopes, lamps, readouts), plus per-block progress, cancel and re-run. Logs go to the Console. Only changed blocks re-run.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Design rule</span>
+    <h2>Station says where, Flow says what</h2>
+    <p>The physics stays in the station and the solver (the plant). The flow never contains plant blocks, which is what separates it from Simulink, where you build the plant out of blocks. Two kinds of block are anchored in the station:</p>
+    <ul>
+      <li><b>Sources</b> push on the scene: a force source on a joint, a motor on a cart, an inlet on a channel. Each appears in the flow as a block with an input that you drive with a function (step, ramp, sine, expression, CSV).</li>
+      <li><b>Probes</b> are places you choose to measure: displacement at a joint, stress in a member, the angle of a link, pressure at a point. Each appears in the flow as a block with outputs.</li>
+    </ul>
+  </div>
+  <div class="wide">
+    <div class="tbl flowfig">
+      <svg viewBox="0 0 660 236" role="img" aria-label="Example flow: a sine function drives force source F1; probe P1 feeds a graph and a threshold that lights a lamp; the sine is also tapped into the graph for comparison">
+        <g fill="none" stroke-linecap="round">
+          <path d="M140 52 L200 52" stroke="var(--accent)" stroke-width="3"/>
+          <path d="M140 52 C165 52 165 8 200 8 L400 8 C424 8 420 44 440 44" stroke="var(--accent)" stroke-width="3" stroke-dasharray="1 6"/>
+          <path d="M350 167 C395 167 395 78 440 78" stroke="var(--steel)" stroke-width="3"/>
+          <path d="M350 167 C385 167 385 187 420 187" stroke="var(--steel)" stroke-width="3"/>
+          <path d="M530 187 L570 187" stroke="var(--muted)" stroke-width="1.5"/>
+        </g>
+        <g stroke-width="1.5">
+          <rect x="10" y="25" width="130" height="54" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+          <rect x="200" y="25" width="150" height="54" rx="6" fill="var(--steel-soft)" stroke="var(--steel)"/>
+          <rect x="200" y="140" width="150" height="54" rx="6" fill="var(--steel-soft)" stroke="var(--steel)"/>
+          <rect x="440" y="20" width="210" height="104" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+          <rect x="420" y="160" width="110" height="54" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+          <rect x="570" y="160" width="80" height="54" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+        </g>
+        <g fill="var(--fg)" font-family="Bricolage Grotesque, system-ui, sans-serif" font-size="13">
+          <text x="22" y="46">Sine</text>
+          <text x="212" y="46">F1 · Force source</text>
+          <text x="212" y="161">P1 · Probe</text>
+          <text x="452" y="40">Graph</text>
+          <text x="432" y="181">Threshold</text>
+          <text x="582" y="181">Lamp</text>
+        </g>
+        <g fill="var(--muted)" font-family="JetBrains Mono, monospace" font-size="10">
+          <text x="22" y="66">5 kN · 2 Hz</text>
+          <text x="212" y="66">setup: joint J3, −z</text>
+          <text x="212" y="181">setup: joint J5, disp z</text>
+          <text x="500" y="40">load vs response</text>
+          <text x="432" y="201">&gt; 10 mm</text>
+        </g>
+        <g fill="none" stroke-width="2">
+          <path d="M452 86 C467 56 482 56 497 86 S527 116 542 86 S572 56 587 86 S617 116 632 86" stroke="var(--accent)"/>
+          <path d="M452 98 C470 74 485 74 503 98 S533 122 551 98 S581 74 599 98 S629 122 640 106" stroke="var(--steel)"/>
+        </g>
+        <circle cx="626" cy="187" r="10" fill="var(--accent)"/>
+        <g fill="var(--fg)"><circle cx="140" cy="52" r="4"/><circle cx="200" cy="52" r="4"/><circle cx="350" cy="167" r="4"/><circle cx="440" cy="44" r="4"/><circle cx="440" cy="78" r="4"/><circle cx="420" cy="187" r="4"/><circle cx="530" cy="187" r="3"/><circle cx="570" cy="187" r="3"/></g>
+        <g font-family="JetBrains Mono, monospace" font-size="10" fill="var(--muted)">
+          <rect x="10" y="222" width="12" height="3" fill="var(--steel)"/><text x="28" y="227">anchored in the station</text>
+          <line x1="210" y1="223.5" x2="232" y2="223.5" stroke="var(--accent)" stroke-width="3" stroke-dasharray="1 6" stroke-linecap="round"/><text x="238" y="227">tap: same signal, also sent to the graph</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+  <div class="wrap">
+    <p>Wires come in three kinds, each with its own look, and ports only accept the matching kind:</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Wire</th><th>Carries</th><th>Example</th></tr></thead>
+        <tbody>
+          <tr><td><b>Signal</b> · thick</td><td>A time series on the run clock, with a unit</td><td>Force in kN, displacement in mm, angle in rad</td></tr>
+          <tr><td><b>Value</b> · thin</td><td>A number, flag or setting, fixed for one run</td><td>Threshold 10 mm, LQR weight Q, trip flag</td></tr>
+          <tr><td><b>Result</b> · dashed</td><td>A finished object, computed once and cached</td><td>Mesh, gain matrix, mode shapes, sweep table</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Monitoring</span>
+    <h2>Monitor blocks build the Dashboard</h2>
+    <p>Each monitor block in the flow becomes one instrument on the Dashboard. You lay the instruments out once and the layout is saved with the project, so the Dashboard needs no separate UI work.</p>
+    <ul>
+      <li><b>Scope</b> (the graph; goal: the "mother of all scopes", with zoom, cursors, triggers, X–Y and export) takes any number of signals and overlays them. <b>Diff mode</b> plots A − B when the units match, and A against B on two axes when they don't.</li>
+      <li><b>Lamp</b> takes a threshold and shows green, amber or red. It latches when tripped and has an optional output that stops the run.</li>
+      <li><b>Readout</b> shows the current value, the peak and the RMS.</li>
+      <li><b>Taps:</b> drag any port or wire onto a graph to add that signal. Dragging a block's input and its output onto the same graph gives a before/after comparison, such as commanded force against reaction force, or a filter's input against its output.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Execution</span>
+    <h2>How a Signal flow runs</h2>
+    <p>A Signal flow (causal): wires carry values one way, the graph is sorted once, and feedback closes through the plant (a probe reads the state the previous step left). Two run modes:</p>
+    <div class="contrast">
+      <div class="yes">
+        <span class="eyebrow">Evaluate once · open loop</span>
+        <p>The parametric example: the graph runs once and builds a result. Source functions are known in advance. The executor evaluates them, runs the solver, then reads the probes, so the graph stays a plain dependency graph. For linear structures it solves once per unit load and scales by f(t) (superposition), so playback is instant.</p>
+      </div>
+      <div class="yes">
+        <span class="eyebrow">Simulate · closed loop</span>
+        <p>The mass-spring, cart-pole and runner examples: a probe feeds back into a source, for example angle → LQR → motor. The executor steps the solver and the flow together on a fixed time step. Validation will reject only loops that have no delay or stateful block in them (algebraic loops); today every cycle in the graph is rejected.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Flow types</span>
+    <h2>Beyond Signal flow</h2>
+    <p>A backend declares which flow types it supports, and a toolkit can require one (an electrical toolkit needs Model flow). Each has its own executor and look. A flow is drawn on <b>sheets</b>. Signal blocks (the <code>base</code>, <code>signal</code> and <code>math</code> packages) work in every type: in a Step flow they run once per clock step and feed conditions and monitors.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Flow type</th><th>Wires mean</th><th>Like</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td><b>Signal flow</b></td><td>A value flows one way (causal)</td><td>Simulink, Grasshopper</td><td>Built (evaluate and simulate)</td></tr>
+          <tr><td><b>Step flow</b></td><td>Control passes along step wires, one block at a time per path: sequence, branch, loop, wait. Hats start paths: Start once, When on an event (a key, the clock passing 10 s), so paths run side by side; Stop ends the run</td><td>Scratch, flowcharts</td><td>Built: toolkit <code>step</code> package, animation example, active blocks lit</td></tr>
+          <tr><td><b>State flow</b></td><td>Transitions between states on events</td><td>Finite state machines, Stateflow</td><td>Idea</td></tr>
+          <tr><td><b>Model flow</b></td><td>A physical connection whose flow and effort balance (acausal)</td><td>Modelica, Simscape</td><td>Planned: OpenModelica (<code>omc</code>) as the solver, below</td></tr>
+          <tr><td><b>Modes</b> (hybrid)</td><td>A State flow whose states each hold their own sheet, switched by transitions</td><td>Hybrid automata</td><td>Idea</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Model flow · acausal solver</span>
+    <h2>OpenModelica as the Model flow solver</h2>
+    <p>A Model flow is a physical network: wires are connections where effort (voltage, force, pressure) is equal and flow (current, force, mass flow) sums to zero. Solving one means building a DAE, reducing its index and integrating it: years of work to do well. OpenModelica's compiler, <code>omc</code>, already does all of it, with the Modelica Standard Library (MSL) for components. Paperboat uses it as the solver instead of writing one.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Step</th><th>What happens</th><th>Where</th></tr></thead>
+        <tbody>
+          <tr><td><b>1 · Generate</b></td><td>The Model flow sheet becomes Modelica source: each block is an MSL component (<code>Resistor</code>, <code>Mass</code>, <code>Spring</code>, <code>HeatCapacitor</code>), each wire a <code>connect()</code>, each param a <code>parameter</code>. Physical port types (electrical pin, flange, heat port) come from the descriptor, and connection rules (#4) keep wires between matching ones.</td><td>Engine, from the toolkit's model packages</td></tr>
+          <tr><td><b>2 · Compile</b></td><td><code>omc</code> flattens, reduces the index and compiles the model to an <b>FMU</b> (FMI 2/3, co-simulation, its solver inside). Cached by a hash of the generated source.</td><td><code>omc</code> as a child process</td></tr>
+          <tr><td><b>3 · Run</b></td><td>The engine loads the FMU and steps it on the run clock, alongside the station plant and any Signal or Step flow: probes read FMU outputs, sources set FMU inputs, monitors stream <code>signal</code> events as today.</td><td>Engine (FMI runtime, e.g. FMI Library)</td></tr>
+          <tr><td><b>4 · Iterate</b></td><td>Changing a param sets an FMU parameter: no recompile. Changing the sheet (a block, a wire) recompiles, which takes seconds; the UI shows it as a compile step with progress.</td><td>Engine, UI</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul>
+      <li><b>Why an FMU, not <code>omc</code> simulating directly:</b> the engine keeps control of the clock, so a Model flow can close loops with Signal flow blocks and the station, stream live and be cancelled like any run.</li>
+      <li><b>Toolkit side:</b> a model package (<code>electrical</code>, <code>mechanics</code>, <code>thermal</code>) is a set of templates that map to MSL classes; its blocks declare the Model flow type, so the palette only offers them on a Model flow sheet.</li>
+      <li><b>Dependency:</b> <code>omc</code> is large (hundreds of MB) and stays an external install the engine finds on the path, not bundled at first. Runtime FMUs are small and self-contained.</li>
+      <li><b>Licences to check before shipping:</b> OpenModelica (OSMC-PL, with a GPL v3 option) as a separate tool; MSL is BSD-3; generated FMUs are ours.</li>
+      <li><b>Fallback:</b> our own DAE solver only if FMUs fall short (live structural changes, browser-only runs).</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">The reusable core</span>
+    <h2>Model → Discretize → Solve → Study</h2>
+    <p>All three domains share this pipeline. The framework owns the stages, caching and execution; each domain plugs in its own blocks for each stage.</p>
+  </div>
+  <div class="wide">
+    <div class="pipe">
+      <div><b>Model</b><span>The setup scene, turned into a typed domain model.</span></div>
+      <div><b>Discretize</b><span>Mesh, lattice, element assignment, linearization, sample time.</span></div>
+      <div><b>Solve</b><span>FEA, flow solver, time integration. Often long-running.</span></div>
+      <div><b>Study</b><span>Sweeps, Monte Carlo, limit checks, comparisons, Pareto fronts.</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Architecture</span>
+    <h2>Four layers</h2>
+    <div class="layers">
+      <div class="layer"><b>Frontend</b><span>Station (three.js), Flow (React Flow), Dashboard (uPlot planned) and Console. Builds every form and block from the backend's catalog, so it has no domain code.</span></div>
+      <div class="layer wire"><b>Protocol</b><span>One WebSocket. JSON text messages for the block catalog, the scene, the graph and run events; binary frames for large fields. Language-neutral, so any backend that speaks it works with the UI (see <code>protocol/README.md</code>). Schemas published as JSON Schema.</span></div>
+      <div class="layer"><b>Core (C++)</b><span>Toolkit of reusable blocks and TOML descriptors (built) · registry of entity and block types · graph validation and type checking · content-hash cache · thread-pool executor with progress, cancel (<code>std::stop_token</code>) and fan-out · WebSocket server.</span></div>
+      <div class="layer"><b>Solvers (C++)</b><span>Solver adapters behind blocks: an Eigen direct-stiffness frame solver, own equations of motion with boost::odeint, a lattice-Boltzmann solver, and later OpenFOAM or CalculiX in podman. Solvers that can't check the stop token run in a child process so cancel always works.</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Plugin API</span>
+    <h2>What a domain author writes</h2>
+    <p>A domain is a <b>descriptor</b> plus C++ for what only it can do. The descriptor is a TOML file listing the domain's blocks: templates from the reusable C++ <b>toolkit</b> (waves, math, PID, simulator, keyboard keys, graphs), used as is or renamed and re-defaulted, and the domain's own sources, probes and solver blocks with their ports and params. The engine turns it into the catalog the UI reads, so the frontend has no domain code.</p>
+<pre><code>domain = "structural"
+
+[[blocks]]
+use = "signal/sine"
+defaults = { amplitude = 5000, frequency = 2 }
+
+[[blocks]]
+use = "math/threshold"
+label = "Limit 10 mm"
+defaults = { level = 10 }
+
+[[blocks]]
+use = "dashboard/graph"
+
+# The domain's own blocks
+[[blocks]]
+type = "ForceSource"
+kind = "source"
+inputs = ["force"]
+
+[[blocks]]
+type = "DisplacementProbe"
+kind = "probe"
+outputs = [{ id = "disp", type = "mm" }]
+
+[[blocks]]
+type = "LinearStatic"
+kind = "function"
+inputs = [{ id = "model", type = "FrameModel" }]
+outputs = [{ id = "result", type = "FrameResult" }]
+params = { check_tolerance = 1e-6 }</code></pre>
+    <p>The domain's own blocks are C++ classes bound to their descriptor entries; toolkit entries need no code:</p>
+<pre><code>#include &lt;paperboat/plugin.hpp&gt;
+using namespace paperboat;
+
+class LinearStatic : public Node {
+  Outputs run(Ctx&amp; ctx, const Inputs&amp; in) override {
+    ctx.progress(0.1, "assembling stiffness");
+    auto result = solve_frame(in.get&lt;FrameModel&gt;("model"), params(), ctx.stop_token());
+    ctx.metric("max_displacement_mm", result.max_disp * 1e3);
+    return {{"result", std::move(result)}};
+  }
+};
+
+void register_structural(Domain&amp; d) {
+  d.load_descriptor("examples/backends/structural-cpp/descriptor.toml");
+  d.implement&lt;LinearStatic&gt;("LinearStatic");
+  d.implement&lt;ForceSource&gt;("ForceSource");
+  d.implement&lt;DisplacementProbe&gt;("DisplacementProbe");
+}</code></pre>
+    <ul>
+      <li>Placing a <code>ForceSource</code> or <code>DisplacementProbe</code> on a joint in the station adds a matching block to the flow palette, named after the entity (<code>F1</code>, <code>P1</code>).</li>
+      <li><code>ctx.progress</code>, <code>ctx.metric</code>, <code>ctx.log</code> and <code>ctx.frame</code> become events on the Dashboard and Console.</li>
+      <li><code>ctx.stop_token()</code> is a <code>std::stop_token</code>. Solvers check it between iterations; anything that can't runs in a child process that the engine kills on cancel.</li>
+      <li>A block's output is cached by a hash of its inputs and params, so editing one block re-runs only what depends on it.</li>
+      <li>Domains are separate CMake targets: <code>paperboat_structural</code>, <code>paperboat_control</code>, <code>paperboat_cfd</code>. They link statically at first; loadable shared libraries behind a C ABI come later.</li>
+      <li>The toolkit (<code>engine/toolkit</code>) is built and tested: packages <code>base</code>, the simple things meant for every flow type (constant, gain, sum, threshold, saturation, sine, step, ramp, square, key, graph), and <code>control</code>, dynamics on a clock (PID, integrator, lag, plus <code>rk4_step</code> for plants). A descriptor's <code>config</code> fixes load-time settings, so one template can appear twice, e.g. Key ← and Key →.</li>
+      <li>Station entities (Joint, Member) get a descriptor section of their own later; Lua scripting can be added for expression blocks without changing the format.</li>
+      <li>Block definitions are data once they leave the engine, so a domain can also be prototyped in any language that speaks the protocol (<code>examples/backends/</code>) before it is ported to C++.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Run protocol</span>
+    <h2>Events on the WebSocket</h2>
+    <p>The Station, Flow palette and Dashboard are built only from these messages, so any domain gets its UI without writing UI. Rows marked <i>planned</i> are not in protocol v0 yet.</p>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Event</th><th>Carries</th><th>Shown as</th></tr></thead>
+        <tbody>
+          <tr><td><code>catalog</code> / <code>scene</code> / <code>graph.load</code></td><td>Block definitions; station entities (shape, position, size, color) and a 2D/3D <code>view</code>; a starter graph</td><td>Flow palette and block forms; the Station; the canvas contents</td></tr>
+          <tr><td><code>scene.patch</code></td><td>Changed fields of some entities</td><td>Live motion in the Station</td></tr>
+          <tr><td><code>run.started</code> / <code>run.finished</code></td><td>Run id, block order, status, duration</td><td>Header status, total progress</td></tr>
+          <tr><td><code>node.state</code></td><td>running · done today (Step flow); later queued · cached · failed · cancelled</td><td>The active block lit on the Flow page; later badges in debug mode</td></tr>
+          <tr><td><code>node.progress</code> <i>planned</i></td><td>Fraction 0–1 and a short message</td><td>Per-block progress bar</td></tr>
+          <tr><td><code>signal</code></td><td>Monitor id, time (or list index), value</td><td>Scope and Readout instruments</td></tr>
+          <tr><td><code>monitor.state</code> <i>planned</i></td><td>Lamp id, ok · warn · trip, the value that tripped it</td><td>Lamp instruments, and a marker on the scope</td></tr>
+          <tr><td><code>metric</code> <i>planned</i></td><td>Series name, x, y, unit</td><td>Solver plots that aren't on the run clock (residual against iteration)</td></tr>
+          <tr><td><code>frame</code> <i>planned</i></td><td>2D primitives or a small field image</td><td>Live view (pendulum, velocity field, deformed shape)</td></tr>
+          <tr><td><code>log</code></td><td>Level, text</td><td>The Console</td></tr>
+          <tr><td><code>input</code> (UI → backend)</td><td>A key code and up/down</td><td>Drives Key blocks (play the runner with Space and ↓)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wide">
+    <span class="eyebrow">Domains</span>
+    <h2>Three demos, each stressing a different part</h2>
+    <div class="domains">
+      <article class="domain">
+        <h3>Structural frame</h3>
+        <span class="stress">Tests the 3D setup editor</span>
+        <dl>
+          <div><dt>Station</dt><dd>3D joints and members on a snapping grid, supports, sections and materials. Force sources on joints, and displacement and stress probes on joints and members.</dd></div>
+          <div><dt>Flow</dt><dd><code>Sine 5 kN</code> → <code>F1</code> · <code>P1 disp</code> → <code>Graph</code> and <code>Threshold 10 mm</code> → <code>Lamp</code> · study: <code>Section sweep</code></dd></div>
+          <div><dt>Dashboard</dt><dd>Animated deformed shape, load against displacement, lamps per probe, utilization per member.</dd></div>
+          <div><dt>Backend</dt><dd>Own direct-stiffness frame solver on Eigen for statics, with superposition for time-varying loads. Newmark-β on the assembled matrices for dynamics. Later gmsh + CalculiX for solids.</dd></div>
+        </dl>
+      </article>
+      <article class="domain">
+        <h3>Cart-pole &amp; double pendulum</h3>
+        <span class="stress">Tests live streaming and sweeps</span>
+        <dl>
+          <div><dt>Station</dt><dd>2D rail, cart, one or two links. The motor is a force source with a limit; the encoders are angle and position probes. Masses and lengths as settings.</dd></div>
+          <div><dt>Flow</dt><dd>Closed loop: <code>θ, x probes</code> → <code>LQR</code> → <code>Motor</code>. <code>Graph</code> of θ against the reference, <code>Lamp</code> when the cart nears the rail end. Study: <code>Sweep Q ×10</code> → <code>Pareto</code>.</dd></div>
+          <div><dt>Dashboard</dt><dd>Animated pendulum, state and force plots, one row per sweep case.</dd></div>
+          <div><dt>Backend</dt><dd>Own equations of motion, boost::odeint for integration, LQR from a Riccati solve on Eigen.</dd></div>
+        </dl>
+      </article>
+      <article class="domain">
+        <h3>2D channel flow (CFD)</h3>
+        <span class="stress">Tests long jobs and convergence</span>
+        <dl>
+          <div><dt>Station</dt><dd>2D channel with obstacles (cylinder, airfoil), walls, outlet, fluid viscosity. The inlet is a velocity source; pressure and velocity probes go at points behind the obstacle.</dd></div>
+          <div><dt>Flow</dt><dd><code>Ramp 0→2 m/s</code> → <code>Inlet</code> · <code>Probe p</code> → <code>FFT</code> → <code>Graph</code> (shedding frequency) · <code>Lamp</code> if residuals diverge · study: <code>Reynolds sweep</code></dd></div>
+          <div><dt>Dashboard</dt><dd>Live vorticity field, residual curve, drag coefficient, cancel and resume.</dd></div>
+          <div><dt>Backend</dt><dd>C++ lattice-Boltzmann (a few hundred lines). Later an OpenFOAM block in podman with the same graph.</dd></div>
+        </dl>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Stack</span>
+    <h2>Libraries</h2>
+    <ul>
+      <li><b>Engine:</b> C++20, CMake with presets; dependencies through FetchContent today (vcpkg manifest still an option, decide before CI). nlohmann/json, toml++ for descriptors, Catch2 for tests. Planned: uWebSockets or Boost.Beast for the core server (the C++ example uses IXWebSocket), Eigen, boost::odeint; clang-format and clang-tidy.</li>
+      <li><b>Frontend:</b> Vite + React + TypeScript. <a href="https://reactflow.dev" target="_blank" rel="noopener">React Flow (xyflow)</a> for the node editor, three.js for the Station, uPlot for the Dashboard (planned; SVG today), a JSON-Schema form renderer for settings.</li>
+      <li><b>Desktop:</b> Electron wraps the same web app and starts the engine as a child process on a local port. Electron over Tauri because Tauri uses WebKitGTK on Linux, which is weaker for WebGL.</li>
+      <li><b>Browser:</b> the same web app, talking to an engine on a server or running locally.</li>
+      <li><b>Prior art to study:</b> ComfyUI (closest architecture), Grasshopper, Houdini, Blender Geometry Nodes, DaVinci Fusion, Node-RED.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Repo layout</span>
+    <h2>Monorepo</h2>
+<pre class="tree">paperboat/               (folder: ~/Onedrive/Projects/rigflow)
+├─ apps/
+│  ├─ web/               Vite + React app: Station, Flow, Dashboard, Console
+│  └─ desktop/           Electron shell; starts the engine (planned)
+├─ engine/               C++20, CMake
+│  ├─ toolkit/           reusable blocks (base, control, step) + descriptor loader
+│  ├─ core/              station, graph, run, session, server (cache next)
+│  ├─ tools/             paperboat-catalog
+│  └─ tests/             Catch2
+├─ python/               Paperboat's Python runtime (pip install ./python), a mirror of the engine
+├─ protocol/             wire protocol spec + smoke_test.py, later JSON Schema
+├─ examples/
+│  ├─ backends/          one project per domain that uses Paperboat (the engine never builds them),
+│  │                     each with its descriptor.toml (palette and
+│  │                     starters): mass-spring-python, cart-pole-cpp, parametric-python,
+│  │                     runner-python, animation-python (Step flow); later structural, cfd
+│  └─ projects/          truss bridge, cart-pole LQR, cylinder wake (planned)
+├─ docs/                 this plan
+├─ GUIDELINES.md         rules, names (glossary), lessons learned
+├─ TODO.md               ideas and open work, priorities P0–P3
+└─ CLAUDE.md             instructions for Claude (commit rules)</pre>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Milestones</span>
+    <h2>Order of work</h2>
+    <p>Each milestone ends with something runnable. The core API is allowed to change until M3; after that it is frozen for the first release.</p>
+    <div class="track">
+      <div class="ms">
+        <span class="id">M0 · Skeleton · in progress</span>
+        <h3>Core with no UI</h3>
+        <p class="done"><b>Done when:</b> a graph loaded from JSON validates in the C++ engine, runs with caching and cancellation, and serves protocol events. Catch2 tests cover type checking, cache hits and cancel. <b>So far:</b> the toolkit, TOML descriptors and <code>engine/core</code> (validation, Signal flow runs with cancellation, the protocol over WebSocket) are done and tested, with a golden cart-pole run; next is caching and node events.</p>
+      </div>
+      <div class="ms">
+        <span class="id">M1 · Flow page · partly done</span>
+        <h3>Flow and Dashboard</h3>
+        <p class="done"><b>Done when:</b> the web app lists block types from the backend, builds a flow, edits params through generated forms, runs it and shows progress and logs live. Scope, Lamp and Readout instruments work, and dragging a port onto a scope adds a tap. <b>So far:</b> the palette, typed wiring, delete, number params, live plots, progress and Console work against five backends; Lamp, Readout and taps are open.</p>
+      </div>
+      <div class="ms">
+        <span class="id">M2 · Structural</span>
+        <h3>Station in 3D</h3>
+        <p class="done"><b>Done when:</b> you can draw a truss bridge in 3D, put a force source on one joint and a probe at midspan, drive the source with a 5 kN sine, graph force against displacement, and see a lamp trip above 10 mm. Saved as <code>examples/truss-bridge</code>.</p>
+      </div>
+      <div class="ms">
+        <span class="id">M3 · Control</span>
+        <h3>Closed loop, live streaming and fan-out</h3>
+        <p class="done"><b>Done when:</b> the LQR block closes the loop from the angle probes to the motor source with fixed-step execution, and a sweep of 10 Q weights runs in parallel, each case animates live, and a Pareto plot compares settling time against peak force. The double pendulum swaps in with no framework change.</p>
+      </div>
+      <div class="ms">
+        <span class="id">M4 · CFD</span>
+        <h3>Long jobs</h3>
+        <p class="done"><b>Done when:</b> flow past a cylinder shows live vortex shedding and a residual curve, cancels cleanly mid-run, and a Reynolds sweep reports drag. Optional: the same graph runs on OpenFOAM in podman.</p>
+      </div>
+      <div class="ms">
+        <span class="id">M5 · Release</span>
+        <h3>Packaging and docs</h3>
+        <p class="done"><b>Done when:</b> the Electron app installs from an AppImage, MSI or DMG and starts its bundled engine on a clean machine, <code>paperboat-engine serve</code> plus the static web build works in a browser, and the docs include a "write your own domain" tutorial.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <span class="eyebrow">Risks</span>
+    <h2>Open questions</h2>
+    <ul>
+      <li><b>3D editor scope.</b> A full CAD tool is out of reach. Start with grid snapping, point and link entities, and a property panel, and add import (STEP, STL) later.</li>
+      <li><b>Sweep semantics.</b> Grasshopper data trees are powerful but confusing. Start with plain list fan-out (one run per item) and a <code>Collect</code> block.</li>
+      <li><b>Station ↔ flow link.</b> When the station changes, which blocks are stale? Hash the station per entity so only the affected model blocks invalidate.</li>
+      <li><b>Clock alignment.</b> Probes from different solvers sample at different rates. Graphs resample onto the run clock, and diff mode needs matching units (otherwise it falls back to two axes).</li>
+      <li><b>Probe placement on meshes.</b> A probe at a point that isn't a mesh node has to interpolate. Snap probes to joints first and allow free points later.</li>
+      <li><b>Large results.</b> CFD fields don't belong in JSON. Send them as compressed binary frames and keep full results on disk with a reference in the cache.</li>
+      <li><b>C++ builds on three OSes.</b> Pin dependencies with a vcpkg manifest and run CI on Linux, Windows and macOS from M0, not at release.</li>
+      <li><b>Protocol drift.</b> The C++ engine and the example backends must stay in sync. Generate the TypeScript types and C++ structs from one JSON Schema; every backend already runs the same smoke test.</li>
+      <li><b>Flow type scope.</b> Model flow and Modes are each a project of their own. Make Signal and Step flow solid first; treat Model flow as an adapter to OpenModelica (generate Modelica, compile to an FMU, step it) before writing a DAE solver.</li>
+      <li><b>Name.</b> Settled: product <b>Paperboat</b>, handle <b>paperboatlab</b> (GitHub org, domain, package scope).</li>
+    </ul>
+  </div>
+</section>

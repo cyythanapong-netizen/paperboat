@@ -1,0 +1,526 @@
+import {
+  addEdge,
+  Background,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
+  getSmoothStepPath,
+  Handle,
+  MarkerType,
+  Position,
+  ReactFlow,
+  useReactFlow,
+  type Connection,
+  type Edge,
+  type EdgeProps,
+  type IsValidConnection,
+  type Node,
+  type NodeProps,
+  type OnEdgesChange,
+  type OnNodesChange,
+} from "@xyflow/react";
+import { createContext, useContext, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
+import {
+  display,
+  frameAround,
+  GroupActions,
+  GroupBox,
+  isFrame,
+  splitHandle,
+  STORY_DEF,
+  toGroups,
+  withoutFrame,
+  type GroupData,
+  type GroupNode,
+} from "./groups";
+import type { BlockDef, Graph, ObjectDef, ParamDef, ParamValue, Station } from "./protocol";
+
+/**
+ * `missing`: the backend's catalog has no block of this type (an old graph, another
+ * backend's, a block renamed in code). The node keeps its type, params and wires, drawn
+ * red from what it had, until the type comes back or the user replaces it.
+ */
+export type BlockData = { def: BlockDef; params: Record<string, ParamValue>; missing?: boolean };
+export type BlockNode = Node<BlockData, "block">;
+/** What the Flow canvas holds: blocks, and the groups (frames) around some of them. */
+export type FlowNode = BlockNode | GroupNode;
+export const isBlock = (n: FlowNode): n is BlockNode => n.type === "block";
+/** `type`: the type of the ports it joins: `step` (control passes along it), `signal`, `image`… */
+export type Wire = Edge<{ type: string }, "wire">;
+
+/** What the last run said about blocks (`node.state`): where a Step flow is, which failed. */
+export const RunStates = createContext<{ active: ReadonlySet<string>; failed: ReadonlySet<string> }>({
+  active: new Set(),
+  failed: new Set(),
+});
+
+const portType = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs") =>
+  def?.[side].find((p) => p.id === port)?.type;
+
+/** Generic node: everything it shows comes from the backend's BlockDef. */
+function Block({ id, data, selected }: NodeProps<BlockNode>) {
+  const { updateNodeData, deleteElements } = useReactFlow<BlockNode, Wire>();
+  const states = useContext(RunStates);
+  const active = states.active.has(id);
+  const { def, params, missing } = data;
+  const failed = states.failed.has(id);
+  const classes = ["block", `kind-${def.kind}`, active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
+  return (
+    <div
+      className={classes.filter(Boolean).join(" ")}
+      title={missing ? `This backend has no "${def.type}" block: its params and wires are kept. Replace or delete it.` : undefined}
+    >
+      <div className="block-title">
+        {missing ? (
+          <span>
+            {def.type} <span className="missing-tag">missing</span>
+          </span>
+        ) : def.linked ? (
+          <span title="Linked to a station object: set its properties, or remove it, on the Station">
+            {def.label} <span className="linked-tag">⚓ {id}</span>
+          </span>
+        ) : (
+          def.label
+        )}
+        {selected && !def.linked && (
+          <button className="remove nodrag" title="Delete block" onClick={() => deleteElements({ nodes: [{ id }] })}>
+            ×
+          </button>
+        )}
+      </div>
+      {def.inputs.map((p) => (
+        <div key={p.id} className={`port in port-${p.type}`}>
+          <Handle type="target" position={Position.Left} id={p.id} />
+          {p.id}
+        </div>
+      ))}
+      {def.outputs.map((p) => (
+        <div key={p.id} className={`port out port-${p.type}`}>
+          {p.id}
+          <Handle type="source" position={Position.Right} id={p.id} />
+        </div>
+      ))}
+      {def.params.map((p) => (
+        <label key={p.id} className="param">
+          {p.id}
+          <ParamInput
+            def={p}
+            value={params[p.id]}
+            disabled={missing}
+            set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })}
+          />
+        </label>
+      ))}
+    </div>
+  );
+}
+
+/** A number field, or for a `key` param a field that takes the next key you press. */
+export function ParamInput({
+  def,
+  value,
+  set,
+  disabled,
+}: {
+  def: ParamDef;
+  value: ParamValue;
+  set: (v: ParamValue) => void;
+  disabled?: boolean;
+}) {
+  if (def.type === "boolean") {
+    return (
+      <input
+        className="nodrag bool-param"
+        type="checkbox"
+        disabled={disabled}
+        checked={value === true || value === 1}
+        onChange={(e) => set(e.target.checked)}
+      />
+    );
+  }
+  if (def.type === "file" || def.type === "text") {
+    return (
+      <input
+        className="nodrag text-param"
+        disabled={disabled}
+        value={String(value)}
+        title={def.type === "file" ? "A file, relative to the backend's descriptor" : undefined}
+        onChange={(e) => set(e.target.value)}
+      />
+    );
+  }
+  if (def.type === "key") {
+    return (
+      <input
+        className="nodrag key-param"
+        disabled={disabled}
+        readOnly
+        value={String(value)}
+        title="Click, then press a key (Esc to keep)"
+        onKeyDown={(e) => {
+          e.preventDefault();
+          if (e.code !== "Escape") set(e.code);
+          e.currentTarget.blur();
+        }}
+      />
+    );
+  }
+  return (
+    <input
+      className="nodrag"
+      type="number"
+      step="any"
+      disabled={disabled}
+      value={Number(value)}
+      onChange={(e) => set(e.target.valueAsNumber || 0)}
+    />
+  );
+}
+
+/** A wire: a curve for signals, a right-angled arrow for steps, and × when selected. */
+function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire>) {
+  const { deleteElements } = useReactFlow();
+  const step = data?.type === "step";
+  const [path, x, y] = (step ? getSmoothStepPath : getBezierPath)(geometry);
+  return (
+    <>
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} className={`wire-${data?.type ?? "signal"}`} />
+      {selected && (
+        <EdgeLabelRenderer>
+          <button
+            className="remove nodrag nopan"
+            title="Delete wire"
+            style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
+            onClick={() => deleteElements({ edges: [{ id }] })}
+          >
+            ×
+          </button>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
+const nodeTypes = { block: Block, frame: GroupBox };
+const edgeTypes = { wire: WireEdge };
+
+function makeNode(def: BlockDef, id: string, x: number, y: number, params: Record<string, ParamValue> = {}): BlockNode {
+  const defaults = Object.fromEntries(def.params.map((p) => [p.id, p.default]));
+  // A linked block goes when its station object goes, not from the Flow page.
+  return { id, type: "block", position: { x, y }, deletable: !def.linked, data: { def, params: { ...defaults, ...params } } };
+}
+
+/**
+ * Keep the linked blocks in step with the station: one per station object that spawns
+ * one (same id), none for objects that are gone. Returns `nodes` itself when nothing changes.
+ */
+export function syncLinked(nodes: FlowNode[], station: Station | null, objects: ObjectDef[], blocks: BlockDef[]): FlowNode[] {
+  const spawns = new Map(objects.flatMap((o) => (o.block ? [[o.type, o.block] as const] : [])));
+  const defs = new Map(blocks.map((b) => [b.type, b]));
+  const wanted = new Map(
+    (station?.objects ?? []).flatMap((o) => {
+      const def = defs.get(spawns.get(o.type) ?? "");
+      return def ? [[o.id, def] as const] : [];
+    }),
+  );
+  const kept = nodes.filter((n) => !isBlock(n) || !n.data.def.linked || wanted.has(n.id));
+  const have = new Set(kept.map((n) => n.id));
+  // New ones go below everything on the canvas, so they never cover a block.
+  const top = kept.filter((n) => !n.parentId);
+  const left = top.length ? Math.min(...top.map((n) => n.position.x)) : 0;
+  const below = top.length ? Math.max(...top.map((n) => n.position.y + (n.measured?.height ?? 130))) + 60 : 0;
+  const added = [...wanted]
+    .filter(([id]) => !have.has(id))
+    .map(([id, def], i) => makeNode(def, id, left + 220 * (i % 4), below + 150 * Math.floor(i / 4)));
+  return kept.length === nodes.length && added.length === 0 ? nodes : [...kept, ...added];
+}
+
+function makeWire(c: Connection, type: string): Wire {
+  const step = type === "step";
+  return {
+    id: `${c.source}.${c.sourceHandle}-${c.target}.${c.targetHandle}`,
+    type: "wire",
+    ...c,
+    data: { type },
+    markerEnd: step ? { type: MarkerType.ArrowClosed } : undefined,
+  };
+}
+
+/**
+ * Add a wire, replacing the one it can't share a port with: a signal input reads one
+ * wire, and a step output leads to one next block (a step input can be reached from many).
+ */
+function connect(wires: Wire[], c: Connection, type: string): Wire[] {
+  const step = type === "step";
+  const clash = (w: Wire) =>
+    step
+      ? w.source === c.source && w.sourceHandle === c.sourceHandle
+      : w.target === c.target && w.targetHandle === c.targetHandle;
+  return addEdge(makeWire(c, type), wires.filter((w) => !clash(w)));
+}
+
+function freeId(type: string, nodes: FlowNode[]): string {
+  const taken = new Set(nodes.map((n) => n.id));
+  let i = 1;
+  while (taken.has(`${type}-${i}`)) i++;
+  return `${type}-${i}`;
+}
+
+/**
+ * A stand-in definition for a block whose type the catalog lacks, from what is known of
+ * it: the ports its wires use (and any it had), and its params as they were.
+ */
+function missingDef(
+  type: string,
+  params: Record<string, ParamValue>,
+  wires: { source: string; sourceHandle?: string | null; target: string; targetHandle?: string | null; type?: string }[],
+  id: string,
+  had?: BlockDef,
+): BlockDef {
+  const ports = (side: "inputs" | "outputs") => {
+    const known = new Map((had?.[side] ?? []).map((p) => [p.id, p.type]));
+    for (const w of wires) {
+      const port = side === "inputs" ? (w.target === id ? w.targetHandle : null) : w.source === id ? w.sourceHandle : null;
+      if (port && !known.has(port)) known.set(port, w.type ?? "signal");
+    }
+    return [...known].map(([pid, ptype]) => ({ id: pid, type: ptype }));
+  };
+  return {
+    type,
+    label: type,
+    kind: "function",
+    inputs: ports("inputs"),
+    outputs: ports("outputs"),
+    params: Object.entries(params).map(([pid, v]) =>
+      typeof v === "number"
+        ? { id: pid, type: "number" as const, default: v }
+        : typeof v === "boolean"
+          ? { id: pid, type: "boolean" as const, default: v }
+          : { id: pid, type: "text" as const, default: v },
+    ),
+  };
+}
+
+/** Wire graph → editor state. A node whose type isn't in the catalog stays, as a missing block. */
+export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]; edges: Wire[] } {
+  const defs = new Map(blocks.map((b) => [b.type, b]));
+  const wires = graph.edges.map(({ from: [s, sp], to: [t, tp] }) => ({ source: s, sourceHandle: sp, target: t, targetHandle: tp }));
+  const nodes = graph.nodes.map((n, i) => {
+    const [x, y] = n.pos ?? [0, 120 * i];
+    const def = defs.get(n.type);
+    if (def) return makeNode(def, n.id, x, y, n.params);
+    const node = makeNode(missingDef(n.type, n.params ?? {}, wires, n.id), n.id, x, y, n.params);
+    return { ...node, data: { ...node.data, missing: true } };
+  });
+  const byId = new Map<string, BlockDef>(nodes.map((n) => [n.id, n.data.def]));
+  // Groups: frames around their blocks (parents before children, as React Flow wants).
+  let all: FlowNode[] = nodes;
+  const frames: FlowNode[] = [];
+  for (const g of graph.groups ?? []) {
+    const inside = all.filter((n): n is BlockNode => isBlock(n) && g.nodes.includes(n.id) && !n.parentId);
+    if (inside.length === 0) continue;
+    const { frame, children } = frameAround(g.id, g.kind, inside, {
+      label: g.label,
+      collapsed: g.collapsed,
+      seconds: g.params?.seconds,
+      pos: g.pos,
+    });
+    if (g.kind === "story") byId.set(g.id, STORY_DEF);
+    frames.push(frame);
+    const moved = new Map(children.map((c) => [c.id, c]));
+    all = all.map((n) => moved.get(n.id) ?? n);
+  }
+  const edges = wires.map((w) => makeWire(w, portType(byId.get(w.source), w.sourceHandle, "outputs") ?? "signal"));
+  return { nodes: [...frames, ...all], edges };
+}
+
+/**
+ * The same canvas against a new catalog (the backend came back, perhaps changed): each
+ * block takes its type's current definition, keeping the params it still has; a type that
+ * is gone leaves a missing block; a missing one whose type is back is whole again.
+ * Returns `nodes` itself when nothing changes.
+ */
+export function resolveBlocks(nodes: FlowNode[], edges: Wire[], blocks: BlockDef[]): FlowNode[] {
+  const defs = new Map(blocks.map((b) => [b.type, b]));
+  let changed = false;
+  const out = nodes.map((n): FlowNode => {
+    if (!isBlock(n)) return n;
+    const def = defs.get(n.data.def.type);
+    if (def === n.data.def || (!def && n.data.missing)) return n;
+    changed = true;
+    if (def) {
+      const defaults = Object.fromEntries(def.params.map((p) => [p.id, p.default]));
+      const kept = Object.fromEntries(Object.entries(n.data.params).filter(([k]) => k in defaults));
+      return { ...n, deletable: !def.linked, data: { def, params: { ...defaults, ...kept } } };
+    }
+    const wires = edges.map((e) => ({ ...e, type: e.data?.type }));
+    return { ...n, deletable: true, data: { ...n.data, def: missingDef(n.data.def.type, n.data.params, wires, n.id, n.data.def), missing: true } };
+  });
+  return changed ? out : nodes;
+}
+
+export function toGraph(nodes: FlowNode[], edges: Wire[]): Graph {
+  const groups = toGroups(nodes);
+  return {
+    nodes: nodes.filter(isBlock).map((n) => ({ id: n.id, type: n.data.def.type, params: n.data.params })),
+    edges: edges.map((e) => ({ from: [e.source, e.sourceHandle ?? ""], to: [e.target, e.targetHandle ?? ""] })),
+    ...(groups.length > 0 ? { groups } : {}),
+  };
+}
+
+type Props = {
+  blocks: BlockDef[];
+  nodes: FlowNode[];
+  edges: Wire[];
+  setNodes: Dispatch<SetStateAction<FlowNode[]>>;
+  setEdges: Dispatch<SetStateAction<Wire[]>>;
+  onNodesChange: OnNodesChange<FlowNode>;
+  onEdgesChange: OnEdgesChange<Wire>;
+};
+
+/** Blocks by palette group, groups in catalog order. */
+function groupBlocks(blocks: BlockDef[]): [string, BlockDef[]][] {
+  const groups = new Map<string, BlockDef[]>();
+  for (const b of blocks.filter((b) => !b.linked)) {
+    const g = b.group ?? "";
+    groups.set(g, [...(groups.get(g) ?? []), b]);
+  }
+  return [...groups];
+}
+
+export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange }: Props) {
+  const defOf = (id: string): BlockDef | undefined => {
+    const n = nodes.find((x) => x.id === id);
+    if (!n) return undefined;
+    if (isBlock(n)) return n.data.def;
+    return n.data.kind === "story" ? STORY_DEF : undefined;
+  };
+  // A wire drawn to a collapsed group's port is a wire to the block inside it.
+  const real = (c: Connection): Connection => {
+    const s = c.sourceHandle ? splitHandle(c.sourceHandle) : null;
+    const t = c.targetHandle ? splitHandle(c.targetHandle) : null;
+    return {
+      source: s ? s[0] : c.source,
+      sourceHandle: s ? s[1] : c.sourceHandle,
+      target: t ? t[0] : c.target,
+      targetHandle: t ? t[1] : c.targetHandle,
+    };
+  };
+  const wireType = (c: Connection | Wire) => portType(defOf(c.source), c.sourceHandle, "outputs") ?? "signal";
+
+  // A wire joins ports of one type: signal to signal, step to step, image to image…
+  const isValidConnection: IsValidConnection<Wire> = (shown) => {
+    const c = real(shown as Connection);
+    return c.source !== c.target && wireType(c) === portType(defOf(c.target), c.targetHandle, "inputs");
+  };
+
+  const onConnect = (shown: Connection) => {
+    const c = real(shown);
+    setEdges((ws) => connect(ws, c, wireType(c)));
+  };
+
+  // Grouping: a frame around the selected blocks (not already in a group). A story holds
+  // signal blocks only: it is itself the step.
+  const selected = nodes.filter((n): n is BlockNode => isBlock(n) && !!n.selected && !n.parentId);
+  const selectedFrame = nodes.find((n) => isFrame(n) && n.selected);
+  const canStory = selected.length > 0 && selected.every((n) => !hasStepPorts(n.data.def));
+  const group = (kind: GroupData["kind"]) =>
+    setNodes((ns) => {
+      const picked = ns.filter((n): n is BlockNode => isBlock(n) && !!n.selected && !n.parentId);
+      if (picked.length === 0) return ns;
+      const { frame, children } = frameAround(freeId(kind === "story" ? "story" : "group", ns), kind, picked);
+      const moved = new Map(children.map((c) => [c.id, c]));
+      return [frame, ...ns.filter((n) => !moved.has(n.id)), ...children];
+    });
+  const actions = useMemo(
+    () => ({
+      update: (id: string, change: Partial<GroupData>) =>
+        setNodes((ns) => ns.map((n) => (n.id === id && isFrame(n) ? { ...n, data: { ...n.data, ...change } } : n))),
+      ungroup: (id: string) => {
+        setNodes((ns) => withoutFrame(ns, id));
+        setEdges((ws) => ws.filter((w) => w.source !== id && w.target !== id)); // a story's step wires
+      },
+    }),
+    [setNodes, setEdges],
+  );
+  const runStates = useContext(RunStates);
+  const shown = display(nodes, edges, (node, port, side) => portType(defOf(node), port, side) ?? "signal");
+
+  // Dragging a wire's end onto another port moves it; dropping it anywhere else deletes it.
+  const moved = useRef(true);
+  const onReconnect = (old: Wire, c: Connection) => {
+    moved.current = true;
+    setEdges((ws) => {
+      const rest = ws.filter((w) => w.id !== old.id);
+      return connect(rest, c, wireType(c));
+    });
+  };
+  const onReconnectEnd = (_: unknown, wire: Wire) => {
+    if (!moved.current) setEdges((ws) => ws.filter((w) => w.id !== wire.id));
+    moved.current = true;
+  };
+
+  return (
+    <GroupActions.Provider value={{ ...actions, active: runStates.active }}>
+    <div className="flow">
+      <div className="palette">
+        <div className="palette-group group-tools">
+          <span className="muted">group</span>
+          <button disabled={selected.length === 0} title="Frame the selected blocks (tidy; they run as before)" onClick={() => group("visual")}>
+            ▭ Group
+          </button>
+          <button
+            disabled={!canStory}
+            title="Make the selected signal blocks a story: one step of a Step flow that runs them for its seconds"
+            onClick={() => group("story")}
+          >
+            ▶ Story
+          </button>
+          <button disabled={!selectedFrame} onClick={() => selectedFrame && actions.ungroup(selectedFrame.id)}>
+            ⊟ Ungroup
+          </button>
+        </div>
+        {groupBlocks(blocks).map(([group, defs]) => (
+          <div key={group} className="palette-group">
+            {group && <span className="muted">{group}</span>}
+            {defs.map((b) => (
+              <button
+                key={b.type}
+                className={[...b.inputs, ...b.outputs].some((p) => p.type === "step") ? "step-block" : undefined}
+                onClick={() => setNodes((ns) => [...ns, makeNode(b, freeId(b.type, ns), 40 * ns.length, 400)])}
+              >
+                + {b.label}
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+      <ReactFlow
+        nodes={shown.nodes}
+        edges={shown.edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        isValidConnection={isValidConnection}
+        onReconnect={onReconnect}
+        onReconnectStart={() => (moved.current = false)}
+        onReconnectEnd={onReconnectEnd}
+        deleteKeyCode={["Backspace", "Delete"]}
+        multiSelectionKeyCode={["Control", "Meta"]}
+        panActivationKeyCode={null} // Space belongs to the backend (Key blocks)
+        fitView
+      >
+        <Background />
+      </ReactFlow>
+      <p className="hint muted">
+        Click a block or wire, then Delete or ×. Shift-drag to select several; Ctrl-click to add one. Drag a wire's end
+        off its port to remove it. Group or Story the selected blocks; ▾ collapses a group.
+      </p>
+    </div>
+    </GroupActions.Provider>
+  );
+}
+
+const hasStepPorts = (def: BlockDef) => [...def.inputs, ...def.outputs].some((p) => p.type === "step");
