@@ -281,6 +281,12 @@ Serving
    .. py:attribute:: emit_every
       :type: int
 
+   .. py:attribute:: speed
+      :type: float
+
+      Times real time (0: as fast as it can). The defaults here are what the UI shows; a user
+      may change ``duration`` and ``speed`` per run.
+
    .. py:attribute:: view
       :type: dict | None
 

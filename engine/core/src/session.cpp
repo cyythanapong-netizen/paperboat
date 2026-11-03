@@ -30,7 +30,7 @@ Session::Session(const Backend& backend, Send send)
   const auto& catalog = *backend.catalog;
   json station_view = {{"view", catalog.station_view}};
   if (!catalog.station_page.empty()) station_view["page"] = "/" + catalog.station_page;  // on this port, over HTTP
-  s.emit({{"type", "hello"}, {"protocol", "paperboat/0"}, {"engine", backend.engine}, {"station", station_view}});
+  s.emit({{"type", "hello"}, {"protocol", "paperboat/0"}, {"engine", backend.engine}, {"station", station_view}, {"run", settings_json(backend.run)}});
   s.emit(json::parse(toolkit::catalog_message(catalog)));
   const auto opening = backend.state ? backend.state() : nullptr;
   s.emit(scene_message(make_station(s.station, catalog), opening.get(), backend.view));
@@ -57,8 +57,9 @@ void Session::on_message(const std::string& text) {
       return s.keys;
     };
     // Assigning a new jthread stops and joins the previous run first.
-    s.run = std::jthread([&s, id, graph = msg.value("graph", json::object()), station, keys_now](std::stop_token stop) {
-      core::run(id, graph, station, s.backend, [&s](const json& m) { s.emit(m); }, keys_now, stop);
+    s.run = std::jthread([&s, id, graph = msg.value("graph", json::object()), station, keys_now,
+                          settings = msg.value("settings", json())](std::stop_token stop) {
+      core::run(id, graph, station, s.backend, [&s](const json& m) { s.emit(m); }, keys_now, stop, settings);
     });
   } else if (type == "station.set") {
     // An edit on the Station page: check it, keep it, and show it.

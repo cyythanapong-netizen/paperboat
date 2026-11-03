@@ -30,7 +30,7 @@ class Clock final : public Executor {
       run.at_time(k * s.dt);
       const json samples = run.pass();
       const auto ended = run.advance();
-      if (k % s.emit_every == 0 || ended) run.frame(samples, steps ? static_cast<double>(k) / steps : 1.0);
+      if (k % s.emit_every == 0 || k == steps || ended) run.frame(samples, steps ? static_cast<double>(k) / steps : 1.0);
       if (ended) {
         run.log("warn", *ended);
         break;

@@ -464,7 +464,7 @@ std::string read_file(const std::string& path) {
 // the built-in toolkit; then the descriptor loads against that registry.
 std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descriptor, nb::list blocks, nb::list objects,
                              nb::object state, const std::string& mode, double dt, double duration, int emit_every,
-                             nb::object view) {
+                             nb::object view, double speed) {
   auto h = std::make_unique<Hosted>();
   h->registry = tk::builtins();
   const std::string domain = tk::descriptor_domain(read_file(descriptor));
@@ -521,7 +521,8 @@ std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descr
            .dt = dt,
            .duration = duration,
            .emit_every = emit_every,
-           .real_time = true};
+           .real_time = true,
+           .speed = speed};
   if (!state.is_none()) {
     nb::handle factory = h->state;
     b.state = [factory]() -> std::unique_ptr<tk::DomainState> {
@@ -556,7 +557,7 @@ NB_MODULE(_engine, m) {
 
   m.def("make", &make, nb::arg("engine"), nb::arg("descriptor"), nb::arg("blocks"), nb::arg("objects"),
         nb::arg("state").none(), nb::arg("mode"), nb::arg("dt"), nb::arg("duration"), nb::arg("emit_every"),
-        nb::arg("view").none(), "Register the domain's classes and load the descriptor.");
+        nb::arg("view").none(), nb::arg("speed") = 1.0, "Register the domain's classes and load the descriptor.");
 
   m.def(
       "options",

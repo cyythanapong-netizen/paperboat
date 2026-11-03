@@ -536,6 +536,16 @@ Serving
 
       Pace at wall-clock speed (``--run`` and tests turn it off).
 
+   .. cpp:member:: double speed = 1.0
+
+      Times real time when paced; 0: as fast as it can. The UI may change it per run,
+      with ``duration`` and ``dt`` (``graph.run``'s ``settings``).
+
+.. cpp:function:: RunSettings with_overrides(RunSettings base, const json &settings)
+
+   ``base`` with a ``graph.run``'s ``settings`` on top (any but ``mode``). Throws
+   ``std::invalid_argument`` for a value out of range; a run with one fails before it starts.
+
 .. cpp:struct:: Backend
 
    What a backend is made of.

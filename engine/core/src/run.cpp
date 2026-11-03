@@ -6,6 +6,7 @@
 #include <cmath>
 #include <exception>
 #include <optional>
+#include <stdexcept>
 #include <thread>
 
 namespace paperboat::core {
@@ -218,8 +219,8 @@ void Run::frame(const json& samples, std::optional<double> progress) {
   for (const auto& e : scene_of_blocks(blocks())) patch.push_back(e);
   if (!patch.empty()) emit_({{"type", "scene.patch"}, {"entities", patch}});
   if (progress) emit_({{"type", "run.progress"}, {"run", id_}, {"fraction", *progress}});
-  if (settings_.real_time)
-    std::this_thread::sleep_for(std::chrono::duration<double>(settings_.dt * settings_.emit_every));
+  if (settings_.real_time && settings_.speed > 0)
+    std::this_thread::sleep_for(std::chrono::duration<double>(settings_.dt * settings_.emit_every / settings_.speed));
 }
 
 json Run::scene(bool with_blocks) const {
@@ -244,9 +245,39 @@ json scene_message(const Station& station, const toolkit::DomainState* state, co
   return msg;
 }
 
+RunSettings with_overrides(RunSettings base, const json& settings) {
+  if (settings.is_null()) return base;
+  if (!settings.is_object()) throw std::invalid_argument("run settings must be an object");
+  auto number = [&](const char* key, double& into, bool zero_ok) {
+    if (!settings.contains(key)) return;
+    const auto& v = settings.at(key);
+    if (!v.is_number() || !std::isfinite(v.get<double>()) || v.get<double>() < 0 || (!zero_ok && v.get<double>() == 0))
+      throw std::invalid_argument(std::string("run setting ") + key + (zero_ok ? " must be 0 or more" : " must be more than 0"));
+    into = v.get<double>();
+  };
+  number("duration", base.duration, false);
+  number("dt", base.dt, false);
+  number("speed", base.speed, true);
+  if (base.duration / base.dt > 1e7) throw std::invalid_argument("run settings: more than 10 million clock steps (duration / dt)");
+  return base;
+}
+
+json settings_json(const RunSettings& s) {
+  return {{"mode", s.mode == RunSettings::Mode::Once ? "once" : "clock"}, {"duration", s.duration}, {"dt", s.dt}, {"speed", s.speed}};
+}
+
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,
-                const Emit& emit, const KeysNow& keys, const std::stop_token& stop) {
-  return Run(id, backend, backend.run, emit, keys, stop).go(graph, station);
+                const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings) {
+  RunSettings s;
+  try {
+    s = with_overrides(backend.run, settings);
+  } catch (const std::invalid_argument& err) {
+    emit({{"type", "run.started"}, {"run", id}});
+    emit(log_msg("error", err.what()));
+    emit({{"type", "run.finished"}, {"run", id}, {"status", "failed"}});
+    return "failed";
+  }
+  return Run(id, backend, s, emit, keys, stop).go(graph, station);
 }
 
 }  // namespace paperboat::core

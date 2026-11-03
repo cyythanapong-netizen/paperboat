@@ -3,11 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "./engine";
 import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toGraph, type FlowNode, type Wire } from "./FlowEditor";
 import { absolute, isFrame } from "./groups";
-import type { Station } from "./protocol";
+import type { RunSettings, Station } from "./protocol";
 import { RunPanel } from "./RunPanel";
 import { SceneView } from "./SceneView";
 import { StationGraph } from "./StationGraph";
 import { StationPanel } from "./StationPanel";
+import { RunOptions } from "./RunOptions";
 import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
 
@@ -24,6 +25,8 @@ export function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Wire>([]);
   const { fitView } = useReactFlow();
   const [station, setStation] = useState<Station | null>(null);
+  const [runSettings, setRunSettings] = useState<RunSettings>({});
+  useEffect(() => setRunSettings({}), [state.engine]); // another backend: its own defaults
 
   // What the canvas and station were loaded as, and from which backend: a backend that
   // comes back (restarted, reconnected) doesn't overwrite what the user changed since.
@@ -145,9 +148,10 @@ export function App() {
         <span className={`conn conn-${state.connection}`}>
           {state.connection} {state.engine && `· ${state.engine}`}
         </span>
-        <button disabled={state.connection !== "open"} onClick={() => send({ type: "graph.run", graph: toGraph(nodes, edges), ...(station ? { station } : {}) })}>
+        <button disabled={state.connection !== "open"} onClick={() => send({ type: "graph.run", graph: toGraph(nodes, edges), ...(station ? { station } : {}), ...(Object.keys(runSettings).length ? { settings: runSettings } : {}) })}>
           Run
         </button>
+        <RunOptions defaults={state.runDefaults} value={runSettings} onChange={setRunSettings} />
         <button disabled={!running} onClick={() => send({ type: "run.cancel" })}>
           Cancel
         </button>

@@ -413,6 +413,9 @@
         },
         "station": {
           "$ref": "#/$defs/StationView"
+        },
+        "run": {
+          "$ref": "#/$defs/RunSettings"
         }
       },
       "required": [
@@ -663,6 +666,9 @@
         },
         "station": {
           "$ref": "#/$defs/Station"
+        },
+        "settings": {
+          "$ref": "#/$defs/RunSettings"
         }
       },
       "required": [
@@ -1196,6 +1202,35 @@
           }
         }
       }
+    },
+    "RunSettings": {
+      "description": "How a run goes. The backend's defaults come in hello.run; graph.run may override any of them except mode.",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "enum": [
+            "clock",
+            "once"
+          ],
+          "description": "clock: every step for duration (and every Step flow); once: a Signal flow evaluated a single time."
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Run length, s (a Step flow: its limit)."
+        },
+        "dt": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Clock step, s."
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Times real time (1: as the clock goes; 0: as fast as it can)."
+        }
+      },
+      "additionalProperties": false
     }
   },
   "$ref": "#/$defs/toUI"

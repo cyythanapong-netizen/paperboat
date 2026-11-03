@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { BlockDef, ClientMsg, Entity, Graph, ObjectDef, RunStatus, ServerMsg, Station, StationView, View } from "./protocol";
+import type { BlockDef, ClientMsg, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, View } from "./protocol";
 
 export type Series = { t: number[]; v: number[] };
 
@@ -8,6 +8,8 @@ export type EngineState = {
   engine: string;
   /** How the Station page shows the station (from hello). */
   stationView: StationView;
+  /** The backend's run defaults (from hello); empty if it didn't say. */
+  runDefaults: RunSettings;
   blocks: BlockDef[];
   objects: ObjectDef[];
   entities: Record<string, Entity>;
@@ -32,6 +34,7 @@ const initial: EngineState = {
   connection: "connecting",
   engine: "",
   stationView: { view: "scene" },
+  runDefaults: {},
   blocks: [],
   objects: [],
   entities: {},
@@ -61,7 +64,7 @@ function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, connection: "closed", run, logs };
     }
     case "hello":
-      return { ...s, engine: m.engine, stationView: m.station ?? { view: "scene" } };
+      return { ...s, engine: m.engine, stationView: m.station ?? { view: "scene" }, runDefaults: m.run ?? {} };
     case "catalog":
       return { ...s, blocks: m.blocks, objects: m.objects ?? [] };
     case "scene":

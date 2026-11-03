@@ -447,3 +447,29 @@ TEST_CASE("a backend can bring its own executor, driving the same run") {
   CHECK(samples == 10);
   CHECK(std::ranges::any_of(out.messages, [](const json& m) { return m["type"] == "log" && m["text"] == "ten passes"; }));
 }
+
+TEST_CASE("graph.run's settings override the backend's run settings") {
+  const core::RunSettings base{.duration = 10, .real_time = false};
+  const auto s = core::with_overrides(base, json{{"duration", 2.5}, {"dt", 0.05}, {"speed", 0}});
+  CHECK(s.duration == 2.5);
+  CHECK(s.dt == 0.05);
+  CHECK(s.speed == 0);
+  CHECK(s.mode == base.mode);  // the backend's to say
+  CHECK(core::with_overrides(base, nullptr).duration == 10);
+  CHECK_THROWS_WITH(core::with_overrides(base, json{{"dt", 0}}), ContainsSubstring("dt"));
+  CHECK_THROWS_WITH(core::with_overrides(base, json{{"duration", "long"}}), ContainsSubstring("duration"));
+  CHECK_THROWS_WITH(core::with_overrides(base, json{{"duration", 1e6}, {"dt", 1e-3}}), ContainsSubstring("10 million"));
+  CHECK(core::settings_json(base)["mode"] == "clock");
+
+  // A run takes them: a shorter clock run ends sooner, a bad one fails before it starts.
+  const core::Backend backend{.engine = "test", .catalog = &cart_pole_catalog(), .run = base};
+  Collected out;
+  CHECK(core::run("r", starter_graph(), starter_station(), backend, out.emit(), nullptr, {}, json{{"duration", 0.5}}) == "done");
+  double last_t = 0;
+  for (const auto& m : out.messages)
+    if (m["type"] == "signal") last_t = m["t"];
+  CHECK_THAT(last_t, WithinAbs(0.5, 1e-9));
+  Collected bad;
+  CHECK(core::run("r", starter_graph(), starter_station(), backend, bad.emit(), nullptr, {}, json{{"dt", -1}}) == "failed");
+  CHECK(bad.messages.back()["status"] == "failed");
+}

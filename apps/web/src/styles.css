@@ -103,3 +103,6 @@ header form { display: flex; gap: 4px; }
 .frame-empty { font-size: 10px; padding: 2px 8px; }
 .frame-head .step-handle { width: 9px; height: 9px; border-radius: 1px; background: #1e293b; }
 .group-tools button:disabled { opacity: 0.45; }
+
+.run-options { display: inline-flex; align-items: center; gap: 4px; color: #888; font-size: 0.9em; }
+.run-options input { width: 4.5em; }

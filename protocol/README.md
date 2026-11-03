@@ -12,7 +12,7 @@ Default address: `ws://localhost:8765`.
 
 | `type`         | Fields                                      | Sent                         |
 | -------------- | ------------------------------------------- | ---------------------------- |
-| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }` | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
+| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults) | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
 | `catalog`      | `blocks: BlockDef[]`                        | on connect                   |
 | `scene`        | `entities: Entity[]`, `view?: View`         | on connect, and on reset     |
 | `graph.load`   | `graph: { nodes, edges }`                   | on connect (starter graph)   |
@@ -29,7 +29,7 @@ Default address: `ws://localhost:8765`.
 
 | `type`       | Fields                     |
 | ------------ | -------------------------- |
-| `graph.run`  | `graph: { nodes, edges }`, `station?: Station` (the backend's current one if absent) |
+| `graph.run`  | `graph: { nodes, edges }`, `station?: Station` (the backend's current one if absent), `settings?: RunSettings` (overrides the backend's defaults for this run) |
 | `station.set` | `station: Station`: an edit on the Station page; the backend checks it and answers with a `scene` (or a `log` error) |
 | `run.cancel` | —                          |
 | `input`      | `key: string` (a `KeyboardEvent.code`, e.g. `"Space"`), `down: boolean` |
@@ -69,6 +69,10 @@ Default address: `ws://localhost:8765`.
 // View: camera hint sent with a scene (default 3d)
 { "mode": "3d" }
 { "mode": "2d", "center": [6, 5], "height": 11 }   // orthographic, looking down −z
+
+// RunSettings: hello.run (the backend's defaults) and graph.run.settings (this run's
+// changes; any but mode). A value out of range fails the run with a log, not the backend.
+{ "mode": "clock", "duration": 10, "dt": 0.01, "speed": 1 }   // mode: clock | once; speed: times real time, 0 as fast as it can
 
 // Graph: sent by the UI with graph.run, and by the backend with graph.load
 {
