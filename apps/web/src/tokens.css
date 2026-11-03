@@ -1,0 +1,106 @@
+/*
+ * Paperboat design tokens (apps/web/DESIGN.md). Three layers: primitives are raw values;
+ * semantic tokens name a role; component tokens belong to one component. Components use
+ * only semantic and component tokens, never a primitive or a raw hex.
+ */
+
+@import "@fontsource-variable/jost";
+@import "@fontsource/jetbrains-mono/400.css";
+
+:root {
+  /* ---- Primitives ---------------------------------------------------------------- */
+  --paper: #edeff2;          /* the ground: cool, not cream */
+  --ink: #000000;            /* rules, glyphs, outlines: true black */
+  --graphite: #23252b;       /* body text on glass */
+  --slate: #5d626d;          /* secondary text */
+  --mist: #c9cdd4;           /* hairlines on glass */
+  --red: #d02020;            /* Bauhaus primaries */
+  --yellow: #f0c020;
+  --blue: #1040c0;
+  --white: #ffffff;
+
+  --glass-55: rgb(255 255 255 / 0.55);
+  --glass-75: rgb(255 255 255 / 0.75);
+  --glass-92: rgb(255 255 255 / 0.92);   /* content on glass: blocks, instruments */
+  --glass-edge: rgb(255 255 255 / 0.8);
+
+  --font-sans: "Jost Variable", "Jost", "Futura", "Century Gothic", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Type scale (perfect fourth from 13px) */
+  --size-xs: 11px;
+  --size-sm: 13px;
+  --size-md: 16px;
+  --size-lg: 21px;
+  --size-xl: 28px;
+
+  /* Space: a 4px grid */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  /* ---- Semantic -------------------------------------------------------------------- */
+  /* Each page has one colour and one shape (Kandinsky's correspondence). The same colour
+     marks what belongs to that page wherever it appears: a source block acts on the
+     Station (red), a monitor feeds the Dashboard (blue). */
+  --page-station: var(--red);      /* square */
+  --page-flow: var(--yellow);      /* triangle */
+  --page-dashboard: var(--blue);   /* circle */
+  --page-console: var(--ink);      /* bar */
+
+  --surface-ground: var(--paper);
+  --surface-glass: var(--glass-55);
+  --surface-glass-strong: var(--glass-75);
+  --surface-content: var(--glass-92);
+  --surface-edge: var(--glass-edge);
+  --glass-blur: blur(18px) saturate(140%);
+
+  --text: var(--graphite);
+  --text-muted: var(--slate);
+  --text-on-ink: var(--white);
+  --rule: var(--ink);
+  --hairline: var(--mist);
+
+  --state-running: var(--yellow);  /* a block a path is at; a selected wire */
+  --state-failed: var(--red);
+  --state-ok: #1d7a46;             /* connected; not a page colour on purpose */
+  --focus: var(--blue);
+
+  --rule-width: 2px;
+  --shadow-hard: 3px 3px 0 var(--ink);   /* tactile controls only, never panels */
+  --radius-square: 0;
+  --radius-round: 999px;
+  --motion: 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* ---- Component ------------------------------------------------------------------- */
+  --panel-bg: var(--surface-glass);
+  --panel-head-height: 34px;
+  --rail-width: 76px;
+  --bar-height: 52px;
+  --gutter: var(--space-2);
+
+  --button-bg: var(--white);
+  --button-fg: var(--ink);
+  --button-border: var(--rule-width) solid var(--ink);
+  --button-primary-bg: var(--ink);
+  --button-primary-fg: var(--white);
+
+  --block-bg: var(--surface-content);
+  --block-border: 1.5px solid var(--ink);
+  --block-head-function: var(--white);
+  --block-head-source: var(--page-station);    /* source and probe: act on the Station */
+  --block-head-monitor: var(--page-dashboard); /* feeds the Dashboard */
+  --block-head-step: var(--ink);               /* control on a Step flow's path */
+
+  --wire: #4b5160;
+  --wire-step: var(--ink);
+  --wire-image: #6a3fd0;
+  --wire-selected: var(--state-running);
+  --trace: var(--page-dashboard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --motion: 0ms linear; }
+}

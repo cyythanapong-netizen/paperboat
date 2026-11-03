@@ -82,7 +82,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { params, missing } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
-  const classes = ["block", `kind-${def.kind}`, active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
+  const classes = ["block", `kind-${def.kind}`, hasStepPorts(def) && "step", active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
   return (
     <div
       className={classes.filter(Boolean).join(" ")}

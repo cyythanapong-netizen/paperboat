@@ -12,11 +12,12 @@ function Plot({ name, series }: { name: string; series: Series }) {
   return (
     <figure className="instrument graph">
       <figcaption>
-        {name} · {last.toFixed(3)}
+        <span>{name}</span>
+        <output>{last.toFixed(3)}</output>
       </figcaption>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-        <line x1={0} x2={W} y1={H - (-vMin / span) * H} y2={H - (-vMin / span) * H} stroke="#ccc" />
-        <polyline points={points} fill="none" stroke="#c2410c" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+        <line className="zero" x1={0} x2={W} y1={H - (-vMin / span) * H} y2={H - (-vMin / span) * H} />
+        <polyline className="trace" points={points} fill="none" vectorEffect="non-scaling-stroke" />
       </svg>
     </figure>
   );
@@ -53,52 +54,31 @@ export type Monitor = { kind: string; x: number; y: number };
  * right, then top to bottom: a pipeline's stages read in order, and moving a monitor
  * block moves its instrument.
  */
-export function RunPanel({
-  state,
-  monitors,
-  onBlock,
-}: {
-  state: EngineState;
-  monitors: Record<string, Monitor>;
-  /** A Console line's block was clicked. */
-  onBlock: (id: string) => void;
-}) {
+export function Dashboard({ state, monitors }: { state: EngineState; monitors: Record<string, Monitor> }) {
   const at = (n: string) => monitors[n] ?? { kind: "graph", x: Infinity, y: Infinity };
   const names = Object.keys(state.latest).sort((a, b) => at(a).x - at(b).x || at(a).y - at(b).y);
   const kind = (n: string) => at(n).kind;
   const readouts = names.filter((n) => kind(n) === "display");
   const tiles = [...names.filter((n) => kind(n) === "image"), ...names.filter((n) => !["display", "image"].includes(kind(n)))];
   return (
-    <div className="run">
-      <div className="dashboard">
-        {readouts.length > 0 && (
-          <div className="readouts">
-            {readouts.map((n) => (
-              <Instrument key={n} name={n} kind="display" state={state} />
-            ))}
-          </div>
-        )}
-        {tiles.length > 0 && (
-          <div className="tiles">
-            {tiles.map((n) => (
-              <Instrument key={n} name={n} kind={kind(n)} state={state} />
-            ))}
-          </div>
-        )}
-        {names.length === 0 && <p className="muted">Monitors (graphs, displays, image views) show up here during a run.</p>}
-      </div>
-      <ol className="logs">
-        {state.logs.map((l, i) => (
-          <li key={i} className={`log-${l.level}`}>
-            {l.node && (
-              <button className="log-node" title="Show this block" onClick={() => onBlock(l.node!)}>
-                {l.node}
-              </button>
-            )}
-            {l.node && l.text.startsWith(`${l.node}: `) ? l.text.slice(l.node.length + 2) : l.text}
-          </li>
-        ))}
-      </ol>
+    <div className="dashboard">
+      {readouts.length > 0 && (
+        <div className="readouts">
+          {readouts.map((n) => (
+            <Instrument key={n} name={n} kind="display" state={state} />
+          ))}
+        </div>
+      )}
+      {tiles.length > 0 && (
+        <div className="tiles">
+          {tiles.map((n) => (
+            <Instrument key={n} name={n} kind={kind(n)} state={state} />
+          ))}
+        </div>
+      )}
+      {names.length === 0 && (
+        <p className="empty">Add a Graph, Display or Image view block on the Flow page and press Run: its instrument shows here.</p>
+      )}
     </div>
   );
 }

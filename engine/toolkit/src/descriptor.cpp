@@ -487,6 +487,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.group.empty()) block["group"] = e.group;
     if (e.linked) block["linked"] = true;
     if (!e.def.instrument.empty()) block["instrument"] = e.def.instrument;
+    if (!e.def.feedthrough) block["feedthrough"] = false;
     if (!e.def.forms.empty()) {
       json forms = json::array();
       for (const auto& f : e.def.forms)

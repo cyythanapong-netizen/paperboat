@@ -171,6 +171,10 @@
             "$ref": "#/$defs/Form"
           },
           "description": "A magic block's forms; its inputs and outputs are the first's, and its form param (an enum) picks one."
+        },
+        "feedthrough": {
+          "type": "boolean",
+          "description": "false: its outputs this step don't depend on its inputs this step (an integrator, a delay), so a feedback loop may pass through it. Absent: true."
         }
       },
       "required": [

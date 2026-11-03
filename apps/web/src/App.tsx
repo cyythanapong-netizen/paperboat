@@ -4,7 +4,9 @@ import { useEngine } from "./engine";
 import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toGraph, type FlowNode, type Wire } from "./FlowEditor";
 import { absolute, isFrame } from "./groups";
 import type { RunSettings, Station } from "./protocol";
-import { RunPanel } from "./RunPanel";
+import { Console } from "./Console";
+import { Dashboard } from "./Dashboard";
+import { Composition, ModeSwitch, PAGES, Panel, Rail, Wordmark, type Mode, type Page } from "./Shell";
 import { SceneView } from "./SceneView";
 import { StationGraph } from "./StationGraph";
 import { StationPanel } from "./StationPanel";
@@ -17,7 +19,32 @@ const DEFAULT_URL =
   import.meta.env.VITE_ENGINE_URL ??
   "ws://localhost:8765";
 
+/** A per-viewer convenience, kept in this browser when it can be. */
+function remembered<T extends string>(key: string, fallback: T, allowed: readonly T[]): [T, (v: T) => void] {
+  const [value, setValue] = useState<T>(() => {
+    try {
+      const v = localStorage.getItem(key) as T | null;
+      return v && allowed.includes(v) ? v : fallback;
+    } catch {
+      return fallback;
+    }
+  });
+  const set = (v: T) => {
+    setValue(v);
+    try {
+      localStorage.setItem(key, v);
+    } catch {
+      /* private window: not kept */
+    }
+  };
+  return [value, set];
+}
+
+const PAGE_IDS = PAGES.map((p) => p.id);
+
 export function App() {
+  const [mode, setMode] = remembered<Mode>("paperboat.mode", "navigator", ["navigator", "commander"]);
+  const [page, setPage] = remembered<Page>("paperboat.page", "flow", PAGE_IDS);
   const [url, setUrl] = useState(DEFAULT_URL);
   const [draftUrl, setDraftUrl] = useState(DEFAULT_URL);
   const { state, send, subscribe } = useEngine(url);
@@ -97,6 +124,31 @@ export function App() {
   // Ctrl+Z / Ctrl+Shift+Z on the Flow canvas; a new graph from the backend starts afresh.
   useUndo(nodes, edges, setNodes, setEdges, state.loaded);
 
+  // A page that changes size (another mode, or brought into view) fits its flow again.
+  useEffect(() => {
+    if (mode === "navigator" && page !== "flow") return;
+    const t = window.setTimeout(() => fitView({ duration: 200 }), 60);
+    return () => window.clearTimeout(t);
+  }, [mode, page, fitView]);
+
+  // Alt+1–4 opens a page (Navigator); Alt+M switches the view mode.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey) return;
+      const n = Number(e.key);
+      if (n >= 1 && n <= PAGES.length) {
+        e.preventDefault();
+        setPage(PAGES[n - 1].id);
+        setMode("navigator");
+      } else if (e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        setMode(mode === "navigator" ? "commander" : "navigator");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   // Forward the keyboard to the backend (e.g. a Key block). Typing in a field is not input.
   useEffect(() => {
     const forward = (down: boolean) => (e: KeyboardEvent) => {
@@ -124,6 +176,7 @@ export function App() {
   const showBlock = (id: string) => {
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
+    setPage("flow");
     // Open the group it's in, if that's collapsed.
     setNodes((ns) =>
       ns.map((n) =>
@@ -134,79 +187,108 @@ export function App() {
   };
 
   const view = state.stationView.view;
+  const errors = state.logs.filter((l) => l.level === "error").length;
+  const open = (p: Page) => {
+    setPage(p);
+    setMode("navigator");
+  };
+  const panel = (p: Page) => ({ page: p, mode, current: page === p, onOpen: () => open(p) });
+  const run = () =>
+    send({
+      type: "graph.run",
+      graph: toGraph(nodes, edges),
+      ...(station ? { station } : {}),
+      ...(Object.keys(runSettings).length ? { settings: runSettings } : {}),
+    });
 
   return (
-    <div className="app">
-      <header>
-        <b>Paperboat</b>
+    <div className={`app mode-${mode}`}>
+      <Composition focus={mode === "navigator" ? page : null} />
+      <header className="bar">
+        <Wordmark />
         <form
+          className="backend"
           onSubmit={(e) => {
             e.preventDefault();
             setUrl(draftUrl);
           }}
         >
-          <input value={draftUrl} onChange={(e) => setDraftUrl(e.target.value)} size={24} />
+          <span className={`dot conn-${state.connection}`} title={state.connection} />
+          <input aria-label="Backend address" value={draftUrl} onChange={(e) => setDraftUrl(e.target.value)} size={22} />
           <button>Connect</button>
+          <span className="engine">{state.connection === "open" ? state.engine : state.connection}</span>
         </form>
-        <span className={`conn conn-${state.connection}`}>
-          {state.connection} {state.engine && `· ${state.engine}`}
-        </span>
-        <button disabled={state.connection !== "open"} onClick={() => send({ type: "graph.run", graph: toGraph(nodes, edges), ...(station ? { station } : {}), ...(Object.keys(runSettings).length ? { settings: runSettings } : {}) })}>
-          Run
-        </button>
-        <RunOptions defaults={state.runDefaults} value={runSettings} onChange={setRunSettings} />
-        <button disabled={!running} onClick={() => send({ type: "run.cancel" })}>
-          Cancel
-        </button>
-        {state.run && (
-          <span>
-            <progress value={state.run.progress} /> {state.run.id} · {state.run.status}
-          </span>
-        )}
+        <div className="run-controls">
+          <button className="primary" disabled={state.connection !== "open" || running} onClick={run}>
+            Run
+          </button>
+          <RunOptions defaults={state.runDefaults} value={runSettings} onChange={setRunSettings} />
+          <button disabled={!running} onClick={() => send({ type: "run.cancel" })}>
+            Cancel
+          </button>
+          {state.run && (
+            <span className={`run-status status-${state.run.status}`}>
+              <progress value={state.run.progress} aria-label="Run progress" /> {state.run.status}
+            </span>
+          )}
+        </div>
+        <ModeSwitch mode={mode} onMode={setMode} />
       </header>
-      <div className={`station view-${view}`}>
-        {view === "web" && state.stationView.page ? (
-          <WebStation
-            backend={url}
-            page={state.stationView.page}
+      {mode === "navigator" && <Rail page={page} onPage={setPage} errors={errors} />}
+      <main className="pages">
+        <Panel {...panel("station")}>
+          <div className={`station view-${view}`}>
+            {view === "web" && state.stationView.page ? (
+              <WebStation
+                backend={url}
+                page={state.stationView.page}
+                state={state}
+                subscribe={subscribe}
+                send={send}
+                onStation={editStation}
+              />
+            ) : view === "graph" ? (
+              <StationGraph objects={state.objects} station={station ?? { objects: [] }} onChange={editStation} locked={running} />
+            ) : (
+              <SceneView key={JSON.stringify(state.view)} view={state.view} entities={state.entities} />
+            )}
+            {station && state.objects.length > 0 && (
+              <StationPanel
+                objects={state.objects}
+                station={station}
+                taken={new Set([...station.objects.map((o) => o.id), ...nodes.map((n) => n.id)])}
+                onChange={editStation}
+                locked={running}
+              />
+            )}
+          </div>
+        </Panel>
+        <Panel {...panel("flow")}>
+          <RunStates.Provider value={runStates}>
+            <FlowEditor
+              blocks={state.blocks}
+              nodes={nodes}
+              edges={edges}
+              setNodes={setNodes}
+              setEdges={setEdges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+            />
+          </RunStates.Provider>
+        </Panel>
+        <Panel {...panel("dashboard")}>
+          <Dashboard
             state={state}
-            subscribe={subscribe}
-            send={send}
-            onStation={editStation}
+            monitors={Object.fromEntries(
+              nodes.filter(isBlock).map((n) => [n.id, { kind: n.data.def.instrument ?? "graph", ...absolute(n, nodes) }]),
+            )}
           />
-        ) : view === "graph" ? (
-          <StationGraph objects={state.objects} station={station ?? { objects: [] }} onChange={editStation} locked={running} />
-        ) : (
-          <SceneView key={JSON.stringify(state.view)} view={state.view} entities={state.entities} />
-        )}
-        {station && state.objects.length > 0 && (
-          <StationPanel
-            objects={state.objects}
-            station={station}
-            taken={new Set([...station.objects.map((o) => o.id), ...nodes.map((n) => n.id)])}
-            onChange={editStation}
-            locked={running}
-          />
-        )}
-      </div>
-      <RunStates.Provider value={runStates}>
-        <FlowEditor
-          blocks={state.blocks}
-          nodes={nodes}
-          edges={edges}
-          setNodes={setNodes}
-          setEdges={setEdges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-        />
-      </RunStates.Provider>
-      <RunPanel
-        state={state}
-        onBlock={showBlock}
-        monitors={Object.fromEntries(
-          nodes.filter(isBlock).map((n) => [n.id, { kind: n.data.def.instrument ?? "graph", ...absolute(n, nodes) }]),
-        )}
-      />
+        </Panel>
+        <Panel {...panel("console")} tools={errors > 0 ? <b className="badge">{errors}</b> : null}>
+          <Console logs={state.logs} onBlock={showBlock} />
+        </Panel>
+      </main>
     </div>
   );
+
 }
