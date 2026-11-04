@@ -1,7 +1,7 @@
 import { Position } from "@xyflow/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { isRef } from "./bindings";
-import { portLabel } from "./ports";
+import { portLabel, signOf } from "./ports";
 import type { BlockDef, ParamValue } from "./protocol";
 import { PortHandle } from "./wireSnap";
 
@@ -123,6 +123,11 @@ export function CompactBlock({
         <Glyph name={def.view?.glyph ?? "const"} />
         {def.inputs.map((p, i) => (
           <PortHandle key={p.id} type="target" position={Position.Left} id={p.id} top={spread(def.inputs.length, i)} label={portLabel(p)} className={`t-${p.type}`} />
+        ))}
+        {def.inputs.map((p, i) => signOf(def, params, i) && (
+          <span key={`sign-${p.id}`} className="plate-sign" style={{ top: spread(def.inputs.length, i) }} aria-hidden="true">
+            {signOf(def, params, i)}
+          </span>
         ))}
         {def.outputs.map((p, i) => (
           <PortHandle key={p.id} type="source" position={Position.Right} id={p.id} top={spread(def.outputs.length, i)} label={portLabel(p)} className={`t-${p.type}`} />

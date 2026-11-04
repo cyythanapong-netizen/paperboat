@@ -218,3 +218,21 @@ TEST_CASE("expressions: precedence, functions, errors") {
   CHECK_THROWS_WITH(Expression("max(1)", {}), Catch::Matchers::ContainsSubstring("takes 2 arguments"));
   CHECK_THROWS_WITH(Expression("  ", {}), Catch::Matchers::ContainsSubstring("empty"));
 }
+
+TEST_CASE("sum signs (#73): one input per sign, each adding or subtracting") {
+  const Template* t = builtins().find("math/sum");
+  REQUIRE(t != nullptr);
+  CHECK(parse_signs("+-+") == std::vector<int>{1, -1, 1});
+  CHECK(parse_signs("+\xE2\x88\x92 +") == std::vector<int>{1, -1, 1});  // U+2212 and a space
+  CHECK(parse_signs("") == std::vector<int>{1, 1});
+  CHECK(parse_signs(std::string(40, '+')).size() == 26);
+
+  auto three = t->make({}, Config{{"signs", "+-+"}});
+  CHECK(out(*three, 0, {{"a", 5}, {"b", 2}, {"c", 1}}) == 4.0);
+
+  const auto def = with_signs(t->def, "+-+");
+  REQUIRE(def.inputs.size() == 3);
+  CHECK(def.inputs[2].id == "c");
+  CHECK(with_signs(t->def, "++").inputs.size() == 2);  // the default keeps a and b
+  CHECK(with_signs(builtins().find("math/gain")->def, "+-+").inputs.size() == 1);  // no ports_from: unchanged
+}

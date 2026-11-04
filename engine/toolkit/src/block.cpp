@@ -30,6 +30,32 @@ BlockDef in_form(const BlockDef& def, std::string_view form) {
   return def;
 }
 
+std::vector<int> parse_signs(std::string_view text) {
+  std::vector<int> out;
+  for (std::size_t i = 0; i < text.size() && out.size() < 26; ++i) {
+    if (text[i] == '+') out.push_back(1);
+    else if (text[i] == '-') out.push_back(-1);
+    else if (text.substr(i, 3) == "\xE2\x88\x92") {  // U+2212 MINUS SIGN
+      out.push_back(-1);
+      i += 2;
+    }
+  }
+  return out.empty() ? std::vector<int>{1, 1} : out;
+}
+
+BlockDef with_signs(const BlockDef& def, std::string_view text) {
+  if (def.ports_from.empty()) return def;
+  BlockDef out = def;
+  const PortDef proto = def.inputs.empty() ? PortDef{} : def.inputs.front();
+  out.inputs.clear();
+  for (std::size_t i = 0; i < parse_signs(text).size(); ++i) {
+    PortDef p = proto;
+    p.id = std::string(1, static_cast<char>('a' + i));
+    out.inputs.push_back(std::move(p));
+  }
+  return out;
+}
+
 bool has_step_ports(const BlockDef& def) {
   auto step = [](const PortDef& p) { return p.type == "step"; };
   return std::ranges::any_of(def.inputs, step) || std::ranges::any_of(def.outputs, step);
