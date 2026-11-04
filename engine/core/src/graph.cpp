@@ -98,6 +98,9 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     }
     // A magic block's ports are those of its form.
     node.def = toolkit::in_form(node.entry->def, text.contains("form") ? text.at("form") : "");
+    // A block whose param decides its inputs (Sum's signs) has one per character of it.
+    const auto& from = node.entry->def.ports_from;
+    node.def = toolkit::with_signs(node.def, from.empty() || !text.contains(from) ? "" : text.at(from));
     const auto& def = node.def;
 
     // Making a block can fail (a param it can't use, an expression that doesn't compile):

@@ -56,6 +56,8 @@ export type BlockDef = {
   };
   /** A magic block's forms; its inputs and outputs are the first's, and its form param (an enum) picks one. */
   forms?: Form[];
+  /** The id of a text param that decides the inputs: one per sign character in it (+ adds, - or − subtracts; at most 26; none reads as ++), ids a, b, c… of the first input's type. Sum's signs. */
+  ports_from?: string;
   /** false: its outputs this step don't depend on its inputs this step (an integrator, a delay), so a feedback loop may pass through it. Absent: true. */
   feedthrough?: boolean;
   /** One line in plain words: what it does. Shown on its card in the block browser. Optional. */

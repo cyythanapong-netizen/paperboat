@@ -53,6 +53,12 @@ Blocks
       ``gain``, ``plus``, ``step``, ``clamp``, ``const``; or a few characters drawn as text)
       and ``value`` (an expression of the params for the caption, such as ``"{k}"``).
 
+   .. py:attribute:: ports_from
+      :type: str
+
+      The name of a text param that decides the block's inputs: one per sign character in its
+      value (``"+-+"``: ids ``a``, ``b``, ``c``; at most 26); ``inputs`` is only the default.
+
    .. py:attribute:: feedthrough
       :type: bool
 

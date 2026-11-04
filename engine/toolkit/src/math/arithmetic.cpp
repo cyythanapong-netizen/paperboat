@@ -14,12 +14,19 @@ void add_arithmetic(Registry& registry) {
             [=](const Context&, const Values& in) { return Values{{"y", k * get_or(in, "u")}}; });
       }));
 
-  registry.add(make_template(
-      "math", "sum", "Sum", {"a", "b"}, {"y"}, {}, [](const Values&, const Config&) {
-        return std::make_unique<Stateless>([](const Context&, const Values& in) {
-          return Values{{"y", get_or(in, "a") + get_or(in, "b")}};
+  // Sum: one input per sign in `signs` ("+-+": a − b + c), ids a, b, c…
+  auto sum = make_template(
+      "math", "sum", "Sum", {"a", "b"}, {"y"}, {ParamDef{.id = "signs", .type = "text", .default_text = "++"}},
+      [](const Values&, const Config& text) {
+        const auto signs = parse_signs(text.contains("signs") ? text.at("signs") : "");
+        return std::make_unique<Stateless>([=](const Context&, const Values& in) {
+          double y = 0;
+          for (std::size_t i = 0; i < signs.size(); ++i) y += signs[i] * get_or(in, std::string(1, static_cast<char>('a' + i)));
+          return Values{{"y", y}};
         });
-      }));
+      });
+  sum.def.ports_from = "signs";
+  registry.add(std::move(sum));
 
   registry.add(make_template(
       "math", "threshold", "Threshold", {"u"}, {"y"}, {{"level", 0.5}}, [](const Values& p, const Config&) {

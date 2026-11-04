@@ -701,6 +701,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.def.instrument.empty()) block["instrument"] = e.def.instrument;
     if (!e.def.description.empty()) block["description"] = e.def.description;
     if (!e.def.feedthrough) block["feedthrough"] = false;
+    if (!e.def.ports_from.empty()) block["ports_from"] = e.def.ports_from;
     if (!e.def.view.empty()) {
       json view = json::object();
       if (e.def.view.compact) view["compact"] = *e.def.view.compact;

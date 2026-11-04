@@ -117,6 +117,13 @@ initializers may leave any out.
       A magic block's forms. Its ``inputs`` and ``outputs`` are the first form's; its enum
       param ``form`` picks one (see :cpp:func:`magic_def`).
 
+   .. cpp:member:: std::string ports_from
+
+      The id of a text param that decides the inputs: one per sign character in it
+      (``"+-+"``: ``a``, ``b``, ``c``; see :cpp:func:`parse_signs`), of the first input's type.
+      Empty: the inputs are the definition's. Sum's ``signs``. A wire to an input that no
+      longer exists is dropped.
+
 .. cpp:struct:: Form
 
    One form of a magic block: the ports it has in that form, such as ``"signal"`` (values in
@@ -127,6 +134,16 @@ initializers may leave any out.
    .. cpp:member:: std::vector<PortDef> inputs
 
    .. cpp:member:: std::vector<PortDef> outputs
+
+.. cpp:function:: std::vector<int> parse_signs(std::string_view text)
+
+   The signs in ``text``, one per input: ``+`` is 1, ``-`` (or ``−``) is -1; anything else is
+   skipped. At most 26; none at all reads as ``"++"``.
+
+.. cpp:function:: BlockDef with_signs(const BlockDef &def, std::string_view text)
+
+   The definition with the inputs its ``ports_from`` param (``text``) gives: ids ``a``, ``b``,
+   ``c``… of the first input's type. ``def`` itself if it has no ``ports_from``.
 
 .. cpp:function:: BlockDef in_form(const BlockDef &def, std::string_view form)
 
