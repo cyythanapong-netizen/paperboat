@@ -66,6 +66,7 @@ function useTheme(choice: Theme): "light" | "dark" {
 
 export function App() {
   const [mode, setMode] = remembered<Mode>("paperboat.mode", "navigator", ["navigator", "commander"]);
+  const [arrange, setArrange] = useState(false);
   const [page, setPage] = remembered<Page>("paperboat.page", "flow", PAGE_IDS);
   const [themeChoice, setThemeChoice] = remembered<Theme>("paperboat.theme", "auto", ["auto", "light", "dark"]);
   const theme = useTheme(themeChoice);
@@ -238,6 +239,10 @@ export function App() {
       + Add
     </button>
   );
+  const monitors = useMemo(
+    () => Object.fromEntries(nodes.filter(isBlock).filter((n) => n.data.def.kind === "monitor").map((n) => [n.id, { kind: n.data.def.instrument ?? "graph", ...absolute(n, nodes) }])),
+    [nodes],
+  );
   const errors = state.logs.filter((l) => l.level === "error").length;
   const open = (p: Page) => {
     setPage(p);
@@ -365,13 +370,16 @@ export function App() {
             />
           </RunStates.Provider>
         </Panel>
-        <Panel {...panel("dashboard")} info={count(Object.keys(state.latest).length, "instrument")}>
-          <Dashboard
-            state={state}
-            monitors={Object.fromEntries(
-              nodes.filter(isBlock).map((n) => [n.id, { kind: n.data.def.instrument ?? "graph", ...absolute(n, nodes) }]),
-            )}
-          />
+        <Panel
+          {...panel("dashboard")}
+          actions={
+            <button className={`key small${arrange ? " on" : ""}`} aria-pressed={arrange} title="Move instruments and pick their sizes" onClick={() => setArrange(!arrange)}>
+              {arrange ? "Done" : "Arrange"}
+            </button>
+          }
+          info={count(Object.keys(monitors).length, "instrument")}
+        >
+          <Dashboard state={state} monitors={monitors} arrange={arrange} />
         </Panel>
         <Panel {...panel("console")} info={`${count(state.logs.length, "line")}${errors ? ` · ${count(errors, "error")}` : ""}`}>
           <Console logs={state.logs} onBlock={showBlock} />

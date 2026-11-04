@@ -124,6 +124,20 @@ export type GraphEdge = {
   to: [string, string];
 };
 
+/** The Dashboard's grid: where each monitor block's instrument sits and how big it is. A backend ships one as its default (the descriptor's [dashboard]); an instrument not listed falls in where the automatic order puts it, and a block that does not exist is ignored. */
+export type DashboardLayout = {
+  /** Grid columns; the UI fits fewer on a narrow screen. */
+  columns?: number;
+  instruments?: ({
+    /** The monitor block's id. */
+    block: string;
+    /** compact: a readout card (1x1 cells); normal: a plot or picture to read at a glance (2x1); large: one to study (2x2). Absent: the kind's default (display compact, graph normal, image large). */
+    size?: "compact" | "normal" | "large";
+    /** Top-left cell: [column, row]. */
+    at?: [number, number];
+  })[];
+};
+
 /** A group of blocks. visual: tidies the canvas only. story: runs as one step of a Step flow (ports in -> next): its blocks once per clock step for params.seconds (0: once), fresh each time if params.reset. */
 export type GraphGroup = {
   id: string;
@@ -204,6 +218,7 @@ export type ServerMsg =
     type: "catalog";
     blocks: BlockDef[];
     objects?: ObjectDef[];
+    dashboard?: DashboardLayout;
   }
   | {
     type: "scene";

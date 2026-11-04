@@ -163,6 +163,48 @@ ObjectEntry object_from_template(const json& e, const std::string& at, const Reg
   return entry;
 }
 
+// [dashboard]: the default layout of the Dashboard's grid, in the protocol's shape. Blocks
+// are not checked against the catalog (a layout may name monitors the user has not added;
+// the UI ignores unknown ones), only its own shape.
+void load_dashboard(const json& doc, Catalog& catalog) {
+  if (!doc.contains("dashboard")) return;
+  const json& d = doc.at("dashboard");
+  only_fields(d, {"columns", "instruments"}, "dashboard");
+  json out = json::object();
+  if (d.contains("columns")) {
+    if (!d["columns"].is_number_integer() || d["columns"] < 1 || d["columns"] > 12)
+      throw DescriptorError("dashboard.columns must be a whole number from 1 to 12");
+    out["columns"] = d["columns"];
+  }
+  json instruments = json::array();
+  std::set<std::string> seen;
+  const json list = d.value("instruments", json::array());
+  for (std::size_t i = 0; i < list.size(); ++i) {
+    const auto& e = list[i];
+    const auto at = "dashboard.instruments[" + std::to_string(i) + "]";
+    only_fields(e, {"block", "size", "at"}, at);
+    if (!e.contains("block") || !e["block"].is_string()) throw DescriptorError(at + ": needs \"block\", a monitor block's id");
+    if (!seen.insert(e["block"].get<std::string>()).second)
+      throw DescriptorError(at + ": block \"" + e["block"].get<std::string>() + "\" is placed twice");
+    json item = {{"block", e["block"]}};
+    if (e.contains("size")) {
+      const std::string size = e["size"].is_string() ? e["size"].get<std::string>() : "";
+      if (size != "compact" && size != "normal" && size != "large")
+        throw DescriptorError(at + ": size must be compact, normal or large");
+      item["size"] = size;
+    }
+    if (e.contains("at")) {
+      const auto& a = e["at"];
+      if (!a.is_array() || a.size() != 2 || !a[0].is_number_integer() || !a[1].is_number_integer() || a[0] < 0 || a[1] < 0)
+        throw DescriptorError(at + ": at must be [column, row], whole numbers from 0");
+      item["at"] = a;
+    }
+    instruments.push_back(std::move(item));
+  }
+  out["instruments"] = std::move(instruments);
+  catalog.dashboard = out.dump();
+}
+
 // [graph] and [station]: the starters, in the protocol's shapes, checked against the
 // catalog so a typo fails at load, not when the UI opens.
 void load_starters(const json& doc, Catalog& catalog) {
@@ -326,7 +368,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
   } catch (const toml::parse_error& err) {
     throw DescriptorError("not valid TOML: " + at_line(err.source()) + ": " + std::string(err.description()));
   }
-  only_fields(doc, {"domain", "import", "blocks", "objects", "graph", "station"}, "descriptor");
+  only_fields(doc, {"domain", "import", "blocks", "objects", "graph", "station", "dashboard"}, "descriptor");
 
   Catalog catalog;
   catalog.domain = doc.value("domain", std::string{});
@@ -414,6 +456,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
   if (catalog.entries.empty() && catalog.objects.empty())
     throw DescriptorError("descriptor: the catalog is empty: import packages, use templates, or register the domain's "
                           "own under the package \"" + catalog.domain + "\"");
+  load_dashboard(doc, catalog);
   load_starters(doc, catalog);
   return catalog;
 }
@@ -500,6 +543,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     blocks.push_back(std::move(block));
   }
   json msg = {{"type", "catalog"}, {"blocks", blocks}};
+  if (!catalog.dashboard.empty()) msg["dashboard"] = json::parse(catalog.dashboard);
   if (!catalog.objects.empty()) {
     json objects = json::array();
     for (const auto& o : catalog.objects) {

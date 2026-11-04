@@ -113,12 +113,35 @@ pushes on the object through the block's inputs and reads it through its outputs
                 "links": [], "block": "cart-pole" }]          // links: slots naming other objects
 }
 
+// The catalog may also carry the Dashboard's default layout (see below)
+
 // Station: station.load, station.set, graph.run
 { "objects": [{ "id": "cart-pole-1", "type": "cart-pole", "props": { "theta0": 0.15 } }] }
 // links: slot → the id of the object filling it; pos: its place in the Station's graph view
 { "objects": [{ "id": "mass-1", "type": "mass", "props": { "x0": 1 } },
               { "id": "spring-1", "type": "spring", "links": { "a": "wall", "b": "mass-1" }, "pos": [220, 0] }] }
 ```
+
+**Dashboard layout.** The Dashboard is a grid of equal cells with one instrument per monitor
+block on the Flow canvas (the canvas decides which exist). A catalog may carry a default
+layout, `dashboard`, which the UI uses until the user arranges their own (kept in the
+browser per backend for now, with the project later, #34). All fields are optional:
+
+```jsonc
+"dashboard": {
+  "columns": 6,                                       // 1 to 12; the UI fits fewer on a narrow screen
+  "instruments": [
+    { "block": "graph-theta", "size": "large", "at": [0, 0] },   // at: top-left cell [column, row]
+    { "block": "speed", "size": "compact" }           // no place: falls in by the automatic order
+  ]
+}
+```
+
+`size` is `compact` (1×1 cells, a readout), `normal` (2×1, a plot) or `large` (2×2); absent,
+the kind's default (display compact, graph normal, image large). An instrument that is not
+listed, or has no `at`, takes the first free cell in the automatic order (readouts, then
+pictures, then plots, each in Flow-canvas order); a block that is not a monitor is ignored;
+a place that is taken makes the instrument move down to the first free cell.
 
 - The UI keeps one linked block per object that spawns one, adds it when the object is
   added and removes it (and its wires) when the object goes.

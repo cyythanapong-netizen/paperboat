@@ -102,7 +102,8 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Block** | Raised grey, 1px outline; head with the name and a word tag. Step blocks are outlined in ink; linked blocks dashed; missing ones dashed red; failed ones outlined red. Params are underlined values |
 | **Wire** | Ink, 1.2px; step wires 2px; image wires dashed; selected wires 3px |
 | **Group / story** | A visual group is a dashed frame; a story a solid ink frame |
-| **Instrument** | A display with its name (and latest value) underneath; readouts show a 30px monospace number |
+| **Instrument** | A display with its name (and latest value) underneath; readouts show a 30px monospace number. Three sizes on a grid of equal cells (116px tall, 12px apart): **compact** 1×1 (a readout), **normal** 2×1 (a plot to read at a glance), **large** 2×2 (a plot or picture to study); a kind's default is display compact, graph normal, image large. Before a run sends anything it is a placeholder: same frame, greyed, dashed edge, "–" |
+| **Arrange** | The Dashboard head's key. While on: a dashed outline round each instrument, faint dashed cells under the grid, a size picker (C N L in brackets, full names on hover) top right of each, a solid outline where a drag would land. Drag to a cell, or focus and use the arrows. Reset layout returns to the backend's default |
 | **Console** | A display; numbered lines; warnings in the signal colour, errors red; a block's id is a key that shows it on the Flow page |
 | **Card** | A block or station object in the browser: name, kind in words, one-line description, ports on a well (in → out; step ports square), params with defaults, how many are already used, and Add. Draggable |
 | **Collection window** | The browser, floating over the page from its Add key: search, a kind choice in brackets, packages on the left, cards in sections. Moved by its head and remembered; Escape closes. While a card is dragged it fades and lets the pointer through |
@@ -129,4 +130,4 @@ positions and lines.
 - A new component uses existing tokens; a new value goes in as a primitive, then a
   semantic role, then is used through the role.
 - A backend's own look belongs in a web station (`[station] view = "web"`).
-- Still open (#33): the signal colour, the Monitor mode, the Dashboard grid (#49).
+- Still open (#33): the signal colour, the Monitor mode.

@@ -260,23 +260,42 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .group-tools button:disabled { opacity: 0.4; }
 
 /* ---- Dashboard: each instrument is a display with its name underneath. ------------- */
-.dashboard { flex: 1; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--panel-pad); overflow: auto; min-width: 0; }
-.readouts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--space-3); }
-.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--space-4); align-items: start; }
-.instrument { margin: 0; min-width: 0; }
+.dashboard { flex: 1; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--panel-pad); overflow: auto; min-width: 0; }
+.dash-bar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.key.on { border-color: var(--line-ink); font-weight: 600; }
+
+/* The grid: equal cells (--cols wide, --row tall); an instrument fills the cells of its size. */
+.dash-grid { position: relative; display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); grid-auto-rows: var(--row); gap: var(--gap); }
+.cell { position: relative; min-width: 0; min-height: 0; border-radius: var(--radius-md); }
+.arranging .cell { cursor: grab; outline: 1.5px dashed var(--line-strong); outline-offset: 3px; }
+.arranging .cell:focus-visible { outline: 2px solid var(--line-ink); }
+.arranging .cell.dragging { opacity: 0.4; }
+.arranging .cell .instrument { pointer-events: none; }
+.slot { border: 1px dashed var(--line); border-radius: var(--radius-md); opacity: 0.6; pointer-events: none; }
+.drop { border: 1.5px solid var(--line-ink); border-radius: var(--radius-md); background: color-mix(in srgb, var(--line-ink) 8%, transparent); pointer-events: none; z-index: 1; }
+.cell-tools { position: absolute; top: 6px; right: 6px; z-index: 2; background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 2px; cursor: default; }
+.cell-tools .opt { font-size: var(--size-2xs); }
+
+.instrument { margin: 0; min-width: 0; height: 100%; display: flex; flex-direction: column; }
+.instrument .screen { flex: 1; min-height: 0; position: relative; }
 .instrument figcaption { display: flex; justify-content: space-between; gap: var(--space-2); margin-top: 6px; font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .instrument figcaption output { font-family: var(--font-mono); }
 .instrument figcaption span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .instrument output { font-variant-numeric: tabular-nums; }
 .instrument figcaption output { color: var(--text); }
-.instrument.display .screen { height: 84px; display: flex; align-items: flex-end; padding: var(--space-3); }
+.instrument.display .screen { display: flex; align-items: flex-end; padding: var(--space-3); }
 .instrument.display .screen output { font: 500 var(--size-xl) / 1 var(--font-mono); overflow-wrap: anywhere; }
-.instrument.graph .screen { padding: var(--space-3); }
-.instrument.graph svg { display: block; width: 100%; height: 100px; }
+.size-large .instrument.display .screen output { font-size: calc(var(--size-xl) * 2); }
+.instrument.graph .screen { padding: var(--space-3); display: flex; }
+.instrument.graph svg { display: block; width: 100%; height: 100%; }
 .instrument .trace { stroke: var(--signal); stroke-width: 1.6; }
 .instrument .zero { stroke: var(--text-on-screen-muted); stroke-dasharray: 2 3; }
 .instrument.image .screen { padding: var(--space-2); }
-.instrument.image img { display: block; width: 100%; height: 180px; object-fit: contain; }
+.instrument.image img { position: absolute; inset: var(--space-2); width: calc(100% - 2 * var(--space-2)); height: calc(100% - 2 * var(--space-2)); object-fit: contain; }
+/* Before a run sends anything: the same frame, greyed and dashed. */
+.instrument.idle .screen { background: transparent; border: 1px dashed var(--line-strong); color: var(--text-muted); }
+.instrument.idle .screen output { color: var(--text-muted); }
+.instrument.idle .zero { stroke: var(--line-strong); }
 
 /* ---- Console: a display of what the backend logged. -------------------------------- */
 .panel-console .panel-body { padding: var(--panel-pad); }

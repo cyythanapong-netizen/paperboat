@@ -56,6 +56,9 @@ struct Catalog {
   // station.load's station ("" when absent). Checked against this catalog at load.
   std::string graph;
   std::string station;
+  // The optional [dashboard] table: the default layout of the Dashboard's grid, as the
+  // protocol's JSON text ("" when absent). Sent in the catalog message.
+  std::string dashboard;
   // How the Station page shows the station: "scene" (the built-in 2D/3D scene), "graph"
   // (station objects as nodes, their links as wires) or "web" (the backend's own page,
   // `station_page`, relative to `dir`, served by the engine).
