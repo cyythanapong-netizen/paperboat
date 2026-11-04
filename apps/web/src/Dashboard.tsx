@@ -26,7 +26,7 @@ import {
 import type { Monitor, PlacedDeco } from "./dashboardLayout";
 import type { DashboardLayout } from "./protocol";
 import { Console } from "./Console";
-import { VarsContext } from "./Variables";
+import { VAR_DRAG, VarsContext } from "./Variables";
 import { RemoveIcon } from "./RemoveIcon";
 
 export type { Monitor } from "./dashboardLayout";
@@ -171,6 +171,12 @@ function EditText({
         // A chip's text lands at the pointer by itself; keep the grid from reading it as a move.
         e.stopPropagation();
         const el = e.currentTarget;
+        // A variable from the sheet carries its bare name: it goes in as {name}, at the caret.
+        const name = e.dataTransfer.getData(VAR_DRAG);
+        if (name) {
+          e.preventDefault();
+          el.setRangeText(`{${name}}`, el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length, "end");
+        }
         requestAnimationFrame(() => el.focus());
       }}
     />
@@ -318,6 +324,30 @@ export function Dashboard({
     el.focus();
   };
   const textual = (d: PlacedDeco | undefined) => d !== undefined && (d.kind === "label" || d.kind === "section");
+  // A variable dragged from the Variables sheet onto a label or section title shows its
+  // value there: `{name}` goes at the end of the text (at the caret while it is edited).
+  const [varOver, setVarOver] = useState<number | null>(null);
+  const takesVar = (e: React.DragEvent, d: PlacedDeco) => textual(d) && !arranged.narrowed && e.dataTransfer.types.includes(VAR_DRAG);
+  const varDrop = (d: PlacedDeco) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!takesVar(e, d)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = "link";
+      setVarOver(d.index);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setVarOver(null);
+    },
+    onDrop: (e: React.DragEvent) => {
+      setVarOver(null);
+      if (!takesVar(e, d)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const name = e.dataTransfer.getData(VAR_DRAG);
+      if (name && editing !== d.index) commit(editDecoration(arranged, d.index, { text: `${d.text}${d.text && !d.text.endsWith(" ") ? " " : ""}{${name}}` }));
+    },
+  });
   const editingDeco = editing === null ? undefined : arranged.decorations.find((d) => d.index === editing);
   const shown = (d: PlacedDeco): PlacedDeco => (sizing?.index === d.index ? { ...d, ...(d.kind === "hline" ? { w: sizing.w } : d.kind === "vline" ? { h: sizing.h } : { w: sizing.w, h: sizing.h }) } : d);
 
@@ -348,7 +378,7 @@ export function Dashboard({
           {arranged.narrowed ? (
             <span>The screen is narrower than this layout: widen it to arrange.</span>
           ) : (
-            <span>Drag an instrument or decoration to a cell (or focus it and use the arrow keys); pick a size; double-click text to edit; put a value in it with {"{block}"}.</span>
+            <span>Drag an instrument or decoration to a cell (or focus it and use the arrow keys); pick a size; double-click text to edit; put a value in it with {"{block}"}, or drag a variable from the Variables sheet onto it.</span>
           )}
           <span className="dash-add" role="group" aria-label="Add">
             <span className="lbl">Add</span>
@@ -484,7 +514,7 @@ export function Dashboard({
             return (
               <div
                 key={d.index}
-                className={`deco deco-${d.kind}${d.kind === "label" ? ` ${d.style}` : ""}${picked === d.index ? " picked" : ""}${mine ? " dragging" : ""}`}
+                className={`deco deco-${d.kind}${d.kind === "label" ? ` ${d.style}` : ""}${picked === d.index ? " picked" : ""}${mine ? " dragging" : ""}${varOver === d.index ? " var-over" : ""}`}
                 style={{ gridColumn: `${d.col + 1} / span ${d.w}`, gridRow: `${d.row + 1} / span ${d.h}` }}
                 draggable={canEdit && editing !== d.index && !sizing}
                 tabIndex={canEdit ? 0 : undefined}
@@ -495,6 +525,7 @@ export function Dashboard({
                 onKeyDown={(e) => canEdit && decoKey(e, d)}
                 onDragStart={(e) => (sizing ? e.preventDefault() : startDrag(e, { kind: "decoration", id: d.index, col: d.col, row: d.row }))}
                 onDragEnd={stop}
+                {...varDrop(d)}
               >
                 {d.kind === "section" && (
                   <span className="deco-title">

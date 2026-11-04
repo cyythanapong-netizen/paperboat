@@ -339,6 +339,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .arranging .deco { pointer-events: auto; cursor: grab; outline: 1px dashed var(--line-strong); outline-offset: 2px; }
 .arranging .deco:focus-visible { outline: 2px solid var(--focus); }
 .arranging .deco.picked { outline: var(--select-outline); outline-offset: var(--select-offset); z-index: 3; }
+/* A variable from the Variables sheet held over a label or section title: dropping it shows its value there. */
+.dragging-var .deco-label { pointer-events: auto; }
+.deco.var-over { outline: 2px dashed var(--line-ink); outline-offset: 2px; z-index: 3; }
 .arranging .deco.dragging { opacity: 0.4; }
 /* A section: a titled frame drawn in the gaps round its cells; it takes no cells. */
 .deco-section { margin: calc(var(--gap) / -2); border: 1px solid var(--line-strong); border-radius: var(--radius-md); outline: 0 !important; }

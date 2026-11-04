@@ -28,7 +28,7 @@ export const VarsContext = createContext<VarsApi | null>(null);
 
 /** A variable being dragged from the sheet onto a field (dataTransfer can't be read on dragover). */
 const dragged = { current: null as Variable | null };
-const VAR_DRAG = "application/x-paperboat-variable";
+export const VAR_DRAG = "application/x-paperboat-variable";
 
 const show = (v: unknown) => (typeof v === "number" ? String(+v.toPrecision(6)) : typeof v === "boolean" ? (v ? "on" : "off") : String(v ?? "–"));
 
@@ -469,7 +469,7 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
         className="var-name"
         draggable={!vars.locked}
         tabIndex={0}
-        title="Click to open; drag onto a field to bind it"
+        title="Click to open; drag onto a field to bind it, or onto a Dashboard label to show its value"
         onClick={onOpen}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen())}
         onDragStart={(e) => {
@@ -477,8 +477,12 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
           e.dataTransfer.setData(VAR_DRAG, v.name);
           e.dataTransfer.setData("text/plain", v.name);
           e.dataTransfer.effectAllowed = "link";
+          document.body.classList.add("dragging-var"); // what takes a variable listens for it (Dashboard labels)
         }}
-        onDragEnd={() => (dragged.current = null)}
+        onDragEnd={() => {
+          dragged.current = null;
+          document.body.classList.remove("dragging-var");
+        }}
       >
         {v.name}
       </span>
