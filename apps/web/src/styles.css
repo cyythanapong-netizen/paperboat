@@ -666,3 +666,19 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .chip i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-ink); background: var(--text); }
 .chip.conn-closed i, .chip.conn-connecting i { background: none; }
 .key.small.err { color: var(--danger); border-color: var(--danger); }
+
+/* ---- Projects (#82): the name and the unsaved dot, notices, the undo toast ---------- */
+.proj { display: inline-flex; align-items: center; gap: var(--space-2); max-width: 240px; font: 500 var(--size-sm) var(--font-sans); }
+.proj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); }
+.notice { height: auto; width: min(480px, calc(100vw - 32px)); }
+.notice-body { padding: var(--panel-pad) var(--panel-pad) var(--space-2); }
+.notice-body p { margin: 0 0 var(--space-2); max-width: 62ch; }
+.notice-actions { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-2) var(--panel-pad) var(--panel-pad); }
+.toast {
+  position: fixed; z-index: 45; left: calc(var(--rail-width) + 2 * var(--gutter)); bottom: var(--space-4);
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3);
+  background: var(--surface-panel); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); font-size: var(--size-sm);
+}
+@media (max-width: 860px) { .toast { left: var(--space-3); bottom: 72px; } }

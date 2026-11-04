@@ -70,8 +70,9 @@ name), the bar wraps, and Commander stacks its pages in one scrolling column. Be
 
 ## Menus, command search and the run dock (#78)
 
-The bar holds only the wordmark, the **menus**, the view switch, an error count when the
-Console has errors, and a connection chip (which opens File > Backend…). Everything else
+The bar holds only the wordmark, the **menus**, the project's name (with a signal-coloured dot
+while there are changes not saved), the view switch, an error count when the Console has
+errors, and a connection chip (which opens File > Backend…). Everything else
 you can do is a **command** in one registry (`src/commands.ts`); the menu bar, the command
 search and the registry's own shortcuts all read it, so a label, a shortcut and whether
 something is available can't drift between them.
@@ -89,6 +90,12 @@ something is available can't drift between them.
 - **Run dock** (`Dock.tsx`): Run, Cancel, the next run's length and speed, and where the
   run is, floating at the bottom of the pages. It is glass, because it floats over live
   content (the one place glass is for); on the Flow page it rides above the helper line.
+- **Projects** (#82, `project.ts`, `ProjectUI.tsx`): File > Open (Ctrl+O), Save (Ctrl+S), Save as,
+  Restore last session and Recent projects; a file dropped on the window opens too. Anything
+  that needs a word first (another backend, unsaved changes, a file that can't be read, the
+  offer to restore) is a **notice** floating in the middle, with its safe choice last (Esc);
+  a successful open leaves a **toast** at the bottom left with one **Undo**. See
+  `docs/api/project.rst` for the file.
 - **Keys:** a menu, the search and the dock's buttons take their keys (arrows, Enter) for
   themselves: elements marked `data-own-keys` are not forwarded to the backend. A
   command's `chord` is handled by the registry (Alt+1–3, Alt+M, Alt+V, Ctrl+K); undo and

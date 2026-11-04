@@ -132,7 +132,7 @@ export function toToml(list: Variables): string {
     .join("\n\n");
 }
 
-/** The user's variables for a backend, kept in this browser until projects (#34). */
+/** The user's variables for a backend, kept in this browser as the working copy: a project file (#82) saves and restores them. */
 export function loadMine(engine: string): Variables | undefined {
   try {
     const v = JSON.parse(localStorage.getItem(`paperboat.variables:${engine}`) ?? "null");

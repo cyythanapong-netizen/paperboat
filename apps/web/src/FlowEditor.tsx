@@ -559,6 +559,19 @@ export function toGraph(nodes: FlowNode[], edges: Wire[]): Graph {
   };
 }
 
+/** `toGraph` and every block's place on the whole canvas, for a project file (a run doesn't need places). */
+export function toFlow(nodes: FlowNode[], edges: Wire[]): Graph {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const g = toGraph(nodes, edges);
+  return {
+    ...g,
+    nodes: g.nodes.map((n) => {
+      const at = absolute(byId.get(n.id)!, byId);
+      return { ...n, pos: [Math.round(at.x), Math.round(at.y)] };
+    }),
+  };
+}
+
 /**
  * A new block at `at` (flow coordinates on the whole canvas, its top-left), selected and the
  * only one selected; inside subsystem `level` when one is open.
