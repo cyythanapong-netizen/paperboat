@@ -15,6 +15,7 @@ import {
   useInternalNode,
   useReactFlow,
   useStoreApi,
+  useUpdateNodeInternals,
   type Connection,
   type Edge,
   type EdgeProps,
@@ -24,10 +25,10 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
 } from "@xyflow/react";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { CompactBlock } from "./Compact";
-import { wireMismatch } from "./ports";
+import { movePort, placePorts, resetPort, SIDES, wireMismatch, type Placed, type PortSides, type Side } from "./ports";
 import { Bindable, NumberOrFormula } from "./Variables";
 import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
@@ -51,8 +52,9 @@ import type { BlockDef, Graph, ObjectDef, ParamDef, ParamValue, PortDef, Station
  * `missing`: the backend's catalog has no block of this type (an old graph, another
  * backend's, a block renamed in code). The node keeps its type, params and wires, drawn
  * red from what it had, until the type comes back or the user replaces it.
+ * `ports`: where the user moved its ports to (drag a port's name); absent: inputs left, outputs right.
  */
-export type BlockData = { def: BlockDef; params: Record<string, ParamValue>; missing?: boolean };
+export type BlockData = { def: BlockDef; params: Record<string, ParamValue>; missing?: boolean; ports?: PortSides };
 export type BlockNode = Node<BlockData, "block">;
 /** What the Flow canvas holds: blocks, and the groups (frames) around some of them. */
 export type FlowNode = BlockNode | GroupNode;
@@ -89,6 +91,7 @@ const portType = (def: BlockDef | undefined, port: string | null | undefined, si
 /** Generic node: everything it shows comes from the backend's BlockDef. */
 function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { updateNodeData } = useReactFlow<BlockNode, Wire>();
+  const updateNodeInternals = useUpdateNodeInternals();
   const states = useContext(RunStates);
   const active = states.active.has(id);
   const progress = states.progress[id];
@@ -97,6 +100,12 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const failed = states.failed.has(id);
   // A simple block draws as a small plate (#70) until double-clicked open; fold puts it back.
   const [expanded, setExpanded] = useState(false);
+  // A port moves by dragging its name to another side of the block, or along its side.
+  // While dragged the block shows where it would go; the move is saved (one undo) on release.
+  const [moving, setMoving] = useState<{ id: string; sides: PortSides | undefined } | null>(null);
+  const sides = moving ? moving.sides : data.ports;
+  const sidesKey = JSON.stringify(sides ?? null);
+  useEffect(() => updateNodeInternals(id), [id, sidesKey, updateNodeInternals]);
   if (def.view?.compact && !expanded && !missing && !hasStepPorts(def)) {
     return (
       <CompactBlock
@@ -119,6 +128,72 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
       />
     );
   }
+  const placed = placePorts(def, sides);
+  const startMove = (e: ReactPointerEvent, port: string) => {
+    // A press on the dot draws a wire; only the name moves the port.
+    if (e.button !== 0 || missing || (e.target as HTMLElement).closest(".react-flow__handle")) return;
+    const block = (e.currentTarget as HTMLElement).closest(".block") as HTMLElement | null;
+    if (!block) return;
+    const [x0, y0] = [e.clientX, e.clientY];
+    let next = data.ports;
+    let live = false;
+    const move = (ev: PointerEvent) => {
+      if (!live && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
+      live = true;
+      const r = block.getBoundingClientRect();
+      // The side nearest the pointer, and the place along it among the other ports there.
+      const d: Record<Side, number> = { left: ev.clientX - r.left, right: r.right - ev.clientX, top: ev.clientY - r.top, bottom: r.bottom - ev.clientY };
+      const side = SIDES.reduce((a, b) => (d[b] < d[a] ? b : a));
+      const across = side === "top" || side === "bottom";
+      const index = [...block.querySelectorAll<HTMLElement>(`.port[data-side="${side}"]`)]
+        .filter((o) => o.dataset.port !== port)
+        .filter((o) => {
+          const b = o.getBoundingClientRect();
+          return across ? b.left + b.width / 2 < ev.clientX : b.top + b.height / 2 < ev.clientY;
+        }).length;
+      next = movePort(def, data.ports, port, side, index);
+      setMoving({ id: port, sides: next });
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
+      setMoving(null);
+      if (live && JSON.stringify(next ?? null) !== JSON.stringify(data.ports ?? null)) updateNodeData(id, { ports: next });
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
+  };
+  const portRow = ({ port: p, dir }: Placed, side: Side) => {
+    const name = side === "right" ? (
+      <>
+        {p.unit && <span className="unit">{p.unit} </span>}
+        {p.id}
+      </>
+    ) : (
+      <>
+        {p.id}
+        {p.unit && <span className="unit"> {p.unit}</span>}
+      </>
+    );
+    return (
+      <div
+        key={`${dir}:${p.id}`}
+        className={`port ${dir} side-${side} port-${p.type} nodrag${moving?.id === p.id ? " moving" : ""}`}
+        data-side={side}
+        data-port={p.id}
+        onPointerDown={(e) => startMove(e, p.id)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          if (!missing) updateNodeData(id, { ports: resetPort(def, data.ports, p.id) });
+        }}
+      >
+        {name}
+        <PortHandle type={dir === "in" ? "target" : "source"} position={POSITION[side]} id={p.id} />
+      </div>
+    );
+  };
   const step = hasStepPorts(def);
   const classes = ["block", `kind-${def.kind}`, step && "step", selected && "selected", active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
   // The head's tag says what is happening to the block, else what it is: words, not colours.
@@ -140,6 +215,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
       className={classes.filter(Boolean).join(" ")}
       title={missing ? `This backend has no "${def.type}" block: its params and wires are kept. Replace or delete it.` : undefined}
     >
+      {placed.top.length > 0 && <div className="port-strip top">{placed.top.map((e) => portRow(e, "top"))}</div>}
       <div className="block-title">
         <span className="block-name" title={def.linked ? "Linked to a station object: set its properties, or remove it, on the Station" : undefined}>
           {missing ? def.type : def.label}
@@ -157,20 +233,8 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           <div style={{ width: `${progress * 100}%` }} />
         </div>
       )}
-      {def.inputs.map((p) => (
-        <div key={p.id} className={`port in port-${p.type}`}>
-          <PortHandle type="target" position={Position.Left} id={p.id} />
-          {p.id}
-          {p.unit && <span className="unit"> {p.unit}</span>}
-        </div>
-      ))}
-      {def.outputs.map((p) => (
-        <div key={p.id} className={`port out port-${p.type}`}>
-          {p.unit && <span className="unit">{p.unit} </span>}
-          {p.id}
-          <PortHandle type="source" position={Position.Right} id={p.id} />
-        </div>
-      ))}
+      {placed.left.map((e) => portRow(e, "left"))}
+      {placed.right.map((e) => portRow(e, "right"))}
       {def.params.map((p) => (
         <label key={p.id} className="param">
           <span>
@@ -185,9 +249,12 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           />
         </label>
       ))}
+      {placed.bottom.length > 0 && <div className="port-strip bottom">{placed.bottom.map((e) => portRow(e, "bottom"))}</div>}
     </div>
   );
 }
+
+const POSITION: Record<Side, Position> = { left: Position.Left, right: Position.Right, top: Position.Top, bottom: Position.Bottom };
 
 /**
  * A param's (or a station property's) field. It can be bound to a variable (#36): drop one
@@ -319,7 +386,9 @@ function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }
   const step = data?.type === "step";
   const sourceBottom = useBottom(source);
   const targetBottom = useBottom(target);
-  const back = geometry.targetX < geometry.sourceX + 8;
+  // Only a wire leaving to the right for a port facing left runs back round the blocks;
+  // ports moved to other sides take an ordinary curve that leaves the way they face.
+  const back = geometry.sourcePosition === Position.Right && geometry.targetPosition === Position.Left && geometry.targetX < geometry.sourceX + 8;
   const [path, x, y] = back
     ? loopPath(
         geometry.sourceX,
@@ -461,9 +530,13 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
   const nodes = graph.nodes.map((n, i) => {
     const [x, y] = n.pos ?? [0, 120 * i];
     const def = defs.get(n.type);
-    if (def) return makeNode(def, n.id, x, y, n.params);
+    const ports = n.ports ? { ports: n.ports } : {};
+    if (def) {
+      const node = makeNode(def, n.id, x, y, n.params);
+      return { ...node, data: { ...node.data, ...ports } };
+    }
     const node = makeNode(missingDef(n.type, n.params ?? {}, wires, n.id), n.id, x, y, n.params);
-    return { ...node, data: { ...node.data, missing: true } };
+    return { ...node, data: { ...node.data, ...ports, missing: true } };
   });
   const byId = new Map<string, BlockDef>(nodes.map((n) => [n.id, inForm(n.data.def, n.data.params)]));
   // Groups: frames around their blocks (parents before children, as React Flow wants).
@@ -505,7 +578,8 @@ export function resolveBlocks(nodes: FlowNode[], edges: Wire[], blocks: BlockDef
     if (def) {
       const defaults = Object.fromEntries(def.params.map((p) => [p.id, p.default]));
       const kept = Object.fromEntries(Object.entries(n.data.params).filter(([k]) => k in defaults));
-      return { ...n, deletable: !def.linked, data: { def, params: { ...defaults, ...kept } } };
+      const ports = n.data.ports ? { ports: n.data.ports } : {};
+      return { ...n, deletable: !def.linked, data: { def, params: { ...defaults, ...kept }, ...ports } };
     }
     const wires = edges.map((e) => ({ ...e, type: e.data?.type }));
     return { ...n, deletable: true, data: { ...n.data, def: missingDef(n.data.def.type, n.data.params, wires, n.id, n.data.def), missing: true } };
@@ -516,7 +590,7 @@ export function resolveBlocks(nodes: FlowNode[], edges: Wire[], blocks: BlockDef
 export function toGraph(nodes: FlowNode[], edges: Wire[]): Graph {
   const groups = toGroups(nodes);
   return {
-    nodes: nodes.filter(isBlock).map((n) => ({ id: n.id, type: n.data.def.type, params: n.data.params })),
+    nodes: nodes.filter(isBlock).map((n) => ({ id: n.id, type: n.data.def.type, params: n.data.params, ...(n.data.ports ? { ports: n.data.ports } : {}) })),
     edges: edges.map((e) => ({ from: [e.source, e.sourceHandle ?? ""], to: [e.target, e.targetHandle ?? ""] })),
     ...(groups.length > 0 ? { groups } : {}),
   };
@@ -997,7 +1071,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       <p className="hint muted">
         <span className="kbd">/</span> or double-click the canvas adds a block. Click a block, or Ctrl-drag a box (Ctrl-click
         adds one): the dialog above it deletes, groups or makes a story. Drag the canvas to pan; the wheel zooms. Drag a
-        wire's end off its port to remove it; ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
+        wire's end off its port to remove it. Drag a port's name to another side of its block (double-click puts it back); ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
       </p>
     </div>
     </Lit.Provider>

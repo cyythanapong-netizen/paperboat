@@ -130,6 +130,13 @@ export type GraphNode = {
   params?: Record<string, ParamValue>;
   /** Its place on the Flow canvas; backends ignore it. */
   pos?: [number, number];
+  /** Where its ports sit on the Flow canvas: the port ids on each side of the block, in order. A port not listed keeps its place (inputs on the left, outputs on the right, after the listed ones). Backends ignore it. */
+  ports?: {
+    left?: string[];
+    right?: string[];
+    top?: string[];
+    bottom?: string[];
+  };
 };
 
 export type GraphEdge = {

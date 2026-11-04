@@ -369,7 +369,8 @@ void load_starters(const json& doc, Catalog& catalog) {
   for (std::size_t i = 0; i < graph["nodes"].size(); ++i) {
     auto& n = graph["nodes"][i];
     const auto at = "graph.nodes[" + std::to_string(i) + "]";
-    only_fields(n, {"id", "type", "params", "pos"}, at);
+    only_fields(n, {"id", "type", "params", "pos", "ports"}, at);
+    if (n.contains("ports")) only_fields(n["ports"], {"left", "right", "top", "bottom"}, at + ".ports");
     if (!n.contains("id") || !n.contains("type")) throw DescriptorError(at + ": needs an id and a type");
     const auto type = n["type"].get<std::string>();
     if (!catalog.find(type)) throw DescriptorError(at + ": no block type \"" + type + "\" in this catalog");

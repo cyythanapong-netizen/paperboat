@@ -216,7 +216,15 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .block-progress > div { height: 100%; background: var(--signal); transition: width 0.1s linear; }
 
 .port { position: relative; padding: 3px 10px; color: var(--text-muted); }
-.port.out { text-align: right; }
+.port.out, .port.side-right { text-align: right; }
+.port.side-left { text-align: left; }
+/* A port moves by dragging its name: to another side of the block, or along its side. */
+.port[data-side] { cursor: grab; user-select: none; }
+.port[data-side].moving { color: var(--text); font-weight: 600; cursor: grabbing; }
+.port-strip { display: flex; justify-content: center; gap: var(--space-2); padding: 0 6px; }
+.port-strip.top { border-bottom: 1px solid var(--line); }
+.port-strip.bottom { border-top: 1px solid var(--line); }
+.port.side-top, .port.side-bottom { padding: 5px 4px; text-align: center; }
 .react-flow__handle { width: 8px; height: 8px; background: var(--surface-raised); border: 1.5px solid var(--line-ink); }
 .port-step { color: var(--text); font-weight: 500; }
 .port-step .react-flow__handle, .frame-head .step-handle { width: 9px; height: 9px; border-radius: 1px; background: var(--line-ink); border-color: var(--line-ink); }

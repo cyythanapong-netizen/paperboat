@@ -70,7 +70,7 @@ TEST_CASE("starters: optional, in protocol shape, checked against the catalog") 
   const auto some = tk::load_descriptor(descriptor(R"(
 import = ["signal", "math", "rig"]
 [graph]
-nodes = [{ id = "g", type = "gain", params = { k = 2 }, pos = [0, 0] }, { id = "s", type = "sine" }]
+nodes = [{ id = "g", type = "gain", params = { k = 2 }, pos = [0, 0], ports = { top = ["u"] } }, { id = "s", type = "sine" }]
 edges = [{ from = ["s", "y"], to = ["g", "u"] }]
 [station]
 objects = [{ id = "cp", type = "slider", props = { x0 = 0.1 } }]
@@ -78,12 +78,15 @@ objects = [{ id = "cp", type = "slider", props = { x0 = 0.1 } }]
   const auto graph = nlohmann::json::parse(some.graph);
   CHECK(graph["nodes"][1]["params"] == nlohmann::json::object());  // filled in
   CHECK(graph["edges"][0]["to"] == nlohmann::json{"g", "u"});
+  CHECK(graph["nodes"][0]["ports"]["top"] == nlohmann::json{"u"});  // the UI's, kept as given
   CHECK(nlohmann::json::parse(some.station)["objects"][0]["id"] == "cp");
 
   CHECK_THROWS_WITH(tk::load_descriptor(descriptor("import = [\"base\"]\n[graph]\nnodes = [{ id = \"x\", type = \"gian\" }]\n")),
                     ContainsSubstring("graph.nodes[0]: no block type \"gian\""));
   CHECK_THROWS_WITH(tk::load_descriptor(descriptor("import = [\"base\"]\n[graph]\nedges = [{ from = [\"a\", \"y\"], to = [\"b\", \"u\"] }]\n")),
                     ContainsSubstring("no node \"a\""));
+  CHECK_THROWS_WITH(tk::load_descriptor(descriptor("import = [\"base\"]\n[graph]\nnodes = [{ id = \"x\", type = \"clock\", ports = { up = [\"t\"] } }]\n")),
+                    ContainsSubstring("graph.nodes[0].ports: unknown field \"up\""));
 }
 
 TEST_CASE("import adds every template of a package; a customised entry wins") {
