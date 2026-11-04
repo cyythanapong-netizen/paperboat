@@ -503,7 +503,7 @@ export function Dashboard({
                 )}
                 {d.kind === "label" && (editing === d.index ? <EditText value={d.text} label="Label text" inputRef={editor} onDone={(v) => finishText(d, v)} /> : <span><Formatted text={d.text} latest={state.latest} /></span>)}
                 {d.kind === "console" && (
-                  <div className="deco-console">
+                  <div className="deco-logs">
                     <Console logs={state.logs} onBlock={onBlock} />
                   </div>
                 )}
