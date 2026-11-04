@@ -41,6 +41,15 @@ export type BlockDef = {
   linked?: boolean;
   /** A monitor's instrument on the Dashboard: graph (default), display (the latest value) or image. */
   instrument?: string;
+  /** How the UI draws the block: a hint, so a UI without it (or a block without it) draws the normal card. */
+  view?: {
+    /** Draw a small plate: a glyph, bare port dots (names on hover), the name and main value in a caption below. */
+    compact?: boolean;
+    /** The plate's glyph: a curve name (gain, plus, step, clamp, const) or a few characters drawn as text (&, ≥1, ¬). */
+    glyph?: string;
+    /** The caption's value, an expression of the block's params: {k}, {min}…{max}. */
+    value?: string;
+  };
   /** A magic block's forms; its inputs and outputs are the first's, and its form param (an enum) picks one. */
   forms?: Form[];
   /** false: its outputs this step don't depend on its inputs this step (an integrator, a delay), so a feedback loop may pass through it. Absent: true. */

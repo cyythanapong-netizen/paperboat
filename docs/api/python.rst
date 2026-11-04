@@ -45,6 +45,14 @@ Blocks
 
       One line in plain words: what it does. Shown on its card in the block browser.
 
+   .. py:attribute:: view
+      :type: dict
+
+      How the UI draws the block, a hint (absent: the normal card). Keys, all optional:
+      ``compact`` (a small plate with bare port dots and a caption), ``glyph`` (a curve name:
+      ``gain``, ``plus``, ``step``, ``clamp``, ``const``; or a few characters drawn as text)
+      and ``value`` (an expression of the params for the caption, such as ``"{k}"``).
+
    .. py:attribute:: feedthrough
       :type: bool
 

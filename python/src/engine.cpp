@@ -381,6 +381,23 @@ tk::Kind kind_from(const std::string& s, const std::string& at) {
   throw std::runtime_error(at + ": kind must be source, probe, function or monitor, not \"" + s + "\"");
 }
 
+// A block class's `view` dict: {"compact": True, "glyph": "gain", "value": "{k}"}, all optional.
+tk::View view_from_py(nb::handle cls, const std::string& at) {
+  tk::View view;
+  if (!nb::hasattr(cls, "view")) return view;
+  nb::object v = cls.attr("view");
+  if (v.is_none()) return view;
+  if (!nb::isinstance<nb::dict>(v)) throw std::runtime_error(at + ": view must be a dict (compact, glyph, value)");
+  for (auto [k, val] : nb::cast<nb::dict>(v)) {
+    const auto key = nb::cast<std::string>(k);
+    if (key == "compact") view.compact = nb::cast<bool>(val);
+    else if (key == "glyph") view.glyph = nb::cast<std::string>(val);
+    else if (key == "value") view.value = nb::cast<std::string>(val);
+    else throw std::runtime_error(at + ": view has no key \"" + key + "\" (compact, glyph, value)");
+  }
+  return view;
+}
+
 tk::BlockDef block_def(nb::handle cls) {
   const std::string at = class_name(cls);
   tk::BlockDef def;
@@ -394,6 +411,7 @@ tk::BlockDef block_def(nb::handle cls) {
   if (def.kind == tk::Kind::Monitor) def.instrument = text_attr(cls, "instrument", "graph");
   if (nb::hasattr(cls, "feedthrough")) def.feedthrough = nb::cast<bool>(cls.attr("feedthrough"));
   def.description = text_attr(cls, "description", "");
+  def.view = view_from_py(cls, at);
   return def;
 }
 

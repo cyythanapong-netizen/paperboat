@@ -96,6 +96,15 @@ initializers may leave any out.
       One line in plain words: what the block does. Shown on its card in the block browser.
       Optional; the built-in templates have one, and a descriptor may set ``description``.
 
+   .. cpp:member:: View view
+
+      How the UI draws the block: a hint, so a block without it is the normal card.
+      ``compact`` draws a small plate with a ``glyph`` (a curve name such as ``"gain"`` or a
+      few characters) and a caption with the name and ``value`` (an expression of the
+      params, ``"{k}"``). Every key is optional: a definition inherits its parent's ``view``
+      and overrides single keys. The built-in simple maths and logic templates have one;
+      a descriptor may set ``view``.
+
    .. cpp:member:: bool feedthrough = true
 
       ``false`` for a block whose outputs this step don't depend on its inputs this step (an

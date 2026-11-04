@@ -139,11 +139,22 @@ through `python/paperboat/toolkit.py`, which mirrors `base` and `step`.
 | `type`     | optional | required | unique id in the catalog (template default: last part of `use`) |
 | `label`    | optional | optional | palette name (default: template label, or `type`) |
 | `description` | optional | optional | one line, shown on its card in the block browser (default: the template's) |
+| `view`     | optional | — | how the UI draws it: `{ compact = true, glyph = "gain", value = "{k}" }`; any key, and a key not given is the template's (see below) |
 | `defaults` | optional | — | `{param: number}` overriding template defaults |
 | `config`   | optional | — | `{key: string}` fixed at load time, not shown in the UI |
 | `kind`     | — | required | `source`, `probe`, `function` or `monitor` |
 | `inputs` / `outputs` | — | optional | port ids, or `{ id = "x", type = "position" }` tables |
 | `params`   | — | optional | `{ param = default }`, kept in the order written |
+
+**View.** A block's `view` says how the UI draws it: `compact` (a small plate: a glyph, bare
+port dots, a caption with the name and value; unset: the normal card), `glyph` (a curve
+name: `gain`, `plus`, `step`, `clamp`, `const`; or a few characters drawn as text) and
+`value` (an expression of the params, `{k}` or `{min}…{max}`, shown in the caption). It is a
+hint, sent as `view` in the catalog. A definition inherits its template's view and
+overrides single keys: `view = { glyph = "plus" }` on `math/gain` keeps `compact` and
+`value`; `view = { compact = false }` draws it as a card. The simple `math` blocks (gain, sum,
+threshold, saturation) and the `base` constant and logic blocks are compact by default
+(`builtin_view()`). A Python block sets a `view` class attribute (a dict of the same keys).
 
 Mistakes fail loudly with their location, e.g.
 `blocks[2] (control/pid): control/pid has no param "kq"`, and unknown fields are
