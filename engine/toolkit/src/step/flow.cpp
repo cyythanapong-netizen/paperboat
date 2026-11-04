@@ -199,7 +199,7 @@ void add_flow(Registry& registry) {
                                   }));
   registry.add(make_step_template("while", "While", {step_port("in"), {"cond"}}, {step_port("loop"), step_port("done")},
                                   {}, [](const Values&, const Config&) { return std::make_unique<While>(); }));
-  registry.add(make_step_template("say", "Say", {step_port("in"), {"value"}}, {step_port("next")},
+  registry.add(make_step_template("say", "Say", {step_port("in"), {"value", "any"}}, {step_port("next")},
                                   {{.id = "text", .type = "text", .default_text = "hello"}},
                                   [](const Values&, const Config& c) {
                                     auto it = c.find("text");

@@ -41,9 +41,10 @@ class Run {
  public:
   Run(std::string id, const Backend& backend, RunSettings settings, Emit emit, KeysNow keys, std::stop_token stop);
 
-  // Makes the station and graph, runs them with the backend's executor (or the default)
-  // and reports the end. Returns "done", "failed" or "cancelled".
-  std::string go(const json& graph, const json& station);
+  // Makes the station and graph (references to `variables` resolved first, #36), runs them
+  // with the backend's executor (or the default) and reports the end. Returns "done",
+  // "failed" or "cancelled".
+  std::string go(const json& graph, const json& station, const json& variables = nullptr);
 
   // ---- For executors ----
   Graph& graph() { return g_; }

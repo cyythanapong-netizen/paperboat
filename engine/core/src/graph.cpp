@@ -7,12 +7,12 @@ namespace paperboat::core {
 
 namespace {
 
-const std::string& port_type(const Node& node, const std::string& port, bool output) {
+const toolkit::PortDef& port_def(const Node& node, const std::string& port, bool output) {
   const auto& ports = output ? node.def.outputs : node.def.inputs;
   auto it = std::ranges::find(ports, port, &toolkit::PortDef::id);
   if (it == ports.end())
     throw GraphError(node.id, node.id + " (" + node.def.type + ") has no " + (output ? "output" : "input") + " \"" + port + "\"");
-  return it->type;
+  return *it;
 }
 
 }  // namespace
@@ -161,18 +161,19 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
       throw GraphError("edge refers to an unknown node: " + from.first + " -> " + to.first);
     const auto& src = out.nodes.at(from.first);
     const auto& dst = out.nodes.at(to.first);
-    // A wire joins ports of one type: step to step, signal to signal, image to image…
-    const auto& type = port_type(src, from.second, true);
-    if (type != port_type(dst, to.second, false))
-      throw GraphError(to.first, "wire " + from.first + "." + from.second + " -> " + to.first + "." + to.second + " joins a " +
-                       type + " port to a " + port_type(dst, to.second, false) + " port");
-    const bool step = type == "step";
+    // A wire joins ports of one type (step to step, image to image; "any" to anything but a
+    // step), in one unit if both ends have one.
+    const auto& out_port = port_def(src, from.second, true);
+    if (auto why = toolkit::wire_mismatch(out_port, port_def(dst, to.second, false)))
+      throw GraphError(to.first, "wire " + from.first + "." + from.second + " -> " + to.first + "." + to.second + " " + *why);
+    const bool step = out_port.type == "step";
     if (step) {
       if (!out.nexts.emplace(from, to.first).second)
         throw GraphError(from.first, "step output " + from.first + "." + from.second + " has two wires; it can lead to one block");
       continue;
     }
-    out.wires[to] = from;
+    if (!out.wires.emplace(to, from).second)
+      throw GraphError(to.first, "input " + to.first + "." + to.second + " has two wires; an input takes one");
     // A linked block's outputs come from its object's state, not its inputs (they push the
     // object after the pass), so a wire into one closes the loop through the station. Step
     // blocks read their signal inputs after the pass too.

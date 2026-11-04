@@ -58,8 +58,10 @@ json scene_message(const Station& station, const toolkit::DomainState* state, co
 
 // Emits run.started, then scene, signal, scene.patch, node.state, run.progress and log
 // events, then run.finished. Returns the final status: "done", "failed" or "cancelled".
-// `settings`: graph.run's overrides of the backend's run settings, if any.
+// `settings`: graph.run's overrides of the backend's run settings, if any. `variables`:
+// the variables (#36) the graph's and station's references resolve against.
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,
-                const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings = nullptr);
+                const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings = nullptr,
+                const json& variables = nullptr);
 
 }  // namespace paperboat::core

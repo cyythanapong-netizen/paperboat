@@ -12,7 +12,11 @@
         },
         "type": {
           "type": "string",
-          "description": "signal (a value), step (control, in a Step flow) or a value shape (image, points, numbers...). A wire joins ports of one type."
+          "description": "signal (a value, the default), step (control in a Step flow), a value's shape (image, points, numbers…), or any (any value but a step). A wire joins ports of one type; any joins anything but a step (#4)."
+        },
+        "unit": {
+          "type": "string",
+          "description": "Its unit (N, m, rad, m/s…). A wire between two ports with units joins the same unit; a port without one takes any (#4)."
         }
       },
       "required": [
@@ -40,6 +44,10 @@
             },
             "default": {
               "type": "number"
+            },
+            "unit": {
+              "type": "string",
+              "description": "Its unit (kg, N/rad…), shown next to the field; a variable bound to it must be in the same unit."
             }
           }
         },
@@ -542,6 +550,54 @@
       ],
       "additionalProperties": false
     },
+    "variables.load": {
+      "type": "object",
+      "description": "The backend's default variables, on connect after the scene, if it has any.",
+      "properties": {
+        "type": {
+          "const": "variables.load"
+        },
+        "variables": {
+          "$ref": "#/$defs/Variables"
+        }
+      },
+      "required": [
+        "type",
+        "variables"
+      ],
+      "additionalProperties": false
+    },
+    "variables.values": {
+      "type": "object",
+      "description": "What the variables come to (#36), so the UI shows formulas' values: on connect and after each variables.set. With error (and at, the variable or block at fault) when they don't hold.",
+      "properties": {
+        "type": {
+          "const": "variables.values"
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "boolean",
+              "string"
+            ]
+          },
+          "description": "Each variable's resolved value, by name."
+        },
+        "error": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ],
+      "additionalProperties": false
+    },
     "run.started": {
       "type": "object",
       "properties": {
@@ -688,6 +744,10 @@
         },
         "settings": {
           "$ref": "#/$defs/RunSettings"
+        },
+        "variables": {
+          "$ref": "#/$defs/Variables",
+          "description": "The variables the graph's and station's references use; absent: the last ones set."
         }
       },
       "required": [
@@ -709,6 +769,23 @@
       "required": [
         "type",
         "station"
+      ],
+      "additionalProperties": false
+    },
+    "variables.set": {
+      "type": "object",
+      "description": "The user's variables changed: the backend checks them, keeps them for the next run, and answers with a scene (or a log error).",
+      "properties": {
+        "type": {
+          "const": "variables.set"
+        },
+        "variables": {
+          "$ref": "#/$defs/Variables"
+        }
+      },
+      "required": [
+        "type",
+        "variables"
       ],
       "additionalProperties": false
     },
@@ -759,6 +836,8 @@
             "scene.patch",
             "graph.load",
             "station.load",
+            "variables.load",
+            "variables.values",
             "run.started",
             "run.progress",
             "run.finished",
@@ -840,6 +919,30 @@
           },
           "then": {
             "$ref": "#/$defs/station.load"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "variables.load"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/variables.load"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "variables.values"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/variables.values"
           }
         },
         {
@@ -940,6 +1043,7 @@
           "enum": [
             "graph.run",
             "station.set",
+            "variables.set",
             "run.cancel",
             "input"
           ]
@@ -968,6 +1072,18 @@
           },
           "then": {
             "$ref": "#/$defs/station.set"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "variables.set"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/variables.set"
           }
         },
         {
@@ -1169,11 +1285,41 @@
       "maxItems": 3
     },
     "ParamValue": {
-      "description": "A param's value: a number, true / false (a boolean param), or text (text, key and file params).",
-      "type": [
-        "number",
-        "boolean",
-        "string"
+      "description": "A param's value: a number, true / false (a boolean param), or text (text, key and file params). Or a reference (#36): {\"var\": name} takes a variable's value; {\"expr\": formula} (number and boolean params) a formula over variables. The backend resolves references before it makes blocks and objects.",
+      "oneOf": [
+        {
+          "type": [
+            "number",
+            "boolean",
+            "string"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "var"
+          ],
+          "properties": {
+            "var": {
+              "type": "string",
+              "description": "A variable's name."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "expr"
+          ],
+          "properties": {
+            "expr": {
+              "type": "string",
+              "description": "A formula over number and boolean variables: + - * / ^ %, comparisons, && || ?:, sqrt, sin, min, clamp…"
+            }
+          }
+        }
       ]
     },
     "RunStatus": {
@@ -1334,6 +1480,89 @@
         "fraction"
       ],
       "additionalProperties": false
+    },
+    "Variable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "type"
+      ],
+      "description": "A named, typed value (#36), used by reference in block params and station props. Exactly one of value and expr.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "description": "Letters, digits and _; not t, pi, e or a function's name."
+        },
+        "type": {
+          "enum": [
+            "number",
+            "boolean",
+            "enum",
+            "text",
+            "file"
+          ]
+        },
+        "value": {
+          "type": [
+            "number",
+            "boolean",
+            "string"
+          ],
+          "description": "Of its type: a number, true / false, or text (enum: one of options)."
+        },
+        "expr": {
+          "type": "string",
+          "description": "A number or boolean variable's formula over other variables, instead of a value."
+        },
+        "unit": {
+          "type": "string",
+          "description": "A number's unit (m, N, rad…)."
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        },
+        "step": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "How much one nudge in the UI changes it."
+        },
+        "whole": {
+          "type": "boolean",
+          "description": "A whole number."
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "An enum's choices."
+        },
+        "note": {
+          "type": "string",
+          "description": "One line: what it's for."
+        },
+        "group": {
+          "type": "string",
+          "description": "Where it's listed (Plant, Controller…)."
+        },
+        "exposed": {
+          "type": "boolean",
+          "description": "Also a control on the Dashboard, for operators."
+        }
+      }
+    },
+    "Variables": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Variable"
+      },
+      "description": "The variables of a backend (its defaults) or the user's."
     }
   },
   "$ref": "#/$defs/toUI"

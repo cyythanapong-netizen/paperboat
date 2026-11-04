@@ -8,6 +8,8 @@
 #include <ostream>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "paperboat/core/run.hpp"
 
@@ -34,16 +36,25 @@ json load_json(const std::filesystem::path& path);
 
 // A backend's command line: `--port N` (serve there) and `--run` (run the starter graph on
 // the starter station once, headless and as fast as it can, print every protocol message
-// as one JSON line, and exit: 0 when the run is done, 1 when it failed).
+// as one JSON line, and exit: 0 when the run is done, 1 when it failed). `--var name=value`
+// (any number of them) sets a default variable (#36) for that run.
 struct Options {
   int port = 0;
   bool run = false;
+  std::vector<std::pair<std::string, std::string>> vars = {};
 };
 Options parse_options(int argc, char** argv, int default_port);  // throws std::invalid_argument
 
-// The starter run of `--run`: every message to `out`, one JSON line each. Returns the
-// run's final status ("done", "failed").
-std::string run_starter(const Backend& backend, std::ostream& out);
+// The starter run of `--run`: every message to `out`, one JSON line each, with `vars` set
+// over the descriptor's default variables. Returns the run's final status ("done",
+// "failed"). Throws std::invalid_argument for a --var the backend doesn't have, or a value
+// that isn't of its type.
+std::string run_starter(const Backend& backend, std::ostream& out,
+                        const std::vector<std::pair<std::string, std::string>>& vars = {});
+
+// The descriptor's default variables with `vars` (name, text) set over them, each value
+// read as its variable's type. Throws std::invalid_argument.
+json with_vars(const toolkit::Catalog& catalog, const std::vector<std::pair<std::string, std::string>>& vars);
 
 // What a backend's main() returns: parse the options, then serve or run the starter.
 int main(const Backend& backend, int argc, char** argv, int default_port);

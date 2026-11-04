@@ -64,8 +64,10 @@ function Ports({ inputs, outputs }: { inputs: PortDef[]; outputs: PortDef[] }) {
   const port = (p: PortDef, side: "in" | "out") => (
     <span key={p.id} className={`card-port ${side}${p.type === "step" ? " step" : ""}`}>
       {side === "out" && p.id}
+      {side === "out" && p.unit && <span className="unit"> {p.unit}</span>}
       <i />
       {side === "in" && p.id}
+      {side === "in" && p.unit && <span className="unit"> {p.unit}</span>}
     </span>
   );
   return (
@@ -108,6 +110,7 @@ function Card({ item, count, onAdd, place }: { item: Item; count: number; onAdd:
           {c.params.map((p) => (
             <span key={p.id}>
               {p.id} <b>{fmt(p)}</b>
+              {"unit" in p && p.unit && <span className="unit"> {p.unit}</span>}
             </span>
           ))}
         </div>

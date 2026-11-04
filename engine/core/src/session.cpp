@@ -4,23 +4,39 @@
 
 #include "paperboat/core/backend.hpp"
 
+#include <paperboat/toolkit/variables.hpp>
+
 namespace paperboat::core {
 
 struct Session::State {
   State(const Backend& b, Send s)
-      : backend(b), send(std::move(s)), station(b.catalog->station.empty() ? json() : json::parse(b.catalog->station)) {}
+      : backend(b),
+        send(std::move(s)),
+        station(b.catalog->station.empty() ? json() : json::parse(b.catalog->station)),
+        variables(b.catalog->variables.empty() ? json::array() : json::parse(b.catalog->variables)) {}
 
   const Backend& backend;
   Send send;
-  std::mutex mutex;  // guards keys and station: the socket thread writes, the run thread reads
+  std::mutex mutex;  // guards keys, station and variables: the socket thread writes, the run thread reads
   toolkit::KeySet keys;
   json station;
+  json variables;  // the list (#36): the backend's defaults until the UI sets its own
   int runs = 0;
   std::jthread run;  // declared last: destroyed (stopped and joined) before the rest
 
   void emit(const json& msg) { send(msg.dump()); }
   void log(const std::string& level, const std::string& text) {
     emit({{"type", "log"}, {"level", level}, {"text", text}});
+  }
+  // The station as it shows: its objects made with their references resolved. Throws
+  // VariableError, GraphError or json::exception.
+  // `report`: also send what the variables come to (variables.values), for the UI.
+  void show(const json& with_station, const json& with_variables, bool report = false) {
+    const toolkit::Variables vars(with_variables);
+    if (report) emit({{"type", "variables.values"}, {"values", vars.values()}});
+    const auto objects = make_station(toolkit::resolve_station(with_station, *backend.catalog, vars), *backend.catalog);
+    const auto state = backend.state ? backend.state() : nullptr;
+    emit(scene_message(objects, state.get(), backend.view));
   }
 };
 
@@ -32,8 +48,8 @@ Session::Session(const Backend& backend, Send send)
   if (!catalog.station_page.empty()) station_view["page"] = "/" + catalog.station_page;  // on this port, over HTTP
   s.emit({{"type", "hello"}, {"protocol", "paperboat/0"}, {"engine", backend.engine}, {"station", station_view}, {"run", settings_json(backend.run)}});
   s.emit(json::parse(toolkit::catalog_message(catalog)));
-  const auto opening = backend.state ? backend.state() : nullptr;
-  s.emit(scene_message(make_station(s.station, catalog), opening.get(), backend.view));
+  s.show(s.station, s.variables, !s.variables.empty());  // checked at load: the starters resolve against the defaults
+  if (!s.variables.empty()) s.emit({{"type", "variables.load"}, {"variables", s.variables}});
   s.emit({{"type", "graph.load"}, {"graph", json::parse(catalog.graph)}});
   if (!s.station.is_null()) s.emit({{"type", "station.load"}, {"station", s.station}});
 }
@@ -45,11 +61,13 @@ void Session::on_message(const std::string& text) {
   const json msg = json::parse(text, nullptr, /*allow_exceptions=*/false);
   const std::string type = msg.is_object() ? msg.value("type", "") : "";
   if (type == "graph.run") {
-    json station;
+    json station, variables;
     {
       std::lock_guard lock(s.mutex);
       if (msg.contains("station")) s.station = msg.at("station");
+      if (msg.contains("variables")) s.variables = msg.at("variables");
       station = s.station;
+      variables = s.variables;
     }
     const std::string id = "run-" + std::to_string(++s.runs);
     auto keys_now = [&s] {
@@ -57,23 +75,42 @@ void Session::on_message(const std::string& text) {
       return s.keys;
     };
     // Assigning a new jthread stops and joins the previous run first.
-    s.run = std::jthread([&s, id, graph = msg.value("graph", json::object()), station, keys_now,
+    s.run = std::jthread([&s, id, graph = msg.value("graph", json::object()), station, variables, keys_now,
                           settings = msg.value("settings", json())](std::stop_token stop) {
-      core::run(id, graph, station, s.backend, [&s](const json& m) { s.emit(m); }, keys_now, stop, settings);
+      core::run(id, graph, station, s.backend, [&s](const json& m) { s.emit(m); }, keys_now, stop, settings, variables);
     });
   } else if (type == "station.set") {
     // An edit on the Station page: check it, keep it, and show it.
     try {
       const json station = msg.at("station");
-      const auto objects = make_station(station, *s.backend.catalog);
+      json variables;
       {
         std::lock_guard lock(s.mutex);
-        s.station = station;
+        variables = s.variables;
       }
-      const auto state = s.backend.state ? s.backend.state() : nullptr;
-      s.emit(scene_message(objects, state.get(), s.backend.view));
+      s.show(station, variables);
+      std::lock_guard lock(s.mutex);
+      s.station = station;
     } catch (const std::exception& err) {
       s.log("error", std::string("invalid station: ") + err.what());
+    }
+  } else if (type == "variables.set") {
+    // The variables changed (#36): check them, keep them, and show the station they shape.
+    try {
+      const json variables = msg.at("variables");
+      json station;
+      {
+        std::lock_guard lock(s.mutex);
+        station = s.station;
+      }
+      s.show(station, variables, true);
+      std::lock_guard lock(s.mutex);
+      s.variables = variables;
+    } catch (const toolkit::VariableError& err) {
+      s.emit({{"type", "variables.values"}, {"values", json::object()}, {"error", err.what()}, {"at", err.where}});
+      s.log("error", std::string("invalid variables: ") + err.what());
+    } catch (const std::exception& err) {
+      s.log("error", std::string("invalid variables: ") + err.what());
     }
   } else if (type == "run.cancel") {
     s.run.request_stop();
