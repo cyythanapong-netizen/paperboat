@@ -525,7 +525,7 @@ export function App() {
           }
           info={count(Object.keys(monitors).length, "instrument")}
         >
-          <Dashboard state={state} monitors={monitors} arrange={arrange} />
+          <Dashboard state={state} monitors={monitors} arrange={arrange} onBlock={showBlock} />
         </Panel>
         {varsShown === "open" && (
           <VariablesSheet

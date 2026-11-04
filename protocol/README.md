@@ -177,6 +177,28 @@ listed, or has no `at`, takes the first free cell in the automatic order (readou
 pictures, then plots, each in Flow-canvas order); a block that is not a monitor is ignored;
 a place that is taken makes the instrument move down to the first free cell.
 
+**Decorations and tabs (#65, #76).** The layout may also carry things that are not
+instruments, and pages. They belong to the layout, not the flow: the Flow canvas still
+decides which instruments exist.
+
+```jsonc
+"dashboard": {
+  "columns": 6,
+  "tabs": ["Run", "Tuning"],                          // two or more show a tab strip; instruments name theirs with "tab"
+  "decorations": [
+    { "kind": "label", "text": "Speed {speed:.1f} m/s", "at": [0, 0], "span": [4, 1], "style": "heading" },
+    { "kind": "section", "text": "Stores", "at": [0, 1], "span": [4, 2] },   // a titled frame, takes no cells
+    { "kind": "hline", "at": [0, 3], "span": 6 },     // a separator in the gap: span columns (vline: rows)
+    { "kind": "console", "at": [0, 4], "span": [6, 3] }                       // the Console's lines, in a frame
+  ]
+}
+```
+
+`label` and `console` take cells like an instrument (default span 2×1 and 4×3); `section`,
+`hline` and `vline` are drawn in the gaps and take none (they are hidden on a screen
+narrower than the layout). Text is a formatted string: `{block}` shows that monitor's latest
+value ("–" before a run), `{block:.2f}` with that many decimals, `{{` and `}}` are braces.
+
 - The UI keeps one linked block per object that spawns one, adds it when the object is
   added and removes it (and its wires) when the object goes.
 - Linked blocks have no params and no feedthrough: outputs come from the object's state;

@@ -287,6 +287,64 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .drop { border: 1.5px solid var(--line-ink); border-radius: var(--radius-md); background: color-mix(in srgb, var(--line-ink) 8%, transparent); pointer-events: none; z-index: 1; }
 .cell-tools { position: absolute; top: 6px; right: 6px; z-index: 2; background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 2px; cursor: default; }
 .cell-tools .opt { font-size: var(--size-2xs); }
+.cell { z-index: 1; }
+
+/* ---- Dashboard decorations and tabs (#65): hairlines and text on the grid; no fills. ---- */
+.dash-bar { flex-wrap: wrap; }
+.dash-add { display: inline-flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.dash-add .lbl { margin-right: var(--space-1); }
+.dash-tabs { display: flex; align-items: center; gap: var(--space-3); padding-bottom: var(--space-2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.dash-tab { display: inline-flex; align-items: center; gap: 2px; border-radius: var(--radius-sm); }
+.dash-tab .opt { border: 0; background: none; padding: 2px 3px; font: 400 var(--size-xs) var(--font-mono); color: var(--text-muted); cursor: pointer; }
+.dash-tab .opt::before { content: "["; margin-right: 3px; visibility: hidden; }
+.dash-tab .opt::after { content: "]"; margin-left: 3px; visibility: hidden; }
+.dash-tab.on .opt { color: var(--text); font-weight: 500; }
+.dash-tab.on .opt::before, .dash-tab.on .opt::after { visibility: visible; }
+.dash-tab .opt:hover { color: var(--text); }
+.dash-tab.drop { outline: 1.5px dashed var(--line-ink); outline-offset: 2px; }
+.tab-remove { border: 0; background: none; padding: 0 3px; color: var(--text-muted); font: 400 var(--size-md) / 1 var(--font-sans); cursor: pointer; }
+.tab-remove:hover { color: var(--danger); }
+.deco-edit { width: 100%; min-width: 8ch; height: 24px; padding: 0 var(--space-2); background: var(--surface-well); box-shadow: var(--well-shadow); border: 0; border-radius: var(--radius-sm); color: var(--text); font: inherit; }
+.dash-tab .deco-edit { width: 12ch; }
+
+.deco { position: relative; z-index: 0; min-width: 0; pointer-events: none; }
+.arranging .deco { pointer-events: auto; cursor: grab; outline: 1px dashed var(--line-strong); outline-offset: 2px; }
+.arranging .deco:focus-visible { outline: 2px solid var(--focus); }
+.arranging .deco.picked { outline: var(--select-outline); outline-offset: var(--select-offset); z-index: 3; }
+.arranging .deco.dragging { opacity: 0.4; }
+/* A section: a titled frame drawn in the gaps round its cells; it takes no cells. */
+.deco-section { margin: calc(var(--gap) / -2); border: 1px solid var(--line-strong); border-radius: var(--radius-md); outline: 0 !important; }
+.arranging .deco-section { pointer-events: none; }
+.arranging .deco-section.picked { outline: var(--select-outline) !important; outline-offset: var(--select-offset); }
+.deco-title { position: absolute; top: -10px; left: 12px; max-width: calc(100% - 24px); padding: 0 6px; background: var(--surface-panel); font: 500 var(--size-2xs) / 18px var(--font-sans); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: auto; }
+.arranging .deco-title { cursor: grab; }
+.deco-title .deco-edit { width: 18ch; height: 20px; }
+/* Separators: on a grid line, in the gap; they take no cells. */
+.deco-hline { align-self: start; height: 0; margin-top: calc(var(--gap) / -2); border-top: 1px solid var(--line-strong); outline: 0 !important; }
+.deco-vline { justify-self: start; width: 0; margin-left: calc(var(--gap) / -2); border-left: 1px solid var(--line-strong); outline: 0 !important; }
+.arranging .deco-hline::before, .arranging .deco-vline::before { content: ""; position: absolute; }
+.arranging .deco-hline::before { left: 0; right: 0; top: -8px; bottom: -8px; }
+.arranging .deco-vline::before { top: 0; bottom: 0; left: -8px; right: -8px; }
+.arranging .deco-hline.picked, .arranging .deco-vline.picked { border-color: var(--line-ink); border-width: 2px; }
+.arranging .deco-hline:focus-visible, .arranging .deco-vline:focus-visible { border-color: var(--focus); }
+/* A label takes cells: a heading, or a note. */
+.deco-label { display: flex; align-items: center; padding: 0 var(--space-1); overflow-wrap: anywhere; }
+.deco-label.heading { font: 600 var(--size-md) / 1.25 var(--font-sans); }
+.deco-label.note { font: 400 var(--size-2xs) / 1.4 var(--font-sans); color: var(--text-muted); }
+.deco-val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; padding: 0 3px; }
+.deco-val.idle { color: var(--text-muted); }
+.deco-console { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-screen); color: var(--text-on-screen); pointer-events: auto; }
+.deco-console .logs { padding-left: 32px; }
+.deco-console .empty { margin: 0; padding: var(--space-3) var(--space-4); color: var(--text-on-screen-muted); }
+.deco-vars { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); margin-bottom: var(--space-2); }
+.deco-vars .chip { font: 400 var(--size-2xs) var(--font-mono); text-transform: none; padding: 2px 8px; background: transparent; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); color: var(--text); cursor: grab; }
+.deco-vars .chip:hover { border-color: var(--line-ink); }
+.deco-remove { position: absolute; top: -10px; right: -10px; width: 16px; height: 16px; z-index: 4; pointer-events: auto; cursor: pointer; }
+.deco-style { position: absolute; top: calc(100% + 6px); left: 0; z-index: 4; background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 2px; pointer-events: auto; cursor: default; }
+.deco-style .opt { font-size: var(--size-2xs); }
+.deco-grip { position: absolute; right: -6px; bottom: -6px; width: 12px; height: 12px; z-index: 4; background: var(--surface-panel); border: 1.5px solid var(--line-ink); border-radius: 2px; cursor: nwse-resize; pointer-events: auto; touch-action: none; }
+.deco-grip.grip-hline { right: -6px; bottom: auto; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+.deco-grip.grip-vline { right: auto; left: 50%; bottom: -6px; transform: translateX(-50%); cursor: ns-resize; }
 
 .instrument { margin: 0; min-width: 0; height: 100%; display: flex; flex-direction: column; }
 .instrument .screen { flex: 1; min-height: 0; position: relative; }
