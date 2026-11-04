@@ -27,8 +27,9 @@ import {
   type Viewport,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type MutableRefObject, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
+import { ownKeys } from "./commands";
 import { CompactBlock } from "./Compact";
 import { copySelection, pasteClip, type Clip } from "./clipboard";
 import { parseSigns, signOf, wireMismatch, type PortSides } from "./ports";
@@ -598,10 +599,26 @@ type Props = {
   /** The subsystem or story open on the canvas (#68); null: the top level. */
   level: string | null;
   setLevel: (level: string | null) => void;
+  /** Filled with what the Edit menu calls: the same actions as the keys and the selection dialog. */
+  controls?: MutableRefObject<FlowControls | null>;
+};
+
+/**
+ * The canvas's actions for the menus (#78). `can` says what the selection allows now; it is read
+ * when a menu opens, so `paste` looks at the clipboard then.
+ */
+export type FlowControls = {
+  copy: () => void;
+  cut: () => void;
+  paste: () => void;
+  remove: () => void;
+  group: (kind: GroupData["kind"]) => void;
+  ungroup: () => void;
+  can: { copy: boolean; paste: boolean; remove: boolean; group: boolean; frame: boolean; story: boolean; ungroup: boolean };
 };
 
 /** Blocks by palette group, groups in catalog order. */
-export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel }: Props) {
+export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, controls }: Props) {
   const states = useContext(RunStates);
   // The open level, if it is still there (undo or ungroup may have taken it away).
   const level = wanted && isLevel(nodes.find((n) => n.id === wanted)) ? wanted : null;
@@ -671,7 +688,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     if (!level) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (ownKeys(t) || (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable))) return;
       const escape = e.key === "Escape" && !nodes.some((n) => n.selected) && !edges.some((w) => w.selected);
       if (!escape && !(e.altKey && e.key === "ArrowUp")) return;
       e.preventDefault();
@@ -775,6 +792,28 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   const copied = useRef<{ clip: Clip; pastes: number } | null>(null);
   const latest = useRef({ nodes, edges });
   latest.current = { nodes, edges };
+  // The three actions, shared by the keys below and the Edit menu. Each says whether it did anything.
+  const copySelected = (cut: boolean): boolean => {
+    const { nodes: ns, edges: es } = latest.current;
+    const clip = copySelection(ns, es);
+    if (!clip) return false;
+    copied.current = { clip, pastes: 0 };
+    if (cut) {
+      const gone = new Set(clip.nodes.map((n) => n.id));
+      setNodes(ns.filter((n) => !gone.has(n.id)));
+      setEdges(es.filter((w) => !gone.has(w.source) && !gone.has(w.target)));
+    }
+    return true;
+  };
+  const pasteCopied = (): boolean => {
+    const c = copied.current;
+    if (!c) return false;
+    c.pastes += 1;
+    const next = pasteClip(c.clip, latest.current.nodes, latest.current.edges, 30 * c.pastes);
+    setNodes(next.nodes);
+    setEdges(next.edges);
+    return true;
+  };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented) return;
@@ -785,30 +824,11 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       const view = store.getState().domNode;
       if (!view || view.offsetParent === null) return; // another page is showing
       if (key !== "v" && window.getSelection()?.toString()) return; // text selected: the browser's copy
-      const { nodes: ns, edges: es } = latest.current;
-      if (key === "v") {
-        if (!copied.current) return;
-        e.preventDefault();
-        const c = copied.current;
-        c.pastes += 1;
-        const next = pasteClip(c.clip, ns, es, 30 * c.pastes);
-        setNodes(next.nodes);
-        setEdges(next.edges);
-        return;
-      }
-      const clip = copySelection(ns, es);
-      if (!clip) return;
-      e.preventDefault();
-      copied.current = { clip, pastes: 0 };
-      if (key === "x") {
-        const gone = new Set(clip.nodes.map((n) => n.id));
-        setNodes(ns.filter((n) => !gone.has(n.id)));
-        setEdges(es.filter((w) => !gone.has(w.source) && !gone.has(w.target)));
-      }
+      if (key === "v" ? pasteCopied() : copySelected(key === "x")) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [store, setNodes, setEdges]);
+  }, [store, setNodes, setEdges]); // eslint-disable-line react-hooks/exhaustive-deps -- the two actions read refs
 
   // ---- Dragging a wire (#52): the port it would join is raised, ports that can't take it dim ----
   const [anchor, setAnchor] = useState<Anchor | null>(null);
@@ -897,11 +917,32 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   };
   const removePicked = () =>
     deleteElements({ nodes: pickedNodes.map((n) => ({ id: n.id })), edges: pickedWires.map((w) => ({ id: w.id })) });
+  if (controls) {
+    controls.current = {
+      copy: () => void copySelected(false),
+      cut: () => void copySelected(true),
+      paste: () => void pasteCopied(),
+      remove: removePicked,
+      group,
+      ungroup: () => pickedFrames.forEach((f) => actions.ungroup(f.id)),
+      can: {
+        copy: copySelection(nodes, edges) !== null,
+        get paste() {
+          return copied.current !== null;
+        },
+        remove: !(kept === pickedNodes.length && pickedWires.length === 0),
+        group: canGroup,
+        frame: canFrame,
+        story: canStory,
+        ungroup: pickedFrames.length > 0,
+      },
+    };
+  }
   useEffect(() => {
     if (!many) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (e.key !== "Escape" || (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT"))) return;
+      if (e.key !== "Escape" || ownKeys(t) || (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT"))) return;
       e.preventDefault(); // not a key for the backend
       deselect();
     };

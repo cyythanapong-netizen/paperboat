@@ -65,15 +65,13 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 
 .bar { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); min-width: 0; }
 .bar > * { flex: none; }
-.bar > .run-controls { flex: 1 1 auto; overflow: hidden; }
+.bar > .spacer { flex: 1 1 auto; }
 .wordmark { display: inline-flex; align-items: center; gap: var(--space-2); font: 600 var(--size-md) var(--font-sans); letter-spacing: -0.01em; }
 .wordmark svg path { fill: none; stroke: var(--text); stroke-width: 1.4; stroke-linejoin: round; }
-.backend { display: flex; align-items: center; gap: var(--space-2); }
 .field { display: inline-flex; align-items: center; gap: var(--space-2); height: 30px; padding: 0 var(--space-3); }
 .field input { font-size: var(--size-xs); padding: 0; width: 20ch; }
 .conn { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; }
 .conn-closed { color: var(--danger); }
-.run-controls { display: flex; align-items: center; gap: var(--space-3); flex: 1; min-width: 0; }
 .run-status { font: 500 var(--size-2xs) var(--font-sans); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .status-running { color: var(--signal); }
 .status-failed { color: var(--danger); }
@@ -138,7 +136,7 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .empty { margin: 0; padding: var(--panel-pad); max-width: 60ch; color: var(--text-muted); }
 
 @media (max-width: 1560px) {
-  .backend > .lbl, .switch > .lbl, .conn, .run-options > .lbl-speed { display: none; }
+  .switch > .lbl, .conn, .run-options > .lbl-speed { display: none; }
 }
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
@@ -417,7 +415,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .log-error { color: var(--danger); }
 .log-node { font: inherit; margin-right: 6px; padding: 0 5px; text-transform: none; color: var(--text-on-screen); background: transparent; border: 1px solid var(--text-on-screen-muted); border-radius: var(--radius-sm); }
 .log-node:hover { border-color: var(--text-on-screen); }
-@media (min-width: 861px) { .bar .switch + .switch { padding-left: var(--space-4); border-left: 1px solid var(--line); } }
 
 /* ---- Adding things (#50): the Flow's tools, the collection window, quick add, drops ---- */
 .kbd { font: 500 var(--size-2xs) var(--font-mono); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: var(--radius-sm); padding: 0 5px; color: var(--text); background: var(--surface-raised); }
@@ -620,3 +617,52 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 /* A port's or param's unit (#4): after its name, small and grey. */
 .unit { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
 .var-detail .var-value.wide { flex: 1; text-align: left; height: 24px; }
+
+/* ---- Menus, the command search and the run dock (#78) ----------------------------- */
+/* The open menu title is boxed in ink like the current page on the rail; a chosen item sits in brackets. */
+.menubar { display: flex; gap: 2px; }
+.menu-wrap { position: relative; display: inline-flex; }
+.menu-title { height: 28px; padding: 0 var(--space-3); border: 1.5px solid transparent; background: none; color: var(--text-muted); font: 400 var(--size-sm) var(--font-sans); }
+.menu-title:hover { color: var(--text); background: color-mix(in srgb, var(--surface-panel) 50%, transparent); border-color: transparent; }
+.menu-title[aria-expanded="true"] { color: var(--text); font-weight: 600; border-color: var(--line-ink); background: none; }
+.menu, .cmd-search { background: var(--surface-panel); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); }
+.menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 260px; padding: var(--space-1); }
+.menu-item { display: flex; justify-content: space-between; align-items: center; gap: var(--space-6); width: 100%; padding: 4px var(--space-3); border: 0; border-radius: var(--radius-sm); background: none; text-align: left; font: 400 var(--size-sm) var(--font-sans); white-space: nowrap; }
+.menu-item:hover:not([aria-disabled="true"]) { background: var(--surface-sunken); }
+.menu-item:focus-visible { outline-offset: -2px; }
+.menu-item[aria-disabled="true"] { color: var(--text-muted); opacity: 0.55; cursor: default; }
+.menu-item.on .menu-label { font-weight: 600; }
+.menu-item.on .menu-label::before { content: "[ "; font-family: var(--font-mono); }
+.menu-item.on .menu-label::after { content: " ]"; font-family: var(--font-mono); }
+.menu-side { display: inline-flex; align-items: center; gap: var(--space-3); }
+.menu-meta, .menu-side kbd { font: 400 var(--size-2xs) var(--font-mono); color: var(--text-muted); }
+.menu-sep { height: 1px; background: var(--line); margin: var(--space-1); }
+.menu-group { padding: var(--space-2) var(--space-3) 2px; font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+
+/* The command search floats at the top centre, over the bar, like a title-bar field. */
+.cmd-search { position: fixed; z-index: 60; top: var(--gutter); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); padding: var(--space-2); }
+.cmd-input { width: 100%; height: 34px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-md); background: var(--surface-well); box-shadow: var(--well-shadow); color: var(--text); font: 400 var(--size-sm) var(--font-sans); }
+.cmd-list { list-style: none; margin: var(--space-2) 0 0; padding: 0; max-height: min(360px, 60vh); overflow: auto; }
+.cmd-item { display: flex; justify-content: space-between; gap: var(--space-6); padding: 5px var(--space-3); border: 1.5px solid transparent; border-radius: var(--radius-sm); font-size: var(--size-sm); cursor: pointer; }
+.cmd-item.on { border-color: var(--line-ink); font-weight: 600; }
+.cmd-item[aria-disabled="true"] { color: var(--text-muted); opacity: 0.6; cursor: default; }
+.cmd-empty { padding: var(--space-3); color: var(--text-muted); }
+
+/* The run dock: glass, because it floats over live content (the pages). */
+.pages { position: relative; }
+.dock {
+  position: absolute; left: 50%; bottom: var(--space-4); transform: translateX(-50%); z-index: 6;
+  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3);
+  max-width: calc(100% - 24px); white-space: nowrap;
+  background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur);
+  border: 1px solid var(--line-strong); border-radius: var(--radius-lg);
+}
+/* On the Flow page the helper line sits under the canvas (up to three lines): the dock rides above it. */
+.mode-navigator .pages:has(.panel-flow:not([hidden])) > .dock { bottom: 76px; }
+.backend-window { height: auto; width: min(520px, calc(100vw - 32px)); }
+.backend-form { display: flex; align-items: center; gap: var(--space-3); padding: var(--panel-pad) var(--panel-pad) var(--space-2); }
+.backend-note { margin: 0; padding: 0 var(--panel-pad) var(--panel-pad); }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 var(--space-2); border: 0; background: none; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-ink); background: var(--text); }
+.chip.conn-closed i, .chip.conn-connecting i { background: none; }
+.key.small.err { color: var(--danger); border-color: var(--danger); }

@@ -35,7 +35,7 @@ The direction and its history are in issue #48.
 ## Themes
 
 Light (grey panels) and dark (near-black panels), built on the same semantic tokens. The
-theme follows the system unless the user picks one with the theme switch (auto, light,
+theme follows the system unless the user picks one in View > Theme (auto, light,
 dark); the choice is kept in this browser. The 3D station reads its background and grid
 from the tokens and is rebuilt when the theme changes. Displays are black in both themes.
 
@@ -53,20 +53,46 @@ size changes.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ ⛵ paperboat  ░ws://… engine░ Connect  ▶ Run  for ░10░ s ░1×░  ■ Cancel   │
-│                          [ navigator ]  commander  │  [ auto ]  light  dark │
+│ ⛵ paperboat  File  Edit  View  Run            [ navigator ]  commander  ● engine │
 ├────────────┬─────────────────────────────────────────────────────────────┤
 │ 1 Station  │ 2 Flow                                            6 blocks  │
 │┏━━━━━━━━━━┓│   2 blocks · 1 wire  Delete  Group  Story  Frame  Ungroup    │
 │┃ 2 Flow   ┃│                                                             │
 │┗━━━━━━━━━━┛│        ┌ PID ───── fn ┐     ┌ Sum ───── fn ┐                │
 │ 3 Dashb…   │        │ kp      40   │ ─── │ a            │                │
+│            │      ┌ ▶ Run  ■ Cancel  for ░10░ s ░1×░  running 3.2 / 10 s ┐ │
 └────────────┴─────────────────────────────────────────────────────────────┘
 ```
 
 Below 860px the rail moves to the bottom (numbers only, the current page boxed with its
 name), the bar wraps, and Commander stacks its pages in one scrolling column. Below
-1560px the bar drops its small labels and the engine's name.
+1560px the view switch drops its small label.
+
+## Menus, command search and the run dock (#78)
+
+The bar holds only the wordmark, the **menus**, the view switch, an error count when the
+Console has errors, and a connection chip (which opens File > Backend…). Everything else
+you can do is a **command** in one registry (`src/commands.ts`); the menu bar, the command
+search and the registry's own shortcuts all read it, so a label, a shortcut and whether
+something is available can't drift between them.
+
+- **Menus** (`Menus.tsx`): File, Edit, View, Run, and only items for things the app does.
+  An ARIA menubar: Tab enters it once, ←/→ move between menus, ↓ or Enter opens one, Esc
+  closes. The open title is boxed in ink like the current page on the rail; a chosen item
+  (page, mode, theme, a toggle) sits in brackets, never filled. A command that can't run
+  now stays and says why in its tooltip ("Stop the run to edit the station").
+- **Command search** (Ctrl+K, ⌘K on a Mac): a field floating at the top centre, over
+  everything. It is only reached by its shortcut and View > Command search…, so the bar
+  has no search well. Type to narrow, ↑/↓ and Enter to run, Esc to close; focus returns to
+  where it was. The key is `SEARCH_CHORD` in `commands.ts`. `/` stays quick add on the
+  canvas.
+- **Run dock** (`Dock.tsx`): Run, Cancel, the next run's length and speed, and where the
+  run is, floating at the bottom of the pages. It is glass, because it floats over live
+  content (the one place glass is for); on the Flow page it rides above the helper line.
+- **Keys:** a menu, the search and the dock's buttons take their keys (arrows, Enter) for
+  themselves: elements marked `data-own-keys` are not forwarded to the backend. A
+  command's `chord` is handled by the registry (Alt+1–3, Alt+M, Alt+V, Ctrl+K); undo and
+  copy/cut/paste stay with the canvas, which the Edit menu reaches through `FlowControls`.
 
 ## Tokens
 
