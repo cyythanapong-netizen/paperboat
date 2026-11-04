@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { EngineState, Series } from "./engine";
 import {
@@ -12,7 +12,6 @@ import {
   editDecoration,
   formatText,
   freshTabName,
-  loadSaved,
   moveDecoration,
   moveInstrument,
   moveToTab,
@@ -22,11 +21,12 @@ import {
   resizeDecoration,
   resizeInstrument,
   rowsOf,
-  save,
   tabIsEmpty,
 } from "./dashboardLayout";
 import type { Monitor, PlacedDeco } from "./dashboardLayout";
+import type { DashboardLayout } from "./protocol";
 import { Console } from "./Console";
+import { VarsContext } from "./Variables";
 import { RemoveIcon } from "./RemoveIcon";
 
 export type { Monitor } from "./dashboardLayout";
@@ -100,15 +100,25 @@ const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRigh
 /** What is being dragged: an instrument (by block id) or a decoration (by its index). */
 type Drag = { kind: "instrument"; id: string; dx: number; dy: number } | { kind: "decoration"; id: number; dx: number; dy: number };
 
-/** Text with `{block}` values in it, shown live. */
+/** Text with `{name}` values in it (a monitor block's latest, else a variable's), shown live. */
 function Formatted({ text, latest }: { text: string; latest: Record<string, unknown> }) {
+  const vars = useContext(VarsContext);
+  // A variable's value is the engine's resolved one; until it has resolved, a plain variable's own value.
+  const values = useMemo(
+    () => ({ ...Object.fromEntries((vars?.list ?? []).filter((v) => !v.expr).map((v) => [v.name, v.value])), ...vars?.values }),
+    [vars?.list, vars?.values],
+  );
   return (
     <>
-      {formatText(text, latest).map((p, i) =>
+      {formatText(text, latest, values).map((p, i) =>
         typeof p === "string" ? (
           p
         ) : (
-          <output key={i} className={`deco-val${p.value === "–" ? " idle" : ""}`} title={p.name}>
+          <output
+            key={i}
+            className={`deco-val${p.value === "–" ? " idle" : ""}${p.variable ? " var" : ""}`}
+            title={p.shadowed ? `${p.name}: the block (a variable has this name too)` : p.variable ? `${p.name}: a variable` : p.name}
+          >
             {p.value}
           </output>
         ),
@@ -178,15 +188,25 @@ function EditText({
  * edit decorations and tabs; the layout is kept in the browser, per backend, until
  * projects can save it (#34).
  */
-export function Dashboard({ state, monitors, arrange, onBlock }: { state: EngineState; monitors: Record<string, Monitor>; arrange: boolean; onBlock: (id: string) => void }) {
-  const storeKey = state.engine || "default";
-  const [saved, setSaved] = useState(() => loadSaved(storeKey));
-  useEffect(() => setSaved(loadSaved(storeKey)), [storeKey]);
+export function Dashboard({
+  state,
+  monitors,
+  arrange,
+  onBlock,
+  saved,
+  onSave,
+}: {
+  state: EngineState;
+  monitors: Record<string, Monitor>;
+  arrange: boolean;
+  onBlock: (id: string) => void;
+  /** The user's layout for this backend (App keeps it, so renaming a variable can rewrite the text that uses it). */
+  saved: DashboardLayout | undefined;
+  onSave: (next: DashboardLayout | undefined) => void;
+}) {
+  const vars = useContext(VarsContext);
   const layout = saved ?? state.dashboard;
-  const commit = (next: typeof saved) => {
-    setSaved(next);
-    save(storeKey, next);
-  };
+  const commit = onSave;
 
   // Every monitor block on the Flow canvas has an instrument, and only those (#58): what a
   // run reported for a block that's gone since doesn't keep its tile.
@@ -375,12 +395,12 @@ export function Dashboard({ state, monitors, arrange, onBlock }: { state: Engine
       {arrange && textual(editingDeco) && (
         <div className="deco-vars" role="group" aria-label="Insert a value">
           <span className="lbl">Value</span>
-          {Object.keys(all).map((n) => (
+          {[...Object.keys(all).map((n) => [n, false] as const), ...(vars?.list ?? []).filter((v) => !(v.name in all)).map((v) => [v.name, true] as const)].map(([n, isVar]) => (
             <button
               key={n}
-              className="chip"
+              className={`chip${isVar ? " var" : ""}`}
               draggable
-              title={`Click to put {${n}} in the text at the caret, or drag it in`}
+              title={`${isVar ? "Variable: click" : "Click"} to put {${n}} in the text at the caret, or drag it in`}
               onDragStart={(e) => {
                 e.stopPropagation();
                 e.dataTransfer.effectAllowed = "copy";

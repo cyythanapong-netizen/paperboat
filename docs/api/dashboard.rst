@@ -33,8 +33,13 @@ cells), **separators** (``hline``, ``vline``), a **label** (a heading or a note)
 **console** (the Console's lines in a frame), and **tabs**, pages with a grid each. Labels
 and the console take cells; sections and separators are drawn in the gaps. Text in a label or
 section is a formatted string: ``{speed}`` shows that monitor block's latest value, ``{speed:.2f}``
-with that many decimals, ``{{`` and ``}}`` are braces. In the UI, Arrange adds and edits
-them; while editing text, click a value chip (or drag it in) to put ``{block}`` at the caret.
+with that many decimals, ``{{`` and ``}}`` are braces. A name that is no monitor block but a
+**variable** shows the variable's value (live: it changes as the variable is edited, no run
+needed); if a block and a variable share a name, the block wins. In the UI, Arrange adds and
+edits them; while editing text, click a value chip (or drag it in) to put ``{name}`` at the
+caret; variables have their own chips. Renaming a variable rewrites ``{old}`` in labels and
+section titles, deleting one replaces it with its value, and the variables sheet lists them
+under "Used by".
 
 The Console
 -----------

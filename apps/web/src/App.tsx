@@ -4,11 +4,12 @@ import { useEngine } from "./engine";
 import { BrowserWindow, DRAG_TYPE, dragging, type Item } from "./Browser";
 import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toGraph, withBlock, type FlowNode, type Wire } from "./FlowEditor";
 import { absolute, isFrame } from "./groups";
-import type { ParamValue, RunSettings, Station, Variable, Variables } from "./protocol";
+import type { DashboardLayout, ParamValue, RunSettings, Station, Variable, Variables } from "./protocol";
 import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
 import { emptyOf, freeName, inlineRef, loadMine, merged, refersTo, renameInFormula, renameRef, saveMine, toToml, usesOf, type Use } from "./bindings";
 import { ConsoleWindow } from "./Console";
 import { Dashboard } from "./Dashboard";
+import { inlineInText, loadSaved, mapTexts, renameInText, save as saveLayout, textUsing } from "./dashboardLayout";
 import { PAGES, Panel, Rail, Switch, Wordmark, type Mode, type Page, type Theme } from "./Shell";
 import { SceneView } from "./SceneView";
 import { StationGraph } from "./StationGraph";
@@ -88,6 +89,14 @@ export function App() {
   const engineKey = state.engine || "default";
   useEffect(() => setMine(loadMine(engineKey)), [engineKey]);
   const variables = useMemo(() => merged(state.variables, mine), [state.variables, mine]);
+  // The Dashboard's layout is kept here, so renaming or deleting a variable can rewrite the labels that use it (#86).
+  const [dashSaved, setDashSaved] = useState(() => loadSaved(engineKey));
+  useEffect(() => setDashSaved(loadSaved(engineKey)), [engineKey]);
+  const saveDash = (next: DashboardLayout | undefined) => {
+    setDashSaved(next);
+    saveLayout(engineKey, next);
+  };
+  const dashLayout = dashSaved ?? state.dashboard;
   const [varsShown, setVarsShown] = remembered<"open" | "closed">("paperboat.variables", "closed", ["open", "closed"]);
   const [openVar, setOpenVar] = useState<string | null>(null);
   const [consoleShown, setConsoleShown] = useState(false);
@@ -275,6 +284,12 @@ export function App() {
     if (station?.objects.some((o) => Object.values(o.props ?? {}).some(uses)))
       editStation({ objects: station.objects.map((o) => ({ ...o, props: mapParams(o.props ?? {}, f) })) });
   };
+  /** Labels and section titles: the same rewrite as in params. Rewriting the backend's default layout makes it the user's own. */
+  const rewriteLabels = (f: (text: string) => string) => {
+    if (!dashLayout) return;
+    const next = mapTexts(dashLayout, f);
+    if (next !== dashLayout) saveDash(next);
+  };
   const varsApi: VarsApi = {
     list: variables,
     values: state.varValues,
@@ -285,6 +300,7 @@ export function App() {
     rename: (from, to) => {
       setVariables(variables.map((v) => (v.name === from ? { ...v, name: to } : v.expr ? { ...v, expr: renameInFormula(v.expr, from, to) } : v)));
       rewrite((v) => refersTo(v, from), (v) => renameRef(v, from, to));
+      rewriteLabels((t) => renameInText(t, from, to));
       varsHistory.current = { past: [], future: [] }; // the Flow and Station changed too: not undone from here
       setOpenVar(to);
     },
@@ -292,6 +308,7 @@ export function App() {
       const gone = variables.find((v) => v.name === name);
       const value = state.varValues[name] ?? gone?.value ?? 0;
       rewrite((v) => refersTo(v, name), (v) => inlineRef(v, name, value));
+      rewriteLabels((t) => inlineInText(t, name, value));
       setVariables(
         variables
           .filter((v) => v.name !== name)
@@ -300,7 +317,10 @@ export function App() {
       varsHistory.current = { past: [], future: [] };
       setOpenVar(null);
     },
-    uses: (name) => usesOf(name, nodes.filter(isBlock).map((n) => ({ id: n.id, params: n.data.params })), station, variables),
+    uses: (name) => [
+      ...usesOf(name, nodes.filter(isBlock).map((n) => ({ id: n.id, params: n.data.params })), station, variables),
+      ...textUsing(dashLayout, name).map((d): Use => ({ page: "dashboard", id: d.kind, field: d.text })),
+    ],
     reveal: (name) => {
       setVarsShown("open");
       setOpenVar(name);
@@ -329,6 +349,7 @@ export function App() {
   };
   const showUse = (u: Use) => {
     if (u.page === "variables") setOpenVar(u.id);
+    else if (u.page === "dashboard") setPage("dashboard");
     else if (u.page === "flow") showBlock(u.id);
     else setPage("station");
   };
@@ -525,7 +546,7 @@ export function App() {
           }
           info={count(Object.keys(monitors).length, "instrument")}
         >
-          <Dashboard state={state} monitors={monitors} arrange={arrange} onBlock={showBlock} />
+          <Dashboard state={state} monitors={monitors} arrange={arrange} onBlock={showBlock} saved={dashSaved} onSave={saveDash} />
         </Panel>
         {varsShown === "open" && (
           <VariablesSheet

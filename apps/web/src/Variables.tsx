@@ -602,7 +602,7 @@ function Detail({ v, uses, onChange, onShow }: { v: Variable; uses: Use[]; onCha
           {uses.map((u) => (
             <div key={`${u.page}:${u.id}:${u.field}`} className="var-use">
               <code>{u.field ? `${u.id} · ${u.field}` : u.id}</code>
-              <span className="where">{u.page === "variables" ? "in its formula" : u.formula ? "a formula" : u.page === "flow" ? "Flow" : "Station"}</span>
+              <span className="where">{u.page === "variables" ? "in its formula" : u.formula ? "a formula" : u.page === "flow" ? "Flow" : u.page === "dashboard" ? "Dashboard" : "Station"}</span>
               <button className="key small" onClick={() => onShow(u)}>
                 Show
               </button>

@@ -38,7 +38,7 @@ export function inlineRef(value: ParamValue, name: string, v: number | boolean |
 }
 
 /** A place that uses a variable: a block's param on the Flow, a station object's property, or another variable's formula. */
-export type Use = { page: "flow" | "station" | "variables"; id: string; field: string; formula?: string };
+export type Use = { page: "flow" | "station" | "variables" | "dashboard"; id: string; field: string; formula?: string };
 
 /** Where each variable is used: blocks' params, station props and other variables' formulas. */
 export function usesOf(

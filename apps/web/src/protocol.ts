@@ -160,7 +160,7 @@ export type DashboardLayout = {
   /** Things that are not instruments. section: a titled frame round a group of cells (takes no cells; `at` and `span` [w, h]). hline / vline: a separator on a grid line, in the gap, along `span` columns (hline, from the top of `at`'s row) or rows (vline, down the left of `at`'s column); takes no cells. label: text that takes cells like an instrument (`span` [w, h], default [2, 1]); a section's title and a label's text may hold `{block}` or `{block:.2f}`, which show that monitor's latest value (`{{` and `}}` are braces). console: the Console's lines, in a frame that takes cells (`span` [w, h], default [4, 3]); it has no text. */
   decorations?: ({
     kind: "section" | "hline" | "vline" | "label" | "console";
-    /** A section's title, or a label's text. `{block}` shows the monitor block's latest value, `{block:.2f}` with that many decimals; `{{` and `}}` are literal braces. */
+    /** A section's title, or a label's text. `{name}` shows the monitor block's latest value (else the variable's value), `{block:.2f}` with that many decimals; `{{` and `}}` are literal braces. */
     text?: string;
     /** Top-left cell: [column, row]. */
     at: [number, number];

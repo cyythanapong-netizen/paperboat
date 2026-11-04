@@ -333,6 +333,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .deco-label.note { font: 400 var(--size-2xs) / 1.4 var(--font-sans); color: var(--text-muted); }
 .deco-val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; padding: 0 3px; }
 .deco-val.idle { color: var(--text-muted); }
+.deco-val.var { border-bottom: 1px dotted var(--text-muted); }
 .deco-console { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-screen); color: var(--text-on-screen); pointer-events: auto; }
 .deco-console .logs { padding-left: 32px; }
 .deco-console .empty { margin: 0; padding: var(--space-3) var(--space-4); color: var(--text-on-screen-muted); }
