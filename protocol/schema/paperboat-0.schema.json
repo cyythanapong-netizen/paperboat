@@ -1275,7 +1275,7 @@
               },
               "text": {
                 "type": "string",
-                "description": "A section's title, or a label's text. `{block}` shows the monitor block's latest value, `{block:.2f}` with that many decimals; `{{` and `}}` are literal braces."
+                "description": "A section's title, or a label's text. `{name}` shows the monitor block's latest value (else the variable's value), `{block:.2f}` with that many decimals; `{{` and `}}` are literal braces."
               },
               "at": {
                 "type": "array",
