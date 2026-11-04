@@ -502,7 +502,7 @@ export function App() {
           }
           info={count(Object.keys(monitors).length, "instrument")}
         >
-          <Dashboard state={state} monitors={monitors} arrange={arrange} />
+          <Dashboard state={state} monitors={monitors} arrange={arrange} onBlock={showBlock} />
         </Panel>
         <Panel {...panel("console")} info={`${count(state.logs.length, "line")}${errors ? ` · ${count(errors, "error")}` : ""}`}>
           <Console logs={state.logs} onBlock={showBlock} />

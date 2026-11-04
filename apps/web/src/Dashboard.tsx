@@ -1,8 +1,33 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { EngineState, Series } from "./engine";
-import { CELLS, DEFAULT_COLUMNS, SIZES, SIZE_LABEL, loadSaved, move, place, resize, save } from "./dashboardLayout";
-import type { Monitor, Placed } from "./dashboardLayout";
+import {
+  CELLS,
+  DEFAULT_COLUMNS,
+  SIZES,
+  SIZE_LABEL,
+  addDecoration,
+  addTab,
+  arrange as arrangeLayout,
+  editDecoration,
+  formatText,
+  freshTabName,
+  loadSaved,
+  moveDecoration,
+  moveInstrument,
+  moveToTab,
+  removeDecoration,
+  removeTab,
+  renameTab,
+  resizeDecoration,
+  resizeInstrument,
+  rowsOf,
+  save,
+  tabIsEmpty,
+} from "./dashboardLayout";
+import type { Monitor, PlacedDeco } from "./dashboardLayout";
+import { Console } from "./Console";
+import { RemoveIcon } from "./RemoveIcon";
 
 export type { Monitor } from "./dashboardLayout";
 
@@ -72,16 +97,88 @@ function Instrument({ name, kind, state }: { name: string; kind: string; state: 
 
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
+/** What is being dragged: an instrument (by block id) or a decoration (by its index). */
+type Drag = { kind: "instrument"; id: string; dx: number; dy: number } | { kind: "decoration"; id: number; dx: number; dy: number };
+
+/** Text with `{block}` values in it, shown live. */
+function Formatted({ text, latest }: { text: string; latest: Record<string, unknown> }) {
+  return (
+    <>
+      {formatText(text, latest).map((p, i) =>
+        typeof p === "string" ? (
+          p
+        ) : (
+          <output key={i} className={`deco-val${p.value === "–" ? " idle" : ""}`} title={p.name}>
+            {p.value}
+          </output>
+        ),
+      )}
+    </>
+  );
+}
+
+/**
+ * Text edited where it stands: Enter or a click away keeps it, Escape drops the change.
+ * A value chip (`.deco-vars`) may take the focus without ending the edit: a chip clicked
+ * or dropped on the text puts `{block}` in at the caret.
+ */
+function EditText({
+  value,
+  onDone,
+  label,
+  inputRef,
+}: {
+  value: string;
+  onDone: (v: string | null) => void;
+  label: string;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+}) {
+  return (
+    <input
+      className="deco-edit"
+      ref={(el) => {
+        if (inputRef) inputRef.current = el;
+        if (el && !el.dataset.ready) {
+          el.dataset.ready = "1";
+          el.select(); // the whole text, once: a refocus (after a value chip) keeps the caret
+        }
+      }}
+      autoFocus
+      aria-label={label}
+      defaultValue={value}
+      onBlur={(e) => {
+        if ((e.relatedTarget as HTMLElement | null)?.closest(".deco-vars")) return;
+        onDone(e.currentTarget.value);
+      }}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") onDone(e.currentTarget.value);
+        if (e.key === "Escape") onDone(null);
+      }}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onDragOver={(e) => e.stopPropagation()}
+      onDrop={(e) => {
+        // A chip's text lands at the pointer by itself; keep the grid from reading it as a move.
+        e.stopPropagation();
+        const el = e.currentTarget;
+        requestAnimationFrame(() => el.focus());
+      }}
+    />
+  );
+}
+
 /**
  * The Dashboard: a grid of equal cells, one instrument per monitor block on the Flow
  * canvas (which decides what exists; adding or removing a block adds or removes its
- * instrument). Each is compact, normal, large or xlarge (1x1, 2x1, 2x2, 3x3 cells). Where one sits
- * comes from the user's saved layout, else the backend's default (`catalog.dashboard`),
- * else the automatic order. While `arrange` is on, drag an instrument to a cell (or move
- * it with the arrow keys) and pick its size; the layout is kept in the browser, per
- * backend, until projects can save it (#34).
+ * instrument). Each is compact, normal, large or xlarge. Decorations belong to the layout:
+ * sections (a titled frame), separators and labels (#65), and tabs, each with its own grid.
+ * Where things sit comes from the user's saved layout, else the backend's default
+ * (`catalog.dashboard`), else the automatic order. While `arrange` is on, drag an
+ * instrument or decoration to a cell (or move it with the arrow keys), pick sizes, add and
+ * edit decorations and tabs; the layout is kept in the browser, per backend, until
+ * projects can save it (#34).
  */
-export function Dashboard({ state, monitors, arrange }: { state: EngineState; monitors: Record<string, Monitor>; arrange: boolean }) {
+export function Dashboard({ state, monitors, arrange, onBlock }: { state: EngineState; monitors: Record<string, Monitor>; arrange: boolean; onBlock: (id: string) => void }) {
   const storeKey = state.engine || "default";
   const [saved, setSaved] = useState(() => loadSaved(storeKey));
   useEffect(() => setSaved(loadSaved(storeKey)), [storeKey]);
@@ -108,13 +205,28 @@ export function Dashboard({ state, monitors, arrange }: { state: EngineState; mo
   const configured = layout?.columns ?? DEFAULT_COLUMNS;
   const columns = width ? Math.max(1, Math.min(configured, Math.floor((width + GAP) / (MIN_CELL + GAP)))) : configured;
 
-  const placed = useMemo(() => place(all, layout, columns), [all, layout, columns]);
-  const rows = Math.max(0, ...placed.map((p) => p.row + p.h)) + (arrange ? 1 : 0);
+  const arranged = useMemo(() => arrangeLayout(all, layout, columns), [all, layout, columns]);
+  const { tabs } = arranged;
+  const [openTab, setOpenTab] = useState("");
+  const tab = tabs.length === 0 ? "" : tabs.includes(openTab) ? openTab : tabs[0];
+  const placed = arranged.instruments.filter((p) => p.tab === tab);
+  const decos = arranged.decorations.filter((d) => d.tab === tab && !d.hidden);
+  const rows = rowsOf(arranged, tab) + (arrange ? 1 : 0);
+  const canEdit = arrange && !arranged.narrowed; // on a narrowed screen the cells are not the layout's
+  const empty = arranged.instruments.length === 0 && arranged.decorations.length === 0;
 
   const grid = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ block: string; dx: number; dy: number } | null>(null);
-  const [dragging, setDragging] = useState<string | null>(null);
+  const drag = useRef<Drag | null>(null);
+  const [dragging, setDragging] = useState<Drag | null>(null);
   const [target, setTarget] = useState<{ col: number; row: number } | null>(null);
+  const [picked, setPicked] = useState<number | null>(null); // the decoration selected
+  const [editing, setEditing] = useState<number | null>(null); // the decoration whose text is edited
+  const [renaming, setRenaming] = useState<string | null>(null); // the tab being renamed
+  const [sizing, setSizing] = useState<{ index: number; w: number; h: number } | null>(null); // a decoration being resized
+  const editor = useRef<HTMLInputElement>(null); // the text input being edited
+  const sizingNow = useRef(sizing); // the same, read by the pointer handlers between renders
+  const [tabDrop, setTabDrop] = useState<string | null>(null);
+
   const cellAt = (e: { clientX: number; clientY: number }) => {
     const r = grid.current!.getBoundingClientRect();
     return {
@@ -122,44 +234,211 @@ export function Dashboard({ state, monitors, arrange }: { state: EngineState; mo
       row: Math.floor((e.clientY - r.top) / (ROW + GAP)),
     };
   };
+  const sizeOf = (d: Drag) => (d.kind === "instrument" ? placed.find((q) => q.block === d.id) : decos.find((q) => q.index === d.id))!;
   const landing = (e: { clientX: number; clientY: number }) => {
     if (!drag.current) return null;
     const c = cellAt(e);
-    const p = placed.find((q) => q.block === drag.current!.block)!;
-    return { col: Math.min(Math.max(0, c.col - drag.current.dx), columns - p.w), row: Math.max(0, c.row - drag.current.dy) };
+    const it = sizeOf(drag.current);
+    return { col: Math.min(Math.max(0, c.col - drag.current.dx), columns - it.w), row: Math.max(0, c.row - drag.current.dy) };
   };
   const stop = () => {
     drag.current = null;
     setDragging(null);
     setTarget(null);
+    setTabDrop(null);
   };
-  const moveTo = (block: string, col: number, row: number) => commit(move(placed, block, col, row, columns));
-  const onKey = (e: ReactKeyboardEvent, p: Placed) => {
-    const d = ARROWS[e.key];
-    if (!d || e.target !== e.currentTarget) return;
+  const moveTo = (d: Drag, col: number, row: number) =>
+    commit(d.kind === "instrument" ? moveInstrument(arranged, d.id, col, row) : moveDecoration(arranged, d.id, col, row));
+  const startDrag = (e: React.DragEvent, d: { kind: Drag["kind"]; id: string | number; col: number; row: number }) => {
+    const c = cellAt(e);
+    drag.current = { kind: d.kind, id: d.id, dx: Math.max(0, c.col - d.col), dy: Math.max(0, c.row - d.row) } as Drag;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(d.id));
+    setDragging(drag.current);
+  };
+  const arrow = (e: ReactKeyboardEvent, d: Drag, at: { col: number; row: number; w: number }) => {
+    const step = ARROWS[e.key];
+    if (!step || e.target !== e.currentTarget) return;
     e.preventDefault();
-    moveTo(p.block, Math.min(Math.max(0, p.col + d[0]), columns - p.w), Math.max(0, p.row + d[1]));
+    moveTo(d, Math.min(Math.max(0, at.col + step[0]), columns - at.w), Math.max(0, at.row + step[1]));
   };
-  const dragged = placed.find((p) => p.block === dragging);
+  const dragged = dragging ? sizeOf(dragging) : undefined;
+
+  // ---- Decorations ----
+  const picks = (index: number) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPicked(index);
+  };
+  const decoKey = (e: ReactKeyboardEvent, d: PlacedDeco) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Delete" || e.key === "Backspace") {
+      e.preventDefault();
+      commit(removeDecoration(arranged, d.index));
+      setPicked(null);
+    } else if (e.key === "Enter" && textual(d)) {
+      e.preventDefault();
+      setEditing(d.index);
+    } else arrow(e, { kind: "decoration", id: d.index, dx: 0, dy: 0 }, d);
+  };
+  const finishText = (d: PlacedDeco, v: string | null) => {
+    setEditing(null);
+    if (v !== null && v !== d.text) commit(editDecoration(arranged, d.index, { text: v }));
+  };
+  // A corner (a separator's end) dragged: the size follows the cell under the pointer.
+  const sizePoint = (e: React.PointerEvent, d: PlacedDeco) => {
+    const c = cellAt(e);
+    sizingNow.current = { index: d.index, w: Math.max(1, c.col - d.col + 1), h: Math.max(1, c.row - d.row + 1) };
+    setSizing(sizingNow.current);
+  };
+  // A value chip clicked: `{block}` goes in at the caret of the text being edited.
+  const insertValue = (name: string) => {
+    const el = editor.current;
+    if (!el) return;
+    el.setRangeText(`{${name}}`, el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length, "end");
+    el.focus();
+  };
+  const textual = (d: PlacedDeco | undefined) => d !== undefined && (d.kind === "label" || d.kind === "section");
+  const editingDeco = editing === null ? undefined : arranged.decorations.find((d) => d.index === editing);
+  const shown = (d: PlacedDeco): PlacedDeco => (sizing?.index === d.index ? { ...d, ...(d.kind === "hline" ? { w: sizing.w } : d.kind === "vline" ? { h: sizing.h } : { w: sizing.w, h: sizing.h }) } : d);
+
+  const tabName = (t: string) => (
+    <span className="tab-name">
+      {renaming === t ? (
+        <EditText
+          value={t}
+          label="Tab name"
+          onDone={(v) => {
+            setRenaming(null);
+            if (v && v !== t && !tabs.includes(v)) {
+              commit(renameTab(arranged, t, v));
+              if (openTab === t) setOpenTab(v);
+            }
+          }}
+        />
+      ) : (
+        t
+      )}
+    </span>
+  );
 
   return (
     <div className="dashboard" ref={root}>
       {arrange && (
         <div className="dash-bar">
-          <span>Drag an instrument to a cell (or focus it and use the arrow keys); pick its size.</span>
+          {arranged.narrowed ? (
+            <span>The screen is narrower than this layout: widen it to arrange.</span>
+          ) : (
+            <span>Drag an instrument or decoration to a cell (or focus it and use the arrow keys); pick a size; double-click text to edit; put a value in it with {"{block}"}.</span>
+          )}
+          <span className="dash-add" role="group" aria-label="Add">
+            <span className="lbl">Add</span>
+            {(
+              [
+                ["section", "Section", "A titled frame round a group of cells"],
+                ["label", "Label", "A heading or a note; {block} in it shows that block's value"],
+                ["console", "Console", "What the backend logged, in a frame"],
+                ["hline", "Separator —", "A horizontal rule between rows"],
+                ["vline", "Separator |", "A vertical rule between columns"],
+              ] as const
+            ).map(([kind, text, title]) => (
+              <button
+                key={kind}
+                className="key small"
+                disabled={!canEdit}
+                title={title}
+                onClick={() => {
+                  commit(addDecoration(arranged, kind, tab));
+                  setPicked(arranged.decorations.length);
+                }}
+              >
+                {text}
+              </button>
+            ))}
+            <button
+              className="key small"
+              disabled={!canEdit}
+              title="Another page of the Dashboard"
+              onClick={() => {
+                const name = freshTabName(tabs.length ? tabs : ["Main"]);
+                commit(addTab(arranged, name));
+                setOpenTab(name);
+              }}
+            >
+              + tab
+            </button>
+          </span>
           <button className="key small" disabled={!saved} title="Back to the backend's layout, or the automatic one" onClick={() => commit(undefined)}>
             Reset layout
           </button>
         </div>
       )}
-      {placed.length === 0 && (
+      {arrange && textual(editingDeco) && (
+        <div className="deco-vars" role="group" aria-label="Insert a value">
+          <span className="lbl">Value</span>
+          {Object.keys(all).map((n) => (
+            <button
+              key={n}
+              className="chip"
+              draggable
+              title={`Click to put {${n}} in the text at the caret, or drag it in`}
+              onDragStart={(e) => {
+                e.stopPropagation();
+                e.dataTransfer.effectAllowed = "copy";
+                e.dataTransfer.setData("text/plain", `{${n}}`);
+              }}
+              onClick={() => insertValue(n)}
+            >
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
+      {tabs.length >= 2 && (
+        <div className="dash-tabs" role="tablist" aria-label="Dashboard pages">
+          {tabs.map((t) => (
+            <span
+              key={t}
+              className={`dash-tab${t === tab ? " on" : ""}${tabDrop === t ? " drop" : ""}`}
+              onDragOver={(e) => {
+                if (drag.current?.kind !== "instrument") return;
+                e.preventDefault();
+                setTabDrop(t);
+              }}
+              onDragLeave={() => setTabDrop(null)}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (drag.current?.kind === "instrument") commit(moveToTab(arranged, drag.current.id, t));
+                stop();
+              }}
+            >
+              <button
+                role="tab"
+                className="opt"
+                aria-selected={t === tab}
+                title={canEdit ? "Double-click to rename; drop an instrument here to move it to this tab" : undefined}
+                onClick={() => setOpenTab(t)}
+                onDoubleClick={() => canEdit && setRenaming(t)}
+              >
+                {tabName(t)}
+              </button>
+              {canEdit && tabIsEmpty(arranged, t) && (
+                <button className="tab-remove" aria-label={`Remove tab ${t}`} title="Remove this empty tab" onClick={() => commit(removeTab(arranged, t))}>
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+      {empty && (
         <p className="empty">Add a Graph, Display or Image view block on the Flow page: its instrument shows here, and a run fills it.</p>
       )}
-      {placed.length > 0 && (
+      {(!empty || arrange) && (
         <div
           ref={grid}
           className={`dash-grid${arrange ? " arranging" : ""}`}
           style={{ "--cols": columns, "--row": `${ROW}px`, "--gap": `${GAP}px` } as React.CSSProperties}
+          onClick={() => setPicked(null)}
           onDragOver={(e) => {
             if (!drag.current) return;
             e.preventDefault();
@@ -167,7 +446,7 @@ export function Dashboard({ state, monitors, arrange }: { state: EngineState; mo
           }}
           onDrop={(e) => {
             const at = landing(e);
-            if (at && drag.current) moveTo(drag.current.block, at.col, at.row);
+            if (at && drag.current) moveTo(drag.current, at.col, at.row);
             stop();
           }}
         >
@@ -178,25 +457,97 @@ export function Dashboard({ state, monitors, arrange }: { state: EngineState; mo
           {target && dragged && (
             <div className="drop" style={{ gridColumn: `${target.col + 1} / span ${dragged.w}`, gridRow: `${target.row + 1} / span ${dragged.h}` }} />
           )}
+          {decos.map((raw) => {
+            const d = shown(raw);
+            const line = d.kind === "hline" || d.kind === "vline";
+            const mine = dragging?.kind === "decoration" && dragging.id === d.index;
+            return (
+              <div
+                key={d.index}
+                className={`deco deco-${d.kind}${d.kind === "label" ? ` ${d.style}` : ""}${picked === d.index ? " picked" : ""}${mine ? " dragging" : ""}`}
+                style={{ gridColumn: `${d.col + 1} / span ${d.w}`, gridRow: `${d.row + 1} / span ${d.h}` }}
+                draggable={canEdit && editing !== d.index && !sizing}
+                tabIndex={canEdit ? 0 : undefined}
+                role={d.kind === "label" || d.kind === "section" ? undefined : "separator"}
+                aria-orientation={d.kind === "vline" ? "vertical" : d.kind === "hline" ? "horizontal" : undefined}
+                onClick={canEdit ? picks(d.index) : undefined}
+                onDoubleClick={() => canEdit && textual(d) && setEditing(d.index)}
+                onKeyDown={(e) => canEdit && decoKey(e, d)}
+                onDragStart={(e) => (sizing ? e.preventDefault() : startDrag(e, { kind: "decoration", id: d.index, col: d.col, row: d.row }))}
+                onDragEnd={stop}
+              >
+                {d.kind === "section" && (
+                  <span className="deco-title">
+                    {editing === d.index ? <EditText value={d.text} label="Section title" inputRef={editor} onDone={(v) => finishText(d, v)} /> : <Formatted text={d.text} latest={state.latest} />}
+                  </span>
+                )}
+                {d.kind === "label" && (editing === d.index ? <EditText value={d.text} label="Label text" inputRef={editor} onDone={(v) => finishText(d, v)} /> : <span><Formatted text={d.text} latest={state.latest} /></span>)}
+                {d.kind === "console" && (
+                  <div className="deco-console">
+                    <Console logs={state.logs} onBlock={onBlock} />
+                  </div>
+                )}
+                {canEdit && picked === d.index && (
+                  <>
+                    <button
+                      className="remove deco-remove nodrag"
+                      aria-label="Remove"
+                      title="Remove (or press Delete)"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        commit(removeDecoration(arranged, d.index));
+                        setPicked(null);
+                      }}
+                    >
+                      <RemoveIcon />
+                    </button>
+                    {d.kind === "label" && (
+                      <span className="switch deco-style" role="group" aria-label="Label style" onClick={(e) => e.stopPropagation()}>
+                        {(["heading", "note"] as const).map((s) => (
+                          <button key={s} className={`opt${d.style === s ? " on" : ""}`} aria-pressed={d.style === s} onClick={() => commit(editDecoration(arranged, d.index, { style: s }))}>
+                            {s}
+                          </button>
+                        ))}
+                      </span>
+                    )}
+                    <span
+                      className={`deco-grip${line ? ` grip-${d.kind}` : ""}`}
+                      title={line ? "Drag to change its length" : "Drag to resize"}
+                      draggable={false}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        sizePoint(e, d);
+                      }}
+                      onPointerMove={(e) => sizingNow.current && e.buttons && sizePoint(e, d)}
+                      onPointerUp={(e) => {
+                        const last = sizingNow.current;
+                        if (last) commit(resizeDecoration(arranged, d.index, last.w, last.h));
+                        sizingNow.current = null;
+                        setSizing(null);
+                        e.currentTarget.releasePointerCapture(e.pointerId);
+                      }}
+                    />
+                  </>
+                )}
+              </div>
+            );
+          })}
           {placed.map((p) => (
             <div
               key={p.block}
-              className={`cell size-${p.size}${dragging === p.block ? " dragging" : ""}`}
+              className={`cell size-${p.size}${dragging?.kind === "instrument" && dragging.id === p.block ? " dragging" : ""}`}
               style={{ gridColumn: `${p.col + 1} / span ${p.w}`, gridRow: `${p.row + 1} / span ${p.h}` }}
-              draggable={arrange}
-              tabIndex={arrange ? 0 : undefined}
-              onKeyDown={(e) => arrange && onKey(e, p)}
-              onDragStart={(e) => {
-                const c = cellAt(e);
-                drag.current = { block: p.block, dx: Math.max(0, c.col - p.col), dy: Math.max(0, c.row - p.row) };
-                e.dataTransfer.effectAllowed = "move";
-                e.dataTransfer.setData("text/plain", p.block);
-                setDragging(p.block);
-              }}
+              draggable={canEdit}
+              tabIndex={canEdit ? 0 : undefined}
+              onKeyDown={(e) => canEdit && arrow(e, { kind: "instrument", id: p.block, dx: 0, dy: 0 }, p)}
+              onDragStart={(e) => startDrag(e, { kind: "instrument", id: p.block, col: p.col, row: p.row })}
               onDragEnd={stop}
             >
               <Instrument name={p.block} kind={all[p.block].kind} state={state} />
-              {arrange && (
+              {canEdit && (
                 <div className="switch cell-tools" role="group" aria-label={`Size of ${p.block}`}>
                   {SIZES.map((s) => (
                     <button
@@ -205,7 +556,7 @@ export function Dashboard({ state, monitors, arrange }: { state: EngineState; mo
                       title={`${s}: ${CELLS[s][0]}×${CELLS[s][1]} cells`}
                       aria-label={s}
                       aria-pressed={p.size === s}
-                      onClick={() => commit(resize(placed, p.block, s, columns))}
+                      onClick={() => commit(resizeInstrument(arranged, p.block, s))}
                     >
                       {SIZE_LABEL[s]}
                     </button>

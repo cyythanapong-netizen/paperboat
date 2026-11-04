@@ -258,6 +258,61 @@ instruments = [
   fails_with("instruments = [{ block = \"a\" }, { block = \"a\" }]", "placed twice");
 }
 
+TEST_CASE("[dashboard] decorations and tabs: sections, separators, labels, pages") {
+  const auto catalog = tk::load_descriptor(R"(domain = "test"
+[dashboard]
+columns = 6
+tabs = ["Run", "Tuning"]
+instruments = [{ block = "theta", size = "large", at = [0, 1], tab = "Run" }, { block = "gains", tab = "Tuning" }]
+decorations = [
+  { kind = "label", text = "Pendulum", at = [0, 0], span = [3, 1], style = "heading" },
+  { kind = "section", text = "Controller", at = [3, 0], span = [3, 2] },
+  { kind = "hline", at = [0, 3], span = 6 },
+  { kind = "vline", at = [3, 0], span = 2, tab = "Tuning" },
+  { kind = "label", text = "Notes", at = [0, 4] },
+  { kind = "console", at = [0, 5], span = [6, 3] },
+]
+)", test_registry());
+  const auto d = nlohmann::json::parse(tk::catalog_message(catalog))["dashboard"];
+  CHECK(d["tabs"] == nlohmann::json::array({"Run", "Tuning"}));
+  CHECK(d["instruments"][0]["tab"] == "Run");
+  CHECK(d["decorations"].size() == 6);
+  CHECK(d["decorations"][5] == nlohmann::json{{"kind", "console"}, {"at", {0, 5}}, {"span", {6, 3}}});
+  CHECK(d["decorations"][0] == nlohmann::json{{"kind", "label"}, {"at", {0, 0}}, {"span", {3, 1}}, {"text", "Pendulum"}, {"style", "heading"}});
+  CHECK(d["decorations"][2] == nlohmann::json{{"kind", "hline"}, {"at", {0, 3}}, {"span", 6}});
+  CHECK(d["decorations"][3]["tab"] == "Tuning");
+  // A layout without them is as before: no tabs, no decorations.
+  const auto plain = nlohmann::json::parse(tk::catalog_message(tk::load_descriptor("domain = \"test\"\n[dashboard]\ncolumns = 4\n", test_registry())))["dashboard"];
+  CHECK_FALSE(plain.contains("tabs"));
+  CHECK_FALSE(plain.contains("decorations"));
+
+  auto fails_with = [](const std::string& dashboard, const std::string& text) {
+    INFO(dashboard);
+    CHECK_THROWS_WITH(tk::load_descriptor("domain = \"test\"\n[dashboard]\ncolumns = 6\ntabs = [\"Run\"]\n" + dashboard, test_registry()),
+                      ContainsSubstring(text));
+  };
+  fails_with("decorations = [{ kind = \"frame\", at = [0, 0] }]", "kind must be section, hline, vline, label or console");
+  fails_with("decorations = [{ kind = \"label\", text = \"x\" }]", "needs \"at\"");
+  fails_with("decorations = [{ kind = \"label\", at = [0, 0] }]", "a label needs its text");
+  fails_with("decorations = [{ kind = \"label\", text = \"x\", at = [6, 0] }]", "past the last of 6");
+  fails_with("decorations = [{ kind = \"section\", at = [4, 0], span = [3, 2] }]", "spans past the last column");
+  fails_with("decorations = [{ kind = \"hline\", at = [0, 0], span = 7 }]", "spans past the last column");
+  fails_with("decorations = [{ kind = \"hline\", at = [0, 0] }]", "needs a span");
+  fails_with("decorations = [{ kind = \"hline\", at = [0, 0], span = [2, 1] }]", "whole number of cells");
+  fails_with("decorations = [{ kind = \"section\", at = [0, 0], span = 3 }]", "[columns, rows]");
+  fails_with("decorations = [{ kind = \"hline\", at = [0, 0], span = 2, text = \"x\" }]", "has no text");
+  fails_with("decorations = [{ kind = \"section\", at = [0, 0], span = [2, 2], style = \"note\" }]", "only a label has a style");
+  fails_with("decorations = [{ kind = \"console\", at = [0, 0], text = \"x\" }]", "the console has no text");
+  fails_with("decorations = [{ kind = \"console\", at = [0, 0], span = 3 }]", "[columns, rows]");
+  fails_with("decorations = [{ kind = \"label\", text = \"x\", at = [0, 0], style = \"big\" }]", "heading or note");
+  fails_with("decorations = [{ kind = \"label\", text = \"x\", at = [0, 0], tab = \"Other\" }]", "tab must be one of dashboard.tabs");
+  fails_with("instruments = [{ block = \"a\", tab = \"Other\" }]", "tab must be one of dashboard.tabs");
+  fails_with("decorations = [{ kind = \"label\", text = \"x\", at = [0, 0], colour = \"red\" }]", "unknown field \"colour\"");
+  CHECK_THROWS_WITH(tk::load_descriptor("domain = \"test\"\n[dashboard]\ntabs = [\"a\", \"a\"]\n", test_registry()), ContainsSubstring("is twice"));
+  CHECK_THROWS_WITH(tk::load_descriptor("domain = \"test\"\n[dashboard]\ninstruments = [{ block = \"a\", tab = \"x\" }]\n", test_registry()),
+                    ContainsSubstring("(there are none)"));
+}
+
 TEST_CASE("a block's view: built-in for simple maths, inherited, overridden one key at a time") {
   const auto msg = [](const std::string& blocks) {
     return nlohmann::json::parse(tk::catalog_message(tk::load_descriptor(descriptor(blocks), test_registry())));

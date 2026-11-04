@@ -218,20 +218,41 @@ ObjectEntry object_from_template(const json& e, const std::string& at, const Reg
 void load_dashboard(const json& doc, Catalog& catalog) {
   if (!doc.contains("dashboard")) return;
   const json& d = doc.at("dashboard");
-  only_fields(d, {"columns", "instruments"}, "dashboard");
+  only_fields(d, {"columns", "tabs", "instruments", "decorations"}, "dashboard");
   json out = json::object();
+  int columns = 6;  // the UI's default when none is given
   if (d.contains("columns")) {
     if (!d["columns"].is_number_integer() || d["columns"] < 1 || d["columns"] > 12)
       throw DescriptorError("dashboard.columns must be a whole number from 1 to 12");
     out["columns"] = d["columns"];
+    columns = d["columns"].get<int>();
   }
+  // Tabs: pages of the Dashboard. An instrument or decoration may name the tab it is on.
+  std::set<std::string> tabs;
+  if (d.contains("tabs")) {
+    if (!d["tabs"].is_array()) throw DescriptorError("dashboard.tabs must be a list of names");
+    for (const auto& t : d["tabs"]) {
+      if (!t.is_string() || t.get<std::string>().empty()) throw DescriptorError("dashboard.tabs: each tab needs a name");
+      if (!tabs.insert(t.get<std::string>()).second) throw DescriptorError("dashboard.tabs: \"" + t.get<std::string>() + "\" is twice");
+    }
+    out["tabs"] = d["tabs"];
+  }
+  const auto check_tab = [&](const json& e, const std::string& at) {
+    if (!e.contains("tab")) return;
+    if (!e["tab"].is_string() || !tabs.contains(e["tab"].get<std::string>()))
+      throw DescriptorError(at + ": tab must be one of dashboard.tabs" + (tabs.empty() ? " (there are none)" : ""));
+  };
+  const auto check_at = [&](const json& a, const std::string& at) {
+    if (!a.is_array() || a.size() != 2 || !a[0].is_number_integer() || !a[1].is_number_integer() || a[0] < 0 || a[1] < 0)
+      throw DescriptorError(at + ": at must be [column, row], whole numbers from 0");
+  };
   json instruments = json::array();
   std::set<std::string> seen;
   const json list = d.value("instruments", json::array());
   for (std::size_t i = 0; i < list.size(); ++i) {
     const auto& e = list[i];
     const auto at = "dashboard.instruments[" + std::to_string(i) + "]";
-    only_fields(e, {"block", "size", "at"}, at);
+    only_fields(e, {"block", "size", "at", "tab"}, at);
     if (!e.contains("block") || !e["block"].is_string()) throw DescriptorError(at + ": needs \"block\", a monitor block's id");
     if (!seen.insert(e["block"].get<std::string>()).second)
       throw DescriptorError(at + ": block \"" + e["block"].get<std::string>() + "\" is placed twice");
@@ -243,14 +264,72 @@ void load_dashboard(const json& doc, Catalog& catalog) {
       item["size"] = size;
     }
     if (e.contains("at")) {
-      const auto& a = e["at"];
-      if (!a.is_array() || a.size() != 2 || !a[0].is_number_integer() || !a[1].is_number_integer() || a[0] < 0 || a[1] < 0)
-        throw DescriptorError(at + ": at must be [column, row], whole numbers from 0");
-      item["at"] = a;
+      check_at(e["at"], at);
+      item["at"] = e["at"];
     }
+    check_tab(e, at);
+    if (e.contains("tab")) item["tab"] = e["tab"];
     instruments.push_back(std::move(item));
   }
   out["instruments"] = std::move(instruments);
+
+  // Decorations: a section (a titled frame), hline and vline (separators), a label (text), the console (#76).
+  // They belong to the layout: the Flow still decides which instruments exist.
+  if (d.contains("decorations")) {
+    if (!d["decorations"].is_array()) throw DescriptorError("dashboard.decorations must be a list");
+    json decorations = json::array();
+    const auto& dlist = d["decorations"];
+    for (std::size_t i = 0; i < dlist.size(); ++i) {
+      const auto& e = dlist[i];
+      const auto at = "dashboard.decorations[" + std::to_string(i) + "]";
+      only_fields(e, {"kind", "text", "at", "span", "style", "tab"}, at);
+      const std::string kind = e.contains("kind") && e["kind"].is_string() ? e["kind"].get<std::string>() : "";
+      if (kind != "section" && kind != "hline" && kind != "vline" && kind != "label" &&
+          kind != "console")
+        throw DescriptorError(at + ": kind must be section, hline, vline, label or console");
+      if (!e.contains("at")) throw DescriptorError(at + ": needs \"at\": [column, row]");
+      check_at(e["at"], at);
+      if (e["at"][0].get<int>() >= columns)
+        throw DescriptorError(at + ": at is in column " + std::to_string(e["at"][0].get<int>()) + ", past the last of " +
+                              std::to_string(columns));
+      json item = {{"kind", kind}, {"at", e["at"]}};
+      const bool line = kind == "hline" || kind == "vline";
+      if (e.contains("span")) {
+        const auto& span = e["span"];
+        if (line) {
+          if (!span.is_number_integer() || span < 1) throw DescriptorError(at + ": a separator's span is a whole number of cells, from 1");
+        } else if (!span.is_array() || span.size() != 2 || !span[0].is_number_integer() || !span[1].is_number_integer() || span[0] < 1 ||
+                   span[1] < 1) {
+          throw DescriptorError(at + ": a " + kind + "'s span is [columns, rows], whole numbers from 1");
+        }
+        const int c = e["at"][0].get<int>();
+        const int w = line ? (kind == "hline" ? span.get<int>() : 1) : span[0].get<int>();
+        if (c + w > columns)
+          throw DescriptorError(at + ": spans past the last column (" + std::to_string(columns) + "): at column " + std::to_string(c) + " it can take " +
+                                std::to_string(columns - c));
+        item["span"] = span;
+      } else if (line) {
+        throw DescriptorError(at + ": a separator needs a span: how many cells it runs");
+      }
+      if (e.contains("text")) {
+        if (line || kind == "console" || !e["text"].is_string())
+          throw DescriptorError(at + (line ? ": a separator has no text" : kind == "console" ? ": the console has no text" : ": text must be text"));
+        item["text"] = e["text"];
+      } else if (kind == "label") {
+        throw DescriptorError(at + ": a label needs its text");
+      }
+      if (e.contains("style")) {
+        const std::string style = e["style"].is_string() ? e["style"].get<std::string>() : "";
+        if (kind != "label") throw DescriptorError(at + ": only a label has a style");
+        if (style != "heading" && style != "note") throw DescriptorError(at + ": style must be heading or note");
+        item["style"] = style;
+      }
+      check_tab(e, at);
+      if (e.contains("tab")) item["tab"] = e["tab"];
+      decorations.push_back(std::move(item));
+    }
+    out["decorations"] = std::move(decorations);
+  }
   catalog.dashboard = out.dump();
 }
 
