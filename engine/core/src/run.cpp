@@ -213,10 +213,12 @@ json Run::pass_over(const std::vector<std::string>& order) {
 
 void Run::store_step_outputs() {
   for (auto& [id, node] : g_.nodes)
-    if (node.step) {
-      const auto call = calling(id);
-      if (auto values = node.step->outputs(); !values.empty()) outputs_[id] = std::move(values);
-    }
+    if (node.step) store_step_outputs(id);
+}
+
+void Run::store_step_outputs(const std::string& id) {
+  const auto call = calling(id);
+  if (auto values = g_.nodes.at(id).step->outputs(); !values.empty()) outputs_[id] = std::move(values);
 }
 
 std::optional<std::string> Run::advance() {

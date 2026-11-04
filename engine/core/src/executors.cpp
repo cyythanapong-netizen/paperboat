@@ -60,7 +60,7 @@ class Once final : public Executor {
 };
 
 // A Step flow: hats start paths; each path is at one block; a block another path is in
-// makes it wait; Stop ends everything.
+// makes it wait, unless several may be in it (Join); Stop ends everything.
 class Steps final : public Executor {
  public:
   std::string execute(Run& run) override {
@@ -88,13 +88,31 @@ class Steps final : public Executor {
       run.at_time(t);
       const json samples = run.pass();
 
-      for (const auto& h : g.hats) {  // a hat doesn't restart its path while that path runs
+      // Whether a path other than paths[skip] is in block `at`.
+      auto others_in = [&](const std::string& at, std::size_t skip) {
+        for (std::size_t j = 0; j < paths.size(); ++j)
+          if (j != skip && paths[j].entered && paths[j].at == at) return true;
+        return false;
+      };
+      // A path leaves the block it is in.
+      auto leave = [&](const Path& path, std::size_t i) {
+        if (!g.nodes.at(path.at).step->shared()) busy.erase(path.at);
+        if (!others_in(path.at, i)) run.node_state(path.at, "done");
+      };
+
+      for (const auto& h : g.hats) {  // a hat restarts its running path only if it says so
         auto& hat = g.nodes.at(h);
         const auto call = run.calling(h);
         const auto out = hat.step->tick(ctx, run.inputs_of(hat));
         auto next = g.nexts.find({h, out});
-        if (!out.empty() && next != g.nexts.end() && std::ranges::none_of(paths, [&](const Path& p) { return p.hat == h; }))
+        if (out.empty() || next == g.nexts.end()) continue;
+        auto running = std::ranges::find(paths, h, &Path::hat);
+        if (running == paths.end()) {
           paths.push_back({.at = next->second, .entered = false, .hat = h});
+        } else if (hat.step->restarts()) {
+          if (running->entered) leave(*running, static_cast<std::size_t>(running - paths.begin()));
+          *running = {.at = next->second, .entered = false, .hat = h};
+        }
       }
 
       for (std::size_t i = 0; i < paths.size() && !stopped;) {
@@ -106,8 +124,10 @@ class Steps final : public Executor {
           const std::string here = path.at;  // path.at changes when the path moves on
           const auto call = run.calling(here);
           if (!path.entered) {
-            if (busy.contains(path.at)) break;
-            busy.insert(path.at);
+            if (!node.step->shared()) {  // a path reaching a block another path is in waits
+              if (busy.contains(path.at)) break;
+              busy.insert(path.at);
+            }
             node.step->enter(ctx, run.inputs_of(node));
             path.entered = true;
             run.node_state(path.at, "running");
@@ -117,9 +137,9 @@ class Steps final : public Executor {
             }
           }
           const auto out = node.step->tick(ctx, run.inputs_of(node));
+          run.store_step_outputs(here);  // blocks further on read them in this clock step
           if (out.empty()) break;
-          busy.erase(path.at);
-          run.node_state(path.at, "done");
+          leave(path, i);
           auto next = g.nexts.find({path.at, out});
           if (next == g.nexts.end()) {
             ended = true;
@@ -138,7 +158,9 @@ class Steps final : public Executor {
                         (paths.empty() && std::ranges::none_of(g.hats, [&](const std::string& h) {
                            return g.nodes.at(h).step->may_start();
                          }));
-      if (k % s.emit_every == 0 || over) run.frame(samples, std::nullopt);
+      // How far through its time limit: the run may end sooner (Stop, every path ended).
+      const auto progress = s.duration > 0 ? std::optional(std::min(1.0, t / s.duration)) : std::nullopt;
+      if (k % s.emit_every == 0 || over) run.frame(samples, progress);
       char at[64];
       std::snprintf(at, sizeof at, " at t = %.2f s", t);
       if (stopped) {

@@ -193,8 +193,9 @@ class Step {
  public:
   virtual ~Step() = default;
   // Its signal outputs (BlockDef outputs of a type other than "step"), such as how far it
-  // is through its work. Read after each clock step; signal blocks see them in the next
-  // pass, so a wire from a step's output back into it is not a cycle.
+  // is through its work. Read each time it is ticked: blocks further on the path see them
+  // at once, signal blocks in the next pass, so a wire from a step's output back into it
+  // is not a cycle.
   virtual Values outputs() const { return {}; }
   virtual void enter(const Context& /*ctx*/, const Values& /*in*/) {}
   // The step output to leave by, or "" to stay another clock step (a wait, a move).
@@ -204,6 +205,12 @@ class Step {
   virtual bool may_start() const { return false; }
   // True for a block that ends the whole run when a path arrives (Stop).
   virtual bool ends_run() const { return false; }
+  // For a hat: true to start its path over when it fires while that path still runs;
+  // false lets the running path go on.
+  virtual bool restarts() const { return false; }
+  // True for a block several paths may be in at once (Join); a path reaching any other
+  // block that a path is in waits.
+  virtual bool shared() const { return false; }
 };
 
 // The number at `id`, or `fallback` when absent or not a number (an unconnected input

@@ -57,8 +57,10 @@ class Run {
   // (signal messages, sent by frame()).
   json pass();
   json pass_over(const std::vector<std::string>& order);
-  // What step blocks report (a progress), for the next pass.
+  // What step blocks report (a progress, a lap), for the next pass; or what one step block
+  // reports now, for the blocks after it on the path.
   void store_step_outputs();
+  void store_step_outputs(const std::string& node);
   // After a pass: station objects move under their linked blocks' inputs, then the domain
   // state. Returns a message if the domain ends the run.
   std::optional<std::string> advance();
