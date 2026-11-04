@@ -367,6 +367,7 @@ export function App() {
               setEdges={setEdges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
+              minimap={mode === "navigator" && page === "flow"}
             />
           </RunStates.Provider>
         </Panel>
