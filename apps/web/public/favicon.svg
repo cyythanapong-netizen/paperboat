@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <!-- Paperboat mark in the brand colours (tokens.css --brand-*). Same geometry as src/Logo.tsx. -->
+  <rect width="64" height="64" rx="14" fill="#241f31"/>
+  <g transform="translate(32 32) scale(.8) translate(-31 -21)">
+    <path fill="#e4e0ea" d="M30 0h2v2h-2zM28 2h4v2h-4zM26 4h6v2h-6zM24 6h8v2h-8zM22 8h10v2h-10zM20 10h12v2h-12zM18 12h14v2h-14zM16 14h16v2h-16z"/>
+    <path fill="#8d849e" d="M32 2h2v2h-2zM32 4h4v2h-4zM32 6h6v2h-6zM32 8h8v2h-8zM32 10h10v2h-10zM32 12h12v2h-12zM32 14h14v2h-14z"/>
+    <path fill="#e4e0ea" d="M0 18h62v2h-62zM4 20h54v2h-54zM6 22h50v2h-50zM8 24h46v2h-46zM10 26h42v2h-42zM12 28h38v2h-38zM14 30h34v2h-34z"/>
+    <path fill="#c6738f" d="M0 36h6v6h-6zM14 36h6v6h-6zM28 36h6v6h-6zM42 36h6v6h-6zM56 36h6v6h-6z"/>
+  </g>
+</svg>

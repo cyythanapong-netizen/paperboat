@@ -1,4 +1,5 @@
 import type { KeyboardEvent, ReactNode } from "react";
+import { Logo } from "./Logo";
 
 /**
  * The app's frame (apps/web/DESIGN.md): two view modes.
@@ -18,15 +19,11 @@ export const PAGES: { id: Page; label: string; hint: string }[] = [
 
 const number = (p: Page) => PAGES.findIndex((x) => x.id === p) + 1;
 
-/** The paper boat, as a line drawing. */
+/** The mark and the name. */
 export function Wordmark() {
   return (
     <span className="wordmark">
-      <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true">
-        <path d="M11 1 V12 H4 Z" />
-        <path d="M12 4 V12 H17 Z" />
-        <path d="M1 13 H21 L17 17 H5 Z" />
-      </svg>
+      <Logo height={24} />
       paperboat
     </span>
   );
