@@ -28,6 +28,7 @@ import {
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { CompactBlock } from "./Compact";
+import { copySelection, pasteClip, type Clip } from "./clipboard";
 import { parseSigns, signOf, wireMismatch } from "./ports";
 import { Bindable, NumberOrFormula } from "./Variables";
 import { isRef } from "./bindings";
@@ -664,8 +665,47 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   // ---- Adding: quick add at the cursor, and cards dropped from the browser (#50) ----
   const { screenToFlowPosition, deleteElements } = useReactFlow();
 
-  // ---- Dragging a wire (#52): the port it would join is raised, ports that can't take it dim ----
+  // ---- Copy, cut and paste: Ctrl+C / X / V (⌘ on a Mac) on the Flow page, except while typing ----
   const store = useStoreApi();
+  const copied = useRef<{ clip: Clip; pastes: number } | null>(null);
+  const latest = useRef({ nodes, edges });
+  latest.current = { nodes, edges };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented) return;
+      const key = e.key.toLowerCase();
+      if (key !== "c" && key !== "x" && key !== "v") return;
+      const t = e.target as HTMLElement | null;
+      if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || t?.isContentEditable) return;
+      const view = store.getState().domNode;
+      if (!view || view.offsetParent === null) return; // another page is showing
+      if (key !== "v" && window.getSelection()?.toString()) return; // text selected: the browser's copy
+      const { nodes: ns, edges: es } = latest.current;
+      if (key === "v") {
+        if (!copied.current) return;
+        e.preventDefault();
+        const c = copied.current;
+        c.pastes += 1;
+        const next = pasteClip(c.clip, ns, es, 30 * c.pastes);
+        setNodes(next.nodes);
+        setEdges(next.edges);
+        return;
+      }
+      const clip = copySelection(ns, es);
+      if (!clip) return;
+      e.preventDefault();
+      copied.current = { clip, pastes: 0 };
+      if (key === "x") {
+        const gone = new Set(clip.nodes.map((n) => n.id));
+        setNodes(ns.filter((n) => !gone.has(n.id)));
+        setEdges(es.filter((w) => !gone.has(w.source) && !gone.has(w.target)));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [store, setNodes, setEdges]);
+
+  // ---- Dragging a wire (#52): the port it would join is raised, ports that can't take it dim ----
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [target, setTarget] = useState<{ nodeId: string; handleId: string | null } | null>(null);
   const targetNow = useRef(target); // what a drop would join, read when the pointer is released
