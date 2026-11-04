@@ -1,4 +1,4 @@
-import type { BlockDef, GraphNode, PortDef } from "./protocol";
+import type { BlockDef, PortDef, PortSides } from "./protocol";
 
 /**
  * Why a wire may not join output `from` to input `to` (#4), or null if it may. The same
@@ -25,8 +25,7 @@ export const portLabel = (p: PortDef) => (p.unit ? `${p.id} (${p.unit})` : p.id)
 /** A side of a block a port can sit on. */
 export type Side = "left" | "right" | "top" | "bottom";
 export const SIDES: readonly Side[] = ["left", "right", "top", "bottom"];
-/** Where a block's ports sit: the port ids on each side, in order (GraphNode.ports). */
-export type PortSides = NonNullable<GraphNode["ports"]>;
+export type { PortSides };
 /** A port as placed on a block: an input (`in`) or an output (`out`). */
 export type Placed = { port: PortDef; dir: "in" | "out" };
 

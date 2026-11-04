@@ -1157,35 +1157,7 @@
           "description": "Its place on the Flow canvas; backends ignore it."
         },
         "ports": {
-          "type": "object",
-          "properties": {
-            "left": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "right": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "top": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "bottom": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
-          },
-          "additionalProperties": false,
-          "description": "Where its ports sit on the Flow canvas: the port ids on each side of the block, in order. A port not listed keeps its place (inputs on the left, outputs on the right, after the listed ones). Backends ignore it."
+          "$ref": "#/$defs/PortSides"
         }
       },
       "required": [
@@ -1356,7 +1328,7 @@
         "kind",
         "nodes"
       ],
-      "description": "A group of blocks. visual: tidies the canvas only. story: runs as one step of a Step flow (ports in -> next): its blocks once per clock step for params.seconds (0: once), fresh each time if params.reset.",
+      "description": "A group of blocks. subsystem: a block you open to see its insides, like a Simulink subsystem; its ports are the wires crossing its edge. story: a subsystem that runs as one step of a Step flow (ports in -> next): its blocks once per clock step for params.seconds (0: once), fresh each time if params.reset. visual: a frame that tidies the canvas only. Groups nest (parent); the graph's wires stay flat, block to block, so backends treat a subsystem or a frame as if it weren't there.",
       "properties": {
         "id": {
           "type": "string"
@@ -1364,6 +1336,7 @@
         "kind": {
           "enum": [
             "visual",
+            "subsystem",
             "story"
           ]
         },
@@ -1374,7 +1347,12 @@
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Its blocks (not the groups in it: those name it as their parent)."
+        },
+        "parent": {
+          "type": "string",
+          "description": "The group it is in (a subsystem, story or frame); absent: the top level."
         },
         "collapsed": {
           "type": "boolean"
@@ -1385,7 +1363,8 @@
             "type": "number"
           },
           "minItems": 2,
-          "maxItems": 2
+          "maxItems": 2,
+          "description": "Its top-left on the whole canvas; backends ignore it."
         },
         "params": {
           "type": "object",
@@ -1401,6 +1380,10 @@
               "description": "Its blocks start afresh each time a path arrives (a story in a loop starts over)."
             }
           }
+        },
+        "ports": {
+          "$ref": "#/$defs/PortSides",
+          "description": "Where a subsystem's or story's ports sit on its block (ids are node::port, or in and next). Backends ignore it."
         }
       }
     },
@@ -1691,6 +1674,37 @@
         "$ref": "#/$defs/Variable"
       },
       "description": "The variables of a backend (its defaults) or the user's."
+    },
+    "PortSides": {
+      "type": "object",
+      "properties": {
+        "left": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "right": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "top": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bottom": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Where a block's ports sit on the Flow canvas: the port ids on each side, in order. A port not listed keeps its place (inputs on the left, outputs on the right, after the listed ones). Backends ignore it."
     }
   },
   "$ref": "#/$defs/toUI"

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "./engine";
 import { BrowserWindow, DRAG_TYPE, dragging, type Item } from "./Browser";
 import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toGraph, withBlock, type FlowNode, type Wire } from "./FlowEditor";
-import { absolute, isFrame } from "./groups";
+import { absolute, isFrame, levelOf } from "./groups";
 import type { ParamValue, RunSettings, Station, Variable, Variables } from "./protocol";
 import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
 import { emptyOf, freeName, inlineRef, loadMine, merged, refersTo, renameInFormula, renameRef, saveMine, toToml, usesOf, type Use } from "./bindings";
@@ -251,18 +251,22 @@ export function App() {
     [state.active, state.failed, state.progress],
   );
 
-  // A Console line names a block: select it and bring it into view.
+  // The subsystem or story open on the Flow canvas (#68); null: the top level.
+  const [flowLevel, setFlowLevel] = useState<string | null>(null);
+
+  // A Console line names a block: open the level it is on, select it and bring it into view.
   const showBlock = (id: string) => {
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
     setPage("flow");
-    // Open the group it's in, if that's collapsed.
+    setFlowLevel(levelOf(id, nodes));
+    // Open the frame it's in, if that's collapsed.
     setNodes((ns) =>
       ns.map((n) =>
-        n.id === node.parentId && isFrame(n) ? { ...n, data: { ...n.data, collapsed: false } } : { ...n, selected: n.id === id },
+        n.id === node.parentId && isFrame(n) && n.data.kind === "visual" ? { ...n, data: { ...n.data, collapsed: false } } : { ...n, selected: n.id === id },
       ),
     );
-    fitView({ nodes: [{ id }], duration: 300, maxZoom: 1.2 });
+    window.setTimeout(() => fitView({ nodes: [{ id }], duration: 300, maxZoom: 1.2 }), 80);
   };
 
   const view = state.stationView.view;
@@ -351,7 +355,7 @@ export function App() {
     // In the middle of the canvas as it is in view.
     const r = document.querySelector(".panel-flow .react-flow")?.getBoundingClientRect();
     const at = screenToFlowPosition({ x: r ? r.left + r.width / 2 : 400, y: r ? r.top + r.height / 2 : 300 });
-    setNodes((ns) => withBlock(ns, item.def, { x: at.x - 78 + (ns.length % 5) * 18, y: at.y - 30 + (ns.length % 5) * 18 })[0]);
+    setNodes((ns) => withBlock(ns, item.def, { x: at.x - 78 + (ns.length % 5) * 18, y: at.y - 30 + (ns.length % 5) * 18 }, flowLevel)[0]);
     if (mode === "navigator") setPage("flow");
   };
   const gridOn = gridChoice === "auto" ? (state.view.mode === "3d" ? state.view.grid !== false : true) : gridChoice === "on";
@@ -513,6 +517,8 @@ export function App() {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               minimap={mode === "navigator" && page === "flow"}
+              level={flowLevel}
+              setLevel={setFlowLevel}
             />
           </RunStates.Provider>
         </Panel>

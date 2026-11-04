@@ -278,6 +278,25 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .frame-head .remove { width: 16px; height: 16px; }
 .frame-ports { padding: var(--space-1) 0; }
 .frame-empty { font-size: var(--size-2xs); padding: 2px 8px; }
+/* A subsystem or story (#68): a block with a second card edge behind it, saying there is
+   more inside; double-click (or open) shows its own level. */
+.block.subsystem { box-shadow: 4px 4px 0 -1px var(--surface-raised), 4px 4px 0 0 var(--line-strong); }
+.block.subsystem.step { box-shadow: 4px 4px 0 -1px var(--surface-raised), 4px 4px 0 0 var(--line-ink); }
+.block.subsystem .remove { width: 16px; height: 16px; }
+.block.subsystem .frame-empty { padding: 4px 10px; }
+/* Inside a level: where you are, and the way back up. */
+.crumbs { display: flex; align-items: center; gap: var(--space-1); margin: var(--space-2); padding: 3px var(--space-2); font: var(--size-xs) var(--font-sans); background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.crumb { border: 0; background: transparent; padding: 2px 4px; color: var(--text-muted); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.crumb:hover { color: var(--text); }
+.crumb-step { display: inline-flex; align-items: center; gap: var(--space-1); }
+.crumb-sep { color: var(--text-muted); }
+.crumb-here { border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; background: transparent; padding: 1px 2px; font: 600 var(--size-xs) var(--font-sans); color: var(--text); }
+.crumb-kind { margin-left: var(--space-2); font-size: var(--size-2xs); color: var(--text-muted); }
+/* In and Out: where the level's wires cross its edge. */
+.boundary { position: relative; box-sizing: border-box; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; gap: var(--space-2); padding: 4px 10px; font: var(--size-2xs) var(--font-mono); color: var(--text); background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: 999px; white-space: nowrap; }
+.boundary-tag { font: 600 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.boundary-name { overflow: hidden; text-overflow: ellipsis; }
+.react-flow__node-boundary { cursor: default; }
 .group-tools button:disabled { opacity: 0.4; }
 
 /* ---- Dashboard: each instrument is a display with its name underneath. ------------- */

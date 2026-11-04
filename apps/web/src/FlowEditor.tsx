@@ -8,6 +8,7 @@ import {
   MarkerType,
   MiniMap,
   NodeToolbar,
+  Panel,
   useStore,
   Position,
   ReactFlow,
@@ -23,6 +24,7 @@ import {
   type NodeProps,
   type OnEdgesChange,
   type OnNodesChange,
+  type Viewport,
 } from "@xyflow/react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
@@ -34,11 +36,17 @@ import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
 import { connectionOf, nearestAccepting, SNAP, WireDragContext, type Anchor } from "./wireSnap";
 import {
+  absolute,
+  Boundary,
+  descendants,
   display,
   frameAround,
   GroupActions,
   GroupBox,
   isFrame,
+  isLevel,
+  levelPath,
+  ordered,
   splitHandle,
   STORY_DEF,
   toGroups,
@@ -348,7 +356,7 @@ function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }
   );
 }
 
-const nodeTypes = { block: Block, frame: GroupBox };
+const nodeTypes = { block: Block, frame: GroupBox, boundary: Boundary };
 const edgeTypes = { wire: WireEdge };
 
 export function makeNode(def: BlockDef, id: string, x: number, y: number, params: Record<string, ParamValue> = {}): BlockNode {
@@ -464,11 +472,18 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
     return { ...node, data: { ...node.data, ...ports, missing: true } };
   });
   const byId = new Map<string, BlockDef>(nodes.map((n) => [n.id, inForm(n.data.def, n.data.params)]));
-  // Groups: frames around their blocks (parents before children, as React Flow wants).
+  // Groups round their blocks and the groups in them, innermost first: each is made while
+  // everything it holds still has its place on the whole canvas.
+  const groups = graph.groups ?? [];
+  const parentOf = new Map(groups.flatMap((g) => (g.parent ? [[g.id, g.parent] as const] : [])));
+  const depth = (id: string) => {
+    let d = 0;
+    for (let p = parentOf.get(id); p && d < 64; p = parentOf.get(p)) d++;
+    return d;
+  };
   let all: FlowNode[] = nodes;
-  const frames: FlowNode[] = [];
-  for (const g of graph.groups ?? []) {
-    const inside = all.filter((n): n is BlockNode => isBlock(n) && g.nodes.includes(n.id) && !n.parentId);
+  for (const g of [...groups].sort((a, b) => depth(b.id) - depth(a.id))) {
+    const inside = all.filter((n) => !n.parentId && (isBlock(n) ? g.nodes.includes(n.id) : parentOf.get(n.id) === g.id));
     if (inside.length === 0) continue;
     const { frame, children } = frameAround(g.id, g.kind, inside, {
       label: g.label,
@@ -476,14 +491,19 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
       seconds: g.params?.seconds,
       reset: g.params?.reset,
       pos: g.pos,
+      sides: g.ports,
     });
     if (g.kind === "story") byId.set(g.id, STORY_DEF);
-    frames.push(frame);
     const moved = new Map(children.map((c) => [c.id, c]));
-    all = all.map((n) => moved.get(n.id) ?? n);
+    all = [...all.map((n) => moved.get(n.id) ?? n), frame];
   }
+  // A frame's children are kept inside it, and so is a group in a frame.
+  all = all.map((n) => {
+    const p = n.parentId ? all.find((q) => q.id === n.parentId) : undefined;
+    return p && isFrame(p) && p.data.kind === "visual" ? { ...n, extent: "parent" as const } : n;
+  });
   const edges = wires.map((w) => makeWire(w, portType(byId.get(w.source), w.sourceHandle, "outputs") ?? "signal"));
-  return { nodes: [...frames, ...all], edges };
+  return { nodes: ordered(all), edges };
 }
 
 /**
@@ -521,11 +541,22 @@ export function toGraph(nodes: FlowNode[], edges: Wire[]): Graph {
   };
 }
 
-/** A new block at `at` (flow coordinates, its top-left), selected and the only one selected. */
-export function withBlock(nodes: FlowNode[], def: BlockDef, at: { x: number; y: number }): [FlowNode[], string] {
+/**
+ * A new block at `at` (flow coordinates on the whole canvas, its top-left), selected and the
+ * only one selected; inside subsystem `level` when one is open.
+ */
+export function withBlock(nodes: FlowNode[], def: BlockDef, at: { x: number; y: number }, level: string | null = null): [FlowNode[], string] {
   const id = freeId(def.type, nodes);
-  const node = { ...makeNode(def, id, Math.round(at.x), Math.round(at.y)), selected: true };
+  const node = { ...inLevel(makeNode(def, id, Math.round(at.x), Math.round(at.y)), level, nodes), selected: true };
   return [[...nodes.map((n) => (n.selected ? { ...n, selected: false } : n)), node], id];
+}
+
+/** A new node placed in subsystem `level` (its position made relative to it), or as it is. */
+function inLevel<N extends FlowNode>(node: N, level: string | null, nodes: FlowNode[]): N {
+  const host = level ? nodes.find((n) => n.id === level) : undefined;
+  if (!host) return node;
+  const o = absolute(host, nodes);
+  return { ...node, parentId: level, position: { x: node.position.x - o.x, y: node.position.y - o.y } };
 }
 
 const typeOf = (p: PortDef) => p.type ?? "signal";
@@ -547,11 +578,19 @@ type Props = {
   onEdgesChange: OnEdgesChange<Wire>;
   /** Show the overview map: when the Flow page is the one in view, not among all pages (Commander). */
   minimap: boolean;
+  /** The subsystem or story open on the canvas (#68); null: the top level. */
+  level: string | null;
+  setLevel: (level: string | null) => void;
 };
 
 /** Blocks by palette group, groups in catalog order. */
-export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap }: Props) {
+export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel }: Props) {
   const states = useContext(RunStates);
+  // The open level, if it is still there (undo or ungroup may have taken it away).
+  const level = wanted && isLevel(nodes.find((n) => n.id === wanted)) ? wanted : null;
+  useEffect(() => {
+    if (wanted !== level) setLevel(level);
+  }, [wanted, level, setLevel]);
   const defOf = (id: string): BlockDef | undefined => {
     const n = nodes.find((x) => x.id === id);
     if (!n) return undefined;
@@ -585,18 +624,51 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     setEdges((ws) => connect(ws, c, wireType(c)));
   };
 
-  // Grouping: a frame around the selected blocks (not already in a group). A story holds
-  // signal blocks only: it is itself the step.
-  const selected = nodes.filter((n): n is BlockNode => isBlock(n) && !!n.selected && !n.parentId);
-  const canStory = selected.length > 0 && selected.every((n) => !hasStepPorts(portsOf(n)));
-  const group = (kind: GroupData["kind"]) =>
-    setNodes((ns) => {
-      const picked = ns.filter((n): n is BlockNode => isBlock(n) && !!n.selected && !n.parentId);
-      if (picked.length === 0) return ns;
-      const { frame, children } = frameAround(freeId(kind === "story" ? "story" : "group", ns), kind, picked);
-      const moved = new Map(children.map((c) => [c.id, c]));
-      return [frame, ...ns.filter((n) => !moved.has(n.id)), ...children];
-    });
+  // ---- Levels (#68): a subsystem or story opens on the canvas; the way back is the breadcrumb ----
+  const { getViewport, setViewport, fitView } = useReactFlow();
+  const views = useRef(new Map<string | null, Viewport>()); // each level keeps its own view
+  const deselectAll = () => {
+    setNodes((ns) => (ns.some((n) => n.selected) ? ns.map((n) => (n.selected ? { ...n, selected: false } : n)) : ns));
+    setEdges((ws) => (ws.some((w) => w.selected) ? ws.map((w) => (w.selected ? { ...w, selected: false } : w)) : ws));
+  };
+  const go = (to: string | null) => {
+    if (to === level) return;
+    views.current.set(level, getViewport());
+    deselectAll();
+    setLevel(to);
+  };
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false; // the app fits the view when a graph loads
+      return;
+    }
+    const saved = views.current.get(level);
+    const t = window.setTimeout(() => (saved ? setViewport(saved) : fitView({ padding: 0.25, duration: 200, maxZoom: 1.2 })), 30);
+    return () => window.clearTimeout(t);
+  }, [level]); // eslint-disable-line react-hooks/exhaustive-deps -- on entering or leaving only
+  const path = levelPath(level, nodes);
+  const up = path.length > 1 ? path[path.length - 2].id : null;
+  // Alt+↑ goes up a level; so does Escape when nothing is selected.
+  useEffect(() => {
+    if (!level) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      const escape = e.key === "Escape" && !nodes.some((n) => n.selected) && !edges.some((w) => w.selected);
+      if (!escape && !(e.altKey && e.key === "ArrowUp")) return;
+      e.preventDefault();
+      go(up);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  // Grouping: a subsystem, story or frame round the selected blocks and groups of this
+  // level, which must sit in the same place (not some in a frame and some out). A story
+  // holds signal blocks only: it is itself the step. A frame holds blocks only.
+  const choosable = (ns: FlowNode[], shownIds: Set<string>) => ns.filter((n) => n.selected && shownIds.has(n.id));
+  const runStates = useContext(RunStates);
   const actions = useMemo(
     () => ({
       update: (id: string, change: Partial<GroupData>) =>
@@ -608,7 +680,16 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     }),
     [setNodes, setEdges],
   );
-  const runStates = useContext(RunStates);
+  // A group is as busy as its busiest block: failed, else running.
+  const inside = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const n of nodes) if (isLevel(n)) m.set(n.id, descendants(n.id, nodes));
+    return m;
+  }, [nodes]);
+  const stateOf = (id: string) => {
+    const all = [id, ...(inside.get(id) ?? [])];
+    return all.some((x) => runStates.failed.has(x)) ? ("failed" as const) : all.some((x) => runStates.active.has(x)) ? ("running" as const) : undefined;
+  };
   // Hovering a wire, a port or a block lights its wires and fades the rest.
   const [lit, setLit] = useState<ReadonlySet<string> | null>(null);
   const follow = (e: { target: EventTarget | null }) => {
@@ -631,12 +712,31 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       return prev && prev.size === ids.length && ids.every((i) => prev.has(i)) ? prev : new Set(ids);
     });
   };
-  const shown = display(nodes, edges, (node, port, side) => portType(defOf(node), port, side) ?? "signal");
+  const shown = display(nodes, edges, (node, port, side) => portType(defOf(node), port, side) ?? "signal", level);
+  const shownIds = new Set(shown.nodes.filter((n) => !n.hidden).map((n) => n.id));
+  const picked = choosable(nodes, shownIds);
+  const sameParent = picked.length > 0 && picked.every((n) => n.parentId === picked[0].parentId);
+  const canGroup = sameParent;
+  const canFrame = sameParent && picked.every(isBlock);
+  const canStory = canFrame && picked.every((n) => isBlock(n) && !hasStepPorts(portsOf(n)));
+  const group = (kind: GroupData["kind"]) => {
+    const ids = new Set(picked.map((n) => n.id));
+    setNodes((ns) => {
+      const chosen = ns.filter((n) => ids.has(n.id));
+      if (chosen.length === 0) return ns;
+      const host = chosen[0].parentId ? ns.find((n) => n.id === chosen[0].parentId) : undefined;
+      const inFrame = !!host && isFrame(host) && host.data.kind === "visual";
+      const { frame, children } = frameAround(freeId(kind === "visual" ? "frame" : kind, ns), kind, chosen, { inFrame });
+      const moved = new Map(children.map((c) => [c.id, c]));
+      return ordered([...ns.map((n) => moved.get(n.id) ?? n), { ...frame, selected: kind !== "visual" }]);
+    });
+  };
 
   // Dragging a wire's end onto another port moves it; dropping it anywhere else deletes it.
   const moved = useRef(true);
-  const onReconnect = (old: Wire, c: Connection) => {
+  const onReconnect = (old: Wire, shownC: Connection) => {
     moved.current = true;
+    const c = real(shownC);
     setEdges((ws) => {
       const rest = ws.filter((w) => w.id !== old.id);
       return connect(rest, c, wireType(c));
@@ -695,7 +795,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     const at = screenToFlowPosition(screen);
     let id = "";
     setNodes((ns) => {
-      const [next, made] = withBlock(ns, def, { x: at.x - BLOCK_SIZE.w / 2, y: at.y - 16 });
+      const [next, made] = withBlock(ns, def, { x: at.x - BLOCK_SIZE.w / 2, y: at.y - 16 }, level);
       id = made;
       return next;
     });
@@ -820,7 +920,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     const pl = plan(def, e.clientX, e.clientY);
     const at = screenToFlowPosition({ x: e.clientX, y: e.clientY });
     const id = freeId(def.type, nodes);
-    const node = { ...makeNode(def, id, Math.round(at.x - BLOCK_SIZE.w / 2), Math.round(at.y - 16)), selected: true };
+    const node = { ...inLevel(makeNode(def, id, Math.round(at.x - BLOCK_SIZE.w / 2), Math.round(at.y - 16)), level, nodes), selected: true };
     setNodes((ns) => [...ns.map((n) => (n.selected ? { ...n, selected: false } : n)), node]);
     if (pl.kind === "insert") {
       const w = pl.wire;
@@ -843,7 +943,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   const rel = (x: number, y: number) => ({ x: x - (box?.left ?? 0), y: y - (box?.top ?? 0) });
 
   return (
-    <GroupActions.Provider value={{ ...actions, active: runStates.active }}>
+    <GroupActions.Provider value={{ ...actions, enter: go, stateOf }}>
     <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
     <Lit.Provider value={lit}>
     <div className="flow">
@@ -906,6 +1006,32 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
           fitView
         >
           <Background />
+          {level && (
+            <Panel position="top-left" className="crumbs" aria-label="Where you are: click a level to go back up (Alt+↑ or Escape goes up one)">
+              <button className="crumb" onClick={() => go(null)}>
+                Flow
+              </button>
+              {path.map((g) => (
+                <span key={g.id} className="crumb-step">
+                  <span className="crumb-sep">›</span>
+                  {g.id === level ? (
+                    <input
+                      className="crumb-here nodrag"
+                      value={g.data.label}
+                      size={Math.max(4, g.data.label.length)}
+                      title={`Rename this ${g.data.kind}`}
+                      onChange={(e) => actions.update(g.id, { label: e.target.value })}
+                    />
+                  ) : (
+                    <button className="crumb" onClick={() => go(g.id)}>
+                      {g.data.label}
+                    </button>
+                  )}
+                </span>
+              ))}
+              <span className="crumb-kind">{path[path.length - 1]?.data.kind}</span>
+            </Panel>
+          )}
           {minimap && (
             <MiniMap
               pannable
@@ -913,7 +1039,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
               ariaLabel="Overview of the flow: click or drag to move the view"
               // Words, not colours, tell kinds apart (DESIGN.md): grey blocks, groups as outlines,
               // the signal colour for running, red for failed.
-              nodeColor={(n) => (n.type === "frame" ? "transparent" : states.failed.has(n.id) ? "var(--danger)" : states.active.has(n.id) ? "var(--signal)" : "var(--line-strong)")}
+              nodeColor={(n) => (n.type === "frame" && (n.data as GroupData).kind === "visual" ? "transparent" : states.failed.has(n.id) ? "var(--danger)" : states.active.has(n.id) ? "var(--signal)" : "var(--line-strong)")}
               nodeStrokeColor={(n) => (states.failed.has(n.id) ? "var(--danger)" : states.active.has(n.id) ? "var(--signal)" : "var(--line-strong)")}
               nodeStrokeWidth={3}
               nodeBorderRadius={2}
@@ -938,7 +1064,12 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
             >
               Delete
             </button>
-            <button className="key small" disabled={selected.length === 0} title="Frame the selected blocks (tidy; they run as before)" onClick={() => group("visual")}>
+            <button
+              className="key small"
+              disabled={!canGroup}
+              title={canGroup ? "Make the selection a subsystem: one block here, its insides on their own level (double-click it to open)" : "Pick blocks or groups in the same place (not some in a frame)"}
+              onClick={() => group("subsystem")}
+            >
               Group
             </button>
             <button
@@ -949,10 +1080,13 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
             >
               Story
             </button>
+            <button className="key small" disabled={!canFrame} title="Draw a frame round the selected blocks (tidy; they stay on this level and run as before)" onClick={() => group("visual")}>
+              Frame
+            </button>
             <button
               className="key small"
               disabled={pickedFrames.length === 0}
-              title="Remove the selected groups' frames (keeps the blocks)"
+              title="Ungroup: put the selected groups' blocks back on this level"
               onClick={() => pickedFrames.forEach((f) => actions.ungroup(f.id))}
             >
               Ungroup
@@ -996,7 +1130,8 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       <p className="hint muted">
         <span className="kbd">/</span> or double-click the canvas adds a block. Click a block, or Ctrl-drag a box (Ctrl-click
         adds one): the dialog above it deletes, groups or makes a story. Drag the canvas to pan; the wheel zooms. Drag a
-        wire's end off its port to remove it. Drag a port's name to another side of its block (double-click puts it back); ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
+        wire's end off its port to remove it. Drag a port's name to another side of its block (double-click puts it back). Group makes a
+        subsystem: double-click it to open, Alt+↑ or Escape to come back; ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
       </p>
     </div>
     </Lit.Provider>
