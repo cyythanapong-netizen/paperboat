@@ -1,6 +1,7 @@
-import { Handle, NodeResizer, Position, type Edge, type Node, type NodeProps } from "@xyflow/react";
+import { NodeResizer, Position, type Edge, type Node, type NodeProps } from "@xyflow/react";
 import { createContext, useContext } from "react";
 import type { BlockDef, GraphGroup, PortDef } from "./protocol";
+import { PortHandle } from "./wireSnap";
 
 import { NumberField } from "./NumberField";
 /**
@@ -69,7 +70,7 @@ export function GroupBox({ id, data, selected }: NodeProps<GroupNode>) {
         />
       )}
       <div className="frame-head" style={{ height: HEAD }}>
-        {story && <Handle type="target" position={Position.Left} id="in" className="step-handle" />}
+        {story && <PortHandle type="target" position={Position.Left} id="in" className="step-handle" />}
         <button className="frame-toggle nodrag" title={data.collapsed ? "Open" : "Collapse"} onClick={() => update(id, { collapsed: !data.collapsed })}>
           {data.collapsed ? "▸" : "▾"}
         </button>
@@ -90,20 +91,20 @@ export function GroupBox({ id, data, selected }: NodeProps<GroupNode>) {
         <button className="remove nodrag" title="Ungroup (keeps the blocks)" onClick={() => ungroup(id)}>
           ⊟
         </button>
-        {story && <Handle type="source" position={Position.Right} id="next" className="step-handle" />}
+        {story && <PortHandle type="source" position={Position.Right} id="next" className="step-handle" />}
       </div>
       {data.collapsed && (
         <div className="frame-ports">
           {ports.inputs.map((p) => (
             <div key={p.id} className={`port in port-${p.type}`}>
-              <Handle type="target" position={Position.Left} id={p.id} />
+              <PortHandle type="target" position={Position.Left} id={p.id} />
               {p.id.replace(SEP, ".")}
             </div>
           ))}
           {ports.outputs.map((p) => (
             <div key={p.id} className={`port out port-${p.type}`}>
               {p.id.replace(SEP, ".")}
-              <Handle type="source" position={Position.Right} id={p.id} />
+              <PortHandle type="source" position={Position.Right} id={p.id} />
             </div>
           ))}
           {ports.inputs.length + ports.outputs.length === 0 && <div className="muted frame-empty">no wires cross it</div>}
