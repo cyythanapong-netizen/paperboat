@@ -183,16 +183,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* ---- Flow ------------------------------------------------------------------------- */
 .flow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.palette {
-  display: flex; flex-wrap: wrap; column-gap: var(--space-6); row-gap: var(--space-2);
-  padding: var(--space-3) var(--panel-pad);
-  border-bottom: 1px solid var(--line);
-  flex-shrink: 0; max-height: 40%; overflow: auto;
-}
-.palette-group { display: flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
-.palette-group > span { margin-right: var(--space-1); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
-.palette button { height: 24px; padding: 0 9px; font-size: var(--size-2xs); }
-.palette .step-block { border-color: var(--line-ink); }
 .mode-commander .hint { display: none; }
 .hint { margin: 0; padding: var(--space-2) var(--panel-pad); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); border-top: 1px solid var(--line); }
 .react-flow { background: transparent; --xy-background-pattern-dots-color-default: var(--dots); --xy-edge-stroke-default: var(--line-ink); }
@@ -297,3 +287,72 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .log-node { font: inherit; margin-right: 6px; padding: 0 5px; text-transform: none; color: var(--text-on-screen); background: transparent; border: 1px solid var(--text-on-screen-muted); border-radius: var(--radius-sm); }
 .log-node:hover { border-color: var(--text-on-screen); }
 @media (min-width: 861px) { .bar .switch + .switch { padding-left: var(--space-4); border-left: 1px solid var(--line); } }
+
+/* ---- Adding things (#50): the Flow's tools, the collection window, quick add, drops ---- */
+.flow-tools { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--panel-pad); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.flow-tools > .lbl:first-child { margin-right: var(--space-1); }
+.flow-tools button { height: 26px; padding: 0 9px; font-size: var(--size-2xs); }
+.flow-tip { margin-left: auto; }
+.kbd { font: 500 var(--size-2xs) var(--font-mono); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: var(--radius-sm); padding: 0 5px; color: var(--text); background: var(--surface-raised); }
+.flow-canvas { position: relative; flex: 1; min-height: 0; }
+.key.add { font-weight: 600; border-color: var(--line-ink); }
+
+.wire-hit { fill: none; stroke: transparent; stroke-width: 18px; pointer-events: stroke; }
+.react-flow__edge-path.drop-target { stroke-width: 3.5px !important; }
+.drop-hint { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.drop-outline { position: absolute; width: 156px; height: 64px; border: 1.5px dashed var(--line-ink); border-radius: var(--radius-md); }
+.drop-wire { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.drop-wire line { stroke: var(--line-ink); stroke-width: 1.6; stroke-dasharray: 5 4; }
+.drop-wire circle { fill: var(--line-ink); }
+.drop-label { position: absolute; white-space: nowrap; font: 500 var(--size-2xs) var(--font-sans); color: var(--surface-panel); background: var(--line-ink); padding: 3px 8px; border-radius: var(--radius-sm); }
+
+/* The collection: a floating window over the page, moved by its head. */
+.browser {
+  position: fixed; z-index: 50; width: min(880px, calc(100vw - 32px)); height: min(560px, calc(100vh - 140px));
+  display: flex; flex-direction: column; overflow: hidden; resize: both; min-width: 420px; min-height: 280px;
+  background: var(--surface-panel); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.18);
+}
+.browser-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-2) var(--panel-pad); border-bottom: 1px solid var(--line); cursor: move; user-select: none; }
+.browser-head h2 { font: 600 var(--size-sm) var(--font-sans); white-space: nowrap; }
+.browser-head .found { margin-left: auto; white-space: nowrap; }
+.search { display: inline-flex; align-items: center; gap: var(--space-2); height: 30px; padding: 0 var(--space-2); color: var(--text-muted); flex: 0 1 260px; min-width: 120px; cursor: text; }
+.search input { flex: 1; min-width: 0; font: var(--size-sm) var(--font-sans); padding: 0; }
+.browser-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 150px minmax(0, 1fr); }
+.browser-groups { display: flex; flex-direction: column; gap: 2px; padding: var(--space-2); background: var(--surface-sunken); border-right: 1px solid var(--line); overflow: auto; }
+.browser-groups button { display: flex; justify-content: space-between; border: 1.5px solid transparent; background: transparent; color: var(--text-muted); padding: 6px 8px; text-align: left; }
+.browser-groups button.current { background: var(--surface-panel); border-color: var(--line-ink); color: var(--text); font-weight: 600; }
+.browser-cards { overflow: auto; padding: var(--space-3) var(--panel-pad) var(--panel-pad); }
+.browser-cards h3 { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-2) 0; font-weight: 500; }
+.browser-cards h3::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--space-3); }
+
+.card { display: flex; flex-direction: column; gap: var(--space-2); padding: 10px 12px; background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); cursor: grab; }
+.card:hover { border-color: var(--line-ink); }
+.card.step { border-color: var(--line-ink); }
+.card-head { display: flex; align-items: baseline; gap: var(--space-2); }
+.card-head b { font: 600 var(--size-sm) var(--font-sans); }
+.card-head .lbl { margin-left: auto; text-align: right; }
+.card-desc { margin: 0; color: var(--text-muted); font-size: var(--size-xs); line-height: 1.4; }
+.card-ports { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--space-2); padding: 5px 8px; background: var(--surface-well); border-radius: var(--radius-sm); font: var(--size-2xs) var(--font-mono); }
+.card-ports .ins, .card-ports .outs { display: flex; flex-direction: column; }
+.card-ports .outs { align-items: flex-end; }
+.card-ports .arrow, .card-ports .none { color: var(--text-muted); }
+.card-port i { display: inline-block; width: 7px; height: 7px; border: 1.5px solid var(--line-ink); border-radius: 50%; margin: 0 4px; vertical-align: 0; }
+.card-port.step { font-weight: 500; }
+.card-port.step i { border-radius: 1px; background: var(--line-ink); }
+.card-params { display: flex; flex-wrap: wrap; gap: 2px 10px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
+.card-params b { font-weight: 400; color: var(--text); }
+.card-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; }
+
+/* Quick add: a search floating at the cursor. */
+.quick-add { position: fixed; z-index: 60; width: 280px; background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: 0 12px 30px rgb(0 0 0 / 0.2); overflow: hidden; }
+.quick-add .search { display: flex; margin: var(--space-2); }
+.quick-add ol { list-style: none; margin: 0; padding: 0 var(--space-1) var(--space-1); }
+.quick-add li { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-2); padding: 6px 8px; border-radius: var(--radius-md); border: 1.5px solid transparent; cursor: pointer; }
+.quick-add li b { font-weight: 500; }
+.quick-add li.on { border-color: var(--line-ink); }
+.quick-add li.on b { font-weight: 600; }
+.quick-add li.none { cursor: default; }
+.quick-foot { display: flex; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--line); }
+.dragging-card .browser { opacity: 0.3; pointer-events: none; }

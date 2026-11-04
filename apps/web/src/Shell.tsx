@@ -103,6 +103,7 @@ export function Panel({
   current,
   onOpen,
   info,
+  actions,
   children,
 }: {
   page: Page;
@@ -110,6 +111,8 @@ export function Panel({
   current: boolean;
   onOpen: () => void;
   info?: ReactNode;
+  /** Keys in the head, before Open (the page's Add). */
+  actions?: ReactNode;
   children: ReactNode;
 }) {
   const label = PAGES.find((p) => p.id === page)!.label;
@@ -119,6 +122,7 @@ export function Panel({
         <span className="num">{number(page)}</span>
         <h2>{label}</h2>
         <span className="panel-info lbl">{info}</span>
+        {actions}
         {mode === "commander" && (
           <button className="key small" title={`Show ${label} on its own (Navigator)`} onClick={onOpen}>
             Open
