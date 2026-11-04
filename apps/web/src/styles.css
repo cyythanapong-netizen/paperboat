@@ -80,7 +80,6 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .run-options { display: inline-flex; align-items: center; gap: var(--space-2); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .run-options input, .run-options select { height: 30px; background: var(--surface-well); box-shadow: var(--well-shadow); color: var(--text); border: 0; border-radius: var(--radius-md); padding: 0 var(--space-2); }
 .run-options input::-webkit-inner-spin-button, .run-options input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.run-options input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .run-options input { width: 7ch; text-align: right; }
 
 /* Choice of one: the chosen option sits in brackets in bold ink; the others plain grey.
@@ -289,7 +288,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .instrument figcaption output { color: var(--text); }
 .instrument.display .screen { display: flex; align-items: flex-end; padding: var(--space-3); }
 .instrument.display .screen output { font: 500 var(--size-xl) / 1 var(--font-mono); overflow-wrap: anywhere; }
-.size-large .instrument.display .screen output { font-size: calc(var(--size-xl) * 2); }
+.size-large .instrument.display .screen output, .size-xlarge .instrument.display .screen output { font-size: calc(var(--size-xl) * 2); }
 .instrument.graph .screen { padding: var(--space-3); display: flex; }
 .instrument.graph svg { display: block; width: 100%; height: 100%; }
 .instrument .trace { stroke: var(--signal); stroke-width: 1.6; }

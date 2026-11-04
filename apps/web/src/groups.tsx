@@ -2,6 +2,7 @@ import { Handle, NodeResizer, Position, type Edge, type Node, type NodeProps } f
 import { createContext, useContext } from "react";
 import type { BlockDef, GraphGroup, PortDef } from "./protocol";
 
+import { NumberField } from "./NumberField";
 /**
  * Groups on the Flow page. Two kinds:
  * - **visual**: tidies the canvas. Its blocks run as if ungrouped (the sheet's flow type).
@@ -76,14 +77,7 @@ export function GroupBox({ id, data, selected }: NodeProps<GroupNode>) {
         <input className="frame-label nodrag" value={data.label} onChange={(e) => update(id, { label: e.target.value })} />
         {story && (
           <label className="frame-seconds" title="How long the story runs when a path arrives (0: once)">
-            <input
-              className="nodrag"
-              type="number"
-              min={0}
-              step="any"
-              value={data.seconds}
-              onChange={(e) => update(id, { seconds: Math.max(0, e.target.valueAsNumber || 0) })}
-            />
+            <NumberField className="nodrag num" value={data.seconds} valid={(v) => v >= 0} onChange={(seconds) => update(id, { seconds })} />
             s
           </label>
         )}

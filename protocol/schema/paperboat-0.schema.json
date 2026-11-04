@@ -1080,9 +1080,10 @@
                 "enum": [
                   "compact",
                   "normal",
-                  "large"
+                  "large",
+                  "xlarge"
                 ],
-                "description": "compact: a readout card (1x1 cells); normal: a plot or picture to read at a glance (2x1); large: one to study (2x2). Absent: the kind's default (display compact, graph normal, image large)."
+                "description": "compact: a readout card (1x1 cells); normal: a plot or picture to read at a glance (2x1); large: one to study (2x2); xlarge: one to fill the page with (3x3). Absent: the kind's default (display compact, graph normal, image large)."
               },
               "at": {
                 "type": "array",

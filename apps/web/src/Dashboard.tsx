@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { EngineState, Series } from "./engine";
-import { CELLS, DEFAULT_COLUMNS, SIZES, loadSaved, move, place, resize, save } from "./dashboardLayout";
+import { CELLS, DEFAULT_COLUMNS, SIZES, SIZE_LABEL, loadSaved, move, place, resize, save } from "./dashboardLayout";
 import type { Monitor, Placed } from "./dashboardLayout";
 
 export type { Monitor } from "./dashboardLayout";
@@ -75,7 +75,7 @@ const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRigh
 /**
  * The Dashboard: a grid of equal cells, one instrument per monitor block on the Flow
  * canvas (which decides what exists; adding or removing a block adds or removes its
- * instrument). Each is compact, normal or large (1x1, 2x1, 2x2 cells). Where one sits
+ * instrument). Each is compact, normal, large or xlarge (1x1, 2x1, 2x2, 3x3 cells). Where one sits
  * comes from the user's saved layout, else the backend's default (`catalog.dashboard`),
  * else the automatic order. While `arrange` is on, drag an instrument to a cell (or move
  * it with the arrow keys) and pick its size; the layout is kept in the browser, per
@@ -210,7 +210,7 @@ export function Dashboard({ state, monitors, arrange }: { state: EngineState; mo
                       aria-pressed={p.size === s}
                       onClick={() => commit(resize(placed, p.block, s, columns))}
                     >
-                      {s[0].toUpperCase()}
+                      {SIZE_LABEL[s]}
                     </button>
                   ))}
                 </div>

@@ -1,4 +1,5 @@
 import type { RunSettings } from "./protocol";
+import { NumberField } from "./NumberField";
 
 const SPEEDS = [0.25, 0.5, 1, 2, 4, 0];
 
@@ -15,13 +16,7 @@ export function RunOptions({ defaults, value, onChange }: { defaults: RunSetting
   return (
     <span className="run-options" title="The next run's length and speed (the backend's defaults until changed)">
       for
-      <input
-        type="number"
-        min={0}
-        step="any"
-        value={duration}
-        onChange={(e) => e.target.valueAsNumber > 0 && set({ duration: e.target.valueAsNumber })}
-      />
+      <NumberField className="num" value={duration} valid={(v) => v > 0} onChange={(duration) => set({ duration })} />
       s
       <select value={speed} onChange={(e) => set({ speed: Number(e.target.value) })}>
         {SPEEDS.map((x) => (
