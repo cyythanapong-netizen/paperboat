@@ -83,6 +83,8 @@ export type Entity = {
 /** Camera hint sent with a scene. 2d: orthographic, looking down -z at center, height units tall. */
 export type View = {
   mode: "3d";
+  /** Show the floor grid (default true). The user can switch it on or off on the Station page, and that choice wins. */
+  grid?: boolean;
 } | {
   mode: "2d";
   center: [number, number];
