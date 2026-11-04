@@ -166,6 +166,66 @@ edges = [
   }
 }
 
+TEST_CASE("a Step flow joins paths, says what it sees, loops while and restarts on a key") {
+  const auto& catalog = catalog_of(R"(
+domain = "steps2"
+import = ["step", "base", "signal"]
+)");
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 5, .real_time = false}};
+  auto run = [&](const json& graph, core::KeysNow keys = nullptr) {
+    Collected out;
+    CHECK(core::run("r", graph, nullptr, backend, out.emit(), keys, {}) == "done");
+    return out;
+  };
+  auto node = [](const char* id, const char* type, json params = json::object()) {
+    return json{{"id", id}, {"type", type}, {"params", std::move(params)}};
+  };
+  auto wire = [](const char* a, const char* ap, const char* b, const char* bp) {
+    return json{{"from", {a, ap}}, {"to", {b, bp}}};
+  };
+
+  SECTION("Join waits for both paths, then one goes on") {
+    const json graph{{"nodes", {node("start", "start"), node("one", "constant"), node("when", "when"),
+                                node("a", "wait", {{"seconds", 0.1}}), node("b", "wait", {{"seconds", 0.3}}),
+                                node("join", "join"), node("say", "say", {{"text", "both here"}}), node("stop", "stop")}},
+                     {"edges", {wire("one", "y", "when", "cond"), wire("start", "next", "a", "in"),
+                                wire("when", "next", "b", "in"), wire("a", "next", "join", "in"),
+                                wire("b", "next", "join", "in"), wire("join", "next", "say", "in"),
+                                wire("say", "next", "stop", "in")}}};
+    const auto out = run(graph);
+    const auto text = logs(out);
+    CHECK(std::ranges::count(text, "both here") == 1);
+    CHECK(text.back() == "stopped by stop at t = 0.30 s");
+  }
+  SECTION("Repeat's count reaches a Say in the same lap; While ends the loop") {
+    const json graph{{"nodes", {node("start", "start"), node("repeat", "repeat", {{"times", 3.0}}),
+                                node("say", "say", {{"text", "lap"}}), node("wait", "wait", {{"seconds", 0.05}}),
+                                node("one", "constant"), node("again", "while"), node("stop", "stop")}},
+                     {"edges", {wire("start", "next", "repeat", "in"), wire("repeat", "loop", "say", "in"),
+                                wire("repeat", "count", "say", "value"), wire("say", "next", "wait", "in"),
+                                wire("wait", "next", "repeat", "in"), wire("repeat", "done", "again", "in"),
+                                wire("one", "y", "again", "cond"), wire("again", "loop", "stop", "in")}}};
+    const auto text = logs(run(graph));
+    std::vector<std::string> laps;
+    std::ranges::copy_if(text, std::back_inserter(laps), [](const std::string& t) { return t.starts_with("lap"); });
+    CHECK(laps == std::vector<std::string>{"lap 1", "lap 2", "lap 3"});
+    CHECK(text.back() == "stopped by stop at t = 0.15 s");
+  }
+  SECTION("a When set to restart starts its running path over") {
+    const json graph{{"nodes", {node("key", "key"), node("when", "when", {{"running", "restart"}}),
+                                node("wait", "wait", {{"seconds", 0.5}}), node("stop", "stop")}},
+                     {"edges", {wire("key", "pressed", "when", "cond"), wire("when", "next", "wait", "in"),
+                                wire("wait", "next", "stop", "in")}}};
+    int calls = 0;
+    // Pressed at the first step, released, pressed again at 0.2 s: the wait starts over.
+    core::KeysNow keys = [&] {
+      ++calls;
+      return calls <= 2 || (calls > 20 && calls <= 22) ? tk::KeySet{"Space"} : tk::KeySet{};
+    };
+    CHECK(logs(run(graph, keys)).back() == "stopped by stop at t = 0.70 s");
+  }
+}
+
 namespace words {
 
 // The domain's shared state: a list of words, nothing physical.

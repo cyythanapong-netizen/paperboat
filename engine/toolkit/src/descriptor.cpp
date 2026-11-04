@@ -189,8 +189,8 @@ void load_dashboard(const json& doc, Catalog& catalog) {
     json item = {{"block", e["block"]}};
     if (e.contains("size")) {
       const std::string size = e["size"].is_string() ? e["size"].get<std::string>() : "";
-      if (size != "compact" && size != "normal" && size != "large")
-        throw DescriptorError(at + ": size must be compact, normal or large");
+      if (size != "compact" && size != "normal" && size != "large" && size != "xlarge")
+        throw DescriptorError(at + ": size must be compact, normal, large or xlarge");
       item["size"] = size;
     }
     if (e.contains("at")) {

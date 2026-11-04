@@ -1,10 +1,12 @@
 import type { DashboardLayout } from "./protocol";
 
-export type Size = "compact" | "normal" | "large";
+export type Size = "compact" | "normal" | "large" | "xlarge";
 
 /** What an instrument occupies, in grid cells (columns x rows). */
-export const CELLS: Record<Size, [number, number]> = { compact: [1, 1], normal: [2, 1], large: [2, 2] };
-export const SIZES: Size[] = ["compact", "normal", "large"];
+export const CELLS: Record<Size, [number, number]> = { compact: [1, 1], normal: [2, 1], large: [2, 2], xlarge: [3, 3] };
+export const SIZES: Size[] = ["compact", "normal", "large", "xlarge"];
+/** What the size picker shows. */
+export const SIZE_LABEL: Record<Size, string> = { compact: "S", normal: "M", large: "L", xlarge: "XL" };
 
 /** Columns of the grid when a layout does not say. */
 export const DEFAULT_COLUMNS = 6;

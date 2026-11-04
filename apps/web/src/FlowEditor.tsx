@@ -23,6 +23,7 @@ import {
 } from "@xyflow/react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
+import { NumberField } from "./NumberField";
 import { RemoveIcon } from "./RemoveIcon";
 import {
   display,
@@ -210,14 +211,7 @@ export function ParamInput({
     );
   }
   return (
-    <input
-      className="nodrag"
-      type="number"
-      step="any"
-      disabled={disabled}
-      value={Number(value)}
-      onChange={(e) => set(e.target.valueAsNumber || 0)}
-    />
+    <NumberField className="nodrag num" disabled={disabled} value={Number(value)} onChange={set} />
   );
 }
 

@@ -55,6 +55,55 @@ TEST_CASE("step/when starts a path each time cond rises") {
   CHECK(when->tick({}, {{"cond", 0}}).empty());
   CHECK(when->tick({}, {{"cond", 1}}) == "next");
   CHECK(when->may_start());
+  CHECK_FALSE(when->restarts());  // by default a running path goes on
+}
+
+TEST_CASE("step/when options: on a fall (a key released), and restarting its path") {
+  auto when = make("step/when", {{"on", 1}, {"running", 1}});  // fall, restart (by index)
+  CHECK(when->restarts());
+  CHECK(when->tick({}, {{"cond", 1}}).empty());  // pressed: nothing yet
+  CHECK(when->tick({}, {{"cond", 1}}).empty());
+  CHECK(when->tick({}, {{"cond", 0}}) == "next");  // released
+  CHECK(when->tick({}, {{"cond", 0}}).empty());
+  const auto& on = builtins().find("step/when")->def.params.at(0);
+  CHECK(on.options == std::vector<std::string>{"rise", "fall"});
+}
+
+TEST_CASE("step/while loops while its condition holds") {
+  auto loop = make("step/while");
+  CHECK(loop->tick({}, {{"cond", 1}}) == "loop");
+  CHECK(loop->tick({}, {{"cond", 0}}) == "done");
+  CHECK(loop->tick({}, {}) == "done");  // unwired reads as 0
+}
+
+TEST_CASE("step/say writes its text and value to the Console") {
+  std::vector<std::string> lines;
+  const LogFn log = [&](std::string_view, std::string_view, std::string_view text) { lines.emplace_back(text); };
+  const Context ctx{.log_fn = &log};
+  auto said = [&](const Values& in) {
+    lines.clear();
+    auto say = make("step/say");
+    say->enter(ctx, in);
+    CHECK(say->tick(ctx, in) == "next");
+    return lines.size() == 1 ? lines[0] : "";
+  };
+  CHECK(said({}) == "hello");
+  CHECK(said({{"value", 2.5}}) == "hello 2.5");
+  CHECK(said({{"value", "fold"}}) == "hello fold");
+  CHECK(said({{"value", List{1, 2, 3}}}) == "hello [1, 2, 3]");
+}
+
+TEST_CASE("step/join lets the last of its paths on; the others end there") {
+  auto join = make("step/join", {{"paths", 2}});
+  CHECK(join->shared());
+  join->enter({}, {});
+  CHECK(join->tick({}, {}).empty());  // one path: waits
+  join->enter({}, {});
+  CHECK(join->tick({}, {}) == "next");    // the second goes on
+  CHECK(join->tick({}, {}) == "joined");  // the first ends (nothing is wired to joined)
+  join->enter({}, {});
+  CHECK(join->tick({}, {}).empty());  // counts again
+  CHECK_FALSE(make("step/wait")->shared());
 }
 
 TEST_CASE("step/wait stays for its seconds") {
@@ -103,16 +152,22 @@ TEST_CASE("step/stop ends the run") {
   CHECK_FALSE(make("step/wait")->ends_run());
 }
 
-TEST_CASE("step/repeat loops its times, then is done and starts over") {
+TEST_CASE("step/repeat loops its times, then is done and starts over; count is the lap") {
   auto repeat = make("step/repeat", {{"times", 2}});
   auto arrive = [&] {
     repeat->enter({}, {});
     return repeat->tick({}, {});
   };
+  auto count = [&] { return get_or(repeat->outputs(), "count", -1); };
+  CHECK(count() == 0);
   CHECK(arrive() == "loop");
+  CHECK(count() == 1);
   CHECK(arrive() == "loop");
+  CHECK(count() == 2);
   CHECK(arrive() == "done");
+  CHECK(count() == 2);  // how many it went round
   CHECK(arrive() == "loop");  // a second pass counts again
+  CHECK(count() == 1);
 }
 
 TEST_CASE("a catalog entry makes the right kind of instance") {

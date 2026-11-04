@@ -39,9 +39,12 @@ std::string builtin_description(std::string_view name) {
       {"dashboard/display", "Shows its latest value on the Dashboard."},
       // step
       {"step/start", "Starts a path once, when the run begins."},
-      {"step/when", "Starts a path each time its condition rises: a key, a threshold."},
+      {"step/when", "Starts a path each time its condition rises (or falls): a key, a threshold."},
       {"step/wait", "Holds the path for a while."},
-      {"step/repeat", "Leaves by loop a number of times, then by done."},
+      {"step/repeat", "Leaves by loop a number of times, then by done; count is the lap."},
+      {"step/while", "Leaves by loop while its condition holds, then by done."},
+      {"step/say", "Writes a line to the Console as the path passes: its text and a value."},
+      {"step/join", "Waits for a number of paths to arrive, then goes on as one."},
       {"step/stop", "Ends the whole run."},
       // opencv
       {"opencv/gray", "Turns an image to grey."},

@@ -131,8 +131,8 @@ export type DashboardLayout = {
   instruments?: ({
     /** The monitor block's id. */
     block: string;
-    /** compact: a readout card (1x1 cells); normal: a plot or picture to read at a glance (2x1); large: one to study (2x2). Absent: the kind's default (display compact, graph normal, image large). */
-    size?: "compact" | "normal" | "large";
+    /** compact: a readout card (1x1 cells); normal: a plot or picture to read at a glance (2x1); large: one to study (2x2); xlarge: one to fill the page with (3x3). Absent: the kind's default (display compact, graph normal, image large). */
+    size?: "compact" | "normal" | "large" | "xlarge";
     /** Top-left cell: [column, row]. */
     at?: [number, number];
   })[];

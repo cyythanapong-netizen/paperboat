@@ -233,11 +233,13 @@ columns = 6
 instruments = [
   { block = "graph-theta", size = "large", at = [0, 0] },
   { block = "speed" },
+  { block = "camera", size = "xlarge" },
 ]
 )", test_registry());
   const auto msg = nlohmann::json::parse(tk::catalog_message(catalog));
   CHECK(msg["dashboard"]["columns"] == 6);
   CHECK(msg["dashboard"]["instruments"][0] == nlohmann::json{{"block", "graph-theta"}, {"size", "large"}, {"at", {0, 0}}});
+  CHECK(msg["dashboard"]["instruments"][2]["size"] == "xlarge");
   CHECK(msg["dashboard"]["instruments"][1] == nlohmann::json{{"block", "speed"}});
   CHECK_FALSE(nlohmann::json::parse(tk::catalog_message(tk::load_descriptor("domain = \"test\"\n", test_registry())))
                   .contains("dashboard"));
@@ -250,7 +252,7 @@ instruments = [
   fails_with("columns = 0", "from 1 to 12");
   fails_with("rows = 3", "unknown field \"rows\"");
   fails_with("instruments = [{ size = \"large\" }]", "needs \"block\"");
-  fails_with("instruments = [{ block = \"a\", size = \"huge\" }]", "compact, normal or large");
+  fails_with("instruments = [{ block = \"a\", size = \"huge\" }]", "compact, normal, large or xlarge");
   fails_with("instruments = [{ block = \"a\", at = [1] }]", "[column, row]");
   fails_with("instruments = [{ block = \"a\", at = [-1, 0] }]", "[column, row]");
   fails_with("instruments = [{ block = \"a\" }, { block = \"a\" }]", "placed twice");
