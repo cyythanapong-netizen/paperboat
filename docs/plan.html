@@ -1,37 +1,25 @@
+<meta charset="utf-8">
 <title>Paperboat Plan</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="_static/tokens.css">
+<script>try{var t=localStorage.getItem("paperboat.docs.theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
 <style>
 /* Layout: one reading column (~68ch) with wide breakouts for the pipeline diagram, domain grid and milestone track. */
+/* Colours and fonts are the app's design tokens (_static/tokens.css, generated from apps/web/src/tokens.css);
+   the names below are this page's own, mapped to them. Mono first: ink and grey, the signal colour for
+   what is live, nothing else coloured. */
 :root {
-  --bg: #f5f6f4;
-  --surface: #ffffff;
-  --fg: #1c2321;
-  --muted: #5b6662;
-  --line: #d6dbd8;
-  --accent: #c2410c;      /* signal orange: load arrows, stress */
-  --accent-soft: #fbe6da;
-  --steel: #2f5d62;       /* setup / structure */
-  --steel-soft: #dcebea;
-  --code-bg: #eef1ef;
-  --ok: #2e7d4f;
-  --font-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
-  --font-body: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #141917; --surface: #1c2220; --fg: #e4e9e6; --muted: #9aa6a1; --line: #2e3734;
-    --accent: #f08a4b; --accent-soft: #3a2418; --steel: #7fb8bc; --steel-soft: #1f3134;
-    --code-bg: #212825; --ok: #6cc391; color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #141917; --surface: #1c2220; --fg: #e4e9e6; --muted: #9aa6a1; --line: #2e3734;
-  --accent: #f08a4b; --accent-soft: #3a2418; --steel: #7fb8bc; --steel-soft: #1f3134;
-  --code-bg: #212825; --ok: #6cc391; color-scheme: dark;
+  --bg: var(--surface-ground);
+  --surface: var(--surface-panel);
+  --fg: var(--text);
+  --muted: var(--text-muted);
+  --accent: var(--signal);       /* load arrows, stress */
+  --accent-soft: color-mix(in srgb, var(--signal) 14%, var(--surface-panel));
+  --steel: var(--text);          /* setup / structure: ink */
+  --steel-soft: var(--surface-sunken);
+  --code-bg: var(--surface-well);
+  --ok: var(--text);
+  --font-display: var(--font-sans);
+  --font-body: var(--font-sans);
 }
 
 * { box-sizing: border-box; }
