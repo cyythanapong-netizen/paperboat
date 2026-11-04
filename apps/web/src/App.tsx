@@ -2,9 +2,12 @@ import { useEdgesState, useNodesState, useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "./engine";
 import { BrowserWindow, DRAG_TYPE, dragging, type Item } from "./Browser";
-import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toGraph, withBlock, type FlowControls, type FlowNode, type Wire } from "./FlowEditor";
+import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toFlow, toGraph, withBlock, type FlowControls, type FlowNode, type Wire } from "./FlowEditor";
 import { absolute, isFrame, levelOf } from "./groups";
-import type { DashboardLayout, ParamValue, RunSettings, Station, Variable, Variables } from "./protocol";
+import type { DashboardLayout, ParamValue, Project, RunSettings, Station, Variable, Variables } from "./protocol";
+import { addRecent, ago, buildProject, clearAutosave, loadAutosave, loadRecent, parseProject, projectFileName, projectName, saveAutosave, saveRecent, stringify, type Stored } from "./project";
+import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from "./projectFiles";
+import { Notice, ProjectLabel, Toast, type NoticeSpec } from "./ProjectUI";
 import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
 import { emptyOf, freeName, inlineRef, loadMine, merged, refersTo, renameInFormula, renameRef, saveMine, toToml, usesOf, type Use } from "./bindings";
 import { ConsoleWindow } from "./Console";
@@ -88,7 +91,7 @@ export function App() {
   const [station, setStation] = useState<Station | null>(null);
   const [runSettings, setRunSettings] = useState<RunSettings>({});
   // Variables (#36): the backend's defaults, then the user's own (kept in this browser per
-  // backend until projects, #34). The engine resolves them and says what they come to.
+  // backend as the working copy; a project file, #82, saves them). The engine resolves them and says what they come to.
   const [mine, setMine] = useState<Variables | undefined>(undefined);
   const engineKey = state.engine || "default";
   useEffect(() => setMine(loadMine(engineKey)), [engineKey]);
@@ -398,14 +401,193 @@ export function App() {
   const status = state.run?.status;
   const elapsed = state.run ? `${(state.run.progress * (Number(runSettings.duration ?? state.runDefaults.duration) || 0)).toFixed(1)} / ${runSettings.duration ?? state.runDefaults.duration ?? "?"} s` : "";
 
+  // ---- Projects (#82): the whole session as one file ----
+  // A project is the Flow, the Station, the variables, the Dashboard layout and the run settings. `projectKey` is
+  // that, as text, a moment after the last change; it is "unsaved" while it differs from `baseline`, which is
+  // what the backend started with, or what was last saved or opened.
+  const [projectTitle, setProjectTitle] = useState("Untitled");
+  const fileHandle = useRef<FileHandle | null>(null); // where Save writes, once the user chose a file (Chromium)
+  const [notice, setNotice] = useState<NoticeSpec | null>(null);
+  const [toast, setToast] = useState<{ text: string; undo: () => void } | null>(null);
+  const [recent, setRecent] = useState<Stored[]>(loadRecent);
+  const [lastSession, setLastSession] = useState<Stored | undefined>(undefined); // unsaved work found at load
+  const [restoreChecked, setRestoreChecked] = useState(false);
+  const [baseline, setBaseline] = useState<string | null>(null);
+  const [projectKey, setProjectKey] = useState("");
+  const snapshot = (): Project => buildProject({ backend: state.engine, flow: toFlow(nodes, edges), station, variables, dashboard: dashSaved, run: runSettings });
+  const latestProject = useRef<Project | null>(null);
+  const dirty = baseline !== null && projectKey !== "" && projectKey !== baseline;
+  const live = useRef({ snapshot, projectTitle, baseline, dirty, state });
+  live.current = { snapshot, projectTitle, baseline, dirty, state };
+
+  useEffect(() => {
+    if (!state.engine) return;
+    const t = window.setTimeout(() => {
+      const p = snapshot();
+      latestProject.current = p;
+      setProjectKey(JSON.stringify(p));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [nodes, edges, station, variables, dashSaved, runSettings, state.engine]); // eslint-disable-line react-hooks/exhaustive-deps -- `snapshot` reads exactly these
+  // Another backend: a new, unnamed project.
+  useEffect(() => {
+    setProjectTitle("Untitled");
+    fileHandle.current = null;
+    setBaseline(null);
+    setRestoreChecked(false);
+    setLastSession(undefined);
+  }, [state.engine]);
+  // The backend loaded its starter again: with nothing changed, clean is whatever that settles to.
+  useEffect(() => {
+    if (!live.current.dirty) setBaseline(null);
+  }, [state.loaded]);
+  useEffect(() => {
+    if (baseline !== null || projectKey === "") return;
+    const t = window.setTimeout(() => setBaseline(projectKey), 500);
+    return () => window.clearTimeout(t);
+  }, [projectKey, baseline]);
+  useEffect(() => {
+    document.title = `${dirty ? "● " : ""}${projectTitle} · Paperboat`;
+  }, [projectTitle, dirty]);
+
+  /** Put a project in place of what is open. `rebase`: what counts as unsaved against (null: what is loaded). */
+  const applyProject = (p: Project, name: string, rebase: string | null = null) => {
+    const g = fromGraph(p.flow, state.blocks);
+    setNodes(g.nodes);
+    setEdges(g.edges);
+    setFlowLevel(null);
+    editStation(p.station ?? state.station ?? { objects: [] });
+    varsHistory.current = { past: [], future: [] };
+    if (p.variables) keepVars(p.variables);
+    else {
+      setMine(undefined);
+      saveMine(engineKey, undefined);
+    }
+    saveDash(p.dashboard);
+    setRunSettings(p.run ?? {});
+    setProjectTitle(name);
+    setBaseline(rebase);
+    requestAnimationFrame(() => fitView());
+  };
+  const remember = (p: Project, name: string) =>
+    setRecent((prev) => {
+      const next = addRecent(prev, { name, savedAt: Date.now(), project: p });
+      saveRecent(next);
+      return next;
+    });
+  const fail = (title: string, e: unknown) => setNotice({ title, text: [e instanceof Error ? e.message : String(e)], actions: [{ label: "OK", primary: true }] });
+
+  /** Open a project, after a word if it comes from another backend or replaces unsaved changes; one Undo brings back what was open. */
+  const openProject = (p: Project, name: string) => {
+    const warnings: string[] = [];
+    if (p.backend !== state.engine) warnings.push(`This project was made on “${p.backend}” and you are connected to “${state.engine}”. Blocks this backend lacks stay as lost blocks, with their params and wires.`);
+    if (live.current.dirty) warnings.push("The open project has unsaved changes. Opening replaces them; Undo brings them back.");
+    const go = () => {
+      const { snapshot: before, projectTitle: beforeTitle, baseline: beforeBase } = live.current;
+      const was = before();
+      const handle = fileHandle.current;
+      applyProject(p, name);
+      fileHandle.current = null;
+      remember(p, name);
+      setToast({
+        text: `Opened “${name}”`,
+        undo: () => {
+          applyProject(was, beforeTitle, beforeBase);
+          fileHandle.current = handle;
+        },
+      });
+    };
+    if (warnings.length === 0) go();
+    else setNotice({ title: "Open this project?", text: warnings, actions: [{ label: "Open", primary: true, run: go }, { label: "Cancel" }] });
+  };
+  const openText = (text: string, file: string) => {
+    const r = parseProject(text);
+    if ("error" in r) setNotice({ title: "Can't open this file", text: [`${file}: ${r.error}`, "Nothing was changed."], actions: [{ label: "OK", primary: true }] });
+    else openProject(r.project, projectName(file));
+  };
+  const openFile = async () => {
+    try {
+      const f = await pickText();
+      if (f) openText(f.text, f.name);
+    } catch (e) {
+      fail("Can't open the file", e);
+    }
+  };
+  const saveProject = async (as: boolean) => {
+    const { snapshot: take, projectTitle: title } = live.current;
+    const p = take();
+    try {
+      const r = await saveText(stringify(p), projectFileName(title === "Untitled" ? state.engine || "project" : title), as ? null : fileHandle.current);
+      if (!r) return; // cancelled
+      fileHandle.current = r.handle ?? null;
+      const name = projectName(r.name);
+      setProjectTitle(name);
+      setBaseline(JSON.stringify(p));
+      remember(p, name);
+      clearAutosave(state.engine);
+      setLastSession(undefined);
+    } catch (e) {
+      fail("Can't save", e);
+    }
+  };
+  // Dropping a project file on the window opens it (the app's own cards are not files).
+  const openTextNow = useRef(openText);
+  openTextNow.current = openText;
+  useEffect(() => {
+    const over = (e: DragEvent) => draggingFiles(e) && e.preventDefault();
+    const drop = (e: DragEvent) => {
+      if (!draggingFiles(e)) return;
+      e.preventDefault();
+      droppedText(e).then((f) => f && openTextNow.current(f.text, f.name), (err) => fail("Can't open the file", err));
+    };
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", drop);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- `fail` only sets state
+  // Unsaved work is kept as it happens, and offered back after a reload.
+  const restore = (s: Stored) => {
+    applyProject(s.project, s.name, live.current.baseline);
+    fileHandle.current = null;
+    setLastSession(undefined);
+  };
+  useEffect(() => {
+    if (baseline === null || restoreChecked || !state.engine) return;
+    setRestoreChecked(true);
+    const s = loadAutosave(state.engine);
+    if (!s || JSON.stringify(s.project) === baseline) return clearAutosave(state.engine);
+    setLastSession(s);
+    setNotice({
+      title: "Restore your last session?",
+      text: [`“${s.name}”, ${ago(s.savedAt, Date.now())}, had changes that weren't saved.`],
+      actions: [
+        { label: "Restore", primary: true, run: () => restore(s) },
+        { label: "Discard", run: () => (clearAutosave(s.project.backend), setLastSession(undefined)) },
+        { label: "Not now" },
+      ],
+    });
+  }, [baseline, restoreChecked, state.engine]); // eslint-disable-line react-hooks/exhaustive-deps -- once per backend
+  useEffect(() => {
+    if (!restoreChecked || !state.engine || baseline === null || !latestProject.current) return;
+    if (dirty) saveAutosave(state.engine, { name: projectTitle, savedAt: Date.now(), project: latestProject.current });
+    else if (!lastSession) clearAutosave(state.engine);
+  }, [projectKey, dirty, restoreChecked]); // eslint-disable-line react-hooks/exhaustive-deps -- when the project changes
+
   // ---- The commands (#78): what the menus, the command search and the shortcuts all run ----
-  // Only what the app already does; backends' commands and the file actions come with their issues.
+  // Only what the app already does; backends' commands come with their issue (#85).
   const canRun = state.connection === "open" && !running;
   const flowInView = mode === "commander" || page === "flow";
   /** An Edit action on the canvas: on while the Flow is in view and the canvas allows it. */
   const onCanvas = (can: (c: FlowControls["can"]) => boolean) => () => flowInView && !!flow.current && can(flow.current.can);
   const canvasWhy = (why: string) => (flowInView ? why : "Open the Flow page first");
   const commands: Command[] = [
+    { id: "file.open", label: "Open…", menu: "file", group: "project", shortcut: "Ctrl+O", chord: { key: "o", ctrl: true }, enabled: state.connection === "open", why: "Not connected to a backend", run: () => void openFile() },
+    { id: "file.save", label: "Save", menu: "file", group: "project", shortcut: "Ctrl+S", chord: { key: "s", ctrl: true }, enabled: !!state.engine, why: "Not connected to a backend yet", run: () => void saveProject(false) },
+    { id: "file.saveAs", label: "Save as…", menu: "file", group: "project", shortcut: "Ctrl+Shift+S", chord: { key: "s", ctrl: true, shift: true }, enabled: !!state.engine, why: "Not connected to a backend yet", run: () => void saveProject(true) },
+    { id: "file.restore", label: "Restore last session", menu: "file", group: "session", enabled: !!lastSession, why: "No unsaved session to restore", run: () => lastSession && restore(lastSession) },
+    ...recent.map((s): Command => ({ id: `file.recent.${s.name}`, label: s.name, menu: "file", group: "recent", meta: ago(s.savedAt, Date.now()), enabled: state.connection === "open", why: "Not connected to a backend", run: () => openProject(s.project, s.name) })),
     { id: "file.backend", label: "Backend…", menu: "file", group: "backend", run: () => setBackendOpen(true) },
 
     { id: "edit.undo", label: "Undo", menu: "edit", group: "history", shortcut: "Ctrl+Z", enabled: history.canUndo, why: "Nothing to undo on the Flow canvas", run: history.undo },
@@ -480,6 +662,7 @@ export function App() {
       <header className="bar">
         <Wordmark />
         <MenuBar commands={commands} />
+        <ProjectLabel name={projectTitle} dirty={dirty} />
         <span className="spacer" />
         {errors > 0 && (
           <button className="key small err" title="Open the Console" onClick={() => setConsoleShown(true)}>
@@ -596,6 +779,8 @@ export function App() {
         />
       </main>
       </VarsContext.Provider>
+      {notice && <Notice key={notice.title + notice.text.join()} spec={notice} onClose={() => setNotice(null)} />}
+      {toast && <Toast text={toast.text} undo="Undo" onUndo={toast.undo} onClose={() => setToast(null)} />}
       {searchOpen && <CommandSearch commands={commands} onClose={() => setSearchOpen(false)} />}
       {backendOpen && <BackendWindow url={url} connection={state.connection} engine={state.engine} onConnect={setUrl} onClose={() => setBackendOpen(false)} />}
       {consoleShown && <ConsoleWindow logs={state.logs} errors={errors} onBlock={showBlock} onClose={() => setConsoleShown(false)} />}

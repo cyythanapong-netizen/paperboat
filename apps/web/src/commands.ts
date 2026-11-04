@@ -15,7 +15,7 @@ export const MENUS: { id: MenuId; label: string }[] = [
 ];
 
 /** A heading above a group of items, where the group needs one to read. */
-export const GROUP_TITLES: Record<string, string> = { pages: "Pages", mode: "Mode", theme: "Theme" };
+export const GROUP_TITLES: Record<string, string> = { pages: "Pages", mode: "Mode", theme: "Theme", recent: "Recent projects" };
 
 /** A key combination. `ctrl` also means ⌘ on a Mac. `key` is `KeyboardEvent.key`, lower-case. */
 export type Chord = { key: string; ctrl?: boolean; alt?: boolean; shift?: boolean };

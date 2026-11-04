@@ -291,6 +291,23 @@ export type PortSides = {
   bottom?: string[];
 };
 
+/** A project file (#82): everything a user made, as one JSON file (name.paperboat.json). It is not a protocol message; the UI writes and reads it. flow, station, variables and dashboard are the shapes the protocol already uses. A block whose type the opening backend lacks stays as a lost block, params and wires kept. */
+export type Project = {
+  /** The project format version. Opening refuses a newer one and says so. */
+  paperboat: 0;
+  /** The engine the project was made on (hello.engine). Opening it on another backend warns first. */
+  backend: string;
+  /** The Flow canvas, groups included; every node has its place (pos). */
+  flow: Graph;
+  station?: Station;
+  /** The user's variables: the list the Variables sheet shows. */
+  variables?: Variables;
+  /** The user's Dashboard arrangement, if they made one. */
+  dashboard?: DashboardLayout;
+  /** Only the run settings the user changed from the backend's defaults. */
+  run?: RunSettings;
+};
+
 /** Every message a backend sends. */
 export type ServerMsg =
   | {
