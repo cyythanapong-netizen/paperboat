@@ -7,7 +7,7 @@ import type { EngineState } from "./engine";
 export function Console({ logs, onBlock }: { logs: EngineState["logs"]; onBlock: (id: string) => void }) {
   if (logs.length === 0) return <p className="empty">Nothing yet. Runs, errors and what blocks log appear here.</p>;
   return (
-    <ol className="logs">
+    <ol className="logs screen">
       {logs.map((l, i) => (
         <li key={i} className={`log-${l.level}`}>
           {l.node && (

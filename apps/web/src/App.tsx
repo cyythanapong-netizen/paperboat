@@ -6,7 +6,7 @@ import { absolute, isFrame } from "./groups";
 import type { RunSettings, Station } from "./protocol";
 import { Console } from "./Console";
 import { Dashboard } from "./Dashboard";
-import { Composition, ModeSwitch, PAGES, Panel, Rail, Wordmark, type Mode, type Page } from "./Shell";
+import { PAGES, Panel, Rail, Switch, Wordmark, type Mode, type Page, type Theme } from "./Shell";
 import { SceneView } from "./SceneView";
 import { StationGraph } from "./StationGraph";
 import { StationPanel } from "./StationPanel";
@@ -42,9 +42,32 @@ function remembered<T extends string>(key: string, fallback: T, allowed: readonl
 
 const PAGE_IDS = PAGES.map((p) => p.id);
 
+/** "1 object", "2 objects". */
+const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** The theme in use: the user's pick, or the system's. Sets html[data-theme]. */
+function useTheme(choice: Theme): "light" | "dark" {
+  const query = "(prefers-color-scheme: dark)";
+  const [system, setSystem] = useState(() => (window.matchMedia?.(query).matches ? "dark" : "light"));
+  useEffect(() => {
+    const m = window.matchMedia?.(query);
+    if (!m) return;
+    const on = () => setSystem(m.matches ? "dark" : "light");
+    m.addEventListener("change", on);
+    return () => m.removeEventListener("change", on);
+  }, []);
+  useEffect(() => {
+    if (choice === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = choice;
+  }, [choice]);
+  return choice === "auto" ? (system as "light" | "dark") : choice;
+}
+
 export function App() {
   const [mode, setMode] = remembered<Mode>("paperboat.mode", "navigator", ["navigator", "commander"]);
   const [page, setPage] = remembered<Page>("paperboat.page", "flow", PAGE_IDS);
+  const [themeChoice, setThemeChoice] = remembered<Theme>("paperboat.theme", "auto", ["auto", "light", "dark"]);
+  const theme = useTheme(themeChoice);
   const [url, setUrl] = useState(DEFAULT_URL);
   const [draftUrl, setDraftUrl] = useState(DEFAULT_URL);
   const { state, send, subscribe } = useEngine(url);
@@ -201,9 +224,11 @@ export function App() {
       ...(Object.keys(runSettings).length ? { settings: runSettings } : {}),
     });
 
+  const status = state.run?.status;
+  const elapsed = state.run ? `${(state.run.progress * (Number(runSettings.duration ?? state.runDefaults.duration) || 0)).toFixed(1)} / ${runSettings.duration ?? state.runDefaults.duration ?? "?"} s` : "";
+
   return (
     <div className={`app mode-${mode}`}>
-      <Composition focus={mode === "navigator" ? page : null} />
       <header className="bar">
         <Wordmark />
         <form
@@ -213,30 +238,52 @@ export function App() {
             setUrl(draftUrl);
           }}
         >
-          <span className={`dot conn-${state.connection}`} title={state.connection} />
-          <input aria-label="Backend address" value={draftUrl} onChange={(e) => setDraftUrl(e.target.value)} size={22} />
-          <button>Connect</button>
-          <span className="engine">{state.connection === "open" ? state.engine : state.connection}</span>
+          <span className="lbl">backend</span>
+          <span className="screen field">
+            <input aria-label="Backend address" value={draftUrl} onChange={(e) => setDraftUrl(e.target.value)} size={20} />
+            <span className={`conn conn-${state.connection}`}>
+              {state.connection === "open" ? state.engine : state.connection}
+            </span>
+          </span>
+          <button className="key small">connect</button>
         </form>
         <div className="run-controls">
-          <button className="primary" disabled={state.connection !== "open" || running} onClick={run}>
-            Run
+          <button className="key run" disabled={state.connection !== "open" || running} onClick={run}>
+            ▶ run
           </button>
           <RunOptions defaults={state.runDefaults} value={runSettings} onChange={setRunSettings} />
-          <button disabled={!running} onClick={() => send({ type: "run.cancel" })}>
-            Cancel
+          <button className="key" disabled={!running} onClick={() => send({ type: "run.cancel" })}>
+            ■ cancel
           </button>
           {state.run && (
-            <span className={`run-status status-${state.run.status}`}>
-              <progress value={state.run.progress} aria-label="Run progress" /> {state.run.status}
+            <span className={`run-status status-${status}`}>
+              {status === "running" ? `running ${elapsed}` : status}
             </span>
           )}
         </div>
-        <ModeSwitch mode={mode} onMode={setMode} />
+        <Switch
+          label="view"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: "navigator", label: "navigator", hint: "One page at a time (Alt+M)" },
+            { value: "commander", label: "commander", hint: "Every page at once (Alt+M)" },
+          ]}
+        />
+        <Switch
+          label="theme"
+          value={themeChoice}
+          onChange={setThemeChoice}
+          options={[
+            { value: "auto", label: "auto", hint: "As the system" },
+            { value: "light", label: "light" },
+            { value: "dark", label: "dark" },
+          ]}
+        />
       </header>
       {mode === "navigator" && <Rail page={page} onPage={setPage} errors={errors} />}
       <main className="pages">
-        <Panel {...panel("station")}>
+        <Panel {...panel("station")} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
           <div className={`station view-${view}`}>
             {view === "web" && state.stationView.page ? (
               <WebStation
@@ -250,7 +297,7 @@ export function App() {
             ) : view === "graph" ? (
               <StationGraph objects={state.objects} station={station ?? { objects: [] }} onChange={editStation} locked={running} />
             ) : (
-              <SceneView key={JSON.stringify(state.view)} view={state.view} entities={state.entities} />
+              <SceneView key={`${theme}:${JSON.stringify(state.view)}`} view={state.view} entities={state.entities} />
             )}
             {station && state.objects.length > 0 && (
               <StationPanel
@@ -263,7 +310,7 @@ export function App() {
             )}
           </div>
         </Panel>
-        <Panel {...panel("flow")}>
+        <Panel {...panel("flow")} info={count(nodes.filter(isBlock).length, "block")}>
           <RunStates.Provider value={runStates}>
             <FlowEditor
               blocks={state.blocks}
@@ -276,7 +323,7 @@ export function App() {
             />
           </RunStates.Provider>
         </Panel>
-        <Panel {...panel("dashboard")}>
+        <Panel {...panel("dashboard")} info={count(Object.keys(state.latest).length, "instrument")}>
           <Dashboard
             state={state}
             monitors={Object.fromEntries(
@@ -284,7 +331,7 @@ export function App() {
             )}
           />
         </Panel>
-        <Panel {...panel("console")} tools={errors > 0 ? <b className="badge">{errors}</b> : null}>
+        <Panel {...panel("console")} info={`${count(state.logs.length, "line")}${errors ? ` · ${count(errors, "error")}` : ""}`}>
           <Console logs={state.logs} onBlock={showBlock} />
         </Panel>
       </main>

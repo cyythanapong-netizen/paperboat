@@ -11,14 +11,16 @@ function Plot({ name, series }: { name: string; series: Series }) {
   const last = series.v[series.v.length - 1] ?? 0;
   return (
     <figure className="instrument graph">
+      <div className="screen">
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+          <line className="zero" x1={0} x2={W} y1={H - (-vMin / span) * H} y2={H - (-vMin / span) * H} />
+          <polyline className="trace" points={points} fill="none" vectorEffect="non-scaling-stroke" />
+        </svg>
+      </div>
       <figcaption>
         <span>{name}</span>
         <output>{last.toFixed(3)}</output>
       </figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-        <line className="zero" x1={0} x2={W} y1={H - (-vMin / span) * H} y2={H - (-vMin / span) * H} />
-        <polyline className="trace" points={points} fill="none" vectorEffect="non-scaling-stroke" />
-      </svg>
     </figure>
   );
 }
@@ -29,15 +31,23 @@ function Instrument({ name, kind, state }: { name: string; kind: string; state: 
   if (kind === "image")
     return (
       <figure className="instrument image">
-        <figcaption>{name}</figcaption>
-        {typeof latest === "string" && <img src={latest} alt={name} />}
+        <div className="screen">{typeof latest === "string" && <img src={latest} alt={name} />}</div>
+        <figcaption>
+          <span>{name}</span>
+          <span>image</span>
+        </figcaption>
       </figure>
     );
   if (kind === "display")
     return (
       <figure className="instrument display">
-        <figcaption>{name}</figcaption>
-        <output>{typeof latest === "number" ? +latest.toFixed(4) : (latest ?? "–")}</output>
+        <div className="screen">
+          <output>{typeof latest === "number" ? +latest.toFixed(4) : (latest ?? "–")}</output>
+        </div>
+        <figcaption>
+          <span>{name}</span>
+          <span>display</span>
+        </figcaption>
       </figure>
     );
   const series = state.signals[name];

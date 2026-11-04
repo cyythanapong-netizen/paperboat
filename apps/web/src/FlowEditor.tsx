@@ -82,24 +82,33 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { params, missing } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
-  const classes = ["block", `kind-${def.kind}`, hasStepPorts(def) && "step", active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
+  const step = hasStepPorts(def);
+  const classes = ["block", `kind-${def.kind}`, step && "step", selected && "selected", active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
+  // The head's tag says what is happening to the block, else what it is: words, not colours.
+  const tag = missing
+    ? "missing"
+    : failed
+      ? "failed"
+      : active
+        ? "running"
+        : def.linked
+          ? "station"
+          : step
+            ? "step"
+            : def.kind === "function"
+              ? "fn"
+              : def.kind;
   return (
     <div
       className={classes.filter(Boolean).join(" ")}
       title={missing ? `This backend has no "${def.type}" block: its params and wires are kept. Replace or delete it.` : undefined}
     >
       <div className="block-title">
-        {missing ? (
-          <span>
-            {def.type} <span className="missing-tag">missing</span>
-          </span>
-        ) : def.linked ? (
-          <span title="Linked to a station object: set its properties, or remove it, on the Station">
-            {def.label} <span className="linked-tag">⚓ {id}</span>
-          </span>
-        ) : (
-          def.label
-        )}
+        <span className="block-name" title={def.linked ? "Linked to a station object: set its properties, or remove it, on the Station" : undefined}>
+          {missing ? def.type : def.label}
+          {def.linked && <span className="linked-tag"> {id}</span>}
+        </span>
+        <span className={`block-tag tag-${tag}`}>{tag}</span>
         {selected && !def.linked && (
           <button className="remove nodrag" title="Delete block" onClick={() => deleteElements({ nodes: [{ id }] })}>
             ×
