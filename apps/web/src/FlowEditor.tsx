@@ -5,13 +5,13 @@ import {
   EdgeLabelRenderer,
   getBezierPath,
   getSmoothStepPath,
-  Handle,
   MarkerType,
   MiniMap,
   Position,
   ReactFlow,
   useInternalNode,
   useReactFlow,
+  useStoreApi,
   type Connection,
   type Edge,
   type EdgeProps,
@@ -24,6 +24,7 @@ import {
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { RemoveIcon } from "./RemoveIcon";
+import { connectionOf, nearestAccepting, PortHandle, SNAP, WireDragContext, type Anchor } from "./wireSnap";
 import {
   display,
   frameAround,
@@ -125,14 +126,14 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
       )}
       {def.inputs.map((p) => (
         <div key={p.id} className={`port in port-${p.type}`}>
-          <Handle type="target" position={Position.Left} id={p.id} />
+          <PortHandle type="target" position={Position.Left} id={p.id} />
           {p.id}
         </div>
       ))}
       {def.outputs.map((p) => (
         <div key={p.id} className={`port out port-${p.type}`}>
           {p.id}
-          <Handle type="source" position={Position.Right} id={p.id} />
+          <PortHandle type="source" position={Position.Right} id={p.id} />
         </div>
       ))}
       {def.params.map((p) => (
@@ -564,13 +565,50 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       return connect(rest, c, wireType(c));
     });
   };
-  const onReconnectEnd = (_: unknown, wire: Wire) => {
+  const onReconnectEnd = (_: unknown, wire: Wire, __: unknown, state: { isValid: boolean | null }) => {
+    // The drop missed every port that accepts it, but one does within reach: join that one.
+    if (!state.isValid && anchor && targetNow.current) onReconnect(wire, connectionOf(anchor, targetNow.current.nodeId, targetNow.current.handleId));
     if (!moved.current) setEdges((ws) => ws.filter((w) => w.id !== wire.id));
     moved.current = true;
+    endWire();
   };
 
   // ---- Adding: quick add at the cursor, and cards dropped from the browser (#50) ----
   const { screenToFlowPosition } = useReactFlow();
+
+  // ---- Dragging a wire (#52): the port it would join is raised, ports that can't take it dim ----
+  const store = useStoreApi();
+  const [anchor, setAnchor] = useState<Anchor | null>(null);
+  const [target, setTarget] = useState<{ nodeId: string; handleId: string | null } | null>(null);
+  const targetNow = useRef(target); // what a drop would join, read when the pointer is released
+  useEffect(() => {
+    if (!anchor) return;
+    const move = (e: PointerEvent) => {
+      const next = nearestAccepting(store.getState(), screenToFlowPosition({ x: e.clientX, y: e.clientY }), SNAP.connect, anchor, isValidConnection);
+      if (next?.nodeId === targetNow.current?.nodeId && next?.handleId === targetNow.current?.handleId) return;
+      targetNow.current = next;
+      setTarget(next); // re-render only when the target changes, not on every move
+    };
+    window.addEventListener("pointermove", move);
+    return () => window.removeEventListener("pointermove", move);
+  }); // eslint-disable-line react-hooks/exhaustive-deps -- isValidConnection follows the nodes: re-bind each render
+  const startWire = (a: Anchor) => {
+    targetNow.current = null;
+    setTarget(null);
+    setAnchor(a);
+  };
+  const endWire = () => {
+    targetNow.current = null;
+    setTarget(null);
+    setAnchor(null);
+  };
+  const wireDrag = anchor
+    ? {
+        target,
+        accepts: (nodeId: string, handleId: string | null, side: "source" | "target") =>
+          side !== anchor.type && isValidConnection(connectionOf(anchor, nodeId, handleId)),
+      }
+    : null;
   const wrap = useRef<HTMLDivElement>(null);
   const addable = useMemo<Item[]>(() => blocks.filter((b) => !b.linked).map((def) => ({ kind: "block", def })), [blocks]);
   const [quick, setQuick] = useState<{ x: number; y: number } | null>(null);
@@ -719,6 +757,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
         onDragLeave={(e) => !wrap.current?.contains(e.relatedTarget as globalThis.Node | null) && setHint(null)}
         onDrop={onDrop}
       >
+        <WireDragContext.Provider value={wireDrag}>
         <ReactFlow
           nodes={shown.nodes}
           edges={shown.edges}
@@ -729,8 +768,20 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
           onConnect={onConnect}
           isValidConnection={isValidConnection}
           onReconnect={onReconnect}
-          onReconnectStart={() => (moved.current = false)}
+          onReconnectStart={(_, wire, end) => {
+            moved.current = false;
+            // The end that stays put is the anchor.
+            startWire(end === "target" ? { nodeId: wire.source, handleId: wire.sourceHandle ?? null, type: "source" } : { nodeId: wire.target, handleId: wire.targetHandle ?? null, type: "target" });
+          }}
           onReconnectEnd={onReconnectEnd}
+          onConnectStart={(_, from) => from.nodeId && from.handleType && startWire({ nodeId: from.nodeId, handleId: from.handleId, type: from.handleType })}
+          onConnectEnd={(_, state) => {
+            // Same: nothing accepting was snapped to, but one is within reach.
+            if (!state.isValid && anchor && targetNow.current) onConnect(connectionOf(anchor, targetNow.current.nodeId, targetNow.current.handleId));
+            endWire();
+          }}
+          connectionRadius={SNAP.connect}
+          reconnectRadius={SNAP.reconnect}
           deleteKeyCode={["Backspace", "Delete"]}
           multiSelectionKeyCode={["Control", "Meta"]}
           panActivationKeyCode={null} // Space belongs to the backend (Key blocks)
@@ -755,6 +806,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
             />
           )}
         </ReactFlow>
+        </WireDragContext.Provider>
         {hint && (
           <div className="drop-hint" aria-live="polite">
             {hint.plan.kind === "place" && (

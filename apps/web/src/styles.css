@@ -223,6 +223,12 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .port-step { color: var(--text); font-weight: 500; }
 .port-step .react-flow__handle, .frame-head .step-handle { width: 9px; height: 9px; border-radius: 1px; background: var(--line-ink); border-color: var(--line-ink); }
 .port-image .react-flow__handle { border-style: dashed; }
+/* Wires find their port (#52): a 24px hit area round the 8px dot; while a wire is dragged
+   the port it would join is raised and ringed, ports that can't take it are dimmed. */
+.react-flow__handle::after { content: ""; position: absolute; inset: -8px; }
+.react-flow__handle.wire-dim { opacity: 0.3; }
+.react-flow__handle.wire-target { scale: 1.9; background: var(--signal); border-color: var(--line-ink); box-shadow: 0 0 0 2px var(--surface-panel), 0 0 0 3px var(--line-ink); }
+.port:has(.wire-target) { color: var(--text); font-weight: 600; }
 
 .param { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: 3px 10px; color: var(--text-muted); }
 .param input, .param select { width: 66px; text-align: right; background: transparent; border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; padding: 1px 2px; color: var(--text); }
