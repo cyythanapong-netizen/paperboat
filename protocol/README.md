@@ -145,7 +145,7 @@ pushes on the object through the block's inputs and reads it through its outputs
 **Variables** (#36). Named, typed values defined once and used by reference (above):
 
 ```jsonc
-[{ "name": "pole_length", "type": "number", "value": 1, "unit": "m", "min": 0.2, "max": 3, "group": "Plant" },
+[{ "name": "pole_length", "type": "number", "value": 1, "unit": "m", "min": 0.2, "max": 3, "group": "Cart-pole" },
  { "name": "kp_theta", "type": "number", "value": 40, "unit": "N/rad" },
  { "name": "kd_theta", "type": "number", "expr": "2 * sqrt(kp_theta * pole_length)" },  // a formula
  { "name": "controller", "type": "enum", "value": "pid", "options": ["pid", "lqr"] },

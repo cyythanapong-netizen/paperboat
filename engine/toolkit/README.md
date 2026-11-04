@@ -3,7 +3,7 @@
 Reusable C++ blocks with no domain code, grouped in packages. A domain doesn't
 re-implement a PID or a sine: its **descriptor** lists the templates it wants, renames
 or re-defaults them, and adds the blocks only it can provide (the sources and probes on
-its plant).
+its domain state).
 
 ## Templates
 
@@ -36,7 +36,7 @@ a clock in `control`, image filters in `opencv`. A descriptor imports the packag
 wants, so a domain's palette shows only what makes sense there.
 
 The control package also has `rk4_step` and `euler_step` in
-`paperboat/toolkit/control/simulator.hpp`, for domain plants to integrate their own
+`paperboat/toolkit/control/simulator.hpp`, for domains to integrate their own
 equations of motion.
 
 List them with ports and defaults:
