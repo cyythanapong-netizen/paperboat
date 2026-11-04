@@ -7,8 +7,11 @@ import {
   getSmoothStepPath,
   MarkerType,
   MiniMap,
+  NodeToolbar,
+  useStore,
   Position,
   ReactFlow,
+  SelectionMode,
   useInternalNode,
   useReactFlow,
   useStoreApi,
@@ -81,7 +84,7 @@ const portType = (def: BlockDef | undefined, port: string | null | undefined, si
 
 /** Generic node: everything it shows comes from the backend's BlockDef. */
 function Block({ id, data, selected }: NodeProps<BlockNode>) {
-  const { updateNodeData, deleteElements } = useReactFlow<BlockNode, Wire>();
+  const { updateNodeData } = useReactFlow<BlockNode, Wire>();
   const states = useContext(RunStates);
   const active = states.active.has(id);
   const progress = states.progress[id];
@@ -115,11 +118,6 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           {def.linked && <span className="linked-tag"> {id}</span>}
         </span>
         <span className={`block-tag tag-${tag}`}>{tag}</span>
-        {selected && !def.linked && (
-          <button className="remove nodrag" title="Delete block" onClick={() => deleteElements({ nodes: [{ id }] })}>
-            <RemoveIcon />
-          </button>
-        )}
       </div>
       {active && progress !== undefined && progress < 1 && (
         <div className="block-progress" title={`${Math.round(progress * 100)} %`}>
@@ -539,7 +537,6 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   // Grouping: a frame around the selected blocks (not already in a group). A story holds
   // signal blocks only: it is itself the step.
   const selected = nodes.filter((n): n is BlockNode => isBlock(n) && !!n.selected && !n.parentId);
-  const selectedFrame = nodes.find((n) => isFrame(n) && n.selected);
   const canStory = selected.length > 0 && selected.every((n) => !hasStepPorts(portsOf(n)));
   const group = (kind: GroupData["kind"]) =>
     setNodes((ns) => {
@@ -581,7 +578,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   };
 
   // ---- Adding: quick add at the cursor, and cards dropped from the browser (#50) ----
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, deleteElements } = useReactFlow();
 
   // ---- Dragging a wire (#52): the port it would join is raised, ports that can't take it dim ----
   const store = useStoreApi();
@@ -645,6 +642,49 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
+
+  // ---- Several at once: dragging on empty canvas draws a box; a dialog acts on it (#54) ----
+  const [busy, setBusy] = useState(false); // dragging blocks or the box: the dialog waits
+  const pickedNodes = shown.nodes.filter((n) => n.selected && !n.hidden);
+  const pickedWires = shown.edges.filter((w) => w.selected);
+  const pickedFrames = pickedNodes.filter(isFrame);
+  const kept = pickedNodes.filter((n) => isBlock(n) && n.data.def.linked).length; // linked blocks aren't deleted
+  const many = pickedNodes.length > 0; // a block or group, with or without wires (wires alone have ×)
+  // The dialog floats above the selection, or below it when the selection is at the top of
+  // the canvas (above, it would sit under the panel's head, out of reach).
+  const pickedIds = pickedNodes.map((n) => n.id).join(",");
+  const roomAbove = useStore((st) => {
+    const [, ty, zoom] = st.transform;
+    let top = Infinity;
+    for (const id of pickedIds ? pickedIds.split(",") : []) {
+      const n = st.nodeLookup.get(id);
+      if (n) top = Math.min(top, n.internals.positionAbsolute.y * zoom + ty);
+    }
+    return top > 64;
+  });
+  const deselect = () => {
+    setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
+    setEdges((ws) => ws.map((w) => (w.selected ? { ...w, selected: false } : w)));
+  };
+  const removePicked = () =>
+    deleteElements({ nodes: pickedNodes.map((n) => ({ id: n.id })), edges: pickedWires.map((w) => ({ id: w.id })) });
+  useEffect(() => {
+    if (!many) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== "Escape" || (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT"))) return;
+      e.preventDefault(); // not a key for the backend
+      deselect();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
+  const counted = (n: number, one: string) => (n ? [`${n} ${one}${n === 1 ? "" : "s"}`] : []);
+  const summary = [
+    ...counted(pickedNodes.filter(isBlock).length, "block"),
+    ...counted(pickedFrames.length, "group"),
+    ...counted(pickedWires.length, "wire"),
+  ].join(" · ");
 
   // A dragged card: plan what dropping it here would do, show that, and do it on drop.
   const [hint, setHint] = useState<{ plan: Plan; x: number; y: number; label: string } | null>(null);
@@ -730,25 +770,6 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     <GroupActions.Provider value={{ ...actions, active: runStates.active }}>
     <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
     <div className="flow">
-      <div className="flow-tools">
-        <span className="lbl">Selection</span>
-        <button disabled={selected.length === 0} title="Frame the selected blocks (tidy; they run as before)" onClick={() => group("visual")}>
-          ▭ Group
-        </button>
-        <button
-          disabled={!canStory}
-          title="Make the selected signal blocks a story: one step of a Step flow that runs them for its seconds"
-          onClick={() => group("story")}
-        >
-          ▶ Story
-        </button>
-        <button disabled={!selectedFrame} onClick={() => selectedFrame && actions.ungroup(selectedFrame.id)}>
-          ⊟ Ungroup
-        </button>
-        <span className="lbl flow-tip">
-          <span className="kbd">/</span> or double-click the canvas to add a block
-        </span>
-      </div>
       <div
         className="flow-canvas"
         ref={wrap}
@@ -791,7 +812,15 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
           reconnectRadius={SNAP.reconnect}
           deleteKeyCode={["Backspace", "Delete"]}
           multiSelectionKeyCode={["Control", "Meta"]}
+          selectionKeyCode={["Control", "Meta"]} // Ctrl-drag on the canvas draws a box…
+          selectionMode={SelectionMode.Partial} // …and picks every block it touches; a plain drag pans
           panActivationKeyCode={null} // Space belongs to the backend (Key blocks)
+          onNodeDragStart={() => setBusy(true)}
+          onNodeDragStop={() => setBusy(false)}
+          onSelectionDragStart={() => setBusy(true)}
+          onSelectionDragStop={() => setBusy(false)}
+          onSelectionStart={() => setBusy(true)}
+          onSelectionEnd={() => setBusy(false)}
           zoomOnDoubleClick={false} // double-click is quick add
           fitView
         >
@@ -812,6 +841,47 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
               maskStrokeWidth={1}
             />
           )}
+          <NodeToolbar
+            nodeId={pickedNodes.map((n) => n.id)}
+            isVisible={many && !busy}
+            position={roomAbove ? Position.Top : Position.Bottom}
+            offset={14}
+            className="selection-dialog nodrag nopan nowheel"
+          >
+            <span className="lbl">{summary}</span>
+            <button
+              className="key small"
+              disabled={kept === pickedNodes.length && pickedWires.length === 0}
+              title="Delete the selection (Delete)"
+              onClick={removePicked}
+            >
+              Delete
+            </button>
+            <button className="key small" disabled={selected.length === 0} title="Frame the selected blocks (tidy; they run as before)" onClick={() => group("visual")}>
+              Group
+            </button>
+            <button
+              className="key small"
+              disabled={!canStory}
+              title={canStory ? "Make the selected blocks a story: one step of a Step flow" : "A story holds signal blocks only: no step ports"}
+              onClick={() => group("story")}
+            >
+              Story
+            </button>
+            <button
+              className="key small"
+              disabled={pickedFrames.length === 0}
+              title="Remove the selected groups' frames (keeps the blocks)"
+              onClick={() => pickedFrames.forEach((f) => actions.ungroup(f.id))}
+            >
+              Ungroup
+            </button>
+            {kept > 0 && (
+              <span className="lbl kept" title="Linked blocks come from the backend's own graph">
+                {kept} linked {kept === 1 ? "block stays" : "blocks stay"}
+              </span>
+            )}
+          </NodeToolbar>
         </ReactFlow>
         </WireDragContext.Provider>
         {hint && (
@@ -843,8 +913,9 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
         />
       )}
       <p className="hint muted">
-        Click a block or wire, then Delete or ×. Shift-drag to select several; Ctrl-click to add one. Drag a wire's end
-        off its port to remove it. Group or Story the selected blocks; ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
+        <span className="kbd">/</span> or double-click the canvas adds a block. Click a block, or Ctrl-drag a box (Ctrl-click
+        adds one): the dialog above it deletes, groups or makes a story. Drag the canvas to pan; the wheel zooms. Drag a
+        wire's end off its port to remove it; ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
       </p>
     </div>
     </HotWire.Provider>

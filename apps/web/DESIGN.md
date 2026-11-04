@@ -57,7 +57,7 @@ size changes.
 │                          [ navigator ]  commander  │  [ auto ]  light  dark │
 ├────────────┬─────────────────────────────────────────────────────────────┤
 │ 1 Station  │ 2 Flow                                            6 blocks  │
-│┏━━━━━━━━━━┓│ Group [Group][Story]  Signal [+ Sine]…  Math [+ Gain]…       │
+│┏━━━━━━━━━━┓│        2 blocks · 1 wire  Delete  Group  Story  Ungroup      │
 │┃ 2 Flow   ┃│                                                             │
 │┗━━━━━━━━━━┛│        ┌ PID ───── fn ┐     ┌ Sum ───── fn ┐                │
 │ 3 Dashb…   │        │ kp      40   │ ─── │ a            │                │
@@ -101,7 +101,7 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Bar** | The wordmark, the backend (a well with the address and engine name; Connect), the run (Run, length, speed, Cancel, status in words), view and theme, divided by a hairline |
 | **Rail** | Numbered pages on a sunken grey rail; the current one is boxed in ink on panel grey, its name bold |
 | **Panel** | Grey, 1px edge, 6px radius; a head with its number, name and a short count on the right |
-| **Block** | Raised grey, 1px outline; head with the name and a word tag. Step blocks are outlined in ink; linked blocks dashed; missing ones dashed red; failed ones outlined red. Params are underlined values |
+| **Block** | Raised grey, 1px outline; head with the name and a word tag (deleted from the selection dialog or the Delete key). Step blocks are outlined in ink; linked blocks dashed; missing ones dashed red; failed ones outlined red. Params are underlined values |
 | **Wire** | Ink, 1.2px; step wires 2px; image wires dashed; selected wires 3px |
 | **Group / story** | A visual group is a dashed frame; a story a solid ink frame |
 | **Instrument** | A display with its name (and latest value) underneath; readouts show a 30px monospace number. Four sizes on a grid of equal cells (116px tall, 12px apart), picked S, M, L, XL: **compact** 1×1 (a readout), **normal** 2×1 (a plot to read at a glance), **large** 2×2 (a plot or picture to study), **xlarge** 3×3 (the one to fill the page with); a kind's default is display compact, graph normal, image large. Before a run sends anything it is a placeholder: same frame, greyed, dashed edge, "–" |
@@ -110,6 +110,7 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Card** | A block or station object in the browser: name, kind in words, one-line description, ports on a well (in → out; step ports square), params with defaults, how many are already used, and Add. Draggable |
 | **Collection window** | The browser, floating over the page from its Add key: search, a kind choice in brackets, packages on the left, cards in sections. Moved by its head and remembered; Escape closes. While a card is dragged it fades and lets the pointer through |
 | **Quick add** | A search floating at the cursor (`/` over the canvas, or a double-click on empty canvas): the best matches, arrows, Enter adds at that spot |
+| **Selection dialog** | Floats above what's selected (below it when that is at the top of the canvas) (one or more blocks or groups, with any wires), like quick add: raised grey, ink outline. Says what's picked in words ("3 blocks · 1 wire"), then Delete, Group, Story, Ungroup, each greyed when it doesn't apply; linked blocks stay and it says so. Hides while dragging; Escape clears the selection |
 | **Drop hint** | While a card is dragged over the Flow: a dashed outline where it lands, a thickened wire it would be inserted into, or a dashed line to the port it would connect to; with a label in words ("Insert Lag: pid.u → u, y → sum.a") |
 | **Port (while a wire is dragged)** | A 24px hit area round the 8px dot. A drop within 40px of a port that accepts the wire joins it (a wire's end is grabbed within 20px; both in `SNAP`, `wireSnap.tsx`). The port it would join is enlarged, ringed, in the signal colour, with its name bold; ports that can't take the wire (wrong type, same block) dim to 30%. The nearest port that accepts wins, not the nearest port |
 | **Variables sheet** (#36) | A panel docked at the right of the pages, beside whatever page is open: 360px in Navigator, a column beside the tiles in Commander, a bottom sheet below 860px. Closed until wanted: the bar's **Variables** key (with the count) or Alt+V; Esc closes. Rows by group: name in monospace (drag it onto a field to bind), type in words, value in a well (a formula shows its result, not a well, and its formula below), unit, "2 uses" or "unused". The open row has an ink outline: name, type and value-or-formula as bracketed choices, unit, range, note, group, where it's used (Show), Reset to default or Delete. Errors in words, red. Copy as TOML in the foot |
@@ -118,6 +119,8 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **View cube** | A 96px cube in the 3D Station's top-right corner (hidden in 2D views): a mono label on each face, ink edges, turning with the camera. Hover marks the third of the cube a click would pick (face, edge or corner) in the signal colour; click eases the camera there (260ms, none with reduced motion); drag orbits; a Home key under it restores the opening view |
 
 The Variables are shared by the Station and the Flow, so they belong to neither page: a sheet beside the page you're working on, never a page of their own (#36 weighs the options).
+
+On a canvas a drag pans and the wheel zooms; Ctrl-drag draws a dashed selection box (touching a block picks it), Ctrl-click adds one. The selection's actions are in its dialog, not in a toolbar. Space is never a canvas key: it belongs to the backend.
 
 Focus is a 2px ink ring. Disabled keys are grey and faded.
 

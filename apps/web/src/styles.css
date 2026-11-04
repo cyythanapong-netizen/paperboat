@@ -317,12 +317,14 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 @media (min-width: 861px) { .bar .switch + .switch { padding-left: var(--space-4); border-left: 1px solid var(--line); } }
 
 /* ---- Adding things (#50): the Flow's tools, the collection window, quick add, drops ---- */
-.flow-tools { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--panel-pad); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.flow-tools > .lbl:first-child { margin-right: var(--space-1); }
-.flow-tools button { height: 26px; padding: 0 9px; font-size: var(--size-2xs); }
-.flow-tip { margin-left: auto; }
 .kbd { font: 500 var(--size-2xs) var(--font-mono); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: var(--radius-sm); padding: 0 5px; color: var(--text); background: var(--surface-raised); }
 .flow-canvas { position: relative; flex: 1; min-height: 0; }
+/* The selection dialog (#54): floats above several selected blocks, at any zoom. */
+.selection-dialog { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); white-space: nowrap; }
+.selection-dialog > .lbl:first-child { margin-right: var(--space-2); font-family: var(--font-mono); }
+.selection-dialog .kept { margin: 0 var(--space-2); }
+.react-flow__selection { background: transparent; border: 1px dashed var(--line-ink); }
+.react-flow__nodesselection-rect { background: transparent; border: none; }
 .key.add { font-weight: 600; border-color: var(--line-ink); }
 
 .wire-hit { fill: none; stroke: transparent; stroke-width: 18px; pointer-events: stroke; }
