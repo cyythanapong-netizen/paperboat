@@ -242,14 +242,18 @@ def serve(backend: Backend) -> None:
     `--run`, run the starter once headless, print each protocol message as a JSON line and
     exit (0 when the run is done)."""
     try:
-        port, run = options(sys.argv, backend.port)
+        port, run, variables = options(sys.argv, backend.port)
     except ValueError as err:
         print(err, file=sys.stderr)
         sys.exit(2)
     hosted = make(backend.engine, str(backend.descriptor), list(backend.blocks), list(backend.objects), backend.state,
                   backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view, backend.speed)
     if run:
-        status = hosted.run_starter()
+        try:
+            status = hosted.run_starter(variables)
+        except ValueError as err:  # a --var the backend doesn't have
+            print(err, file=sys.stderr)
+            sys.exit(2)
         sys.stdout.flush()
         os._exit(0 if status == "done" else 1)
     hosted.listen(port)

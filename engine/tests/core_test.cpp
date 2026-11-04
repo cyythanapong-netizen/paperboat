@@ -7,6 +7,7 @@
 #include <optional>
 #include <stdexcept>
 #include <mutex>
+#include <sstream>
 #include <stop_token>
 #include <string>
 #include <thread>
@@ -105,6 +106,69 @@ TEST_CASE("a session sends the handshake, checks station edits and runs") {
   }
   CHECK(sent.back()["type"] == "run.finished");
   CHECK(sent.back()["status"] == "done");
+}
+
+TEST_CASE("variables (#36): the same run with its numbers given by variables, and errors on the block") {
+  const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = {.real_time = false}};
+  json graph = starter_graph();
+  json station = starter_station();
+  for (auto& n : graph["nodes"])
+    if (n["id"] == "pid-x") n["params"] = {{"kp", {{"var", "kp"}}}, {"ki", 0}, {"kd", {{"expr", "0.75 * kp"}}}};
+  station["objects"][0]["props"]["x0"] = {{"var", "start"}};
+  const json variables = json::array({{{"name", "kp"}, {"type", "number"}, {"value", 4}},
+                                      {{"name", "start"}, {"type", "number"}, {"value", 1}, {"unit", "m"}}});
+  SECTION("resolved, the run is the reference run") {
+    Collected out;
+    CHECK(core::run("r", graph, station, backend, out.emit(), nullptr, {}, nullptr, variables) == "done");
+    CHECK_THAT(out.last_signal("graph-x"), WithinAbs(3.597e-07, 1e-10));
+  }
+  SECTION("an unknown variable fails the run, on the block that names it") {
+    graph["nodes"][1]["params"]["kp"] = {{"var", "kq"}};
+    Collected out;
+    CHECK(core::run("r", graph, station, backend, out.emit(), nullptr, {}, nullptr, variables) == "failed");
+    bool marked = false;
+    for (const auto& m : out.messages)
+      if (m["type"] == "log" && m["level"] == "error") {
+        CHECK(m["node"] == "pid-x");
+        CHECK_THAT(m["text"].get<std::string>(), ContainsSubstring("unknown variable \"kq\" (kp?)"));
+        marked = true;
+      }
+    CHECK(marked);
+  }
+  SECTION("a bad list fails the run, naming the variable") {
+    Collected out;
+    const json loop = json::array({{{"name", "kp"}, {"type", "number"}, {"expr", "kp + 1"}}, variables[1]});
+    CHECK(core::run("r", graph, station, backend, out.emit(), nullptr, {}, nullptr, loop) == "failed");
+    CHECK_THAT(out.messages.at(out.messages.size() - 2)["text"].get<std::string>(), ContainsSubstring("variables loop: kp → kp"));
+  }
+}
+
+TEST_CASE("a headless run takes --var for a default variable") {
+  static const auto catalog = tk::load_descriptor(R"(domain = "v"
+import = ["base", "dashboard"]
+[[variables]]
+name = "level"
+value = 2
+[[variables]]
+name = "double"
+expr = "2 * level"
+[graph]
+nodes = [{ id = "c", type = "constant", params = { value = { var = "double" } } }, { id = "show", type = "display" }]
+edges = [{ from = ["c", "y"], to = ["show", "in"] }]
+)");
+  CHECK(core::with_vars(catalog, {{"level", "5"}})[0]["value"] == 5.0);
+  CHECK(core::with_vars(catalog, {{"double", "7"}})[1]["value"] == 7.0);  // a formula set by hand
+  CHECK(!core::with_vars(catalog, {{"double", "7"}})[1].contains("expr"));
+  CHECK_THROWS_WITH(core::with_vars(catalog, {{"lvl", "5"}}), ContainsSubstring("no such variable (this backend has level, double)"));
+  CHECK_THROWS_WITH(core::with_vars(catalog, {{"level", "high"}}), ContainsSubstring("a number, not \"high\""));
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.mode = core::RunSettings::Mode::Once, .real_time = false}};
+  std::ostringstream out;
+  CHECK(core::run_starter(backend, out, {{"level", "5"}}) == "done");
+  CHECK_THAT(out.str(), ContainsSubstring(R"("node":"show")"));
+  CHECK_THAT(out.str(), ContainsSubstring(R"("v":10.0)"));
+  const char* argv[] = {"backend", "--run", "--var", "level=5"};
+  const auto o = core::parse_options(4, const_cast<char**>(argv), 8765);
+  CHECK(o.vars == std::vector<std::pair<std::string, std::string>>{{"level", "5"}});
 }
 
 // --- Not a simulation: a Step flow, a run that evaluates once, and a domain's own blocks

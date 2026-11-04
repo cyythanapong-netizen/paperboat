@@ -5,6 +5,7 @@ add_library(paperboat_toolkit
   src/registry.cpp
   src/descriptions.cpp
   src/descriptor.cpp
+  src/variables.cpp
   # base: what every domain needs (values: number, text, boolean; key)
   src/base/values.cpp
   src/base/key.cpp
@@ -37,4 +38,5 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS src/signal/blocks
 
 target_include_directories(paperboat_toolkit PUBLIC include PRIVATE src)
 target_link_libraries(paperboat_toolkit
-  PRIVATE nlohmann_json::nlohmann_json tomlplusplus::tomlplusplus paperboat_warnings)
+  PUBLIC nlohmann_json::nlohmann_json  # variables.hpp takes the protocol's JSON
+  PRIVATE tomlplusplus::tomlplusplus paperboat_warnings)

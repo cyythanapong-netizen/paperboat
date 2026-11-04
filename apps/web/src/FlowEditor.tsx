@@ -389,7 +389,7 @@ function missingDef(
         ? { id: pid, type: "number" as const, default: v }
         : typeof v === "boolean"
           ? { id: pid, type: "boolean" as const, default: v }
-          : { id: pid, type: "text" as const, default: v },
+          : { id: pid, type: "text" as const, default: typeof v === "string" ? v : "var" in v ? `=${v.var}` : `=${v.expr}` },
     ),
   };
 }

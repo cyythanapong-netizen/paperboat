@@ -22,6 +22,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/pair.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/unique_ptr.h>
 #include <nanobind/stl/vector.h>
 #include <paperboat/core/backend.hpp>
@@ -449,9 +450,9 @@ struct Hosted {
     if (!error.empty()) throw std::runtime_error("cannot listen on port " + std::to_string(port) + ": " + error);
   }
 
-  std::string run_starter() {
+  std::string run_starter(const std::vector<std::pair<std::string, std::string>>& vars) {
     nb::gil_scoped_release free;  // the run takes the GIL for each call into Python
-    return core::run_starter(backend, std::cout);
+    return core::run_starter(backend, std::cout, vars);
   }
 
   void stop() {
@@ -561,7 +562,7 @@ NB_MODULE(_engine, m) {
 
   nb::class_<Hosted>(m, "Hosted", "A backend: the domain's package, its catalog and (once listening) a server.")
       .def("listen", &Hosted::listen, nb::arg("port"), "Serve the protocol (and a web station) on the port.")
-      .def("run_starter", &Hosted::run_starter,
+      .def("run_starter", &Hosted::run_starter, nb::arg("vars") = std::vector<std::pair<std::string, std::string>>{},
            "Run the starter graph on the starter station once, headless; print each message as a JSON line.")
       .def("stop", &Hosted::stop);
 
@@ -575,7 +576,7 @@ NB_MODULE(_engine, m) {
         std::vector<char*> args;
         for (const auto& a : argv) args.push_back(const_cast<char*>(a.c_str()));
         const auto o = core::parse_options(static_cast<int>(args.size()), args.data(), default_port);
-        return std::make_pair(o.port, o.run);
+        return std::make_tuple(o.port, o.run, o.vars);
       },
-      nb::arg("argv"), nb::arg("default_port"), "(port, run) from a command line: --port N, --run.");
+      nb::arg("argv"), nb::arg("default_port"), "(port, run, vars) from a command line: --port N, --run, --var name=value.");
 }

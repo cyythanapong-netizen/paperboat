@@ -28,6 +28,8 @@ class Expression {
   Expression(std::string_view text, std::vector<std::string> variables);
 
   double operator()(std::span<const double> values) const;
+  // True for a name an expression gives its own meaning: pi, e, a function (sin, clamp…).
+  static bool is_builtin(std::string_view name);
   const std::vector<std::string>& variables() const { return variables_; }
   const std::string& text() const { return text_; }
 

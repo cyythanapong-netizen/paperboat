@@ -1,4 +1,5 @@
 #include "paperboat/toolkit/descriptor.hpp"
+#include "paperboat/toolkit/variables.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -205,6 +206,31 @@ void load_dashboard(const json& doc, Catalog& catalog) {
   catalog.dashboard = out.dump();
 }
 
+// [[variables]]: the backend's default variables (#36), in the protocol's shape. A type may
+// be left out when the value says it (a number, true / false, text; a formula is a number).
+void load_variables(const json& doc, Catalog& catalog) {
+  if (!doc.contains("variables")) return;
+  const json& list = doc.at("variables");
+  if (!list.is_array()) throw DescriptorError("variables: a list of [[variables]] tables");
+  json out = json::array();
+  for (std::size_t i = 0; i < list.size(); ++i) {
+    json v = list[i];
+    const auto at = "variables[" + std::to_string(i) + "]";
+    only_fields(v, {"name", "type", "value", "expr", "unit", "min", "max", "step", "whole", "options", "note", "group", "exposed"}, at);
+    if (!v.contains("type")) {
+      const json& value = v.value("value", json());
+      v["type"] = v.contains("expr") || value.is_number() ? "number" : value.is_boolean() ? "boolean" : "text";
+    }
+    out.push_back(std::move(v));
+  }
+  try {
+    const Variables check(out);
+  } catch (const VariableError& err) {
+    throw DescriptorError(std::string("variables: ") + err.what());
+  }
+  catalog.variables = out.dump();
+}
+
 // [graph] and [station]: the starters, in the protocol's shapes, checked against the
 // catalog so a typo fails at load, not when the UI opens.
 void load_starters(const json& doc, Catalog& catalog) {
@@ -368,7 +394,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
   } catch (const toml::parse_error& err) {
     throw DescriptorError("not valid TOML: " + at_line(err.source()) + ": " + std::string(err.description()));
   }
-  only_fields(doc, {"domain", "import", "blocks", "objects", "graph", "station", "dashboard"}, "descriptor");
+  only_fields(doc, {"domain", "import", "blocks", "objects", "graph", "station", "dashboard", "variables"}, "descriptor");
 
   Catalog catalog;
   catalog.domain = doc.value("domain", std::string{});
@@ -457,7 +483,16 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
     throw DescriptorError("descriptor: the catalog is empty: import packages, use templates, or register the domain's "
                           "own under the package \"" + catalog.domain + "\"");
   load_dashboard(doc, catalog);
+  load_variables(doc, catalog);
   load_starters(doc, catalog);
+  // The starters' references (#36) resolve against the defaults, or the descriptor is wrong.
+  try {
+    const Variables vars(catalog.variables.empty() ? json() : json::parse(catalog.variables));
+    resolve_graph(json::parse(catalog.graph), catalog, vars);
+    if (!catalog.station.empty()) resolve_station(json::parse(catalog.station), catalog, vars);
+  } catch (const VariableError& err) {
+    throw DescriptorError(std::string("starter: ") + err.what());
+  }
   return catalog;
 }
 

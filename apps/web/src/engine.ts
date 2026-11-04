@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { BlockDef, ClientMsg, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, View } from "./protocol";
+import type { BlockDef, ClientMsg, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, Variables, View } from "./protocol";
 
 export type Series = { t: number[]; v: number[] };
 
@@ -20,6 +20,8 @@ export type EngineState = {
   loaded: Graph | null;
   /** Last station the backend asked the UI to load. */
   station: Station | null;
+  /** The backend's default variables (#36), from variables.load. */
+  variables: Variables;
   run: { id: string; progress: number; status: "running" | RunStatus } | null;
   signals: Record<string, Series>;
   /** The latest value each monitor sent: what a Display or Image view shows. */
@@ -45,6 +47,7 @@ const initial: EngineState = {
   view: { mode: "3d" },
   loaded: null,
   station: null,
+  variables: [],
   run: null,
   signals: {},
   latest: {},
@@ -93,6 +96,8 @@ function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, loaded: m.graph };
     case "station.load":
       return { ...s, station: m.station };
+    case "variables.load":
+      return { ...s, variables: m.variables };
     case "scene.patch": {
       const entities = { ...s.entities };
       for (const p of m.entities) if (entities[p.id]) entities[p.id] = { ...entities[p.id], ...p };

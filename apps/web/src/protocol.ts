@@ -158,8 +158,14 @@ export type GraphGroup = {
 
 export type Vec3 = [number, number, number];
 
-/** A param's value: a number, true / false (a boolean param), or text (text, key and file params). */
-export type ParamValue = number | boolean | string;
+/** A param's value: a number, true / false (a boolean param), or text (text, key and file params). Or a reference (#36): {"var": name} takes a variable's value; {"expr": formula} (number and boolean params) a formula over variables. The backend resolves references before it makes blocks and objects. */
+export type ParamValue = number | boolean | string | {
+  /** A variable's name. */
+  var: string;
+} | {
+  /** A formula over number and boolean variables: + - * / ^ %, comparisons, && || ?:, sqrt, sin, min, clamp… */
+  expr: string;
+};
 
 export type RunStatus = "done" | "failed" | "cancelled";
 
@@ -207,6 +213,36 @@ export type RunSettings = {
   speed?: number;
 };
 
+/** A named, typed value (#36), used by reference in block params and station props. Exactly one of value and expr. */
+export type Variable = {
+  /** Letters, digits and _; not t, pi, e or a function's name. */
+  name: string;
+  type: "number" | "boolean" | "enum" | "text" | "file";
+  /** Of its type: a number, true / false, or text (enum: one of options). */
+  value?: number | boolean | string;
+  /** A number or boolean variable's formula over other variables, instead of a value. */
+  expr?: string;
+  /** A number's unit (m, N, rad…). */
+  unit?: string;
+  min?: number;
+  max?: number;
+  /** How much one nudge in the UI changes it. */
+  step?: number;
+  /** A whole number. */
+  whole?: boolean;
+  /** An enum's choices. */
+  options?: string[];
+  /** One line: what it's for. */
+  note?: string;
+  /** Where it's listed (Plant, Controller…). */
+  group?: string;
+  /** Also a control on the Dashboard, for operators. */
+  exposed?: boolean;
+};
+
+/** The variables of a backend (its defaults) or the user's. */
+export type Variables = Variable[];
+
 /** Every message a backend sends. */
 export type ServerMsg =
   | {
@@ -238,6 +274,10 @@ export type ServerMsg =
   | {
     type: "station.load";
     station: Station;
+  }
+  | {
+    type: "variables.load";
+    variables: Variables;
   }
   | {
     type: "run.started";
@@ -283,10 +323,16 @@ export type ClientMsg =
     graph: Graph;
     station?: Station;
     settings?: RunSettings;
+    /** The variables the graph's and station's references use; absent: the last ones set. */
+    variables?: Variables;
   }
   | {
     type: "station.set";
     station: Station;
+  }
+  | {
+    type: "variables.set";
+    variables: Variables;
   }
   | {
     type: "run.cancel";
