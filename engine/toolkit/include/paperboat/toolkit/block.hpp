@@ -102,6 +102,9 @@ struct BlockDef {
   std::string instrument = {};
   // A magic block's forms (its inputs and outputs are the first's); its `form` param picks one.
   std::vector<Form> forms = {};
+  // The id of a text param that decides the inputs: one per sign character in it ("+-+": a, b,
+  // c), see parse_signs. Empty: the inputs are the definition's. Sum's `signs`.
+  std::string ports_from = {};
   // False for a block whose outputs this step don't depend on its inputs this step (an
   // integrator, a delay): its Block gives outputs() during the pass and reads its inputs
   // after it, so a feedback loop through it is allowed (no algebraic loop).
@@ -117,6 +120,14 @@ struct BlockDef {
 // The definition in form `form` (that form's ports); `def` itself if it has no forms, or
 // no form of that name.
 BlockDef in_form(const BlockDef& def, std::string_view form);
+
+// The signs in `text`, one per input: '+' is +1, '-' (or '−') is −1; anything else (spaces)
+// is skipped. At most 26 (inputs a–z); none at all reads as "++".
+std::vector<int> parse_signs(std::string_view text);
+
+// The definition with the inputs its `ports_from` param (`text`) gives: ids a, b, c… of the
+// first input's type. `def` itself if it has no `ports_from`.
+BlockDef with_signs(const BlockDef& def, std::string_view text);
 
 // True for a block on a Step flow's path: one with a step port.
 bool has_step_ports(const BlockDef& def);
