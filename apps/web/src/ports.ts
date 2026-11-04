@@ -1,4 +1,4 @@
-import type { BlockDef, PortDef, PortSides } from "./protocol";
+import type { BlockDef, ParamValue, PortDef, PortSides } from "./protocol";
 
 /**
  * Why a wire may not join output `from` to input `to` (#4), or null if it may. The same
@@ -73,4 +73,16 @@ function tidy(def: BlockDef, lists: Record<Side, string[]>): PortSides | undefin
   const home = without(placePorts(def, undefined), "");
   if (SIDES.every((s) => lists[s].join("\n") === home[s].join("\n"))) return undefined;
   return Object.fromEntries(SIDES.filter((s) => lists[s].length > 0).map((s) => [s, lists[s]]));
+}
+
+/** The signs in a `signs` param, one per input: + is 1, - (or −) is −1, else skipped; at most 26; none reads as "++". Mirrors the engine's parse_signs. */
+export function parseSigns(text: ParamValue | undefined): number[] {
+  const signs = [...String(text ?? "")].flatMap((c) => (c === "+" ? [1] : c === "-" || c === "\u2212" ? [-1] : [])).slice(0, 26);
+  return signs.length ? signs : [1, 1];
+}
+
+/** The sign shown beside input `i` of a block whose inputs come from signs: "+" or "−"; "" for any other block. */
+export function signOf(def: BlockDef, params: Record<string, ParamValue>, i: number): string {
+  if (!def.ports_from) return "";
+  return parseSigns(params[def.ports_from])[i] < 0 ? "\u2212" : "+";
 }

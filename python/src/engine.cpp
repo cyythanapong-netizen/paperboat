@@ -415,6 +415,7 @@ tk::BlockDef block_def(nb::handle cls) {
   if (nb::hasattr(cls, "feedthrough")) def.feedthrough = nb::cast<bool>(cls.attr("feedthrough"));
   def.description = text_attr(cls, "description", "");
   def.view = view_from_py(cls, at);
+  def.ports_from = text_attr(cls, "ports_from", "");
   return def;
 }
 

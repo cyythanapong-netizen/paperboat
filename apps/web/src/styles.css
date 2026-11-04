@@ -361,6 +361,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .deco-label.note { font: 400 var(--size-2xs) / 1.4 var(--font-sans); color: var(--text-muted); }
 .deco-val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; padding: 0 3px; }
 .deco-val.idle { color: var(--text-muted); }
+.deco-val.var { border-bottom: 1px dotted var(--text-muted); }
 .deco-console { position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-screen); color: var(--text-on-screen); pointer-events: auto; }
 .deco-console .logs { padding-left: 32px; }
 .deco-console .empty { margin: 0; padding: var(--space-3) var(--space-4); color: var(--text-on-screen-muted); }
@@ -496,6 +497,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .glyph { width: 30px; height: 30px; fill: none; stroke: var(--text); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
 .glyph .ax { stroke: var(--line-strong); stroke-width: 1; }
 .glyph text { fill: var(--text); stroke: none; font: 500 17px var(--font-mono); }
+/* Sum's signs (#73): beside each input, inside the plate or in the port row. */
+.plate-sign { position: absolute; left: 6px; transform: translateY(-50%); font: 600 var(--size-xs) / 1 var(--font-mono); color: var(--text); pointer-events: none; }
+.port-sign { margin-left: 6px; font: 600 var(--size-xs) var(--font-mono); color: var(--text); }
 .plate-prog { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--signal); border-radius: 0 0 0 4px; }
 .plate-cap { display: flex; gap: 5px; white-space: nowrap; font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .plate-val { font-family: var(--font-mono); color: var(--text); border-bottom: 1px solid var(--line-strong); }

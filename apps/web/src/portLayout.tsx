@@ -25,14 +25,16 @@ export function usePortLayout(options: {
   disabled?: boolean;
   /** What a port's row says; default its id. */
   name?: (p: PortDef) => string;
+  /** A sign shown after an input's name (a Sum's + or −), if any. */
+  sign?: (p: PortDef, dir: "in" | "out") => string;
 }): { top: ReactNode; rows: ReactNode; bottom: ReactNode } {
-  const { id, sides: saved, save, disabled, name = (p: PortDef) => p.id } = options;
+  const { id, sides: saved, save, disabled, name = (p: PortDef) => p.id, sign = () => "" } = options;
   const def = { type: "", label: "", kind: "function", params: [], inputs: options.def.inputs, outputs: options.def.outputs } as BlockDef;
   const updateNodeInternals = useUpdateNodeInternals();
   const [moving, setMoving] = useState<{ id: string; sides: PortSides | undefined } | null>(null);
   const sides = moving ? moving.sides : saved;
   const placed = placePorts(def, sides);
-  const key = JSON.stringify(sides ?? null) + JSON.stringify(placed.left.map((e) => e.port.id)) + JSON.stringify(placed.right.map((e) => e.port.id));
+  const key = JSON.stringify(Object.values(placed).map((list) => list.map((e) => e.port.id)));
   useEffect(() => updateNodeInternals(id), [id, key, updateNodeInternals]);
 
   const startMove = (e: ReactPointerEvent, port: string) => {
@@ -88,6 +90,7 @@ export function usePortLayout(options: {
       >
         {side === "right" && unit}
         {name(p)}
+        {sign(p, dir) && <span className="port-sign">{sign(p, dir)}</span>}
         {side !== "right" && unit}
         <PortHandle type={dir === "in" ? "target" : "source"} position={POSITION[side]} id={p.id} />
       </div>

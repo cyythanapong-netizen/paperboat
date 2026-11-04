@@ -56,6 +56,8 @@ export type BlockDef = {
   };
   /** A magic block's forms; its inputs and outputs are the first's, and its form param (an enum) picks one. */
   forms?: Form[];
+  /** The id of a text param that decides the inputs: one per sign character in it (+ adds, - or − subtracts; at most 26; none reads as ++), ids a, b, c… of the first input's type. Sum's signs. */
+  ports_from?: string;
   /** false: its outputs this step don't depend on its inputs this step (an integrator, a delay), so a feedback loop may pass through it. Absent: true. */
   feedthrough?: boolean;
   /** One line in plain words: what it does. Shown on its card in the block browser. Optional. */
@@ -159,7 +161,7 @@ export type DashboardLayout = {
   /** Things that are not instruments. section: a titled frame round a group of cells (takes no cells; `at` and `span` [w, h]). hline / vline: a separator on a grid line, in the gap, along `span` columns (hline, from the top of `at`'s row) or rows (vline, down the left of `at`'s column); takes no cells. label: text that takes cells like an instrument (`span` [w, h], default [2, 1]); a section's title and a label's text may hold `{block}` or `{block:.2f}`, which show that monitor's latest value (`{{` and `}}` are braces). console: the Console's lines, in a frame that takes cells (`span` [w, h], default [4, 3]); it has no text. */
   decorations?: ({
     kind: "section" | "hline" | "vline" | "label" | "console";
-    /** A section's title, or a label's text. `{block}` shows the monitor block's latest value, `{block:.2f}` with that many decimals; `{{` and `}}` are literal braces. */
+    /** A section's title, or a label's text. `{name}` shows the monitor block's latest value (else the variable's value), `{block:.2f}` with that many decimals; `{{` and `}}` are literal braces. */
     text?: string;
     /** Top-left cell: [column, row]. */
     at: [number, number];

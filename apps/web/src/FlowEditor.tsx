@@ -25,11 +25,12 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
   type Viewport,
+  useUpdateNodeInternals,
 } from "@xyflow/react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { CompactBlock } from "./Compact";
-import { wireMismatch, type PortSides } from "./ports";
+import { parseSigns, signOf, wireMismatch, type PortSides } from "./ports";
 import { usePortLayout } from "./portLayout";
 import { Bindable, NumberOrFormula } from "./Variables";
 import { isRef } from "./bindings";
@@ -82,11 +83,15 @@ export const RunStates = createContext<{
   progress: {},
 });
 
-/** A magic block's definition in the form its `form` param picks (its ports are that form's). */
+/** A block's definition as its params make it: a magic block in the form its `form` param picks, a block with `ports_from` with one input per sign (ids a, b, c…). */
 export function inForm(def: BlockDef, params: Record<string, ParamValue>): BlockDef {
   const form = def.forms?.find((f) => f.name === params.form);
-  return form ? { ...def, inputs: form.inputs, outputs: form.outputs } : def;
+  const base = form ? { ...def, inputs: form.inputs, outputs: form.outputs } : def;
+  if (!def.ports_from) return base;
+  const proto = def.inputs[0] ?? { id: "a" };
+  return { ...base, inputs: parseSigns(params[def.ports_from]).map((_, i) => ({ ...proto, id: String.fromCharCode(97 + i) })) };
 }
+
 
 /** A block's ports as they are now (a magic block's: its form's). */
 export const portsOf = (n: BlockNode) => inForm(n.data.def, n.data.params);
@@ -105,9 +110,20 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { params, missing } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
+  // Ports that follow a param come and go: have the canvas measure the handles again.
+  const updateInternals = useUpdateNodeInternals();
+  const portKey = [...def.inputs, ...def.outputs].map((p) => p.id).join(",");
+  useEffect(() => updateInternals(id), [portKey, id, updateInternals]);
   // A simple block draws as a small plate (#70) until double-clicked open; fold puts it back.
   const [expanded, setExpanded] = useState(false);
-  const ports = usePortLayout({ id, def, sides: data.ports, save: (ports) => updateNodeData(id, { ports }), disabled: missing });
+  const ports = usePortLayout({
+    id,
+    def,
+    sides: data.ports,
+    save: (ports) => updateNodeData(id, { ports }),
+    disabled: missing,
+    sign: (p, dir) => (dir === "in" ? signOf(def, params, def.inputs.indexOf(p)) : ""),
+  });
   if (def.view?.compact && !expanded && !missing && !hasStepPorts(def)) {
     return (
       <CompactBlock

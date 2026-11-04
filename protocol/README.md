@@ -64,6 +64,10 @@ Default address: `ws://localhost:8765`.
   // optional, a magic block: one form per way to use it, each with its own ports. Its enum
   // param "form" picks one (the first by default); inputs/outputs are the first form's.
   // A node takes the ports of its form, and the engine makes the block that form needs.
+  // optional: the id of a text param that decides the inputs, one per sign character in it
+  // ("+-+": a, b, c; + adds, - or − subtracts; at most 26, none reads as "++"), of the first
+  // input's type. Sum's "signs". The UI and the engine both take the ports from the param.
+  "ports_from": "signs",
   "forms": [
     { "name": "signal", "inputs": [{ "id": "cond" }, { "id": "a" }, { "id": "b" }], "outputs": [{ "id": "y" }] },
     { "name": "step", "inputs": [{ "id": "in", "type": "step" }, { "id": "cond" }],
