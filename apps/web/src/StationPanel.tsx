@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ParamInput } from "./FlowEditor";
+import { RemoveIcon } from "./RemoveIcon";
 import type { ObjectDef, Station, StationObject } from "./protocol";
 import { withoutObject } from "./StationGraph";
 
@@ -53,7 +54,7 @@ export function StationPanel({ objects, station, onChange, locked }: Props) {
                     {def?.label ?? o.type} <span className="linked-tag">{o.id}</span>
                   </span>
                   <button className="remove" disabled={locked} title="Remove (and its linked block)" onClick={() => remove(o.id)}>
-                    ×
+                    <RemoveIcon />
                   </button>
                 </div>
                 {Object.entries(o.links ?? {}).map(([slot, target]) => (
