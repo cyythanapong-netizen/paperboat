@@ -21,6 +21,7 @@ reference is for developers writing backends.
    flow
    station
    dashboard
+   project
    testing
 
 .. toctree::

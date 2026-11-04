@@ -2,9 +2,12 @@ import { useEdgesState, useNodesState, useReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "./engine";
 import { BrowserWindow, DRAG_TYPE, dragging, type Item } from "./Browser";
-import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toGraph, withBlock, type FlowNode, type Wire } from "./FlowEditor";
+import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toFlow, toGraph, withBlock, type FlowControls, type FlowNode, type Wire } from "./FlowEditor";
 import { absolute, isFrame, levelOf } from "./groups";
-import type { DashboardLayout, ParamValue, RunSettings, Station, Variable, Variables } from "./protocol";
+import type { DashboardLayout, ParamValue, Project, RunSettings, Station, Variable, Variables } from "./protocol";
+import { addRecent, ago, buildProject, clearAutosave, loadAutosave, loadRecent, parseProject, projectFileName, projectName, saveAutosave, saveRecent, stringify, type Stored } from "./project";
+import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from "./projectFiles";
+import { Notice, ProjectLabel, Toast, type NoticeSpec } from "./ProjectUI";
 import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
 import { emptyOf, freeName, inlineRef, loadMine, merged, refersTo, renameInFormula, renameRef, saveMine, toToml, usesOf, type Use } from "./bindings";
 import { ConsoleWindow } from "./Console";
@@ -14,7 +17,9 @@ import { PAGES, Panel, Rail, Switch, Wordmark, type Mode, type Page, type Theme 
 import { SceneView } from "./SceneView";
 import { StationGraph } from "./StationGraph";
 import { StationPanel, withObject } from "./StationPanel";
-import { RunOptions } from "./RunOptions";
+import { BackendWindow, Dock } from "./Dock";
+import { CommandSearch, MenuBar } from "./Menus";
+import { ownKeys, SEARCH_CHORD, useShortcuts, type Command } from "./commands";
 import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
 
@@ -76,7 +81,9 @@ export function App() {
   const [themeChoice, setThemeChoice] = remembered<Theme>("paperboat.theme", "auto", ["auto", "light", "dark"]);
   const theme = useTheme(themeChoice);
   const [url, setUrl] = useState(DEFAULT_URL);
-  const [draftUrl, setDraftUrl] = useState(DEFAULT_URL);
+  const [searchOpen, setSearchOpen] = useState(false); // the command search (Ctrl+K)
+  const [backendOpen, setBackendOpen] = useState(false); // File > Backend…
+  const flow = useRef<FlowControls | null>(null); // the canvas's actions, for the Edit menu
   const { state, send, subscribe } = useEngine(url);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Wire>([]);
@@ -84,7 +91,7 @@ export function App() {
   const [station, setStation] = useState<Station | null>(null);
   const [runSettings, setRunSettings] = useState<RunSettings>({});
   // Variables (#36): the backend's defaults, then the user's own (kept in this browser per
-  // backend until projects, #34). The engine resolves them and says what they come to.
+  // backend as the working copy; a project file, #82, saves them). The engine resolves them and says what they come to.
   const [mine, setMine] = useState<Variables | undefined>(undefined);
   const engineKey = state.engine || "default";
   useEffect(() => setMine(loadMine(engineKey)), [engineKey]);
@@ -193,7 +200,7 @@ export function App() {
   }, [state.loaded, state.blocks, state.engine, setNodes, setEdges, fitView]);
 
   // Ctrl+Z / Ctrl+Shift+Z on the Flow canvas; a new graph from the backend starts afresh.
-  useUndo(nodes, edges, setNodes, setEdges, state.loaded);
+  const history = useUndo(nodes, edges, setNodes, setEdges, state.loaded);
 
   // A page that changes size (another mode, or brought into view) fits its flow again.
   useEffect(() => {
@@ -202,26 +209,7 @@ export function App() {
     return () => window.clearTimeout(t);
   }, [mode, page, fitView]);
 
-  // Alt+1–4 opens a page (Navigator); Alt+M switches the view mode.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (!e.altKey || e.ctrlKey || e.metaKey) return;
-      const n = Number(e.key);
-      if (n >= 1 && n <= PAGES.length) {
-        e.preventDefault();
-        setPage(PAGES[n - 1].id);
-        setMode("navigator");
-      } else if (e.key.toLowerCase() === "m") {
-        e.preventDefault();
-        setMode(mode === "navigator" ? "commander" : "navigator");
-      } else if (e.key.toLowerCase() === "v") {
-        e.preventDefault();
-        setVarsShown(varsShown === "open" ? "closed" : "open");
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+  // (Alt+1–3, Alt+M, Alt+V and Ctrl+K are commands now: see `commands` below.)
 
   useEffect(() => {
     if (!consoleShown) return;
@@ -240,7 +228,7 @@ export function App() {
   // Forward the keyboard to the backend (e.g. a Key block). Typing in a field is not input.
   useEffect(() => {
     const forward = (down: boolean) => (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.repeat || e.defaultPrevented) return; // taken by the app (quick add's /)
+      if (e.target instanceof HTMLInputElement || ownKeys(e.target) || e.repeat || e.defaultPrevented) return; // taken by the app (quick add's /, a menu's arrows)
       if (e.code === "Space") e.preventDefault(); // don't click the focused button
       send({ type: "input", key: e.code, down });
     };
@@ -413,56 +401,274 @@ export function App() {
   const status = state.run?.status;
   const elapsed = state.run ? `${(state.run.progress * (Number(runSettings.duration ?? state.runDefaults.duration) || 0)).toFixed(1)} / ${runSettings.duration ?? state.runDefaults.duration ?? "?"} s` : "";
 
+  // ---- Projects (#82): the whole session as one file ----
+  // A project is the Flow, the Station, the variables, the Dashboard layout and the run settings. `projectKey` is
+  // that, as text, a moment after the last change; it is "unsaved" while it differs from `baseline`, which is
+  // what the backend started with, or what was last saved or opened.
+  const [projectTitle, setProjectTitle] = useState("Untitled");
+  const fileHandle = useRef<FileHandle | null>(null); // where Save writes, once the user chose a file (Chromium)
+  const [notice, setNotice] = useState<NoticeSpec | null>(null);
+  const [toast, setToast] = useState<{ text: string; undo: () => void } | null>(null);
+  const [recent, setRecent] = useState<Stored[]>(loadRecent);
+  const [lastSession, setLastSession] = useState<Stored | undefined>(undefined); // unsaved work found at load
+  const [restoreChecked, setRestoreChecked] = useState(false);
+  const [baseline, setBaseline] = useState<string | null>(null);
+  const [projectKey, setProjectKey] = useState("");
+  const snapshot = (): Project => buildProject({ backend: state.engine, flow: toFlow(nodes, edges), station, variables, dashboard: dashSaved, run: runSettings });
+  const latestProject = useRef<Project | null>(null);
+  const dirty = baseline !== null && projectKey !== "" && projectKey !== baseline;
+  const live = useRef({ snapshot, projectTitle, baseline, dirty, state });
+  live.current = { snapshot, projectTitle, baseline, dirty, state };
+
+  useEffect(() => {
+    if (!state.engine) return;
+    const t = window.setTimeout(() => {
+      const p = snapshot();
+      latestProject.current = p;
+      setProjectKey(JSON.stringify(p));
+    }, 250);
+    return () => window.clearTimeout(t);
+  }, [nodes, edges, station, variables, dashSaved, runSettings, state.engine]); // eslint-disable-line react-hooks/exhaustive-deps -- `snapshot` reads exactly these
+  // Another backend: a new, unnamed project.
+  useEffect(() => {
+    setProjectTitle("Untitled");
+    fileHandle.current = null;
+    setBaseline(null);
+    setRestoreChecked(false);
+    setLastSession(undefined);
+  }, [state.engine]);
+  // The backend loaded its starter again: with nothing changed, clean is whatever that settles to.
+  useEffect(() => {
+    if (!live.current.dirty) setBaseline(null);
+  }, [state.loaded]);
+  useEffect(() => {
+    if (baseline !== null || projectKey === "") return;
+    const t = window.setTimeout(() => setBaseline(projectKey), 500);
+    return () => window.clearTimeout(t);
+  }, [projectKey, baseline]);
+  useEffect(() => {
+    document.title = `${dirty ? "● " : ""}${projectTitle} · Paperboat`;
+  }, [projectTitle, dirty]);
+
+  /** Put a project in place of what is open. `rebase`: what counts as unsaved against (null: what is loaded). */
+  const applyProject = (p: Project, name: string, rebase: string | null = null) => {
+    const g = fromGraph(p.flow, state.blocks);
+    setNodes(g.nodes);
+    setEdges(g.edges);
+    setFlowLevel(null);
+    editStation(p.station ?? state.station ?? { objects: [] });
+    varsHistory.current = { past: [], future: [] };
+    if (p.variables) keepVars(p.variables);
+    else {
+      setMine(undefined);
+      saveMine(engineKey, undefined);
+    }
+    saveDash(p.dashboard);
+    setRunSettings(p.run ?? {});
+    setProjectTitle(name);
+    setBaseline(rebase);
+    requestAnimationFrame(() => fitView());
+  };
+  const remember = (p: Project, name: string) =>
+    setRecent((prev) => {
+      const next = addRecent(prev, { name, savedAt: Date.now(), project: p });
+      saveRecent(next);
+      return next;
+    });
+  const fail = (title: string, e: unknown) => setNotice({ title, text: [e instanceof Error ? e.message : String(e)], actions: [{ label: "OK", primary: true }] });
+
+  /** Open a project, after a word if it comes from another backend or replaces unsaved changes; one Undo brings back what was open. */
+  const openProject = (p: Project, name: string) => {
+    const warnings: string[] = [];
+    if (p.backend !== state.engine) warnings.push(`This project was made on “${p.backend}” and you are connected to “${state.engine}”. Blocks this backend lacks stay as lost blocks, with their params and wires.`);
+    if (live.current.dirty) warnings.push("The open project has unsaved changes. Opening replaces them; Undo brings them back.");
+    const go = () => {
+      const { snapshot: before, projectTitle: beforeTitle, baseline: beforeBase } = live.current;
+      const was = before();
+      const handle = fileHandle.current;
+      applyProject(p, name);
+      fileHandle.current = null;
+      remember(p, name);
+      setToast({
+        text: `Opened “${name}”`,
+        undo: () => {
+          applyProject(was, beforeTitle, beforeBase);
+          fileHandle.current = handle;
+        },
+      });
+    };
+    if (warnings.length === 0) go();
+    else setNotice({ title: "Open this project?", text: warnings, actions: [{ label: "Open", primary: true, run: go }, { label: "Cancel" }] });
+  };
+  const openText = (text: string, file: string) => {
+    const r = parseProject(text);
+    if ("error" in r) setNotice({ title: "Can't open this file", text: [`${file}: ${r.error}`, "Nothing was changed."], actions: [{ label: "OK", primary: true }] });
+    else openProject(r.project, projectName(file));
+  };
+  const openFile = async () => {
+    try {
+      const f = await pickText();
+      if (f) openText(f.text, f.name);
+    } catch (e) {
+      fail("Can't open the file", e);
+    }
+  };
+  const saveProject = async (as: boolean) => {
+    const { snapshot: take, projectTitle: title } = live.current;
+    const p = take();
+    try {
+      const r = await saveText(stringify(p), projectFileName(title === "Untitled" ? state.engine || "project" : title), as ? null : fileHandle.current);
+      if (!r) return; // cancelled
+      fileHandle.current = r.handle ?? null;
+      const name = projectName(r.name);
+      setProjectTitle(name);
+      setBaseline(JSON.stringify(p));
+      remember(p, name);
+      clearAutosave(state.engine);
+      setLastSession(undefined);
+    } catch (e) {
+      fail("Can't save", e);
+    }
+  };
+  // Dropping a project file on the window opens it (the app's own cards are not files).
+  const openTextNow = useRef(openText);
+  openTextNow.current = openText;
+  useEffect(() => {
+    const over = (e: DragEvent) => draggingFiles(e) && e.preventDefault();
+    const drop = (e: DragEvent) => {
+      if (!draggingFiles(e)) return;
+      e.preventDefault();
+      droppedText(e).then((f) => f && openTextNow.current(f.text, f.name), (err) => fail("Can't open the file", err));
+    };
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", drop);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- `fail` only sets state
+  // Unsaved work is kept as it happens, and offered back after a reload.
+  const restore = (s: Stored) => {
+    applyProject(s.project, s.name, live.current.baseline);
+    fileHandle.current = null;
+    setLastSession(undefined);
+  };
+  useEffect(() => {
+    if (baseline === null || restoreChecked || !state.engine) return;
+    setRestoreChecked(true);
+    const s = loadAutosave(state.engine);
+    if (!s || JSON.stringify(s.project) === baseline) return clearAutosave(state.engine);
+    setLastSession(s);
+    setNotice({
+      title: "Restore your last session?",
+      text: [`“${s.name}”, ${ago(s.savedAt, Date.now())}, had changes that weren't saved.`],
+      actions: [
+        { label: "Restore", primary: true, run: () => restore(s) },
+        { label: "Discard", run: () => (clearAutosave(s.project.backend), setLastSession(undefined)) },
+        { label: "Not now" },
+      ],
+    });
+  }, [baseline, restoreChecked, state.engine]); // eslint-disable-line react-hooks/exhaustive-deps -- once per backend
+  useEffect(() => {
+    if (!restoreChecked || !state.engine || baseline === null || !latestProject.current) return;
+    if (dirty) saveAutosave(state.engine, { name: projectTitle, savedAt: Date.now(), project: latestProject.current });
+    else if (!lastSession) clearAutosave(state.engine);
+  }, [projectKey, dirty, restoreChecked]); // eslint-disable-line react-hooks/exhaustive-deps -- when the project changes
+
+  // ---- The commands (#78): what the menus, the command search and the shortcuts all run ----
+  // Only what the app already does; backends' commands come with their issue (#85).
+  const canRun = state.connection === "open" && !running;
+  const flowInView = mode === "commander" || page === "flow";
+  /** An Edit action on the canvas: on while the Flow is in view and the canvas allows it. */
+  const onCanvas = (can: (c: FlowControls["can"]) => boolean) => () => flowInView && !!flow.current && can(flow.current.can);
+  const canvasWhy = (why: string) => (flowInView ? why : "Open the Flow page first");
+  const commands: Command[] = [
+    { id: "file.open", label: "Open…", menu: "file", group: "project", shortcut: "Ctrl+O", chord: { key: "o", ctrl: true }, enabled: state.connection === "open", why: "Not connected to a backend", run: () => void openFile() },
+    { id: "file.save", label: "Save", menu: "file", group: "project", shortcut: "Ctrl+S", chord: { key: "s", ctrl: true }, enabled: !!state.engine, why: "Not connected to a backend yet", run: () => void saveProject(false) },
+    { id: "file.saveAs", label: "Save as…", menu: "file", group: "project", shortcut: "Ctrl+Shift+S", chord: { key: "s", ctrl: true, shift: true }, enabled: !!state.engine, why: "Not connected to a backend yet", run: () => void saveProject(true) },
+    { id: "file.restore", label: "Restore last session", menu: "file", group: "session", enabled: !!lastSession, why: "No unsaved session to restore", run: () => lastSession && restore(lastSession) },
+    ...recent.map((s): Command => ({ id: `file.recent.${s.name}`, label: s.name, menu: "file", group: "recent", meta: ago(s.savedAt, Date.now()), enabled: state.connection === "open", why: "Not connected to a backend", run: () => openProject(s.project, s.name) })),
+    { id: "file.backend", label: "Backend…", menu: "file", group: "backend", run: () => setBackendOpen(true) },
+
+    { id: "edit.undo", label: "Undo", menu: "edit", group: "history", shortcut: "Ctrl+Z", enabled: history.canUndo, why: "Nothing to undo on the Flow canvas", run: history.undo },
+    { id: "edit.redo", label: "Redo", menu: "edit", group: "history", shortcut: "Ctrl+Shift+Z", enabled: history.canRedo, why: "Nothing to redo", run: history.redo },
+    { id: "edit.cut", label: "Cut", menu: "edit", group: "clipboard", shortcut: "Ctrl+X", enabled: onCanvas((c) => c.copy), why: canvasWhy("Select blocks first"), run: () => flow.current?.cut() },
+    { id: "edit.copy", label: "Copy", menu: "edit", group: "clipboard", shortcut: "Ctrl+C", enabled: onCanvas((c) => c.copy), why: canvasWhy("Select blocks first"), run: () => flow.current?.copy() },
+    { id: "edit.paste", label: "Paste", menu: "edit", group: "clipboard", shortcut: "Ctrl+V", enabled: onCanvas((c) => c.paste), why: canvasWhy("Copy blocks first"), run: () => flow.current?.paste() },
+    { id: "edit.delete", label: "Delete", menu: "edit", group: "clipboard", shortcut: "Del", enabled: onCanvas((c) => c.remove), why: canvasWhy("Select blocks or wires first"), run: () => flow.current?.remove() },
+    { id: "edit.group", label: "Group", menu: "edit", group: "grouping", enabled: onCanvas((c) => c.group), why: canvasWhy("Select blocks that sit in the same place"), run: () => flow.current?.group("subsystem") },
+    { id: "edit.story", label: "Story", menu: "edit", group: "grouping", enabled: onCanvas((c) => c.story), why: canvasWhy("A story holds signal blocks only: no step ports"), run: () => flow.current?.group("story") },
+    { id: "edit.frame", label: "Frame", menu: "edit", group: "grouping", enabled: onCanvas((c) => c.frame), why: canvasWhy("Select blocks first"), run: () => flow.current?.group("visual") },
+    { id: "edit.ungroup", label: "Ungroup", menu: "edit", group: "grouping", enabled: onCanvas((c) => c.ungroup), why: canvasWhy("Select a group first"), run: () => flow.current?.ungroup() },
+    { id: "edit.addBlock", label: "Add block…", menu: "edit", group: "add", shortcut: "/", run: () => setBrowser("flow") },
+    {
+      id: "edit.addObject",
+      label: "Add station object…",
+      menu: "edit",
+      group: "add",
+      enabled: !running && state.objects.length > 0,
+      why: running ? "Stop the run to edit the station" : "This backend has no station objects",
+      run: () => setBrowser("station"),
+    },
+    { id: "edit.variables", label: "Variables…", menu: "edit", group: "panels", shortcut: "Alt+V", chord: { key: "v", alt: true }, meta: String(variables.length), run: () => setVarsShown(varsShown === "open" ? "closed" : "open") },
+
+    { id: "view.search", label: "Command search…", menu: "view", group: "search", shortcut: "Ctrl+K", chord: SEARCH_CHORD, quiet: true, run: () => setSearchOpen(true) },
+    ...PAGES.map((p, i): Command => ({
+      id: `view.page.${p.id}`,
+      label: p.label,
+      menu: "view",
+      group: "pages",
+      shortcut: `Alt+${i + 1}`,
+      chord: { key: String(i + 1), alt: true },
+      checked: mode === "navigator" && page === p.id,
+      run: () => open(p.id),
+    })),
+    { id: "view.mode.navigator", label: "Navigator", menu: "view", group: "mode", checked: mode === "navigator", run: () => setMode("navigator") },
+    { id: "view.mode.commander", label: "Commander", menu: "view", group: "mode", checked: mode === "commander", run: () => setMode("commander") },
+    { id: "view.mode.switch", label: "Switch view mode", menu: "view", group: "mode", shortcut: "Alt+M", chord: { key: "m", alt: true }, run: () => setMode(mode === "navigator" ? "commander" : "navigator") },
+    { id: "view.theme.auto", label: "Auto", menu: "view", group: "theme", checked: themeChoice === "auto", run: () => setThemeChoice("auto") },
+    { id: "view.theme.light", label: "Light", menu: "view", group: "theme", checked: themeChoice === "light", run: () => setThemeChoice("light") },
+    { id: "view.theme.dark", label: "Dark", menu: "view", group: "theme", checked: themeChoice === "dark", run: () => setThemeChoice("dark") },
+    { id: "view.console", label: "Console", menu: "view", group: "windows", checked: consoleShown, meta: errors > 0 ? count(errors, "error") : undefined, run: () => setConsoleShown(!consoleShown) },
+    {
+      id: "view.grid",
+      label: "Floor grid",
+      menu: "view",
+      group: "windows",
+      checked: gridOn,
+      enabled: view === "scene" && state.view.mode === "3d",
+      why: "The Station is not a 3D scene",
+      run: () => setGridChoice(gridOn ? "off" : "on"),
+    },
+    {
+      id: "view.arrange",
+      label: "Arrange Dashboard",
+      menu: "view",
+      group: "windows",
+      checked: arrange,
+      run: () => {
+        if (!arrange && mode === "navigator") setPage("dashboard");
+        setArrange(!arrange);
+      },
+    },
+
+    { id: "run.run", label: "Run", menu: "run", group: "run", enabled: canRun, why: running ? "A run is in progress" : "Not connected to a backend", run },
+    { id: "run.cancel", label: "Cancel", menu: "run", group: "run", enabled: running, why: "No run in progress", run: () => send({ type: "run.cancel" }) },
+  ];
+  useShortcuts(commands);
+
   return (
     <div className={`app mode-${mode}`}>
       <header className="bar">
         <Wordmark />
-        <form
-          className="backend"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setUrl(draftUrl);
-          }}
-        >
-          <span className="lbl">Backend</span>
-          <span className="well field">
-            <input aria-label="Backend address" value={draftUrl} onChange={(e) => setDraftUrl(e.target.value)} size={20} />
-            <span className={`conn conn-${state.connection}`}>
-              {state.connection === "open" ? state.engine : state.connection}
-            </span>
-          </span>
-          <button className="key small">Connect</button>
-        </form>
-        <div className="run-controls">
-          <button className="key run" disabled={state.connection !== "open" || running} onClick={run}>
-            ▶ Run
+        <MenuBar commands={commands} />
+        <ProjectLabel name={projectTitle} dirty={dirty} />
+        <span className="spacer" />
+        {errors > 0 && (
+          <button className="key small err" title="Open the Console" onClick={() => setConsoleShown(true)}>
+            {count(errors, "error")}
           </button>
-          <RunOptions defaults={state.runDefaults} value={runSettings} onChange={setRunSettings} />
-          <button className="key" disabled={!running} onClick={() => send({ type: "run.cancel" })}>
-            ■ Cancel
-          </button>
-          {state.run && (
-            <span className={`run-status status-${status}`}>
-              {status === "running" ? `running ${elapsed}` : status}
-            </span>
-          )}
-        </div>
-        <button
-          className={`key small vars-key${varsShown === "open" ? " on" : ""}`}
-          aria-pressed={varsShown === "open"}
-          title="Variables: values used in many places (Alt+V)"
-          onClick={() => setVarsShown(varsShown === "open" ? "closed" : "open")}
-        >
-          Variables <span className="mono muted">{variables.length}</span>
-        </button>
-        <button
-          className={`key small${consoleShown ? " on" : ""}`}
-          aria-pressed={consoleShown}
-          title="Console: what the backend logged"
-          onClick={() => setConsoleShown(!consoleShown)}
-        >
-          Console {errors > 0 && <span className="count" title={`${errors} errors`}>{errors}</span>}
-        </button>
+        )}
         <Switch
           label="View"
           value={mode}
@@ -472,16 +678,10 @@ export function App() {
             { value: "commander", label: "commander", hint: "Every page at once (Alt+M)" },
           ]}
         />
-        <Switch
-          label="Theme"
-          value={themeChoice}
-          onChange={setThemeChoice}
-          options={[
-            { value: "auto", label: "auto", hint: "As the system" },
-            { value: "light", label: "light" },
-            { value: "dark", label: "dark" },
-          ]}
-        />
+        <button className={`chip conn-${state.connection}`} title="Which backend: File > Backend…" onClick={() => setBackendOpen(true)}>
+          <i aria-hidden="true" />
+          {state.connection === "open" ? state.engine : state.connection}
+        </button>
       </header>
       {mode === "navigator" && <Rail page={page} onPage={setPage} />}
       <VarsContext.Provider value={varsApi}>
@@ -538,6 +738,7 @@ export function App() {
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
               minimap={mode === "navigator" && page === "flow"}
+              controls={flow}
               level={flowLevel}
               setLevel={setFlowLevel}
             />
@@ -564,8 +765,24 @@ export function App() {
             toml={() => toToml(variables)}
           />
         )}
+        <Dock
+          canRun={canRun}
+          whyNot={running ? "A run is in progress" : "Not connected to a backend"}
+          running={running}
+          status={state.run ? status : undefined}
+          statusText={status === "running" ? `running ${elapsed}` : status}
+          defaults={state.runDefaults}
+          settings={runSettings}
+          onSettings={setRunSettings}
+          onRun={run}
+          onCancel={() => send({ type: "run.cancel" })}
+        />
       </main>
       </VarsContext.Provider>
+      {notice && <Notice key={notice.title + notice.text.join()} spec={notice} onClose={() => setNotice(null)} />}
+      {toast && <Toast text={toast.text} undo="Undo" onUndo={toast.undo} onClose={() => setToast(null)} />}
+      {searchOpen && <CommandSearch commands={commands} onClose={() => setSearchOpen(false)} />}
+      {backendOpen && <BackendWindow url={url} connection={state.connection} engine={state.engine} onConnect={setUrl} onClose={() => setBackendOpen(false)} />}
       {consoleShown && <ConsoleWindow logs={state.logs} errors={errors} onBlock={showBlock} onClose={() => setConsoleShown(false)} />}
       {browser === "flow" && (
         <BrowserWindow title="Add a block" items={blockItems} counts={counts(nodes.filter(isBlock).map((n) => ({ type: n.data.def.type })))} place="canvas" onAdd={addBlock} onClose={() => setBrowser(null)} />

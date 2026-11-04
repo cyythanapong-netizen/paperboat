@@ -395,7 +395,7 @@ export function loadSaved(key: string): DashboardLayout | undefined {
   }
 }
 
-/** Keep the user's layout for this backend in the browser (until projects exist: #34). `undefined` forgets it. */
+/** Keep the user's layout for this backend in the browser, as the working copy: a project file (#82) saves and restores it. `undefined` forgets it. */
 export function save(key: string, layout: DashboardLayout | undefined) {
   try {
     if (layout) localStorage.setItem(`paperboat.dashboard:${key}`, JSON.stringify(layout));

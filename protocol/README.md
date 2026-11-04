@@ -160,10 +160,18 @@ not `t`, `pi`, `e` or a function's name. A backend's defaults come from its desc
 `[[variables]]`; the user's own live with the project (#34). Headless, `--var name=value`
 sets one for a `--run`.
 
+**Project file** (#82). Everything a user made, as one JSON file (`name.paperboat.json`), written
+and read by the UI; it is not a message, and a backend needs no code for it. It reuses the shapes
+above: `flow` (a `Graph`, every node with its `pos`), `station`, `variables`, `dashboard` and
+`run` (only what differs from the backend's defaults), plus `paperboat` (the format version, `0`;
+a newer file is refused) and `backend` (the `engine` it was made on; opening it elsewhere warns,
+and blocks the other backend lacks stay as lost blocks). The shape is `Project` in the schema.
+See `docs/api/project.rst`.
+
 **Dashboard layout.** The Dashboard is a grid of equal cells with one instrument per monitor
 block on the Flow canvas (the canvas decides which exist). A catalog may carry a default
 layout, `dashboard`, which the UI uses until the user arranges their own (kept in the
-browser per backend for now, with the project later, #34). All fields are optional:
+browser per backend, and in the project file). All fields are optional:
 
 ```jsonc
 "dashboard": {
