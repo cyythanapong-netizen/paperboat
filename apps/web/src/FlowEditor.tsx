@@ -233,8 +233,13 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           <div style={{ width: `${progress * 100}%` }} />
         </div>
       )}
-      {placed.left.map((e) => portRow(e, "left"))}
-      {placed.right.map((e) => portRow(e, "right"))}
+      {/* Left and right ports share rows: the first input beside the first output, and so on. */}
+      {Array.from({ length: Math.max(placed.left.length, placed.right.length) }, (_, i) => (
+        <div key={i} className="port-row">
+          {placed.left[i] ? portRow(placed.left[i], "left") : <span />}
+          {placed.right[i] ? portRow(placed.right[i], "right") : <span />}
+        </div>
+      ))}
       {def.params.map((p) => (
         <label key={p.id} className="param">
           <span>

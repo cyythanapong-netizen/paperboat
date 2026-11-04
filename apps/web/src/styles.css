@@ -221,6 +221,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* A port moves by dragging its name: to another side of the block, or along its side. */
 .port[data-side] { cursor: grab; user-select: none; }
 .port[data-side].moving { color: var(--text); font-weight: 600; cursor: grabbing; }
+.port-row { display: flex; justify-content: space-between; gap: var(--space-3); white-space: nowrap; }
 .port-strip { display: flex; justify-content: center; gap: var(--space-2); padding: 0 6px; }
 .port-strip.top { border-bottom: 1px solid var(--line); }
 .port-strip.bottom { border-top: 1px solid var(--line); }
