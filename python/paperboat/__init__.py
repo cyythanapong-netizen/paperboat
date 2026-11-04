@@ -44,10 +44,13 @@ __all__ = [
 
 
 class Port(NamedTuple):
-    """A port with a type other than "signal": Port("points", "points"), Port("in", "step")."""
+    """A port with a type other than "signal" or a unit: Port("points", "points"),
+    Port("in", "step"), Port("force", unit="N"). "any" takes any value but a step; with a unit
+    on both ends a wire's units must agree."""
 
     id: str
     type: str = "signal"
+    unit: str = ""
 
 
 class Param(NamedTuple):
@@ -69,6 +72,10 @@ class Block:
     label: str = ""                      # shown on the block (default: type)
     kind: str = "function"               # source | probe | function | monitor
     description: str = ""                # one line: what it does; shown on its card in the browser
+    # How the UI draws it (a hint; absent: the normal card). A small plate with a glyph and
+    # a caption: {"compact": True, "glyph": "gain", "value": "{k}"}. glyph is a curve name
+    # (gain, plus, step, clamp, const) or a few characters; value is an expression of params.
+    view: dict = {}
     inputs: list[str | Port] = []
     outputs: list[str | Port] = []
     params: dict[str, float | Param] = {}  # the defaults; an instance's self.params holds its values
@@ -242,14 +249,18 @@ def serve(backend: Backend) -> None:
     `--run`, run the starter once headless, print each protocol message as a JSON line and
     exit (0 when the run is done)."""
     try:
-        port, run = options(sys.argv, backend.port)
+        port, run, variables = options(sys.argv, backend.port)
     except ValueError as err:
         print(err, file=sys.stderr)
         sys.exit(2)
     hosted = make(backend.engine, str(backend.descriptor), list(backend.blocks), list(backend.objects), backend.state,
                   backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view, backend.speed)
     if run:
-        status = hosted.run_starter()
+        try:
+            status = hosted.run_starter(variables)
+        except ValueError as err:  # a --var the backend doesn't have
+            print(err, file=sys.stderr)
+            sys.exit(2)
         sys.stdout.flush()
         os._exit(0 if status == "done" else 1)
     hosted.listen(port)

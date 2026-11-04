@@ -10,6 +10,7 @@ namespace paperboat::toolkit {
 void Registry::add(Template t) {
   if (find(t.name)) throw std::invalid_argument("duplicate template: " + t.name);
   if (t.def.description.empty()) t.def.description = builtin_description(t.name);
+  t.def.view = builtin_view(t.name).overridden_by(t.def.view);  // a template's own keys win
   templates_.push_back(std::move(t));
 }
 

@@ -7,8 +7,11 @@ import {
   getSmoothStepPath,
   MarkerType,
   MiniMap,
+  NodeToolbar,
+  useStore,
   Position,
   ReactFlow,
+  SelectionMode,
   useInternalNode,
   useReactFlow,
   useStoreApi,
@@ -23,7 +26,10 @@ import {
 } from "@xyflow/react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
-import { NumberField } from "./NumberField";
+import { CompactBlock } from "./Compact";
+import { wireMismatch } from "./ports";
+import { Bindable, NumberOrFormula } from "./Variables";
+import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
 import { connectionOf, nearestAccepting, PortHandle, SNAP, WireDragContext, type Anchor } from "./wireSnap";
 import {
@@ -75,18 +81,44 @@ export function inForm(def: BlockDef, params: Record<string, ParamValue>): Block
 /** A block's ports as they are now (a magic block's: its form's). */
 export const portsOf = (n: BlockNode) => inForm(n.data.def, n.data.params);
 
+const portDef = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs") =>
+  def?.[side].find((p) => p.id === port);
 const portType = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs") =>
-  def?.[side].find((p) => p.id === port)?.type;
+  portDef(def, port, side)?.type;
 
 /** Generic node: everything it shows comes from the backend's BlockDef. */
 function Block({ id, data, selected }: NodeProps<BlockNode>) {
-  const { updateNodeData, deleteElements } = useReactFlow<BlockNode, Wire>();
+  const { updateNodeData } = useReactFlow<BlockNode, Wire>();
   const states = useContext(RunStates);
   const active = states.active.has(id);
   const progress = states.progress[id];
   const { params, missing } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
+  // A simple block draws as a small plate (#70) until double-clicked open; fold puts it back.
+  const [expanded, setExpanded] = useState(false);
+  if (def.view?.compact && !expanded && !missing && !hasStepPorts(def)) {
+    return (
+      <CompactBlock
+        id={id}
+        def={def}
+        params={params}
+        selected={!!selected}
+        word={failed ? "failed" : active ? "running" : undefined}
+        progress={progress}
+        onExpand={() => setExpanded(true)}
+        popover={def.params.map((p) => (
+          <label key={p.id} className="param">
+            <span>
+              {p.id}
+              {"unit" in p && p.unit && <span className="unit"> {p.unit}</span>}
+            </span>
+            <ParamInput def={p} value={params[p.id]} set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })} />
+          </label>
+        ))}
+      />
+    );
+  }
   const step = hasStepPorts(def);
   const classes = ["block", `kind-${def.kind}`, step && "step", selected && "selected", active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
   // The head's tag says what is happening to the block, else what it is: words, not colours.
@@ -114,9 +146,9 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           {def.linked && <span className="linked-tag"> {id}</span>}
         </span>
         <span className={`block-tag tag-${tag}`}>{tag}</span>
-        {selected && !def.linked && (
-          <button className="remove nodrag" title="Delete block" onClick={() => deleteElements({ nodes: [{ id }] })}>
-            <RemoveIcon />
+        {def.view?.compact && (
+          <button className="fold nodrag" title="Fold back to a plate" onClick={() => setExpanded(false)}>
+            fold
           </button>
         )}
       </div>
@@ -129,17 +161,22 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
         <div key={p.id} className={`port in port-${p.type}`}>
           <PortHandle type="target" position={Position.Left} id={p.id} />
           {p.id}
+          {p.unit && <span className="unit"> {p.unit}</span>}
         </div>
       ))}
       {def.outputs.map((p) => (
         <div key={p.id} className={`port out port-${p.type}`}>
+          {p.unit && <span className="unit">{p.unit} </span>}
           {p.id}
           <PortHandle type="source" position={Position.Right} id={p.id} />
         </div>
       ))}
       {def.params.map((p) => (
         <label key={p.id} className="param">
-          {p.id}
+          <span>
+            {p.id}
+            {"unit" in p && p.unit && <span className="unit"> {p.unit}</span>}
+          </span>
           <ParamInput
             def={p}
             value={params[p.id]}
@@ -152,8 +189,20 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   );
 }
 
+/**
+ * A param's (or a station property's) field. It can be bound to a variable (#36): drop one
+ * on it from the Variables sheet, or type = in a number field; a bound one shows as a chip.
+ */
+export function ParamInput(props: { def: ParamDef; value: ParamValue; set: (v: ParamValue) => void; disabled?: boolean }) {
+  return (
+    <Bindable def={props.def} value={props.value} set={props.set} disabled={props.disabled}>
+      {isRef(props.value) ? null : <Field {...props} />}
+    </Bindable>
+  );
+}
+
 /** A number field, or for a `key` param a field that takes the next key you press. */
-export function ParamInput({
+function Field({
   def,
   value,
   set,
@@ -212,7 +261,7 @@ export function ParamInput({
     );
   }
   return (
-    <NumberField className="nodrag num" disabled={disabled} value={Number(value)} onChange={set} />
+    <NumberOrFormula def={def} value={Number(value)} set={set} disabled={disabled} />
   );
 }
 
@@ -389,7 +438,7 @@ function missingDef(
         ? { id: pid, type: "number" as const, default: v }
         : typeof v === "boolean"
           ? { id: pid, type: "boolean" as const, default: v }
-          : { id: pid, type: "text" as const, default: v },
+          : { id: pid, type: "text" as const, default: typeof v === "string" ? v : "var" in v ? `=${v.var}` : `=${v.expr}` },
     ),
   };
 }
@@ -512,10 +561,13 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   };
   const wireType = (c: Connection | Wire) => portType(defOf(c.source), c.sourceHandle, "outputs") ?? "signal";
 
-  // A wire joins ports of one type: signal to signal, step to step, image to image…
+  // A wire joins ports of one type (signal to signal, step to step; any to anything but a
+  // step), in one unit when both ends have one (#4). The engine checks again.
   const isValidConnection: IsValidConnection<Wire> = (shown) => {
     const c = real(shown as Connection);
-    return c.source !== c.target && wireType(c) === portType(defOf(c.target), c.targetHandle, "inputs");
+    const from = portDef(defOf(c.source), c.sourceHandle, "outputs");
+    const to = portDef(defOf(c.target), c.targetHandle, "inputs");
+    return c.source !== c.target && !!from && !!to && !wireMismatch(from, to);
   };
 
   const onConnect = (shown: Connection) => {
@@ -526,7 +578,6 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   // Grouping: a frame around the selected blocks (not already in a group). A story holds
   // signal blocks only: it is itself the step.
   const selected = nodes.filter((n): n is BlockNode => isBlock(n) && !!n.selected && !n.parentId);
-  const selectedFrame = nodes.find((n) => isFrame(n) && n.selected);
   const canStory = selected.length > 0 && selected.every((n) => !hasStepPorts(portsOf(n)));
   const group = (kind: GroupData["kind"]) =>
     setNodes((ns) => {
@@ -568,7 +619,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   };
 
   // ---- Adding: quick add at the cursor, and cards dropped from the browser (#50) ----
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, deleteElements } = useReactFlow();
 
   // ---- Dragging a wire (#52): the port it would join is raised, ports that can't take it dim ----
   const store = useStoreApi();
@@ -633,6 +684,49 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     return () => window.removeEventListener("keydown", onKey, true);
   }, []);
 
+  // ---- Several at once: dragging on empty canvas draws a box; a dialog acts on it (#54) ----
+  const [busy, setBusy] = useState(false); // dragging blocks or the box: the dialog waits
+  const pickedNodes = shown.nodes.filter((n) => n.selected && !n.hidden);
+  const pickedWires = shown.edges.filter((w) => w.selected);
+  const pickedFrames = pickedNodes.filter(isFrame);
+  const kept = pickedNodes.filter((n) => isBlock(n) && n.data.def.linked).length; // linked blocks aren't deleted
+  const many = pickedNodes.length > 0; // a block or group, with or without wires (wires alone have ×)
+  // The dialog floats above the selection, or below it when the selection is at the top of
+  // the canvas (above, it would sit under the panel's head, out of reach).
+  const pickedIds = pickedNodes.map((n) => n.id).join(",");
+  const roomAbove = useStore((st) => {
+    const [, ty, zoom] = st.transform;
+    let top = Infinity;
+    for (const id of pickedIds ? pickedIds.split(",") : []) {
+      const n = st.nodeLookup.get(id);
+      if (n) top = Math.min(top, n.internals.positionAbsolute.y * zoom + ty);
+    }
+    return top > 64;
+  });
+  const deselect = () => {
+    setNodes((ns) => ns.map((n) => (n.selected ? { ...n, selected: false } : n)));
+    setEdges((ws) => ws.map((w) => (w.selected ? { ...w, selected: false } : w)));
+  };
+  const removePicked = () =>
+    deleteElements({ nodes: pickedNodes.map((n) => ({ id: n.id })), edges: pickedWires.map((w) => ({ id: w.id })) });
+  useEffect(() => {
+    if (!many) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== "Escape" || (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT"))) return;
+      e.preventDefault(); // not a key for the backend
+      deselect();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
+  const counted = (n: number, one: string) => (n ? [`${n} ${one}${n === 1 ? "" : "s"}`] : []);
+  const summary = [
+    ...counted(pickedNodes.filter(isBlock).length, "block"),
+    ...counted(pickedFrames.length, "group"),
+    ...counted(pickedWires.length, "wire"),
+  ].join(" · ");
+
   // A dragged card: plan what dropping it here would do, show that, and do it on drop.
   const [hint, setHint] = useState<{ plan: Plan; x: number; y: number; label: string } | null>(null);
   const plan = (def: BlockDef, x: number, y: number): Plan => {
@@ -640,9 +734,10 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     const hit = document.elementsFromPoint(x, y).find((el) => el instanceof SVGElement && el.dataset.wire);
     const wire = hit ? edges.find((w) => w.id === (hit as SVGElement).dataset.wire) : undefined;
     if (wire) {
-      const t = wire.data?.type ?? "signal";
-      const input = def.inputs.find((q) => typeOf(q) === t);
-      const output = def.outputs.find((q) => typeOf(q) === t);
+      const from = portDef(defOf(wire.source), wire.sourceHandle, "outputs");
+      const to = portDef(defOf(wire.target), wire.targetHandle, "inputs");
+      const input = from && def.inputs.find((q) => !wireMismatch(from, q));
+      const output = to && def.outputs.find((q) => !wireMismatch(q, to));
       if (input && output) return { kind: "insert", wire, input, output };
     }
     // Near a free port of a type the block has: connect to it.
@@ -657,8 +752,10 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       const d = Math.hypot(hx - x, hy - y);
       if (d > 56 || (best && best.d <= d)) continue;
       const side = el.classList.contains("source") ? "source" : "target";
-      const t = portType(defOf(node), handle, side === "source" ? "outputs" : "inputs") ?? "signal";
-      const port = (side === "source" ? def.inputs : def.outputs).find((q) => typeOf(q) === t);
+      const theirs = portDef(defOf(node), handle, side === "source" ? "outputs" : "inputs");
+      if (!theirs) continue;
+      const t = typeOf(theirs);
+      const port = side === "source" ? def.inputs.find((q) => !wireMismatch(theirs, q)) : def.outputs.find((q) => !wireMismatch(q, theirs));
       const taken = side === "target" && t !== "step" && edges.some((w) => w.target === node && w.targetHandle === handle);
       if (port && !taken) best = { plan: { kind: "port", node, handle, side, port, hx, hy }, d };
     }
@@ -717,25 +814,6 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     <GroupActions.Provider value={{ ...actions, active: runStates.active }}>
     <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
     <div className="flow">
-      <div className="flow-tools">
-        <span className="lbl">Selection</span>
-        <button disabled={selected.length === 0} title="Frame the selected blocks (tidy; they run as before)" onClick={() => group("visual")}>
-          ▭ Group
-        </button>
-        <button
-          disabled={!canStory}
-          title="Make the selected signal blocks a story: one step of a Step flow that runs them for its seconds"
-          onClick={() => group("story")}
-        >
-          ▶ Story
-        </button>
-        <button disabled={!selectedFrame} onClick={() => selectedFrame && actions.ungroup(selectedFrame.id)}>
-          ⊟ Ungroup
-        </button>
-        <span className="lbl flow-tip">
-          <span className="kbd">/</span> or double-click the canvas to add a block
-        </span>
-      </div>
       <div
         className="flow-canvas"
         ref={wrap}
@@ -778,7 +856,15 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
           reconnectRadius={SNAP.reconnect}
           deleteKeyCode={["Backspace", "Delete"]}
           multiSelectionKeyCode={["Control", "Meta"]}
+          selectionKeyCode={["Control", "Meta"]} // Ctrl-drag on the canvas draws a box…
+          selectionMode={SelectionMode.Partial} // …and picks every block it touches; a plain drag pans
           panActivationKeyCode={null} // Space belongs to the backend (Key blocks)
+          onNodeDragStart={() => setBusy(true)}
+          onNodeDragStop={() => setBusy(false)}
+          onSelectionDragStart={() => setBusy(true)}
+          onSelectionDragStop={() => setBusy(false)}
+          onSelectionStart={() => setBusy(true)}
+          onSelectionEnd={() => setBusy(false)}
           zoomOnDoubleClick={false} // double-click is quick add
           fitView
         >
@@ -799,6 +885,47 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
               maskStrokeWidth={1}
             />
           )}
+          <NodeToolbar
+            nodeId={pickedNodes.map((n) => n.id)}
+            isVisible={many && !busy}
+            position={roomAbove ? Position.Top : Position.Bottom}
+            offset={14}
+            className="selection-dialog nodrag nopan nowheel"
+          >
+            <span className="lbl">{summary}</span>
+            <button
+              className="key small"
+              disabled={kept === pickedNodes.length && pickedWires.length === 0}
+              title="Delete the selection (Delete)"
+              onClick={removePicked}
+            >
+              Delete
+            </button>
+            <button className="key small" disabled={selected.length === 0} title="Frame the selected blocks (tidy; they run as before)" onClick={() => group("visual")}>
+              Group
+            </button>
+            <button
+              className="key small"
+              disabled={!canStory}
+              title={canStory ? "Make the selected blocks a story: one step of a Step flow" : "A story holds signal blocks only: no step ports"}
+              onClick={() => group("story")}
+            >
+              Story
+            </button>
+            <button
+              className="key small"
+              disabled={pickedFrames.length === 0}
+              title="Remove the selected groups' frames (keeps the blocks)"
+              onClick={() => pickedFrames.forEach((f) => actions.ungroup(f.id))}
+            >
+              Ungroup
+            </button>
+            {kept > 0 && (
+              <span className="lbl kept" title="Linked blocks come from the backend's own graph">
+                {kept} linked {kept === 1 ? "block stays" : "blocks stay"}
+              </span>
+            )}
+          </NodeToolbar>
         </ReactFlow>
         </WireDragContext.Provider>
         {hint && (
@@ -830,8 +957,9 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
         />
       )}
       <p className="hint muted">
-        Click a block or wire, then Delete or ×. Shift-drag to select several; Ctrl-click to add one. Drag a wire's end
-        off its port to remove it. Group or Story the selected blocks; ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
+        <span className="kbd">/</span> or double-click the canvas adds a block. Click a block, or Ctrl-drag a box (Ctrl-click
+        adds one): the dialog above it deletes, groups or makes a story. Drag the canvas to pan; the wheel zooms. Drag a
+        wire's end off its port to remove it; ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
       </p>
     </div>
     </HotWire.Provider>

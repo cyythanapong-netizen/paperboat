@@ -56,7 +56,7 @@ function Plot({ name, series, idle }: { name: string; series: Series; idle: bool
       </div>
       <figcaption>
         <span>{name}</span>
-        <output>{last === undefined ? "–" : last.toFixed(3)}</output>
+        <output>{last === undefined ? (idle ? "graph" : "–") : last.toFixed(3)}</output>
       </figcaption>
     </figure>
   );
@@ -188,12 +188,9 @@ export function Dashboard({ state, monitors, arrange, onBlock }: { state: Engine
     save(storeKey, next);
   };
 
-  // Every monitor has an instrument; so does a name a run reports that the canvas lacks.
-  const all = useMemo(() => {
-    const out = { ...monitors };
-    for (const n of Object.keys(state.latest)) out[n] ??= { kind: "graph", x: Infinity, y: Infinity };
-    return out;
-  }, [monitors, state.latest]);
+  // Every monitor block on the Flow canvas has an instrument, and only those (#58): what a
+  // run reported for a block that's gone since doesn't keep its tile.
+  const all = monitors;
 
   const root = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);

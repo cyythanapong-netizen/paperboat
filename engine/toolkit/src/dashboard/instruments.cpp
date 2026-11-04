@@ -15,7 +15,7 @@ struct Passive final : Block {
 Template monitor(std::string type, std::string label, std::string instrument) {
   Template t;
   t.name = "dashboard/" + type;
-  t.def = {.type = std::move(type), .label = std::move(label), .kind = Kind::Monitor, .inputs = {{"in"}},
+  t.def = {.type = std::move(type), .label = std::move(label), .kind = Kind::Monitor, .inputs = {{"in", "any"}},
            .outputs = {}, .params = {}, .instrument = std::move(instrument)};
   t.make = [](const Values&, const Config&) { return std::make_unique<Passive>(); };
   return t;

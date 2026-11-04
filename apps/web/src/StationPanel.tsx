@@ -64,7 +64,10 @@ export function StationPanel({ objects, station, onChange, locked }: Props) {
                 ))}
                 {def?.props.map((p) => (
                   <label key={p.id} className="param">
-                    {p.id}
+                    <span>
+                      {p.id}
+                      {"unit" in p && p.unit && <span className="unit"> {p.unit}</span>}
+                    </span>
                     <ParamInput
                       def={p}
                       value={o.props?.[p.id] ?? p.default}

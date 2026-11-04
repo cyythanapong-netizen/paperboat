@@ -278,4 +278,8 @@ Expression::Expression(std::string_view text, std::vector<std::string> variables
 
 double Expression::operator()(std::span<const double> values) const { return eval(*root_, values); }
 
+bool Expression::is_builtin(std::string_view name) {
+  return name == "pi" || name == "e" || name == "clamp" || kOne.contains(name) || kTwo.contains(name);
+}
+
 }  // namespace paperboat::toolkit

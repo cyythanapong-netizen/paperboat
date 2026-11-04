@@ -2,6 +2,8 @@
 
 #include "paperboat/core/executor.hpp"
 
+#include <paperboat/toolkit/variables.hpp>
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -28,6 +30,15 @@ std::string format_values(const toolkit::Values& values) {
     }
   }
   return out;
+}
+
+// Whether `id` is a block of `graph` or an object of `station` (else a variable's name).
+bool names_node(const json& graph, const json& station, const std::string& id) {
+  auto has = [&](const json& doc, const char* list) {
+    if (!doc.is_object() || !doc.contains(list)) return false;
+    return std::ranges::any_of(doc.at(list), [&](const json& n) { return n.value("id", std::string{}) == id; });
+  };
+  return !id.empty() && (has(graph, "nodes") || has(station, "objects"));
 }
 
 json entities_json(const std::vector<toolkit::Entity>& list) {
@@ -75,8 +86,17 @@ Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit
   ctx_.progress_fn = &progress_;
 }
 
-std::string Run::go(const json& graph_json, const json& station_json) {
+std::string Run::go(const json& graph_given, const json& station_given, const json& variables) {
   emit_({{"type", "run.started"}, {"run", id_}});
+  json graph_json, station_json;
+  try {  // variables first (#36): blocks and objects get the values they stand for
+    const toolkit::Variables vars(variables);
+    graph_json = toolkit::resolve_graph(graph_given, *backend_.catalog, vars);
+    station_json = toolkit::resolve_station(station_given, *backend_.catalog, vars);
+  } catch (const toolkit::VariableError& err) {
+    fail(names_node(graph_given, station_given, err.where) ? err.where : "", std::string("invalid variables: ") + err.what());
+    return finish("failed");
+  }
   try {
     station_ = make_station(station_json, *backend_.catalog);
     if (backend_.state) state_ = backend_.state();
@@ -289,7 +309,8 @@ json settings_json(const RunSettings& s) {
 }
 
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,
-                const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings) {
+                const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings,
+                const json& variables) {
   RunSettings s;
   try {
     s = with_overrides(backend.run, settings);
@@ -299,7 +320,7 @@ std::string run(const std::string& id, const json& graph, const json& station, c
     emit({{"type", "run.finished"}, {"run", id}, {"status", "failed"}});
     return "failed";
   }
-  return Run(id, backend, s, emit, keys, stop).go(graph, station);
+  return Run(id, backend, s, emit, keys, stop).go(graph, station, variables);
 }
 
 }  // namespace paperboat::core

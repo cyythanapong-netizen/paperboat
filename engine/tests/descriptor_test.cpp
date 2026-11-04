@@ -313,6 +313,39 @@ decorations = [
                     ContainsSubstring("(there are none)"));
 }
 
+TEST_CASE("a block's view: built-in for simple maths, inherited, overridden one key at a time") {
+  const auto msg = [](const std::string& blocks) {
+    return nlohmann::json::parse(tk::catalog_message(tk::load_descriptor(descriptor(blocks), test_registry())));
+  };
+  auto block = [](const nlohmann::json& m, const std::string& type) {
+    for (const auto& b : m["blocks"]) if (b["type"] == type) return b;
+    FAIL("no block " << type);
+    return nlohmann::json{};
+  };
+  // Simple maths blocks are compact plates by default…
+  const auto base = msg("[[blocks]]\nuse = \"math/gain\"\n[[blocks]]\nuse = \"math/sum\"\n[[blocks]]\nuse = \"control/pid\"\n");
+  CHECK(block(base, "gain")["view"] == nlohmann::json{{"compact", true}, {"glyph", "gain"}, {"value", "{k}"}});
+  CHECK(block(base, "sum")["view"] == nlohmann::json{{"compact", true}, {"glyph", "plus"}});
+  // …and a block with no view is the normal card: the key is absent.
+  CHECK_FALSE(block(base, "pid").contains("view"));
+
+  // A definition inherits its parent's view and overrides single keys of it.
+  const auto child = msg("[[blocks]]\nuse = \"math/gain\"\ntype = \"half\"\ndefaults = { k = 0.5 }\nview = { glyph = \"plus\" }\n");
+  CHECK(block(child, "half")["view"] == nlohmann::json{{"compact", true}, {"glyph", "plus"}, {"value", "{k}"}});
+  // compact = false turns a compact parent back into a card; the other keys stay.
+  const auto card = msg("[[blocks]]\nuse = \"math/gain\"\nview = { compact = false }\n");
+  CHECK(block(card, "gain")["view"] == nlohmann::json{{"compact", false}, {"glyph", "gain"}, {"value", "{k}"}});
+
+  auto fails_with = [](const std::string& view, const std::string& text) {
+    INFO(view);
+    CHECK_THROWS_WITH(tk::load_descriptor(descriptor("[[blocks]]\nuse = \"math/gain\"\nview = " + view + "\n"), test_registry()),
+                      ContainsSubstring(text));
+  };
+  fails_with("{ symbol = \"x\" }", "unknown field \"symbol\"");
+  fails_with("{ compact = \"yes\" }", "compact must be true or false");
+  fails_with("{ glyph = 3 }", "glyph must be text");
+}
+
 TEST_CASE("catalog_message matches the protocol's catalog shape") {
   const auto catalog = tk::load_descriptor(descriptor(R"(
 [[blocks]]

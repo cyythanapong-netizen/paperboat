@@ -4,7 +4,9 @@ import { useEngine } from "./engine";
 import { BrowserWindow, DRAG_TYPE, dragging, type Item } from "./Browser";
 import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toGraph, withBlock, type FlowNode, type Wire } from "./FlowEditor";
 import { absolute, isFrame } from "./groups";
-import type { RunSettings, Station } from "./protocol";
+import type { ParamValue, RunSettings, Station, Variable, Variables } from "./protocol";
+import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
+import { emptyOf, freeName, inlineRef, loadMine, merged, refersTo, renameInFormula, renameRef, saveMine, toToml, usesOf, type Use } from "./bindings";
 import { Console } from "./Console";
 import { Dashboard } from "./Dashboard";
 import { PAGES, Panel, Rail, Switch, Wordmark, type Mode, type Page, type Theme } from "./Shell";
@@ -80,6 +82,38 @@ export function App() {
   const { fitView, screenToFlowPosition } = useReactFlow();
   const [station, setStation] = useState<Station | null>(null);
   const [runSettings, setRunSettings] = useState<RunSettings>({});
+  // Variables (#36): the backend's defaults, then the user's own (kept in this browser per
+  // backend until projects, #34). The engine resolves them and says what they come to.
+  const [mine, setMine] = useState<Variables | undefined>(undefined);
+  const engineKey = state.engine || "default";
+  useEffect(() => setMine(loadMine(engineKey)), [engineKey]);
+  const variables = useMemo(() => merged(state.variables, mine), [state.variables, mine]);
+  const [varsShown, setVarsShown] = remembered<"open" | "closed">("paperboat.variables", "closed", ["open", "closed"]);
+  const [openVar, setOpenVar] = useState<string | null>(null);
+  const varsHistory = useRef<{ past: Variables[]; future: Variables[] }>({ past: [], future: [] });
+  const keepVars = useCallback((next: Variables) => {
+    setMine(next);
+    saveMine(engineKey, next);
+  }, [engineKey]);
+  const setVariables = useCallback(
+    (next: Variables) => {
+      varsHistory.current = { past: [...varsHistory.current.past.slice(-50), variables], future: [] };
+      keepVars(next);
+    },
+    [variables, keepVars],
+  );
+  // The backend keeps the variables it was last told: tell it when they change.
+  const backendVars = useRef("[]");
+  useEffect(() => {
+    backendVars.current = JSON.stringify(state.variables);
+  }, [state.variables, state.engine]);
+  useEffect(() => {
+    if (state.connection !== "open") return;
+    const now = JSON.stringify(variables);
+    if (now === backendVars.current) return;
+    backendVars.current = now;
+    send({ type: "variables.set", variables });
+  }, [variables, state.variables, state.connection, send]);
   useEffect(() => setRunSettings({}), [state.engine]); // another backend: its own defaults
 
   // What the canvas and station were loaded as, and from which backend: a backend that
@@ -170,6 +204,9 @@ export function App() {
       } else if (e.key.toLowerCase() === "m") {
         e.preventDefault();
         setMode(mode === "navigator" ? "commander" : "navigator");
+      } else if (e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        setVarsShown(varsShown === "open" ? "closed" : "open");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -214,6 +251,72 @@ export function App() {
   };
 
   const view = state.stationView.view;
+
+  // ---- Variables: what the sheet and every bound field use ----
+  const mapParams = (params: Record<string, ParamValue>, f: (v: ParamValue) => ParamValue) =>
+    Object.fromEntries(Object.entries(params).map(([k, v]) => [k, f(v)])) as Record<string, ParamValue>;
+  const rewrite = (uses: (v: ParamValue) => boolean, f: (v: ParamValue) => ParamValue) => {
+    setNodes((ns) => ns.map((n) => (isBlock(n) && Object.values(n.data.params).some(uses) ? { ...n, data: { ...n.data, params: mapParams(n.data.params, f) } } : n)));
+    if (station?.objects.some((o) => Object.values(o.props ?? {}).some(uses)))
+      editStation({ objects: station.objects.map((o) => ({ ...o, props: mapParams(o.props ?? {}, f) })) });
+  };
+  const varsApi: VarsApi = {
+    list: variables,
+    values: state.varValues,
+    error: state.varError,
+    defaults: state.variables,
+    locked: running,
+    setList: setVariables,
+    rename: (from, to) => {
+      setVariables(variables.map((v) => (v.name === from ? { ...v, name: to } : v.expr ? { ...v, expr: renameInFormula(v.expr, from, to) } : v)));
+      rewrite((v) => refersTo(v, from), (v) => renameRef(v, from, to));
+      varsHistory.current = { past: [], future: [] }; // the Flow and Station changed too: not undone from here
+      setOpenVar(to);
+    },
+    remove: (name) => {
+      const gone = variables.find((v) => v.name === name);
+      const value = state.varValues[name] ?? gone?.value ?? 0;
+      rewrite((v) => refersTo(v, name), (v) => inlineRef(v, name, value));
+      setVariables(
+        variables
+          .filter((v) => v.name !== name)
+          .map((v) => (v.expr && refersTo({ expr: v.expr }, name) ? { ...v, expr: (inlineRef({ expr: v.expr }, name, value) as { expr: string }).expr } : v)),
+      );
+      varsHistory.current = { past: [], future: [] };
+      setOpenVar(null);
+    },
+    uses: (name) => usesOf(name, nodes.filter(isBlock).map((n) => ({ id: n.id, params: n.data.params })), station, variables),
+    reveal: (name) => {
+      setVarsShown("open");
+      setOpenVar(name);
+    },
+    promote: (def, value) => {
+      const name = freeName(def.id, variables);
+      const type: Variable["type"] = def.type === "key" ? "text" : def.type;
+      const v: Variable = {
+        name,
+        type,
+        value: typeof value === "object" ? emptyOf(type) : value,
+        ...(def.type === "enum" ? { options: def.options } : {}),
+        ...(def.type === "number" && def.unit ? { unit: def.unit } : {}),
+      };
+      setVariables([...variables, v]);
+      return name;
+    },
+  };
+  const undoVars = (redo: boolean) => {
+    const h = varsHistory.current;
+    const from = redo ? h.future : h.past;
+    const to = from.pop();
+    if (!to) return;
+    (redo ? h.past : h.future).push(variables);
+    keepVars(to);
+  };
+  const showUse = (u: Use) => {
+    if (u.page === "variables") setOpenVar(u.id);
+    else if (u.page === "flow") showBlock(u.id);
+    else setPage("station");
+  };
 
   // Adding (#50): the page's Add key opens the collection as a floating window.
   const [browser, setBrowser] = useState<"flow" | "station" | null>(null);
@@ -264,6 +367,7 @@ export function App() {
       graph: toGraph(nodes, edges),
       ...(station ? { station } : {}),
       ...(Object.keys(runSettings).length ? { settings: runSettings } : {}),
+      variables,
     });
 
   const status = state.run?.status;
@@ -303,6 +407,14 @@ export function App() {
             </span>
           )}
         </div>
+        <button
+          className={`key small vars-key${varsShown === "open" ? " on" : ""}`}
+          aria-pressed={varsShown === "open"}
+          title="Variables: values used in many places (Alt+V)"
+          onClick={() => setVarsShown(varsShown === "open" ? "closed" : "open")}
+        >
+          Variables <span className="mono muted">{variables.length}</span>
+        </button>
         <Switch
           label="View"
           value={mode}
@@ -324,7 +436,8 @@ export function App() {
         />
       </header>
       {mode === "navigator" && <Rail page={page} onPage={setPage} errors={errors} />}
-      <main className="pages">
+      <VarsContext.Provider value={varsApi}>
+      <main className={`pages${varsShown === "open" ? " with-vars" : ""}`}>
         <Panel {...panel("station")} actions={<>{gridKey}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
           <div
             className={`station view-${view}`}
@@ -394,7 +507,18 @@ export function App() {
         <Panel {...panel("console")} info={`${count(state.logs.length, "line")}${errors ? ` · ${count(errors, "error")}` : ""}`}>
           <Console logs={state.logs} onBlock={showBlock} />
         </Panel>
+        {varsShown === "open" && (
+          <VariablesSheet
+            open={openVar}
+            onOpen={setOpenVar}
+            onClose={() => setVarsShown("closed")}
+            onShow={showUse}
+            onUndo={undoVars}
+            toml={() => toToml(variables)}
+          />
+        )}
       </main>
+      </VarsContext.Provider>
       {browser === "flow" && (
         <BrowserWindow title="Add a block" items={blockItems} counts={counts(nodes.filter(isBlock).map((n) => ({ type: n.data.def.type })))} place="canvas" onAdd={addBlock} onClose={() => setBrowser(null)} />
       )}

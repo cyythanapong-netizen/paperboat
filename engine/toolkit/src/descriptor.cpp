@@ -1,4 +1,5 @@
 #include "paperboat/toolkit/descriptor.hpp"
+#include "paperboat/toolkit/variables.hpp"
 
 #include <algorithm>
 #include <fstream>
@@ -71,8 +72,9 @@ std::vector<ParamDef> new_params(const json& obj, const std::string& at) {
     else if (v.is_number()) out.push_back({.id = id, .default_value = v.get<double>()});
     else if (v.is_string()) out.push_back({.id = id, .type = "text", .default_text = v.get<std::string>()});
     else if (v.is_object()) {
-      only_fields(v, {"default", "type", "options"}, at + ".params." + id);
+      only_fields(v, {"default", "type", "options", "unit"}, at + ".params." + id);
       ParamDef p{.id = id, .type = v.value("type", std::string{"number"})};
+      p.unit = v.value("unit", std::string{});
       if (p.is_number()) p.default_value = number_of(v.at("default"));
       else p.default_text = v.at("default").get<std::string>();
       if (p.type != "number" && p.type != "boolean" && p.type != "text" && p.type != "key" && p.type != "file" && p.type != "enum")
@@ -91,8 +93,50 @@ std::vector<ParamDef> new_params(const json& obj, const std::string& at) {
   return out;
 }
 
+// A `view` table: compact, glyph, value (all optional).
+View view_from(const json& v, const std::string& at) {
+  only_fields(v, {"compact", "glyph", "value"}, at);
+  View out;
+  if (v.contains("compact")) {
+    if (!v["compact"].is_boolean()) throw DescriptorError(at + ".compact must be true or false");
+    out.compact = v["compact"].get<bool>();
+  }
+  for (const char* key : {"glyph", "value"}) {
+    if (!v.contains(key)) continue;
+    if (!v[key].is_string()) throw DescriptorError(at + "." + key + " must be text");
+    (std::string(key) == "glyph" ? out.glyph : out.value) = v[key].get<std::string>();
+  }
+  return out;
+}
+
+// `units = { force = "N", kp = "N/rad" }`: the units of a block's ports and number params
+// (or a station object's props), by id. A wire between two ports with units must keep them.
+void apply_units(const json& e, std::vector<ParamDef>& params, BlockDef* block, const std::string& at, const std::string& name) {
+  if (!e.contains("units")) return;
+  const json units = e.at("units");  // a copy: keep it alive while iterating
+  if (!units.is_object()) throw DescriptorError(at + ": units is a table: { port or param = \"unit\" }");
+  for (const auto& [id, value] : units.items()) {
+    if (!value.is_string()) throw DescriptorError(at + ": units." + id + " is text, such as \"N\"");
+    const auto unit = value.get<std::string>();
+    bool found = false;
+    if (auto p = std::ranges::find(params, id, &ParamDef::id); p != params.end()) {
+      if (p->type != "number") throw DescriptorError(at + ": " + id + " is a " + p->type + " param: only numbers have units");
+      p->unit = unit;
+      found = true;
+    }
+    if (block)
+      for (auto* ports : {&block->inputs, &block->outputs})
+        if (auto port = std::ranges::find(*ports, id, &PortDef::id); port != ports->end()) {
+          if (port->type == "step") throw DescriptorError(at + ": " + id + " is a step port: it carries no value, so no unit");
+          port->unit = unit;
+          found = true;
+        }
+    if (!found) throw DescriptorError(at + ": " + name + " has no port or param \"" + id + "\" (units)");
+  }
+}
+
 CatalogEntry from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "description", "params", "defaults", "config"}, at);
+  only_fields(e, {"use", "type", "label", "description", "params", "defaults", "config", "view", "units"}, at);
   const auto name = e.at("use").get<std::string>();
   const Template* t = registry.find(name);
   if (!t) {
@@ -105,6 +149,8 @@ CatalogEntry from_template(const json& e, const std::string& at, const Registry&
   entry.def.type = e.value("type", t->def.type);
   entry.def.label = e.value("label", t->def.label);
   entry.def.description = e.value("description", t->def.description);
+  // The look is inherited from the template; a `view` overrides single keys of it.
+  if (e.contains("view")) entry.def.view = entry.def.view.overridden_by(view_from(e.at("view"), at + ".view"));
   // A definition on a parent (TOML inheriting C++): its own params come after the parent's.
   if (e.contains("params")) {
     if (!t->extendable) throw DescriptorError(at + ": " + name + " takes no new params (it isn't a parent for definitions)");
@@ -129,6 +175,7 @@ CatalogEntry from_template(const json& e, const std::string& at, const Registry&
     if (!t->config.contains(key) && !t->extendable) throw DescriptorError(at + ": " + name + " has no config \"" + key + "\"");
     entry.config[key] = value.get<std::string>();
   }
+  apply_units(e, entry.def.params, &entry.def, at, name);
   if (t->check) {
     try {
       t->check(entry.def, resolve_text(entry.def, entry.config, {}));
@@ -145,7 +192,7 @@ CatalogEntry linked_entry(const ObjectDef& def, const std::string& group) {
 }
 
 ObjectEntry object_from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "description", "defaults"}, at);
+  only_fields(e, {"use", "type", "label", "description", "defaults", "units"}, at);
   const auto name = e.at("use").get<std::string>();
   const StationTemplate* t = registry.find_object(name);
   if (!t) throw DescriptorError(at + ": no station template \"" + name + "\"");
@@ -160,6 +207,8 @@ ObjectEntry object_from_template(const json& e, const std::string& at, const Reg
     if (p->is_number()) p->default_value = number_of(value);
     else p->default_text = value.get<std::string>();
   }
+  // Units of its props and of its linked block's ports.
+  apply_units(e, entry.def.props, entry.def.block ? &*entry.def.block : nullptr, at, name);
   return entry;
 }
 
@@ -282,6 +331,31 @@ void load_dashboard(const json& doc, Catalog& catalog) {
     out["decorations"] = std::move(decorations);
   }
   catalog.dashboard = out.dump();
+}
+
+// [[variables]]: the backend's default variables (#36), in the protocol's shape. A type may
+// be left out when the value says it (a number, true / false, text; a formula is a number).
+void load_variables(const json& doc, Catalog& catalog) {
+  if (!doc.contains("variables")) return;
+  const json& list = doc.at("variables");
+  if (!list.is_array()) throw DescriptorError("variables: a list of [[variables]] tables");
+  json out = json::array();
+  for (std::size_t i = 0; i < list.size(); ++i) {
+    json v = list[i];
+    const auto at = "variables[" + std::to_string(i) + "]";
+    only_fields(v, {"name", "type", "value", "expr", "unit", "min", "max", "step", "whole", "options", "note", "group", "exposed"}, at);
+    if (!v.contains("type")) {
+      const json& value = v.value("value", json());
+      v["type"] = v.contains("expr") || value.is_number() ? "number" : value.is_boolean() ? "boolean" : "text";
+    }
+    out.push_back(std::move(v));
+  }
+  try {
+    const Variables check(out);
+  } catch (const VariableError& err) {
+    throw DescriptorError(std::string("variables: ") + err.what());
+  }
+  catalog.variables = out.dump();
 }
 
 // [graph] and [station]: the starters, in the protocol's shapes, checked against the
@@ -447,7 +521,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
   } catch (const toml::parse_error& err) {
     throw DescriptorError("not valid TOML: " + at_line(err.source()) + ": " + std::string(err.description()));
   }
-  only_fields(doc, {"domain", "import", "blocks", "objects", "graph", "station", "dashboard"}, "descriptor");
+  only_fields(doc, {"domain", "import", "blocks", "objects", "graph", "station", "dashboard", "variables"}, "descriptor");
 
   Catalog catalog;
   catalog.domain = doc.value("domain", std::string{});
@@ -536,7 +610,16 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
     throw DescriptorError("descriptor: the catalog is empty: import packages, use templates, or register the domain's "
                           "own under the package \"" + catalog.domain + "\"");
   load_dashboard(doc, catalog);
+  load_variables(doc, catalog);
   load_starters(doc, catalog);
+  // The starters' references (#36) resolve against the defaults, or the descriptor is wrong.
+  try {
+    const Variables vars(catalog.variables.empty() ? json() : json::parse(catalog.variables));
+    resolve_graph(json::parse(catalog.graph), catalog, vars);
+    if (!catalog.station.empty()) resolve_station(json::parse(catalog.station), catalog, vars);
+  } catch (const VariableError& err) {
+    throw DescriptorError(std::string("starter: ") + err.what());
+  }
   return catalog;
 }
 
@@ -586,7 +669,11 @@ Catalog load_descriptor_file(const std::filesystem::path& path, const Registry& 
 std::string catalog_message(const Catalog& catalog, int indent) {
   auto ports = [](const std::vector<PortDef>& list) {
     json out = json::array();
-    for (const auto& p : list) out.push_back({{"id", p.id}, {"type", p.type}});
+    for (const auto& p : list) {
+      json port = {{"id", p.id}, {"type", p.type}};
+      if (!p.unit.empty()) port["unit"] = p.unit;
+      out.push_back(std::move(port));
+    }
     return out;
   };
   auto param_list = [](const std::vector<ParamDef>& list) {
@@ -596,6 +683,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
       else if (p.type == "boolean") out.push_back({{"id", p.id}, {"type", "boolean"}, {"default", p.default_value != 0}});
       else if (p.type == "enum") out.push_back({{"id", p.id}, {"type", "enum"}, {"default", p.default_text}, {"options", p.options}});
       else out.push_back({{"id", p.id}, {"type", p.type}, {"default", p.default_text}});
+      if (!p.unit.empty()) out.back()["unit"] = p.unit;
     }
     return out;
   };
@@ -613,6 +701,13 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.def.instrument.empty()) block["instrument"] = e.def.instrument;
     if (!e.def.description.empty()) block["description"] = e.def.description;
     if (!e.def.feedthrough) block["feedthrough"] = false;
+    if (!e.def.view.empty()) {
+      json view = json::object();
+      if (e.def.view.compact) view["compact"] = *e.def.view.compact;
+      if (!e.def.view.glyph.empty()) view["glyph"] = e.def.view.glyph;
+      if (!e.def.view.value.empty()) view["value"] = e.def.view.value;
+      block["view"] = std::move(view);
+    }
     if (!e.def.forms.empty()) {
       json forms = json::array();
       for (const auto& f : e.def.forms)

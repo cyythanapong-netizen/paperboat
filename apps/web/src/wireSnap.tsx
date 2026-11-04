@@ -62,9 +62,29 @@ export function nearestAccepting(
  * A port's handle. While a wire is dragged: the port it would join is raised and ringed,
  * ports that can't take it are dimmed. The hit area is a 24px square round the 8px dot.
  */
-export function PortHandle({ type, position, id, className }: { type: "source" | "target"; position: Position; id: string; className?: string }) {
+export function PortHandle({
+  type,
+  position,
+  id,
+  className,
+  top,
+  label,
+}: {
+  type: "source" | "target";
+  position: Position;
+  id: string;
+  className?: string;
+  /** Where on the block's side it sits, when not in a port row (a compact block's dots). */
+  top?: string;
+  /** Shown on hover and read aloud: for a port with no name row beside it. */
+  label?: string;
+}) {
   const nodeId = useNodeId();
   const drag = useContext(WireDragContext);
   const state = !drag || !nodeId ? "" : drag.target?.nodeId === nodeId && drag.target.handleId === id ? "wire-target" : drag.accepts(nodeId, id, type) ? "" : "wire-dim";
-  return <Handle type={type} position={position} id={id} className={[className, state].filter(Boolean).join(" ")} />;
+  return (
+    <Handle type={type} position={position} id={id} className={[className, state].filter(Boolean).join(" ")} style={top ? { top } : undefined} aria-label={label}>
+      {label && <span className={`port-tip ${type === "target" ? "in" : "out"}`}>{label}</span>}
+    </Handle>
+  );
 }
