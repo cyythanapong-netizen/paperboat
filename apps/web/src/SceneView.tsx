@@ -52,9 +52,16 @@ function applyEntity(obj: THREE.Object3D, e: Entity) {
  * Renders the backend's scene entities. Knows shapes, not domains. The camera is fixed
  * at mount from `view`, so the parent remounts this component when the view changes.
  */
-export function SceneView({ entities, view }: { entities: Record<string, Entity>; view: View }) {
+export function SceneView({ entities, view, grid }: { entities: Record<string, Entity>; view: View; grid: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const world = useRef<World | null>(null);
+  // The floor grid (3D only) shows or hides without rebuilding the view.
+  const floorGrid = useRef<THREE.GridHelper | null>(null);
+  const showGrid = useRef(grid);
+  useEffect(() => {
+    showGrid.current = grid;
+    if (floorGrid.current) floorGrid.current.visible = grid;
+  }, [grid]);
 
   useEffect(() => {
     const el = host.current!;
@@ -80,7 +87,10 @@ export function SceneView({ entities, view }: { entities: Record<string, Entity>
       camera = ortho;
     } else {
       const grid = token("--scene-grid", "#a9a9a3");
-      scene.add(new THREE.GridHelper(10, 10, grid, grid));
+      const floor = new THREE.GridHelper(10, 10, grid, grid);
+      floor.visible = showGrid.current;
+      floorGrid.current = floor;
+      scene.add(floor);
       const persp = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
       persp.position.set(2, 4, 8);
       fit = (aspect) => (persp.aspect = aspect);
@@ -118,6 +128,7 @@ export function SceneView({ entities, view }: { entities: Record<string, Entity>
       renderer.dispose();
       el.removeChild(renderer.domElement);
       world.current = null;
+      floorGrid.current = null;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- view is read once; see doc comment
 

@@ -67,6 +67,8 @@ function useTheme(choice: Theme): "light" | "dark" {
 export function App() {
   const [mode, setMode] = remembered<Mode>("paperboat.mode", "navigator", ["navigator", "commander"]);
   const [arrange, setArrange] = useState(false);
+  // The floor grid of a 3D Station: the user's switch wins, else the backend's `view.grid`, else shown.
+  const [gridChoice, setGridChoice] = remembered<"auto" | "on" | "off">("paperboat.grid", "auto", ["auto", "on", "off"]);
   const [page, setPage] = remembered<Page>("paperboat.page", "flow", PAGE_IDS);
   const [themeChoice, setThemeChoice] = remembered<Theme>("paperboat.theme", "auto", ["auto", "light", "dark"]);
   const theme = useTheme(themeChoice);
@@ -234,6 +236,13 @@ export function App() {
     setNodes((ns) => withBlock(ns, item.def, { x: at.x - 78 + (ns.length % 5) * 18, y: at.y - 30 + (ns.length % 5) * 18 })[0]);
     if (mode === "navigator") setPage("flow");
   };
+  const gridOn = gridChoice === "auto" ? (state.view.mode === "3d" ? state.view.grid !== false : true) : gridChoice === "on";
+  const gridKey =
+    view === "scene" && state.view.mode === "3d" ? (
+      <button className={`key small${gridOn ? " on" : ""}`} aria-pressed={gridOn} title="Show or hide the floor grid" onClick={() => setGridChoice(gridOn ? "off" : "on")}>
+        Grid
+      </button>
+    ) : null;
   const addKey = (which: "flow" | "station") => (
     <button className="key small add" disabled={which === "station" && (running || state.objects.length === 0)} onClick={() => setBrowser(browser === which ? null : which)}>
       + Add
@@ -316,7 +325,7 @@ export function App() {
       </header>
       {mode === "navigator" && <Rail page={page} onPage={setPage} errors={errors} />}
       <main className="pages">
-        <Panel {...panel("station")} actions={addKey("station")} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
+        <Panel {...panel("station")} actions={<>{gridKey}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
           <div
             className={`station view-${view}`}
             onDragOver={(e) => {
@@ -344,7 +353,7 @@ export function App() {
             ) : view === "graph" ? (
               <StationGraph objects={state.objects} station={station ?? { objects: [] }} onChange={editStation} locked={running} />
             ) : (
-              <SceneView key={`${theme}:${JSON.stringify(state.view)}`} view={state.view} entities={state.entities} />
+              <SceneView key={`${theme}:${JSON.stringify(state.view)}`} view={state.view} grid={gridOn} entities={state.entities} />
             )}
             {station && state.objects.length > 0 && (
               <StationPanel

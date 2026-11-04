@@ -300,6 +300,10 @@
           "properties": {
             "mode": {
               "const": "3d"
+            },
+            "grid": {
+              "type": "boolean",
+              "description": "Show the floor grid (default true). The user can switch it on or off on the Station page, and that choice wins."
             }
           }
         },

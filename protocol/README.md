@@ -71,7 +71,7 @@ Default address: `ws://localhost:8765`.
 // rot: optional, radians, applied in x, y, z order; scale: optional factors on top of size
 
 // View: camera hint sent with a scene (default 3d)
-{ "mode": "3d" }
+{ "mode": "3d" }                                   // "grid": false hides the floor grid (default true; the user's own switch wins)
 { "mode": "2d", "center": [6, 5], "height": 11 }   // orthographic, looking down −z
 
 // RunSettings: hello.run (the backend's defaults) and graph.run.settings (this run's
