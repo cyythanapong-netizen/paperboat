@@ -131,7 +131,7 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Minimap** | Bottom-right of the Flow canvas, Navigator mode on the Flow page only (never in Commander). A sunken grey well with a 1px outline: blocks in grey, groups as outlines, running in the signal colour, failed red; the view is the clear window in the mask. Click or drag to move the view, scroll to zoom. Kinds are not coloured |
 | **Well** | A recessed grey field for input (address, run length, speed); ink text, no spinners |
 | **Display** | Black, 5px radius; light monospace text; the signal colour for traces and live values. For output only |
-| **Bar** | The wordmark, the backend (a well with the address and engine name; Connect), the run (Run, length, speed, Cancel, status in words), view and theme, divided by a hairline |
+| **Bar** | The wordmark (the logo mark and the name), the backend (a well with the address and engine name; Connect), the run (Run, length, speed, Cancel, status in words), view and theme, divided by a hairline |
 | **Rail** | Numbered pages on a sunken grey rail; the current one is boxed in ink on panel grey, its name bold |
 | **Panel** | Grey, 1px edge, 6px radius; a head with its number, name and a short count on the right |
 | **Block** | Raised grey, 1px outline; head with the name and a word tag (deleted from the selection dialog or the Delete key). Step blocks are outlined in ink; linked blocks dashed; missing ones dashed red; failed ones outlined red. Params are underlined values |
@@ -160,6 +160,23 @@ The Variables are shared by the Station and the Flow, so they belong to neither 
 On a canvas a drag pans and the wheel zooms; Ctrl-drag draws a dashed selection box (touching a block picks it), Ctrl-click adds one. The selection's actions are in its dialog, not in a toolbar. Space is never a canvas key: it belongs to the backend.
 
 Focus is a 2px ink ring. Disabled keys are grey and faded.
+
+## Logo
+
+A two-tone paper boat in pixels over a row of larger water pixels. The boat is 31 columns
+of 2-unit pixels: a sail rising to a peak, light on the left half and shaded on the right,
+a gap, then a wide hull whose ends taper to points. The water is five 6-unit pixels, so
+the whole mark is 62 × 42 units. The pixels are hard-edged (`shape-rendering:
+crispEdges`); never smooth, fill with gradients or add shadow.
+
+| Where | Colours |
+| --- | --- |
+| **Bar and in the app** ([`Logo.tsx`](src/Logo.tsx)) | From the theme: sail light and hull in `--text`, sail shade in `--text-muted`, water in `--signal`. Mono, with the one colour as the water |
+| **Favicon and app icon** ([`public/favicon.svg`](public/favicon.svg)) | The brand palette, `--brand-*` in `tokens.css`, on a rounded tile: `#241f31` ground, `#e4e0ea` sail light and hull, `#8d849e` sail shade, `#c6738f` water. A muted violet |
+
+The name is always lowercase, Geist Sans 600, tracking −0.01em, after the mark. Below 24px
+tall the mark is still readable; below 16px use the favicon. Keep the favicon and
+`Logo.tsx` on the same geometry: change both together.
 
 ## Motion
 

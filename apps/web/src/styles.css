@@ -67,7 +67,10 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .bar > * { flex: none; }
 .bar > .spacer { flex: 1 1 auto; }
 .wordmark { display: inline-flex; align-items: center; gap: var(--space-2); font: 600 var(--size-md) var(--font-sans); letter-spacing: -0.01em; }
-.wordmark svg path { fill: none; stroke: var(--text); stroke-width: 1.4; stroke-linejoin: round; }
+.logo { display: block; }
+.logo-light { fill: var(--text); }
+.logo-shade { fill: var(--text-muted); }
+.logo-water { fill: var(--signal); }
 .field { display: inline-flex; align-items: center; gap: var(--space-2); height: 30px; padding: 0 var(--space-3); }
 .field input { font-size: var(--size-xs); padding: 0; width: 20ch; }
 .conn { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; }

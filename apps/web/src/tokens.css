@@ -37,6 +37,14 @@
   --red: #d92d20;
   --red-dark: #ff5c4d;
 
+  /* The logo's own palette (DESIGN.md, "Logo"): the favicon, app icon and docs. The mark in the app
+     bar is drawn from the theme tokens instead, so it stays mono with the signal colour as water. */
+  --brand-bg: #241f31;
+  --brand-sail-light: #e4e0ea;
+  --brand-sail-shade: #8d849e;
+  --brand-hull: #e4e0ea;
+  --brand-water: #c6738f;
+
   --font-sans: "Geist Sans", system-ui, sans-serif;
   --font-mono: "Geist Mono", ui-monospace, monospace;
 
