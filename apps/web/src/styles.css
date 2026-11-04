@@ -171,7 +171,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* ---- Station ---------------------------------------------------------------------- */
 .station { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-.scene { width: 100%; height: 100%; }
+.scene { position: relative; width: 100%; height: 100%; overflow: hidden; }
+.view-cube-home { font-family: var(--font-mono); }
 .station.view-graph .station-panel, .station.view-web .station-panel { left: auto; right: var(--space-3); }
 .web-station { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface-raised); }
 .station-graph { position: absolute; inset: 0; }
