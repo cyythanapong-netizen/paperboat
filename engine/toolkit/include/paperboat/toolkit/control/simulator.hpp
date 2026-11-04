@@ -1,7 +1,7 @@
 #pragma once
 
-// Fixed-step integrators for domain plants (a cart-pole, a mass on a spring). The
-// plant owns its state and equations; these only advance x' = f(t, x) by one step.
+// Fixed-step integrators for domain state (a cart-pole, a mass on a spring). The
+// domain owns its state and equations; these only advance x' = f(t, x) by one step.
 
 #include <array>
 #include <cstddef>

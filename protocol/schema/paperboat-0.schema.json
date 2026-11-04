@@ -1664,7 +1664,7 @@
         },
         "group": {
           "type": "string",
-          "description": "Where it's listed (Plant, Controller…)."
+          "description": "Where it's listed (Cart-pole, Controller…)."
         },
         "exposed": {
           "type": "boolean",

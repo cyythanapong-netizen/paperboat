@@ -176,7 +176,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .web-station { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface-raised); }
 .station-graph { position: absolute; inset: 0; }
 .station-node { min-width: 150px; }
-.station-node.role-joint { border-style: dashed; }
+/* An object is a square plate with an ink bar on top; a joint's bar is doubled. Its
+   linked block carries the same bar (#53). Dashed means missing, nothing else. */
+.block.object { border-radius: 0; border-top: 3px solid var(--line-ink); }
+.block.object.role-joint { border-top: 4px double var(--line-ink); }
 .station-node-props { font: var(--size-2xs) var(--font-sans); padding: 2px 10px 6px; color: var(--text-muted); }
 .port-link .react-flow__handle { background: var(--line-ink); }
 .station-link .react-flow__edge-path { stroke: var(--line-ink); stroke-width: 1.5px; }
@@ -206,7 +209,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .linked-tag { font: 400 var(--size-2xs) var(--font-mono); color: var(--text-muted); text-transform: none; }
 .block.step .block-title { border-bottom-color: var(--line-ink); }
 .block.step { border-color: var(--line-ink); }
-.block.linked { border-style: dashed; }
+.block.linked { border-top: 3px solid var(--line-ink); }
 /* Selected: a 2px ink outline set off from the block; unmistakable in either theme. */
 .block.selected, .frame.selected-frame { outline: var(--select-outline); outline-offset: var(--select-offset); }
 .react-flow__node.selected > .frame { outline: var(--select-outline); outline-offset: var(--select-offset); }
@@ -418,6 +421,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .log-error { color: var(--danger); }
 .log-node { font: inherit; margin-right: 6px; padding: 0 5px; text-transform: none; color: var(--text-on-screen); background: transparent; border: 1px solid var(--text-on-screen-muted); border-radius: var(--radius-sm); }
 .log-node:hover { border-color: var(--text-on-screen); }
+.logs li { position: relative; }
+.logs .log-copy { margin-left: 8px; padding: 0 5px; font: var(--size-2xs) var(--font-sans); color: var(--text-on-screen-muted); background: transparent; border: 1px solid var(--text-on-screen-muted); border-radius: var(--radius-sm); visibility: hidden; }
+.logs li:hover .log-copy, .logs .log-copy:focus-visible { visibility: visible; }
+.logs .log-copy:hover { color: var(--text-on-screen); border-color: var(--text-on-screen); }
 
 /* ---- Adding things (#50): the Flow's tools, the collection window, quick add, drops ---- */
 .kbd { font: 500 var(--size-2xs) var(--font-mono); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: var(--radius-sm); padding: 0 5px; color: var(--text); background: var(--surface-raised); }

@@ -1,4 +1,4 @@
-// Dynamic blocks for the flow: an integrator, a first-order lag and a delay. Plants use
+// Dynamic blocks for the flow: an integrator, a first-order lag and a delay. Domains use
 // the integrators in paperboat/toolkit/control/simulator.hpp directly.
 
 #include <algorithm>

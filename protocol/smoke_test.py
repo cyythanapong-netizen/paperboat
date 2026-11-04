@@ -91,8 +91,19 @@ async def main() -> None:
     args = parser.parse_args()
 
     async with connect(f"ws://localhost:{args.port}") as ws:
-        hello, catalog, scene, loaded = [await recv(ws) for _ in range(4)]
-        check(hello["type"] == "hello" and hello["protocol"] == "paperboat/0", "hello")
+        # The handshake, up to graph.load: hello and catalog first, then the scene; a backend
+        # with variables also sends variables.load and variables.values, in among them.
+        first = {}
+        while "graph.load" not in first:
+            msg = await recv(ws)
+            check(msg["type"] not in first or msg["type"] == "variables.values", f"{msg['type']} twice in the handshake")
+            first[msg["type"]] = msg
+        check(list(first)[:2] == ["hello", "catalog"], "hello, then catalog, come first")
+        check(set(first) <= {"hello", "catalog", "scene", "variables.load", "variables.values", "graph.load"},
+              f"unexpected handshake messages: {sorted(set(first))}")
+        hello, catalog, loaded = first["hello"], first["catalog"], first["graph.load"]
+        scene = first.get("scene", {"type": "missing", "entities": []})
+        check(hello["protocol"] == "paperboat/0", "hello")
         check(catalog["type"] == "catalog" and len(catalog["blocks"]) > 0, "catalog")
         # A built-in scene must show something; a graph or web station may have no entities.
         view = hello.get("station", {}).get("view", "scene")

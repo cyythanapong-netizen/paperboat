@@ -597,7 +597,7 @@ function Detail({ v, uses, onChange, onShow }: { v: Variable; uses: Use[]; onCha
       </span>
       <span className="lbl">Group</span>
       <span className="wells">
-        <input className="well wide" aria-label="Group" value={v.group ?? ""} placeholder="Plant, Controller…" onChange={(e) => onChange({ ...v, group: e.target.value || undefined })} />
+        <input className="well wide" aria-label="Group" value={v.group ?? ""} placeholder="Cart-pole, Controller…" onChange={(e) => onChange({ ...v, group: e.target.value || undefined })} />
       </span>
       <span className="lbl">Used by</span>
       <span className="grey small">{uses.length ? "" : "Nothing yet: drag the name onto a field, or type = in one"}</span>

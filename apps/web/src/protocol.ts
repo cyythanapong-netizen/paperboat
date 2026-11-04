@@ -274,7 +274,7 @@ export type Variable = {
   options?: string[];
   /** One line: what it's for. */
   note?: string;
-  /** Where it's listed (Plant, Controller…). */
+  /** Where it's listed (Cart-pole, Controller…). */
   group?: string;
   /** Also a control on the Dashboard, for operators. */
   exposed?: boolean;
