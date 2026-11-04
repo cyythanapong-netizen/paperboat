@@ -234,13 +234,15 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3px !important; }
 
 .remove {
-  width: 18px; height: 18px; padding: 0; line-height: 14px; text-transform: none;
+  display: grid; place-items: center;
+  width: 18px; height: 18px; padding: 0; line-height: 1; text-transform: none;
   border: 1px solid var(--line-strong); border-radius: var(--radius-round);
   background: var(--surface-raised); color: var(--text);
   pointer-events: all; position: relative;
 }
 .remove:hover { border-color: var(--danger); color: var(--danger); }
-.block-title .remove { width: 16px; height: 16px; line-height: 12px; }
+.remove-icon { width: 8px; height: 8px; display: block; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
+.block-title .remove { width: 16px; height: 16px; }
 .react-flow__edgelabel-renderer .remove { position: absolute; }
 
 /* Groups: a dashed frame (visual), or a story (one step of a Step flow) in solid ink. */
@@ -254,7 +256,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .frame-seconds { display: flex; align-items: center; gap: 2px; font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .frame-seconds input { width: 44px; padding: 0 3px; }
 .frame-toggle { border: 0; background: transparent; color: inherit; padding: 0 2px; }
-.frame-head .remove { width: 16px; height: 16px; line-height: 12px; }
+.frame-head .remove { width: 16px; height: 16px; }
 .frame-ports { padding: var(--space-1) 0; }
 .frame-empty { font-size: var(--size-2xs); padding: 2px 8px; }
 .group-tools button:disabled { opacity: 0.4; }

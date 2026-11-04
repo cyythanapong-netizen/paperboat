@@ -22,6 +22,7 @@ import {
 } from "@xyflow/react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
+import { RemoveIcon } from "./RemoveIcon";
 import {
   display,
   frameAround,
@@ -112,7 +113,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
         <span className={`block-tag tag-${tag}`}>{tag}</span>
         {selected && !def.linked && (
           <button className="remove nodrag" title="Delete block" onClick={() => deleteElements({ nodes: [{ id }] })}>
-            ×
+            <RemoveIcon />
           </button>
         )}
       </div>
@@ -289,7 +290,7 @@ function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }
             style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
             onClick={() => deleteElements({ edges: [{ id }] })}
           >
-            ×
+            <RemoveIcon />
           </button>
         </EdgeLabelRenderer>
       )}
