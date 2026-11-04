@@ -309,13 +309,14 @@ export function freshTabName(tabs: string[]): string {
 // ---- Text with values in it: a formatted string ----
 
 /** A piece of a decoration's text: plain, or the live value of a monitor. */
-export type TextPart = string | { name: string; value: string };
+export type TextPart = string | { name: string; value: string; variable: boolean; shadowed: boolean };
 
-/** A monitor's value as the display instrument shows it; `spec` is `.Nf` (N decimals) as in `{speed:.2f}`. */
+/** A value as the display instrument shows it; `spec` is `.Nf` (N decimals) as in `{speed:.2f}`. */
 function showValue(v: unknown, spec: string): string {
   if (v === undefined || v === null) return "–";
   const fixed = /^\.(\d{1,2})f$/.exec(spec);
   if (typeof v === "number") return fixed ? v.toFixed(+fixed[1]) : String(+v.toFixed(4));
+  if (typeof v === "boolean") return v ? "on" : "off";
   return String(v);
 }
 
@@ -324,8 +325,9 @@ function showValue(v: unknown, spec: string): string {
  * monitor block ("–" before a run), `{block:.2f}` with that many decimals, `{{` and `}}`
  * are braces. A block name may hold a colon: the whole name is tried before the spec.
  */
-export function formatText(text: string, latest: Record<string, unknown>): TextPart[] {
+export function formatText(text: string, latest: Record<string, unknown>, vars: Record<string, unknown> = {}): TextPart[] {
   const parts: TextPart[] = [];
+  const known = (n: string) => n in latest || n in vars;
   const re = /\{\{|\}\}|\{([^{}]+)\}/g;
   let plain = "";
   let at = 0;
@@ -337,14 +339,50 @@ export function formatText(text: string, latest: Record<string, unknown>): TextP
       continue;
     }
     const cut = m[1].lastIndexOf(":");
-    const [name, spec] = m[1] in latest || cut < 0 ? [m[1], ""] : [m[1].slice(0, cut), m[1].slice(cut + 1)];
+    const [name, spec] = known(m[1]) || cut < 0 ? [m[1], ""] : [m[1].slice(0, cut), m[1].slice(cut + 1)];
     if (plain) parts.push(plain);
     plain = "";
-    parts.push({ name, value: showValue(latest[name], spec) });
+    const variable = !(name in latest) && name in vars;
+    parts.push({ name, value: showValue(variable ? vars[name] : latest[name], spec), variable, shadowed: name in latest && name in vars });
   }
   plain += text.slice(at);
   if (plain) parts.push(plain);
   return parts;
+}
+
+/** `text` with the reference `{from}` (or `{from:spec}`) renamed; `{{from}}` is plain text and stays. */
+export function renameInText(text: string, from: string, to: string): string {
+  return text.replace(/\{\{|\}\}|\{([^{}]+)\}/g, (m, body?: string) => {
+    if (body === undefined) return m;
+    if (body === from) return `{${to}}`;
+    return body.startsWith(`${from}:`) ? `{${to}${body.slice(from.length)}}` : m;
+  });
+}
+
+/** `text` with the reference `{name}` replaced by `value` as a chip shows it (the variable is going away). */
+export function inlineInText(text: string, name: string, value: unknown): string {
+  return text.replace(/\{\{|\}\}|\{([^{}]+)\}/g, (m, body?: string) => {
+    if (body === undefined) return m;
+    const spec = body === name ? "" : body.startsWith(`${name}:`) ? body.slice(name.length + 1) : null;
+    return spec === null ? m : showValue(value, spec).replace(/[{}]/g, (c) => c + c);
+  });
+}
+
+/** Labels and section titles in `layout` that refer to `{name}`, by their place in the layout's list. */
+export function textUsing(layout: DashboardLayout | undefined, name: string): { index: number; kind: DecoKind; text: string }[] {
+  return (layout?.decorations ?? []).flatMap((d, index) => (d.text !== undefined && renameInText(d.text, name, `${name}_`) !== d.text ? [{ index, kind: d.kind, text: d.text }] : []));
+}
+
+/** `layout` with every decoration's text mapped by `f`; the same object when nothing changes. */
+export function mapTexts(layout: DashboardLayout, f: (text: string) => string): DashboardLayout {
+  let changed = false;
+  const decorations = layout.decorations?.map((d) => {
+    const text = d.text === undefined ? undefined : f(d.text);
+    if (text === d.text) return d;
+    changed = true;
+    return { ...d, text };
+  });
+  return changed ? { ...layout, decorations } : layout;
 }
 
 /** A saved layout, if the browser has one for this backend. */
