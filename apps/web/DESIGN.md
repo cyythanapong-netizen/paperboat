@@ -43,8 +43,8 @@ from the tokens and is rebuilt when the theme changes. Displays are black in bot
 
 | Mode | What it shows | When |
 | --- | --- | --- |
-| **Navigator** (default) | One page at a time, full size; the rail picks it (Alt+1 to Alt+4). The Console's rail item shows a count of errors | Building one thing: wiring a flow, setting up the station, reading a run |
-| **Commander** | Every page at once: Station and Flow on top, the Dashboard and Console below. Each head has **open**, which shows that page alone in Navigator | Running and watching |
+| **Navigator** (default) | One page at a time, full size; the rail picks it (Alt+1 to Alt+3) | Building one thing: wiring a flow, setting up the station, reading a run |
+| **Commander** | Every page at once: Station and Flow on top, the Dashboard below. Each head has **open**, which shows that page alone in Navigator | Running and watching |
 | **Monitor** (planned) | A finished program's Dashboard, Station and Console collapsible | Using a rig someone built |
 
 Switch with the view switch on the bar, or Alt+M. Every page stays mounted in both modes,
@@ -110,7 +110,7 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Arrange** | The Dashboard head's key. While on: a dashed outline round each instrument, faint dashed cells under the grid, a size picker (C N L in brackets, full names on hover) top right of each, a solid outline where a drag would land. Drag to a cell, or focus and use the arrows. Reset layout returns to the backend's default. The bar also adds decorations (Section, Label, Console, Separator — and |) and a tab; a picked decoration gets the solid selection outline, a remove key, a corner grip to resize (a separator's end to lengthen) and, for a label, a bracketed `heading` / `note` switch. Double-click text to edit it where it stands; while editing, a row of value chips (one per monitor) puts `{block}` in at the caret on click, or by drag |
 | **Decoration** | On the Dashboard grid, from the layout (#65, #76). **Section**: a titled frame, 1px line, the title sits on the edge on the panel colour; takes no cells. **Separator**: a 1px line in the gap, horizontal or vertical. **Label**: text on the grid, `heading` (600 weight) or `note` (muted, small); takes cells. **Console**: the Console's lines in a screen-coloured frame; takes cells. Text is a formatted string: `{block}` shows the monitor's latest value in monospace tabular figures ("–" and muted before a run) |
 | **Tabs** | The Dashboard's pages as a bracketed choice switch above the grid, shown from two tabs; double-click to rename in Arrange, × removes an empty one, dropping an instrument on a tab name moves it there |
-| **Console** | A display; numbered lines; warnings in the signal colour, errors red; a block's id is a key that shows it on the Flow page |
+| **Console** | A floating window, centred, opened by the Console key beside Variables (its count shows errors; Esc closes); a display; numbered lines; warnings in the signal colour, errors red; a block's id is a key that shows it on the Flow page |
 | **Card** | A block or station object in the browser: name, kind in words, one-line description, ports on a well (in → out; step ports square), params with defaults, how many are already used, and Add. Draggable |
 | **Collection window** | The browser, floating over the page from its Add key: search, a kind choice in brackets, packages on the left, cards in sections. Moved by its head and remembered; Escape closes. While a card is dragged it fades and lets the pointer through |
 | **Quick add** | A search floating at the cursor (`/` over the canvas, or a double-click on empty canvas): the best matches, arrows, Enter adds at that spot |

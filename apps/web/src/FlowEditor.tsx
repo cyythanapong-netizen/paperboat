@@ -305,10 +305,17 @@ function loopPath(sx: number, sy: number, tx: number, ty: number, below: number)
 /** A wire: a curve for signals, a right-angled arrow for steps, around the blocks when it runs back, and × when selected. */
 /** The wire a dragged card would be inserted into, if any (drawn thicker). */
 const HotWire = createContext<string | null>(null);
+/** The wires to follow (#55): those of the hovered wire, port or block. null: nothing is hovered. */
+const Lit = createContext<ReadonlySet<string> | null>(null);
 
 function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }: EdgeProps<Wire>) {
-  const { deleteElements } = useReactFlow();
+  const { deleteElements, getEdges } = useReactFlow();
   const hot = useContext(HotWire) === id;
+  const lit = useContext(Lit);
+  const follow = lit ? (lit.has(id) ? " lit" : " dim") : "";
+  // Wires that leave one output start together: each bends a little differently, so they part at once.
+  const siblings = getEdges().filter((w) => w.source === source && w.sourceHandle === geometry.sourceHandleId).map((w) => w.id).sort();
+  const curvature = 0.25 + 0.14 * Math.max(0, siblings.indexOf(id));
   const step = data?.type === "step";
   const sourceBottom = useBottom(source);
   const targetBottom = useBottom(target);
@@ -321,10 +328,14 @@ function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }
         geometry.targetY,
         Math.max(sourceBottom ?? geometry.sourceY, targetBottom ?? geometry.targetY, geometry.sourceY, geometry.targetY) + 28,
       )
-    : (step ? getSmoothStepPath : getBezierPath)(geometry);
+    : step
+      ? getSmoothStepPath(geometry)
+      : getBezierPath({ ...geometry, curvature });
   return (
     <>
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} className={`wire-${data?.type ?? "signal"}${hot ? " drop-target" : ""}`} />
+      {/* Casing: a wider stroke in the canvas colour, so where wires cross, one is seen to pass over the other. */}
+      <path d={path} className={`wire-casing${follow}`} />
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} className={`wire-${data?.type ?? "signal"}${hot ? " drop-target" : ""}${follow}`} />
       {/* What a dropped card finds under the pointer: a wide, invisible stroke tagged with the wire. */}
       <path d={path} className="wire-hit" data-wire={id} />
       {selected && (
@@ -599,6 +610,28 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     [setNodes, setEdges],
   );
   const runStates = useContext(RunStates);
+  // Hovering a wire, a port or a block lights its wires and fades the rest.
+  const [lit, setLit] = useState<ReadonlySet<string> | null>(null);
+  const follow = (e: { target: EventTarget | null }) => {
+    const t = e.target as Element | null;
+    const handle = t?.closest?.(".react-flow__handle");
+    const node = t?.closest?.(".react-flow__node");
+    const wire = t?.closest?.(".react-flow__edge");
+    let ids: string[] | null = null;
+    if (handle) {
+      const n = handle.getAttribute("data-nodeid");
+      const h = handle.getAttribute("data-handleid");
+      ids = edges.filter((w) => (w.source === n && w.sourceHandle === h) || (w.target === n && w.targetHandle === h)).map((w) => w.id);
+    } else if (wire) ids = [wire.getAttribute("data-id") ?? ""];
+    else if (node) {
+      const n = node.getAttribute("data-id");
+      ids = edges.filter((w) => w.source === n || w.target === n).map((w) => w.id);
+    }
+    setLit((prev) => {
+      if (!ids?.length) return prev === null ? prev : null;
+      return prev && prev.size === ids.length && ids.every((i) => prev.has(i)) ? prev : new Set(ids);
+    });
+  };
   const shown = display(nodes, edges, (node, port, side) => portType(defOf(node), port, side) ?? "signal");
 
   // Dragging a wire's end onto another port moves it; dropping it anywhere else deletes it.
@@ -813,12 +846,17 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   return (
     <GroupActions.Provider value={{ ...actions, active: runStates.active }}>
     <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
+    <Lit.Provider value={lit}>
     <div className="flow">
       <div
         className="flow-canvas"
         ref={wrap}
+        onMouseOver={follow}
         onMouseMove={(e) => (pointer.current = { x: e.clientX, y: e.clientY })}
-        onMouseLeave={() => (pointer.current = null)}
+        onMouseLeave={() => {
+          pointer.current = null;
+          setLit(null);
+        }}
         onDoubleClick={(e) => {
           // Empty canvas only: not a block, a wire, a port or a control.
           const t = e.target as Element;
@@ -962,6 +1000,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
         wire's end off its port to remove it; ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
       </p>
     </div>
+    </Lit.Provider>
     </HotWire.Provider>
     </GroupActions.Provider>
   );

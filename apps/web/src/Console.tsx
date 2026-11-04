@@ -21,3 +21,31 @@ export function Console({ logs, onBlock }: { logs: EngineState["logs"]; onBlock:
     </ol>
   );
 }
+
+/** The Console as a window floating in the middle of the screen; the header's Console key toggles it. */
+export function ConsoleWindow({
+  logs,
+  errors,
+  onBlock,
+  onClose,
+}: {
+  logs: EngineState["logs"];
+  errors: number;
+  onBlock: (id: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <section className="console-window" role="dialog" aria-label="Console">
+      <header className="console-head">
+        <h2>Console</h2>
+        <span className="lbl">{`${logs.length} ${logs.length === 1 ? "line" : "lines"}${errors ? ` · ${errors} ${errors === 1 ? "error" : "errors"}` : ""}`}</span>
+        <button className="key small" title="Close the Console (Esc)" onClick={onClose}>
+          Close
+        </button>
+      </header>
+      <div className="console-body">
+        <Console logs={logs} onBlock={onBlock} />
+      </div>
+    </section>
+  );
+}
