@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
-import { NumberField, parseNumber } from "./NumberField";
+import { parseNumber } from "./NumberField";
 import type { ParamDef, ParamValue, Variable, Variables } from "./protocol";
 import { badName, emptyOf, fits, freeName, isRef, type Ref, type Use } from "./bindings";
 
@@ -103,7 +103,7 @@ function Bound({ def, value, set, disabled }: { def: ParamDef; value: Ref; set: 
                 <div className="row">
                   <code>{v.name}</code>
                   <span className="grey">=</span>
-                  {v.expr !== undefined ? <output>{show(now)}</output> : <ValueField v={v} onChange={(x) => vars.setList(vars.list.map((y) => (y.name === v.name ? x : y)))} disabled={vars.locked} />}
+                  {v.expr !== undefined && v.type !== "number" ? <output>{show(now)}</output> : <ValueField v={v} onChange={(x) => vars.setList(vars.list.map((y) => (y.name === v.name ? x : y)))} disabled={vars.locked} />}
                   {v.unit && <span className="grey mono">{v.unit}</span>}
                 </div>
                 <span className="grey small">
@@ -250,10 +250,9 @@ export function NumberOrFormula({ def, value, set, disabled }: { def: ParamDef; 
 }
 
 /** A variable's value, edited as its type. */
-function ValueField({ v, onChange, disabled }: { v: Variable; onChange: (v: Variable) => void; disabled?: boolean }) {
+function ValueField({ v, onChange, disabled, wide }: { v: Variable; onChange: (v: Variable) => void; disabled?: boolean; wide?: boolean }) {
   const set = (value: Variable["value"]) => onChange({ ...v, value });
-  if (v.type === "number")
-    return <NumberField className="var-value well" disabled={disabled} value={Number(v.value ?? 0)} onChange={set} valid={(x) => (v.min === undefined || x >= v.min) && (v.max === undefined || x <= v.max) && (!v.whole || Number.isInteger(x))} />;
+  if (v.type === "number") return <NumberCell v={v} onChange={onChange} disabled={disabled} wide={wide} />;
   if (v.type === "boolean")
     return <input type="checkbox" className="var-check" disabled={disabled} checked={v.value === true} onChange={(e) => set(e.target.checked)} />;
   if (v.type === "enum")
@@ -265,6 +264,51 @@ function ValueField({ v, onChange, disabled }: { v: Variable; onChange: (v: Vari
       </select>
     );
   return <input className="var-value well text" disabled={disabled} value={String(v.value ?? "")} onChange={(e) => set(e.target.value)} />;
+}
+
+/**
+ * A number variable's one field, like a spreadsheet cell: a number, or a formula over other
+ * variables ("kp_theta / 5"). It shows what it comes to; while editing, what was typed. A
+ * number applies as you type; a formula on Enter or leaving the field (half-typed, it
+ * isn't one yet). Stored as `value` when it's a plain number, else `expr`: a plain number
+ * is what a knob or a --var can set, a formula is derived.
+ */
+function NumberCell({ v, onChange, disabled, wide }: { v: Variable; onChange: (v: Variable) => void; disabled?: boolean; wide?: boolean }) {
+  const vars = useContext(VarsContext);
+  const [text, setText] = useState<string | null>(null);
+  const formula = v.expr !== undefined;
+  const now = formula ? vars?.values[v.name] : v.value;
+  const inRange = (x: number) => (v.min === undefined || x >= v.min) && (v.max === undefined || x <= v.max) && (!v.whole || Number.isInteger(x));
+  const asNumber = (t: string) => parseNumber(t, inRange);
+  const commit = () => {
+    if (text === null) return;
+    const t = text.trim();
+    const x = asNumber(t);
+    if (x !== undefined) onChange({ ...v, expr: undefined, value: x });
+    else if (t && !/^[-+.\d\se]*$/.test(t)) onChange({ ...v, value: undefined, expr: t }); // not a half-typed number
+    setText(null);
+  };
+  return (
+    <input
+      className={`var-value well${formula ? " is-formula" : ""}${wide ? " wide" : ""}`}
+      aria-label={`${v.name}: a number or a formula`}
+      title={formula ? `= ${v.expr}` : "A number, or a formula over other variables (kp_theta / 5)"}
+      disabled={disabled}
+      spellCheck={false}
+      value={text ?? (formula && !wide ? show(now) : formula ? v.expr! : String(v.value ?? 0))}
+      onFocus={() => setText(formula ? v.expr! : String(v.value ?? 0))}
+      onChange={(e) => {
+        setText(e.target.value);
+        const x = asNumber(e.target.value);
+        if (x !== undefined && (formula || x !== v.value)) onChange({ ...v, expr: undefined, value: x });
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commit();
+        else if (e.key === "Escape") setText(null);
+      }}
+    />
+  );
 }
 
 /** An optional number (a range end, a step): empty means none. */
@@ -438,8 +482,8 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
       >
         {v.name}
       </span>
-      <span className="var-type">{formula ? "ƒ formula" : v.type}</span>
-      {formula ? <output className="var-value out">{show(vars.values[v.name])}</output> : <ValueField v={v} onChange={onChange} disabled={vars.locked} />}
+      <span className="var-type">{formula && v.type !== "number" ? "ƒ formula" : v.type}</span>
+      {formula && v.type !== "number" ? <output className="var-value out">{show(vars.values[v.name])}</output> : <ValueField v={v} onChange={onChange} disabled={vars.locked} />}
       <span className="var-unit">{v.unit ?? ""}</span>
       <button className={`var-uses${uses.length ? "" : " none"}`} onClick={onOpen} tabIndex={-1}>
         {uses.length ? count(uses.length, "use") : "unused"}
@@ -460,7 +504,7 @@ function Detail({ v, uses, onChange, onShow }: { v: Variable; uses: Use[]; onCha
   const def = vars.defaults.find((d) => d.name === v.name);
   const changed = def && JSON.stringify(def) !== JSON.stringify(v);
   const formula = v.expr !== undefined;
-  const can = (t: Variable["type"]) => t === "number" || t === "boolean";
+  const can = (t: Variable["type"]) => t === "boolean"; // a number's one field takes a formula too
   const rename = () => {
     if (name !== v.name && !why) vars.rename(v.name, name);
     else setName(v.name);
@@ -503,7 +547,15 @@ function Detail({ v, uses, onChange, onShow }: { v: Variable; uses: Use[]; onCha
           </span>
         </>
       )}
-      {formula && (
+      {v.type === "number" && (
+        <>
+          <span className="lbl">Value</span>
+          <span className="wells">
+            <ValueField v={v} onChange={onChange} disabled={vars.locked} wide />
+          </span>
+        </>
+      )}
+      {formula && v.type === "boolean" && (
         <>
           <span className="lbl">Formula</span>
           <span className="wells">
