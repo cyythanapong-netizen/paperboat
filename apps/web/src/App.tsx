@@ -238,22 +238,22 @@ export function App() {
             setUrl(draftUrl);
           }}
         >
-          <span className="lbl">backend</span>
-          <span className="screen field">
+          <span className="lbl">Backend</span>
+          <span className="well field">
             <input aria-label="Backend address" value={draftUrl} onChange={(e) => setDraftUrl(e.target.value)} size={20} />
             <span className={`conn conn-${state.connection}`}>
               {state.connection === "open" ? state.engine : state.connection}
             </span>
           </span>
-          <button className="key small">connect</button>
+          <button className="key small">Connect</button>
         </form>
         <div className="run-controls">
           <button className="key run" disabled={state.connection !== "open" || running} onClick={run}>
-            ▶ run
+            ▶ Run
           </button>
           <RunOptions defaults={state.runDefaults} value={runSettings} onChange={setRunSettings} />
           <button className="key" disabled={!running} onClick={() => send({ type: "run.cancel" })}>
-            ■ cancel
+            ■ Cancel
           </button>
           {state.run && (
             <span className={`run-status status-${status}`}>
@@ -262,7 +262,7 @@ export function App() {
           )}
         </div>
         <Switch
-          label="view"
+          label="View"
           value={mode}
           onChange={setMode}
           options={[
@@ -271,7 +271,7 @@ export function App() {
           ]}
         />
         <Switch
-          label="theme"
+          label="Theme"
           value={themeChoice}
           onChange={setThemeChoice}
           options={[

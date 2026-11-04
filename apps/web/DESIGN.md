@@ -1,8 +1,8 @@
 # Paperboat design system
 
 How the web app looks and why. The look is **flat mono, like a well-made instrument**:
-grey panels with hairlines, small lowercase labels, black displays for values that change,
-and one colour that means "live". It takes its spirit from hardware such as Teenage
+grey panels with hairlines, clear sentence-case labels, recessed grey fields for what you
+type, black displays for output, and one colour that means "live". It takes its spirit from hardware such as Teenage
 Engineering's: honest, precise and quiet, with a little character in the type and the
 displays. Flat: no bevels, no indicator lights, no shadows.
 
@@ -18,15 +18,18 @@ The direction and its history are in issue #48.
    #48 settles it) means live or look here: a run in progress, a block that is running,
    a trace, a warning. Red means failed. Nothing else is coloured.
 3. **Selection is never a fill.** A filled shape doesn't say whether it is on or off. What
-   is selected is shown by position and line: a switch's knob sits on the chosen side
-   and that name is bold ink; the current page has a bar beside it; a selected block has
-   a 2px outline set off from it; a selected wire is thicker.
+   is selected is shown by line and weight: a chosen option sits in brackets in bold ink
+   (`[ navigator ]  commander`); the current page is boxed in ink and stands out on panel
+   grey from the greyed rail; a selected block has a 2px outline set off from it; a
+   selected wire is thicker.
 4. **State in words.** A block's head says what it is (`fn`, `source`, `monitor`,
    `step`, `station`) or what is happening to it (`running`, `failed`, `missing`).
-5. **Displays hold what changes.** Values that move (the backend's address, run length
-   and speed, instruments, the Console) sit in black displays set into the panel.
-6. **Room to breathe.** 14px between sections and around the app, 16px inside them.
-7. **Simple to enter.** A first-time user sees one page (Navigator), a Run key and the
+5. **Displays are for output; wells are for input.** What the run shows (instruments, the
+   Console) sits in black displays. What you type (the backend's address, run length,
+   speed) sits in recessed grey wells: present, never loud.
+6. **Readable first.** Body 13px, labels 12px in a dark grey, values 12.5px monospace.
+7. **Room to breathe.** 14px between sections and around the app, 16px inside them.
+8. **Simple to enter.** A first-time user sees one page (Navigator), a Run key and the
    flow the backend opened with. Nothing needs setting up before the first run.
 
 ## Themes
@@ -50,20 +53,20 @@ size changes.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ ⛵ paperboat  [ws://… engine] connect  ▶ run  for [10] s [1×] ■ cancel    │
-│                                   navigator ◯━ commander   theme ━◯━       │
+│ ⛵ paperboat  ░ws://… engine░ Connect  ▶ Run  for ░10░ s ░1×░  ■ Cancel   │
+│                          [ navigator ]  commander  │  [ auto ]  light  dark │
 ├────────────┬─────────────────────────────────────────────────────────────┤
-│ [1] station│ [2] flow                                         6 blocks   │
-│▌[2] flow   │ group [group][story]  signal [+ sine]…  math [+ gain]…       │
-│ [3] dashb… │                                                             │
-│ [4] console│        ┌ pid ───── fn ┐     ┌ sum ───── fn ┐                │
-│            │        │ kp      40   │ ─── │ a            │                │
+│ 1 Station  │ 2 Flow                                            6 blocks  │
+│┏━━━━━━━━━━┓│ Group [Group][Story]  Signal [+ Sine]…  Math [+ Gain]…       │
+│┃ 2 Flow   ┃│                                                             │
+│┗━━━━━━━━━━┛│        ┌ PID ───── fn ┐     ┌ Sum ───── fn ┐                │
+│ 3 Dashb…   │        │ kp      40   │ ─── │ a            │                │
 └────────────┴─────────────────────────────────────────────────────────────┘
 ```
 
-Below 860px the rail moves to the bottom (the current page underlined), the bar wraps,
-and Commander stacks its pages in one scrolling column. Below 1280px the bar drops its
-small labels.
+Below 860px the rail moves to the bottom (numbers only, the current page boxed with its
+name), the bar wraps, and Commander stacks its pages in one scrolling column. Below
+1560px the bar drops its small labels and the engine's name.
 
 ## Tokens
 
@@ -72,10 +75,10 @@ never a raw hex.
 
 **Primitives**: greys (`--grey-50` to `--grey-900`) for light, `--night-*` for dark,
 `--black` and `--screen-*` for displays, `--orange` (placeholder) and `--red`; fonts
-`--font-sans` (Inter Tight) and `--font-mono` (IBM Plex Mono), both self-hosted; sizes
-10.5 / 11.5 / 13 / 15 / 30 px; a 4px spacing grid.
+`--font-sans` (Geist) and `--font-mono` (Geist Mono), both self-hosted; sizes
+12 / 12.5 / 13 / 15 / 30 px; a 4px spacing grid.
 
-**Semantic**: `--surface-ground | panel | raised | screen | float`, `--float-blur`, `--text`,
+**Semantic**: `--surface-ground | panel | raised | sunken | well | screen | float`, `--well-shadow`, `--float-blur`, `--text`,
 `--text-muted`, `--text-on-screen(-muted)`, `--line` (dividers), `--line-strong` (keys,
 blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`,
 `--danger`, `--focus`, `--scene-bg`, `--scene-grid`, radii, `--motion`. Dark redefines these
@@ -88,12 +91,13 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 
 | Component | Rule |
 | --- | --- |
-| **Label** | 10.5px monospace, lowercase, grey. Names things; never shows selection |
-| **Key** (every button) | Flat, 1px outline, lowercase, 5px radius. Hover inks the outline. Run has an ink outline and bold label |
-| **Switch** | An outlined track with a small ink knob on the chosen option; the chosen name bold ink, the rest grey. Two options sit either side; three sit below. Click a name, click the track to step, or use the arrow keys |
-| **Display** | Black, 5px radius; light monospace text; the signal colour for traces and live values |
-| **Bar** | The wordmark, the backend (a display with the address and engine name; connect), the run (run, length, speed, cancel, status in words), the view and theme switches |
-| **Rail** | Numbered pages; the current one has a 2px ink bar beside it, a bold name and an inked number |
+| **Label** | 12px sans, sentence case, dark grey. Names things; never shows selection |
+| **Key** (every button) | Flat, 1px outline, 5px radius. Hover inks the outline. Run has an ink outline and bold label |
+| **Choice** (view, theme) | Options in monospace; the chosen one in brackets and bold ink, the rest grey. The brackets are reserved for every option, so nothing shifts. Click one, or use the arrow keys |
+| **Well** | A recessed grey field for input (address, run length, speed); ink text, no spinners |
+| **Display** | Black, 5px radius; light monospace text; the signal colour for traces and live values. For output only |
+| **Bar** | The wordmark, the backend (a well with the address and engine name; Connect), the run (Run, length, speed, Cancel, status in words), view and theme, divided by a hairline |
+| **Rail** | Numbered pages on a sunken grey rail; the current one is boxed in ink on panel grey, its name bold |
 | **Panel** | Grey, 1px edge, 6px radius; a head with its number, name and a short count on the right |
 | **Block** | Raised grey, 1px outline; head with the name and a word tag. Step blocks are outlined in ink; linked blocks dashed; missing ones dashed red; failed ones outlined red. Params are underlined values |
 | **Wire** | Ink, 1.2px; step wires 2px; image wires dashed; selected wires 3px |

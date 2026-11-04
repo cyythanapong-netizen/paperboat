@@ -7,11 +7,11 @@
  * user picks one (html[data-theme="light" | "dark"]).
  */
 
-@import "@fontsource/inter-tight/400.css";
-@import "@fontsource/inter-tight/500.css";
-@import "@fontsource/inter-tight/600.css";
-@import "@fontsource/ibm-plex-mono/400.css";
-@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/geist-sans/400.css";
+@import "@fontsource/geist-sans/500.css";
+@import "@fontsource/geist-sans/600.css";
+@import "@fontsource/geist-mono/400.css";
+@import "@fontsource/geist-mono/500.css";
 
 :root {
   /* ---- Primitives ---------------------------------------------------------------- */
@@ -20,14 +20,14 @@
   --grey-200: #dcdcd8;
   --grey-300: #cfcfca;
   --grey-500: #9d9d97;
-  --grey-600: #6f6f69;
+  --grey-600: #55554f;  /* labels: dark enough to read at 12px */
   --grey-900: #161616;
   --night-50: #2a2a2a;
   --night-100: #222222;
   --night-200: #1a1a1a;
   --night-300: #111111;
   --night-500: #6b6b66;
-  --night-600: #8b8b85;
+  --night-600: #a3a39d;
   --night-900: #e9e9e4;
   --black: #0d0d0d;
   --screen-text: #f2f2ee;
@@ -37,12 +37,12 @@
   --red: #d92d20;
   --red-dark: #ff5c4d;
 
-  --font-sans: "Inter Tight", system-ui, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: "Geist Sans", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
 
-  --size-2xs: 10.5px;
-  --size-xs: 11.5px;
-  --size-sm: 13px;
+  --size-2xs: 12px;   /* labels, tags, captions */
+  --size-xs: 12.5px;  /* values, keys, block text */
+  --size-sm: 13px;    /* body */
   --size-md: 15px;
   --size-xl: 30px;
 
@@ -58,7 +58,10 @@
   --surface-ground: var(--grey-200);
   --surface-panel: var(--grey-100);
   --surface-raised: var(--grey-50);        /* keys, blocks, fields on a panel */
-  --surface-screen: var(--black);          /* displays: instruments, Console, values */
+  --surface-screen: var(--black);          /* displays of output: instruments, Console */
+  --surface-well: #dcdcd7;                 /* fields you type in: a recessed grey */
+  --well-shadow: inset 0 1px 2px rgb(0 0 0 / 0.08);
+  --surface-sunken: #e1e1dd;               /* the rail's ground; the current page sits up on panel grey */
   --surface-float: rgb(236 236 232 / 0.78); /* glass: only what floats over live content */
   --float-blur: blur(14px) saturate(130%); /* set to none to retire glass */
 
@@ -102,6 +105,9 @@
   --surface-panel: var(--night-200);
   --surface-raised: var(--night-100);
   --surface-screen: #050505;
+  --surface-well: #111111;
+  --well-shadow: inset 0 1px 2px rgb(0 0 0 / 0.5);
+  --surface-sunken: #151515;
   --surface-float: rgb(34 34 34 / 0.8);
   --text: var(--night-900);
   --text-muted: var(--night-600);
@@ -122,6 +128,9 @@
     --surface-panel: var(--night-200);
     --surface-raised: var(--night-100);
     --surface-screen: #050505;
+    --surface-well: #111111;
+    --well-shadow: inset 0 1px 2px rgb(0 0 0 / 0.5);
+    --surface-sunken: #151515;
     --surface-float: rgb(34 34 34 / 0.8);
     --text: var(--night-900);
     --text-muted: var(--night-600);

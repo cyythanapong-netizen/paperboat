@@ -11,10 +11,10 @@ export type Mode = "navigator" | "commander";
 export type Theme = "auto" | "light" | "dark";
 
 export const PAGES: { id: Page; label: string; hint: string }[] = [
-  { id: "station", label: "station", hint: "The setup: what's being worked on" },
-  { id: "flow", label: "flow", hint: "The blocks and wires" },
-  { id: "dashboard", label: "dashboard", hint: "Instruments during a run" },
-  { id: "console", label: "console", hint: "What the backend logged" },
+  { id: "station", label: "Station", hint: "The setup: what's being worked on" },
+  { id: "flow", label: "Flow", hint: "The blocks and wires" },
+  { id: "dashboard", label: "Dashboard", hint: "Instruments during a run" },
+  { id: "console", label: "Console", hint: "What the backend logged" },
 ];
 
 const number = (p: Page) => PAGES.findIndex((x) => x.id === p) + 1;
@@ -34,9 +34,8 @@ export function Wordmark() {
 }
 
 /**
- * A flat switch: an outlined track whose knob sits on the chosen option, and the chosen
- * option's name in bold ink (the rest grey). Two options sit either side of the track;
- * three or more sit below it. Click a name, or the track to step; arrow keys move it.
+ * A choice of one, instrument-panel style: the chosen option sits in brackets in bold ink,
+ * the others plain and grey. Click one; arrow keys move the choice.
  */
 export function Switch<T extends string>({
   label,
@@ -50,55 +49,33 @@ export function Switch<T extends string>({
   onChange: (v: T) => void;
 }) {
   const i = Math.max(0, options.findIndex((o) => o.value === value));
-  const step = (d: number) => onChange(options[(i + d + options.length) % options.length].value);
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === "ArrowRight" || e.key === "ArrowDown") (e.preventDefault(), step(1));
-    if (e.key === "ArrowLeft" || e.key === "ArrowUp") (e.preventDefault(), step(-1));
+    const d = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    onChange(options[(i + d + options.length) % options.length].value);
   };
-  const name = (o: (typeof options)[number]) => (
-    <button
-      key={o.value}
-      role="radio"
-      aria-checked={o.value === value}
-      tabIndex={-1}
-      className={`opt${o.value === value ? " on" : ""}`}
-      title={o.hint}
-      onClick={() => onChange(o.value)}
-    >
-      {o.label}
-    </button>
-  );
-  const track = (
-    <button
-      className={`track n${options.length}`}
-      aria-label={`${label}: ${options[i].label}`}
-      onClick={() => step(1)}
-      onKeyDown={onKey}
-      style={{ ["--pos" as string]: options.length > 1 ? i / (options.length - 1) : 0 }}
-    >
-      <span className="knob" />
-    </button>
-  );
   return (
-    <div className={`switch${options.length > 2 ? " stacked" : ""}`} role="radiogroup" aria-label={label}>
+    <div className="switch" role="radiogroup" aria-label={label} onKeyDown={onKey}>
       <span className="lbl">{label}</span>
-      {options.length === 2 ? (
-        <>
-          {name(options[0])}
-          {track}
-          {name(options[1])}
-        </>
-      ) : (
-        <span className="switch-stack">
-          {track}
-          <span className="opts">{options.map(name)}</span>
-        </span>
-      )}
+      {options.map((o) => (
+        <button
+          key={o.value}
+          role="radio"
+          aria-checked={o.value === value}
+          tabIndex={o.value === value ? 0 : -1}
+          className={`opt${o.value === value ? " on" : ""}`}
+          title={o.hint}
+          onClick={() => onChange(o.value)}
+        >
+          {o.label}
+        </button>
+      ))}
     </div>
   );
 }
 
-/** Navigator's rail: the four pages; the current one has a bar beside it and a bold name. */
+/** Navigator's rail: the four pages; the current one is boxed in ink on panel grey, the rest sit greyed on the rail. */
 export function Rail({ page, onPage, errors }: { page: Page; onPage: (p: Page) => void; errors: number }) {
   return (
     <nav className="rail" aria-label="Pages">
@@ -144,7 +121,7 @@ export function Panel({
         <span className="panel-info lbl">{info}</span>
         {mode === "commander" && (
           <button className="key small" title={`Show ${label} on its own (Navigator)`} onClick={onOpen}>
-            open
+            Open
           </button>
         )}
       </header>
