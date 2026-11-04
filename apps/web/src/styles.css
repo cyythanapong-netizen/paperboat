@@ -186,6 +186,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .mode-commander .hint { display: none; }
 .hint { margin: 0; padding: var(--space-2) var(--panel-pad); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); border-top: 1px solid var(--line); }
 .react-flow { background: transparent; --xy-background-pattern-dots-color-default: var(--dots); --xy-edge-stroke-default: var(--line-ink); }
+.react-flow__minimap { background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: var(--radius-md); overflow: hidden; }
 .react-flow__attribution { background: transparent !important; }
 .react-flow__attribution a { color: var(--text-muted) !important; }
 

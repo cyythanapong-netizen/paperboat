@@ -7,6 +7,7 @@ import {
   getSmoothStepPath,
   Handle,
   MarkerType,
+  MiniMap,
   Position,
   ReactFlow,
   useInternalNode,
@@ -490,10 +491,13 @@ type Props = {
   setEdges: Dispatch<SetStateAction<Wire[]>>;
   onNodesChange: OnNodesChange<FlowNode>;
   onEdgesChange: OnEdgesChange<Wire>;
+  /** Show the overview map: when the Flow page is the one in view, not among all pages (Commander). */
+  minimap: boolean;
 };
 
 /** Blocks by palette group, groups in catalog order. */
-export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange }: Props) {
+export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap }: Props) {
+  const states = useContext(RunStates);
   const defOf = (id: string): BlockDef | undefined => {
     const n = nodes.find((x) => x.id === id);
     if (!n) return undefined;
@@ -734,6 +738,22 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
           fitView
         >
           <Background />
+          {minimap && (
+            <MiniMap
+              pannable
+              zoomable
+              ariaLabel="Overview of the flow: click or drag to move the view"
+              // Words, not colours, tell kinds apart (DESIGN.md): grey blocks, groups as outlines,
+              // the signal colour for running, red for failed.
+              nodeColor={(n) => (n.type === "frame" ? "transparent" : states.failed.has(n.id) ? "var(--danger)" : states.active.has(n.id) ? "var(--signal)" : "var(--line-strong)")}
+              nodeStrokeColor={(n) => (states.failed.has(n.id) ? "var(--danger)" : states.active.has(n.id) ? "var(--signal)" : "var(--line-strong)")}
+              nodeStrokeWidth={3}
+              nodeBorderRadius={2}
+              maskColor="var(--surface-float)"
+              maskStrokeColor="var(--line-ink)"
+              maskStrokeWidth={1}
+            />
+          )}
         </ReactFlow>
         {hint && (
           <div className="drop-hint" aria-live="polite">
