@@ -67,10 +67,24 @@ export const RunStates = createContext<{
   progress: {},
 });
 
-/** A magic block's definition in the form its `form` param picks (its ports are that form's). */
+/**
+ * A block's definition with the ports its params decide: a magic block takes those of the
+ * form its `form` param picks, and a block with `inputs_by` has one input (a, b, c…) per
+ * character of that text param (Sum's signs). The engine does the same (`with_ports`).
+ */
 export function inForm(def: BlockDef, params: Record<string, ParamValue>): BlockDef {
   const form = def.forms?.find((f) => f.name === params.form);
-  return form ? { ...def, inputs: form.inputs, outputs: form.outputs } : def;
+  const shaped = form ? { ...def, inputs: form.inputs, outputs: form.outputs } : def;
+  const by = shaped.inputs_by ? params[shaped.inputs_by] : undefined;
+  if (typeof by !== "string") return shaped;
+  const type = shaped.inputs[0]?.type ?? "signal";
+  return { ...shaped, inputs: [...by.slice(0, 26)].map((_, i) => ({ id: String.fromCharCode(97 + i), type })) };
+}
+
+/** What a character of an `inputs_by` param says about its input, as drawn beside the port ("+" or "−"); undefined for other blocks. */
+export function inputMarks(def: BlockDef, params: Record<string, ParamValue>): string[] | undefined {
+  const by = def.inputs_by ? params[def.inputs_by] : undefined;
+  return typeof by === "string" ? [...by.slice(0, 26)].map((c) => (c === "-" ? "−" : c)) : undefined;
 }
 
 /** A block's ports as they are now (a magic block's: its form's). */
@@ -81,13 +95,26 @@ const portType = (def: BlockDef | undefined, port: string | null | undefined, si
 
 /** Generic node: everything it shows comes from the backend's BlockDef. */
 function Block({ id, data, selected }: NodeProps<BlockNode>) {
-  const { updateNodeData, deleteElements } = useReactFlow<BlockNode, Wire>();
+  const { updateNodeData, deleteElements, getEdges } = useReactFlow<BlockNode, Wire>();
   const states = useContext(RunStates);
   const active = states.active.has(id);
   const progress = states.progress[id];
   const { params, missing } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
+  // Its text param that decides its inputs (Sum's signs) shows beside the ports; editing it
+  // drops the wires of inputs that go (undo brings them back with it).
+  const marks = inputMarks(def, params);
+  const setParam = (pid: string, v: ParamValue) => {
+    const value = pid === def.inputs_by && typeof v === "string" ? v.slice(0, 26) : v;
+    const next = { ...params, [pid]: value };
+    if (pid === def.inputs_by) {
+      const keep = new Set(inForm(data.def, next).inputs.map((i) => i.id));
+      const gone = getEdges().filter((e) => e.target === id && e.targetHandle && !keep.has(e.targetHandle));
+      if (gone.length) deleteElements({ edges: gone });
+    }
+    updateNodeData(id, { params: next });
+  };
   // A simple block draws as a small plate (#70) until double-clicked open; fold puts it back.
   const [expanded, setExpanded] = useState(false);
   if (def.view?.compact && !expanded && !missing && !hasStepPorts(def)) {
@@ -99,12 +126,13 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
         selected={!!selected}
         word={failed ? "failed" : active ? "running" : undefined}
         progress={progress}
+        marks={marks}
         onExpand={() => setExpanded(true)}
         onRemove={def.linked ? undefined : () => deleteElements({ nodes: [{ id }] })}
         popover={def.params.map((p) => (
           <label key={p.id} className="param">
             {p.id}
-            <ParamInput def={p} value={params[p.id]} set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })} />
+            <ParamInput def={p} value={params[p.id]} set={(v) => setParam(p.id, v)} />
           </label>
         ))}
       />
@@ -153,10 +181,11 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           <div style={{ width: `${progress * 100}%` }} />
         </div>
       )}
-      {def.inputs.map((p) => (
+      {def.inputs.map((p, i) => (
         <div key={p.id} className={`port in port-${p.type}`}>
           <PortHandle type="target" position={Position.Left} id={p.id} />
           {p.id}
+          {marks?.[i] && <span className="port-sign">{marks[i]}</span>}
         </div>
       ))}
       {def.outputs.map((p) => (
@@ -172,7 +201,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
             def={p}
             value={params[p.id]}
             disabled={missing}
-            set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })}
+            set={(v) => setParam(p.id, v)}
           />
         </label>
       ))}

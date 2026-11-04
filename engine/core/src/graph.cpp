@@ -98,6 +98,12 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     }
     // A magic block's ports are those of its form.
     node.def = toolkit::in_form(node.entry->def, text.contains("form") ? text.at("form") : "");
+    // A block whose param decides its inputs (Sum's signs) has the ports that param gives.
+    try {
+      node.def = toolkit::with_ports(node.def, text);
+    } catch (const std::exception& err) {
+      throw GraphError(node.id, node.id + ": " + err.what());
+    }
     const auto& def = node.def;
 
     // Making a block can fail (a param it can't use, an expression that doesn't compile):

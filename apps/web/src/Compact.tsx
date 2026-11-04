@@ -66,6 +66,7 @@ export function CompactBlock({
   selected,
   word,
   progress,
+  marks,
   onExpand,
   onRemove,
   popover,
@@ -76,6 +77,8 @@ export function CompactBlock({
   selected: boolean;
   word?: "running" | "failed";
   progress?: number;
+  /** What each input's character says (Sum's signs), drawn beside its dot. */
+  marks?: string[];
   onExpand: () => void;
   onRemove?: () => void;
   /** The param rows shown in the popover. */
@@ -109,6 +112,7 @@ export function CompactBlock({
     >
       <div
         className="plate"
+        style={{ height: Math.max(56, (Math.max(def.inputs.length, def.outputs.length) + 1) * 16) }}
         role="button"
         tabIndex={0}
         aria-expanded={hasParams ? open : undefined}
@@ -122,7 +126,7 @@ export function CompactBlock({
       >
         <Glyph name={def.view?.glyph ?? "const"} />
         {def.inputs.map((p, i) => (
-          <PortHandle key={p.id} type="target" position={Position.Left} id={p.id} top={spread(def.inputs.length, i)} label={p.id} className={`t-${p.type}`} />
+          <PortHandle key={p.id} type="target" position={Position.Left} id={p.id} top={spread(def.inputs.length, i)} label={p.id} mark={marks?.[i]} className={`t-${p.type}`} />
         ))}
         {def.outputs.map((p, i) => (
           <PortHandle key={p.id} type="source" position={Position.Right} id={p.id} top={spread(def.outputs.length, i)} label={p.id} className={`t-${p.type}`} />

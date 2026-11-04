@@ -69,6 +69,7 @@ export function PortHandle({
   className,
   top,
   label,
+  mark,
 }: {
   type: "source" | "target";
   position: Position;
@@ -78,12 +79,15 @@ export function PortHandle({
   top?: string;
   /** Shown on hover and read aloud: for a port with no name row beside it. */
   label?: string;
+  /** Always shown beside the dot, inside the block: Sum's + or − (a compact block has no name rows). */
+  mark?: string;
 }) {
   const nodeId = useNodeId();
   const drag = useContext(WireDragContext);
   const state = !drag || !nodeId ? "" : drag.target?.nodeId === nodeId && drag.target.handleId === id ? "wire-target" : drag.accepts(nodeId, id, type) ? "" : "wire-dim";
   return (
     <Handle type={type} position={position} id={id} className={[className, state].filter(Boolean).join(" ")} style={top ? { top } : undefined} aria-label={label}>
+      {mark && <span className={`port-mark ${type === "target" ? "in" : "out"}`}>{mark}</span>}
       {label && <span className={`port-tip ${type === "target" ? "in" : "out"}`}>{label}</span>}
     </Handle>
   );

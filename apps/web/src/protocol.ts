@@ -41,6 +41,8 @@ export type BlockDef = {
   linked?: boolean;
   /** A monitor's instrument on the Dashboard: graph (default), display (the latest value) or image. */
   instrument?: string;
+  /** A block with a variable number of inputs: the id of a text param, one input per character of its value (ids a, b, c… up to 26, at least one). `inputs` is the default. The character is shown beside its port: Sum's `signs` ("+-+" is a - b + c). */
+  inputs_by?: string;
   /** How the UI draws the block: a hint, so a UI without it (or a block without it) draws the normal card. */
   view?: {
     /** Draw a small plate: a glyph, bare port dots (names on hover), the name and main value in a caption below. */

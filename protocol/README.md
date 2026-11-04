@@ -56,6 +56,9 @@ Default address: `ws://localhost:8765`.
   // block's name and value. glyph: a curve (gain, plus, step, clamp, const) or a few characters
   // drawn as text; value: an expression of the params. Every key is optional.
   "view": { "compact": true, "glyph": "gain", "value": "{k}" },
+  // optional, a variable number of inputs: a text param's id; one input per character of its
+  // value (a, b, c… up to 26). `inputs` is the default; the character is shown beside the port.
+  "inputs_by": "signs",
   "feedthrough": false,            // optional: its outputs don't depend on this step's inputs
                                    // (an integrator, a delay), so a feedback loop may pass through it
   // optional, a magic block: one form per way to use it, each with its own ports. Its enum

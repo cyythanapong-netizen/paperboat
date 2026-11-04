@@ -105,6 +105,13 @@ initializers may leave any out.
       and overrides single keys. The built-in simple maths and logic templates have one;
       a descriptor may set ``view``.
 
+   .. cpp:member:: std::string inputs_by
+
+      The id of a text param that decides the block's inputs: one per character of its value
+      (``a``, ``b``, ``c``… from 1 to 26), with ``inputs`` the default. The character is shown
+      beside its port. ``math/sum`` has ``signs`` (``"+-+"`` is ``a - b + c``). See
+      :cpp:func:`with_ports`.
+
    .. cpp:member:: bool feedthrough = true
 
       ``false`` for a block whose outputs this step don't depend on its inputs this step (an
@@ -132,6 +139,13 @@ initializers may leave any out.
 
    The definition in form ``form``: that form's ports. ``def`` itself if it has no forms, or no
    form of that name.
+
+.. cpp:function:: BlockDef with_ports(const BlockDef &def, const Config &text)
+
+   ``def`` with the inputs its text params decide: for a block with ``inputs_by``, one input
+   per character of that param's value in ``text``, all of the first input's type. Throws
+   ``std::runtime_error`` if the value is empty or longer than 26. ``def`` itself when no
+   param decides its ports. A magic block's form is picked first, with :cpp:func:`in_form`.
 
 .. cpp:struct:: ObjectDef
 

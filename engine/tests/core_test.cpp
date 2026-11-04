@@ -417,6 +417,45 @@ import = ["step", "base", "signal", "math", "dashboard"]
   CHECK_THROWS_WITH(core::prepare_graph(bad, catalog, none), ContainsSubstring("isn't a block of the graph"));
 }
 
+TEST_CASE("Sum's signs param decides its inputs: one per character, + adds and - subtracts") {
+  const auto& catalog = catalog_of(R"(
+domain = "sums"
+import = ["base", "math", "dashboard"]
+)");
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.1, .duration = 0.3, .emit_every = 1, .real_time = false}};
+  auto flow = [](const std::string& signs, const json& wires) {
+    json sum = {{"id", "sum"}, {"type", "sum"}};
+    if (!signs.empty()) sum["params"] = {{"signs", signs}};
+    return json{{"nodes",
+                 {{{"id", "ten"}, {"type", "constant"}, {"params", {{"value", 10}}}},
+                  {{"id", "three"}, {"type", "constant"}, {"params", {{"value", 3}}}},
+                  {{"id", "two"}, {"type", "constant"}, {"params", {{"value", 2}}}}, sum,
+                  {{"id", "out"}, {"type", "display"}}}},
+                {"edges", wires}};
+  };
+  const auto wire = [](const char* from, const char* port) {
+    return json{{"from", {from, "y"}}, {"to", {"sum", port}}};
+  };
+  const json out_wire = {{"from", {"sum", "y"}}, {"to", {"out", "in"}}};
+
+  Collected out;
+  // "+-+" is a - b + c.
+  CHECK(core::run("r", flow("+-+", {wire("ten", "a"), wire("three", "b"), wire("two", "c"), out_wire}), nullptr, backend, out.emit(), nullptr, {}) == "done");
+  CHECK_THAT(out.last_signal("out"), WithinAbs(9, 1e-9));
+  // The default is "++": a and b, as before signs existed.
+  Collected plain;
+  CHECK(core::run("r", flow("", {wire("ten", "a"), wire("three", "b"), out_wire}), nullptr, backend, plain.emit(), nullptr, {}) == "done");
+  CHECK_THAT(plain.last_signal("out"), WithinAbs(13, 1e-9));
+
+  // A wire to an input the signs don't give, and a bad signs, name the block.
+  core::Station none;
+  CHECK_THROWS_WITH(core::prepare_graph(flow("+", json::array({wire("ten", "b")})), catalog, none), ContainsSubstring("has no input \"b\""));
+  CHECK_THROWS_WITH(core::prepare_graph(flow("+*", json::array()), catalog, none), ContainsSubstring("holds + and -"));
+  json empty = flow("+", json::array());
+  empty["nodes"][3]["params"]["signs"] = "";
+  CHECK_THROWS_WITH(core::prepare_graph(empty, catalog, none), ContainsSubstring("needs 1 to 26 characters"));
+}
+
 TEST_CASE("a step's signal output feeds signal blocks, and back into it, a clock step later") {
   static const tk::Catalog catalog = tk::load_descriptor("domain = \"words\"\nimport = [\"step\", \"math\", \"dashboard\"]\n",
                                                          words::registry());

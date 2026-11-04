@@ -407,6 +407,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .port-tip.out { left: 14px; }
 .react-flow__handle:hover .port-tip { display: block; }
 .react-flow__handle.t-image { border-style: dashed; }
+/* A block whose param decides its inputs (Sum's signs): the character beside each port. */
+.port-mark { position: absolute; top: 50%; transform: translateY(-50%); font: 500 var(--size-2xs) / 1 var(--font-mono); color: var(--text-muted); pointer-events: none; }
+.port-mark.in { left: 13px; }
+.port-mark.out { right: 13px; }
+.port-sign { margin-left: var(--space-2); font-family: var(--font-mono); color: var(--text); }
 /* E1: its params in a popover under the plate; the only glass, like the Station's properties. */
 .react-flow__node:has(.popover) { z-index: 1000 !important; }
 .popover { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 5; min-width: 188px; padding: 10px 12px; cursor: default; background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur); border: 1px solid var(--line); border-radius: var(--radius-lg); }

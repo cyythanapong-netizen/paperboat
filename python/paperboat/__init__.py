@@ -80,6 +80,9 @@ class Block:
     # integrator, a delay): implement current() (its outputs, from its state), and step()
     # then takes the inputs after the pass. A feedback loop may then pass through it.
     feedthrough: bool = True
+    # A variable number of inputs: the name of a text param ("signs"); the block has one input
+    # per character of its value (ids "a", "b", "c"…, 1 to 26), and `inputs` is only the default.
+    inputs_by: str = ""
 
     def __init__(self, params: dict) -> None:
         self.params = params

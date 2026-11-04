@@ -101,6 +101,11 @@ struct BlockDef {
   // One line in plain words: what the block does ("Drives an error to zero"). Shown on its
   // card in the browser. Optional.
   std::string description = {};
+  // A block with a variable number of inputs: the id of a text param, one input per
+  // character of its value (ids "a", "b", "c"… up to 26; at least one). `inputs` is then only
+  // the default (the param's default value); the character is shown beside its port. Sum's
+  // `signs` ("+-+": a - b + c) is one. See with_ports().
+  std::string inputs_by = {};
   // How the UI draws it (a hint; see View). Built-in templates get theirs from
   // builtin_view(); a TOML definition may set `view` and keeps its parent's other keys.
   View view = {};
@@ -161,6 +166,12 @@ struct Value : std::variant<double, List, Table, std::string, Handle> {
 };
 using Values = std::map<std::string, Value, std::less<>>;        // port or param id → value
 using Config = std::map<std::string, std::string, std::less<>>;  // set once in a descriptor
+
+// `def` with the ports its text params (`text`: each text param's value by id) decide: the
+// inputs of a block with `inputs_by`, one per character of that param (the first input's type
+// for all). Throws std::runtime_error naming the param if it is empty or longer than 26.
+// `def` itself when no param decides its ports. A magic block's form is picked first: in_form().
+BlockDef with_ports(const BlockDef& def, const Config& text);
 using KeySet = std::set<std::string, std::less<>>;               // KeyboardEvent.code values
 
 class DomainState;

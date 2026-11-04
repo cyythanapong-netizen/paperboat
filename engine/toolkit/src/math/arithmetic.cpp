@@ -1,6 +1,7 @@
 // The math package: pointwise arithmetic on signals.
 
 #include <algorithm>
+#include <stdexcept>
 
 #include "common.hpp"
 
@@ -14,12 +15,25 @@ void add_arithmetic(Registry& registry) {
             [=](const Context&, const Values& in) { return Values{{"y", k * get_or(in, "u")}}; });
       }));
 
-  registry.add(make_template(
-      "math", "sum", "Sum", {"a", "b"}, {"y"}, {}, [](const Values&, const Config&) {
-        return std::make_unique<Stateless>([](const Context&, const Values& in) {
-          return Values{{"y", get_or(in, "a") + get_or(in, "b")}};
+  // Sum adds or subtracts any number of inputs: `signs` has a character per input, "+" adds
+  // and "-" subtracts, so "+-+" is a - b + c. Its inputs are a, b, c… (see BlockDef::inputs_by).
+  Template sum = make_template(
+      "math", "sum", "Sum", {"a", "b"}, {"y"}, {{.id = "signs", .type = "text", .default_text = "++"}},
+      [](const Values&, const Config& text) {
+        std::vector<double> sign;
+        const auto given = text.find("signs");  // absent when made without its params: the default
+        for (char c : given == text.end() ? std::string("++") : given->second) {
+          if (c != '+' && c != '-') throw std::runtime_error("signs holds + and -, one per input, not \"" + std::string(1, c) + "\"");
+          sign.push_back(c == '+' ? 1.0 : -1.0);
+        }
+        return std::make_unique<Stateless>([sign](const Context&, const Values& in) {
+          double y = 0;
+          for (std::size_t i = 0; i < sign.size(); ++i) y += sign[i] * get_or(in, std::string(1, static_cast<char>('a' + i)));
+          return Values{{"y", y}};
         });
-      }));
+      });
+  sum.def.inputs_by = "signs";
+  registry.add(std::move(sum));
 
   registry.add(make_template(
       "math", "threshold", "Threshold", {"u"}, {"y"}, {{"level", 0.5}}, [](const Values& p, const Config&) {

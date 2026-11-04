@@ -165,6 +165,10 @@
           "type": "string",
           "description": "A monitor's instrument on the Dashboard: graph (default), display (the latest value) or image."
         },
+        "inputs_by": {
+          "type": "string",
+          "description": "A block with a variable number of inputs: the id of a text param, one input per character of its value (ids a, b, c… up to 26, at least one). `inputs` is the default. The character is shown beside its port: Sum's `signs` (\"+-+\" is a - b + c)."
+        },
         "view": {
           "type": "object",
           "additionalProperties": false,

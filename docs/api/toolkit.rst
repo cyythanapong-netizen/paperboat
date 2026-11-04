@@ -68,7 +68,7 @@ pow``.
 math
 ----
 
-Pointwise arithmetic on signals: ``gain`` (``u`` → ``y``; ``k``), ``sum`` (``a``, ``b`` → ``y``),
+Pointwise arithmetic on signals: ``gain`` (``u`` → ``y``; ``k``), ``sum`` (``a``, ``b``… → ``y``: one input per character of its ``signs`` text param, ``+`` adds and ``-`` subtracts, so ``"+-+"`` is ``a - b + c``; the default ``"++"`` is ``a + b``),
 ``threshold`` (``u`` → ``y``: 1 above ``level``, else 0), ``saturation`` (``u`` → ``y``; ``min``,
 ``max``).
 
