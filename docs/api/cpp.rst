@@ -91,6 +91,18 @@ initializers may leave any out.
 
       A monitor's instrument: ``"graph"``, ``"display"`` or ``"image"``.
 
+   .. cpp:member:: std::string description
+
+      One line in plain words: what the block does. Shown on its card in the block browser.
+      Optional; the built-in templates have one, and a descriptor may set ``description``.
+
+   .. cpp:member:: bool feedthrough = true
+
+      ``false`` for a block whose outputs this step don't depend on its inputs this step (an
+      integrator, a delay). Its :cpp:class:`Block` gives ``outputs()`` during the pass and
+      takes its inputs in ``step()`` after it, so a feedback loop may pass through it. A loop
+      with no such block is an algebraic loop, and the run fails naming a block in it.
+
    .. cpp:member:: std::vector<Form> forms
 
       A magic block's forms. Its ``inputs`` and ``outputs`` are the first form's; its enum
@@ -229,7 +241,13 @@ What runs
    .. cpp:function:: virtual Values step(const Context &ctx, const Values &in) = 0
 
       Outputs from inputs. An unconnected input is absent from ``in``. Throw to fail the
-      run; the error names this block.
+      run; the error names this block. For a block without feedthrough it is called after
+      the pass, to take the step's inputs; others read ``outputs()``.
+
+   .. cpp:function:: virtual Values outputs() const
+
+      A block without feedthrough (``BlockDef::feedthrough`` false): what it outputs now,
+      from its state alone. Unused for other blocks.
 
    .. cpp:function:: virtual std::vector<Entity> entities() const
 

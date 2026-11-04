@@ -6,6 +6,7 @@ import {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Connection,
   type Edge,
   type EdgeChange,
@@ -13,7 +14,7 @@ import {
   type NodeChange,
   type NodeProps,
 } from "@xyflow/react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ObjectDef, Station, StationObject } from "./protocol";
 
 type ObjectData = { object: StationObject; def?: ObjectDef };
@@ -93,6 +94,22 @@ type Props = { objects: ObjectDef[]; station: Station; onChange: (station: Stati
 function Graph({ objects, station, onChange, locked }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<ObjectNode>([]);
   const [edges, setEdges] = useEdgesState<LinkEdge>([]);
+  const { fitView } = useReactFlow();
+  // Shown after being hidden (another page in Navigator, or another mode): it was laid out
+  // at no size, so fit it again once it has one.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    let wasEmpty = el.clientWidth === 0;
+    const watch = new ResizeObserver(() => {
+      const empty = el.clientWidth === 0;
+      if (wasEmpty && !empty) requestAnimationFrame(() => fitView());
+      wasEmpty = empty;
+    });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [fitView]);
 
   // The station is the truth; the graph follows it (positions included).
   useEffect(() => {
@@ -144,7 +161,7 @@ function Graph({ objects, station, onChange, locked }: Props) {
     update(node.id, (o) => ({ ...o, pos: [Math.round(node.position.x), Math.round(node.position.y)] }));
 
   return (
-    <div className="station-graph">
+    <div className="station-graph" ref={box}>
       <ReactFlow
         nodes={nodes}
         edges={edges}

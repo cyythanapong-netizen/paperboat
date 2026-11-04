@@ -43,6 +43,10 @@ export type BlockDef = {
   instrument?: string;
   /** A magic block's forms; its inputs and outputs are the first's, and its form param (an enum) picks one. */
   forms?: Form[];
+  /** false: its outputs this step don't depend on its inputs this step (an integrator, a delay), so a feedback loop may pass through it. Absent: true. */
+  feedthrough?: boolean;
+  /** One line in plain words: what it does. Shown on its card in the block browser. Optional. */
+  description?: string;
 };
 
 /** A station object type: a thing on the Station page whose props are edited only there. */
@@ -56,6 +60,8 @@ export type ObjectDef = {
   links: string[];
   /** The linked block type it spawns on the Flow page, if any. */
   block?: string;
+  /** One line in plain words: what it does. Shown on its card in the block browser. Optional. */
+  description?: string;
 };
 
 /** One shape on the Station's scene. shape: box, sphere (size[0] = radius), line (pos to `to`), image (a size[0] x size[1] picture facing +z, from src). */
@@ -116,6 +122,20 @@ export type GraphEdge = {
   from: [string, string];
   /** [node, port] */
   to: [string, string];
+};
+
+/** The Dashboard's grid: where each monitor block's instrument sits and how big it is. A backend ships one as its default (the descriptor's [dashboard]); an instrument not listed falls in where the automatic order puts it, and a block that does not exist is ignored. */
+export type DashboardLayout = {
+  /** Grid columns; the UI fits fewer on a narrow screen. */
+  columns?: number;
+  instruments?: ({
+    /** The monitor block's id. */
+    block: string;
+    /** compact: a readout card (1x1 cells); normal: a plot or picture to read at a glance (2x1); large: one to study (2x2). Absent: the kind's default (display compact, graph normal, image large). */
+    size?: "compact" | "normal" | "large";
+    /** Top-left cell: [column, row]. */
+    at?: [number, number];
+  })[];
 };
 
 /** A group of blocks. visual: tidies the canvas only. story: runs as one step of a Step flow (ports in -> next): its blocks once per clock step for params.seconds (0: once), fresh each time if params.reset. */
@@ -198,6 +218,7 @@ export type ServerMsg =
     type: "catalog";
     blocks: BlockDef[];
     objects?: ObjectDef[];
+    dashboard?: DashboardLayout;
   }
   | {
     type: "scene";

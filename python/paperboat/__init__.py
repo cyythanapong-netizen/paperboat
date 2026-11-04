@@ -68,14 +68,23 @@ class Block:
     type: str = ""                       # its id in the catalog (required)
     label: str = ""                      # shown on the block (default: type)
     kind: str = "function"               # source | probe | function | monitor
+    description: str = ""                # one line: what it does; shown on its card in the browser
     inputs: list[str | Port] = []
     outputs: list[str | Port] = []
     params: dict[str, float | Param] = {}  # the defaults; an instance's self.params holds its values
+    # False for a block whose outputs this step don't depend on its inputs this step (an
+    # integrator, a delay): implement current() (its outputs, from its state), and step()
+    # then takes the inputs after the pass. A feedback loop may then pass through it.
+    feedthrough: bool = True
 
     def __init__(self, params: dict) -> None:
         self.params = params
 
     def step(self, ctx: Context, inputs: dict) -> dict:
+        return {}
+
+    def current(self) -> dict:
+        """A block without feedthrough: what it outputs now, from its state alone."""
         return {}
 
 
@@ -127,8 +136,8 @@ class Step:
     def ends_run(self) -> bool:
         return False
 
-    def outputs(self) -> dict:
-        """Its signal outputs (ports of a type other than "step"), such as a progress."""
+    def current(self) -> dict:
+        """Its signal outputs now (ports of a type other than "step"), such as a progress."""
         return {}
 
 
@@ -167,6 +176,7 @@ class StationObject:
     type: str = ""
     label: str = ""
     role: str = "body"                   # body | joint
+    description: str = ""                # one line: what it is; shown on its card in the browser
     props: dict[str, float | Param] = {}  # the defaults; an instance's self.props holds its values
     links: list[str] = []                # slots that name other station objects
     block: Linked | None = None          # its linked block, if a flow acts on it

@@ -54,8 +54,10 @@ def cycle_graph(blocks: list[dict]) -> dict:
 
     # Linked blocks belong to station objects, so they can't be copied freely; step blocks
     # (even with signal ports) read their inputs after the pass, so they never loop: skip both.
+    # A block without feedthrough (an integrator, a delay) may close a loop: skip it too.
     def plain(b: dict) -> bool:
-        return not b.get("linked") and all(p.get("type", "signal") != "step" for p in b["inputs"] + b["outputs"])
+        return (not b.get("linked") and b.get("feedthrough", True)
+                and all(p.get("type", "signal") != "step" for p in b["inputs"] + b["outputs"]))
     b = next((b for b in blocks if plain(b) and signal_ports(b["inputs"]) and signal_ports(b["outputs"])), None)
     if b is None:
         print("FAIL: catalog has no block with both a signal input and output")

@@ -249,6 +249,7 @@ struct BlockAdapter final : tk::Block {
   tk::Values step(const tk::Context& ctx, const tk::Values& in) override {
     return with_python([&] { return values_from_py((*py).attr("step")(context(ctx), to_py(in))); });
   }
+  tk::Values outputs() const override { return with_python([&] { return values_from_py((*py).attr("current")()); }); }
   Owned py;
 };
 
@@ -265,7 +266,7 @@ struct StepAdapter final : tk::Step {
   }
   bool may_start() const override { return with_python([&] { return nb::cast<bool>((*py).attr("may_start")()); }); }
   bool ends_run() const override { return with_python([&] { return nb::cast<bool>((*py).attr("ends_run")()); }); }
-  tk::Values outputs() const override { return with_python([&] { return values_from_py((*py).attr("outputs")()); }); }
+  tk::Values outputs() const override { return with_python([&] { return values_from_py((*py).attr("current")()); }); }
   Owned py;
 };
 
@@ -391,6 +392,8 @@ tk::BlockDef block_def(nb::handle cls) {
   def.outputs = ports_from_py(cls.attr("outputs"), at);
   def.params = params_from_py(cls.attr("params"), at);
   if (def.kind == tk::Kind::Monitor) def.instrument = text_attr(cls, "instrument", "graph");
+  if (nb::hasattr(cls, "feedthrough")) def.feedthrough = nb::cast<bool>(cls.attr("feedthrough"));
+  def.description = text_attr(cls, "description", "");
   return def;
 }
 
@@ -411,6 +414,7 @@ tk::ObjectDef object_def(nb::handle cls) {
                              .inputs = ports_from_py(linked.attr("inputs"), at + ".block"),
                              .outputs = ports_from_py(linked.attr("outputs"), at + ".block")};
   }
+  def.description = text_attr(cls, "description", "");
   return def;
 }
 

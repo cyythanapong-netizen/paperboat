@@ -60,7 +60,10 @@ export function SceneView({ entities, view }: { entities: Record<string, Entity>
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     el.appendChild(renderer.domElement);
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color("#f0f0f0");
+    // The theme's colours (tokens.css); the view is rebuilt when the theme changes.
+    const css = getComputedStyle(document.documentElement);
+    const token = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+    scene.background = new THREE.Color(token("--scene-bg", "#e3e3df"));
     scene.add(new THREE.AmbientLight(0xffffff, 1.2), new THREE.DirectionalLight(0xffffff, 2));
 
     let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
@@ -75,7 +78,8 @@ export function SceneView({ entities, view }: { entities: Record<string, Entity>
       };
       camera = ortho;
     } else {
-      scene.add(new THREE.GridHelper(10, 10));
+      const grid = token("--scene-grid", "#a9a9a3");
+      scene.add(new THREE.GridHelper(10, 10, grid, grid));
       const persp = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
       persp.position.set(2, 4, 8);
       fit = (aspect) => (persp.aspect = aspect);

@@ -20,7 +20,9 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
 } from "@xyflow/react";
-import { createContext, useContext, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
+import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
+import { RemoveIcon } from "./RemoveIcon";
 import {
   display,
   frameAround,
@@ -34,7 +36,7 @@ import {
   type GroupData,
   type GroupNode,
 } from "./groups";
-import type { BlockDef, Graph, ObjectDef, ParamDef, ParamValue, Station } from "./protocol";
+import type { BlockDef, Graph, ObjectDef, ParamDef, ParamValue, PortDef, Station } from "./protocol";
 
 /**
  * `missing`: the backend's catalog has no block of this type (an old graph, another
@@ -82,27 +84,36 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { params, missing } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
-  const classes = ["block", `kind-${def.kind}`, active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
+  const step = hasStepPorts(def);
+  const classes = ["block", `kind-${def.kind}`, step && "step", selected && "selected", active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
+  // The head's tag says what is happening to the block, else what it is: words, not colours.
+  const tag = missing
+    ? "missing"
+    : failed
+      ? "failed"
+      : active
+        ? "running"
+        : def.linked
+          ? "station"
+          : step
+            ? "step"
+            : def.kind === "function"
+              ? "fn"
+              : def.kind;
   return (
     <div
       className={classes.filter(Boolean).join(" ")}
       title={missing ? `This backend has no "${def.type}" block: its params and wires are kept. Replace or delete it.` : undefined}
     >
       <div className="block-title">
-        {missing ? (
-          <span>
-            {def.type} <span className="missing-tag">missing</span>
-          </span>
-        ) : def.linked ? (
-          <span title="Linked to a station object: set its properties, or remove it, on the Station">
-            {def.label} <span className="linked-tag">⚓ {id}</span>
-          </span>
-        ) : (
-          def.label
-        )}
+        <span className="block-name" title={def.linked ? "Linked to a station object: set its properties, or remove it, on the Station" : undefined}>
+          {missing ? def.type : def.label}
+          {def.linked && <span className="linked-tag"> {id}</span>}
+        </span>
+        <span className={`block-tag tag-${tag}`}>{tag}</span>
         {selected && !def.linked && (
           <button className="remove nodrag" title="Delete block" onClick={() => deleteElements({ nodes: [{ id }] })}>
-            ×
+            <RemoveIcon />
           </button>
         )}
       </div>
@@ -247,8 +258,12 @@ function loopPath(sx: number, sy: number, tx: number, ty: number, below: number)
 }
 
 /** A wire: a curve for signals, a right-angled arrow for steps, around the blocks when it runs back, and × when selected. */
+/** The wire a dragged card would be inserted into, if any (drawn thicker). */
+const HotWire = createContext<string | null>(null);
+
 function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }: EdgeProps<Wire>) {
   const { deleteElements } = useReactFlow();
+  const hot = useContext(HotWire) === id;
   const step = data?.type === "step";
   const sourceBottom = useBottom(source);
   const targetBottom = useBottom(target);
@@ -264,7 +279,9 @@ function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }
     : (step ? getSmoothStepPath : getBezierPath)(geometry);
   return (
     <>
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} className={`wire-${data?.type ?? "signal"}`} />
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} className={`wire-${data?.type ?? "signal"}${hot ? " drop-target" : ""}`} />
+      {/* What a dropped card finds under the pointer: a wide, invisible stroke tagged with the wire. */}
+      <path d={path} className="wire-hit" data-wire={id} />
       {selected && (
         <EdgeLabelRenderer>
           <button
@@ -273,7 +290,7 @@ function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }
             style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
             onClick={() => deleteElements({ edges: [{ id }] })}
           >
-            ×
+            <RemoveIcon />
           </button>
         </EdgeLabelRenderer>
       )}
@@ -284,7 +301,7 @@ function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }
 const nodeTypes = { block: Block, frame: GroupBox };
 const edgeTypes = { wire: WireEdge };
 
-function makeNode(def: BlockDef, id: string, x: number, y: number, params: Record<string, ParamValue> = {}): BlockNode {
+export function makeNode(def: BlockDef, id: string, x: number, y: number, params: Record<string, ParamValue> = {}): BlockNode {
   const defaults = Object.fromEntries(def.params.map((p) => [p.id, p.default]));
   // A linked block goes when its station object goes, not from the Flow page.
   return { id, type: "block", position: { x, y }, deletable: !def.linked, data: { def, params: { ...defaults, ...params } } };
@@ -339,7 +356,7 @@ function connect(wires: Wire[], c: Connection, type: string): Wire[] {
   return addEdge(makeWire(c, type), wires.filter((w) => !clash(w)));
 }
 
-function freeId(type: string, nodes: FlowNode[]): string {
+export function freeId(type: string, nodes: FlowNode[]): string {
   const taken = new Set(nodes.map((n) => n.id));
   let i = 1;
   while (taken.has(`${type}-${i}`)) i++;
@@ -449,6 +466,22 @@ export function toGraph(nodes: FlowNode[], edges: Wire[]): Graph {
   };
 }
 
+/** A new block at `at` (flow coordinates, its top-left), selected and the only one selected. */
+export function withBlock(nodes: FlowNode[], def: BlockDef, at: { x: number; y: number }): [FlowNode[], string] {
+  const id = freeId(def.type, nodes);
+  const node = { ...makeNode(def, id, Math.round(at.x), Math.round(at.y)), selected: true };
+  return [[...nodes.map((n) => (n.selected ? { ...n, selected: false } : n)), node], id];
+}
+
+const typeOf = (p: PortDef) => p.type ?? "signal";
+const BLOCK_SIZE = { w: 156, h: 70 };
+
+/** What dropping a card here would do. */
+type Plan =
+  | { kind: "place" }
+  | { kind: "insert"; wire: Wire; input: PortDef; output: PortDef }
+  | { kind: "port"; node: string; handle: string; side: "source" | "target"; port: PortDef; hx: number; hy: number };
+
 type Props = {
   blocks: BlockDef[];
   nodes: FlowNode[];
@@ -460,15 +493,6 @@ type Props = {
 };
 
 /** Blocks by palette group, groups in catalog order. */
-function groupBlocks(blocks: BlockDef[]): [string, BlockDef[]][] {
-  const groups = new Map<string, BlockDef[]>();
-  for (const b of blocks.filter((b) => !b.linked)) {
-    const g = b.group ?? "";
-    groups.set(g, [...(groups.get(g) ?? []), b]);
-  }
-  return [...groups];
-}
-
 export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange }: Props) {
   const defOf = (id: string): BlockDef | undefined => {
     const n = nodes.find((x) => x.id === id);
@@ -541,65 +565,210 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     moved.current = true;
   };
 
+  // ---- Adding: quick add at the cursor, and cards dropped from the browser (#50) ----
+  const { screenToFlowPosition } = useReactFlow();
+  const wrap = useRef<HTMLDivElement>(null);
+  const addable = useMemo<Item[]>(() => blocks.filter((b) => !b.linked).map((def) => ({ kind: "block", def })), [blocks]);
+  const [quick, setQuick] = useState<{ x: number; y: number } | null>(null);
+  const pointer = useRef<{ x: number; y: number } | null>(null); // over the canvas, else null
+
+  const place = (def: BlockDef, screen: { x: number; y: number }) => {
+    const at = screenToFlowPosition(screen);
+    let id = "";
+    setNodes((ns) => {
+      const [next, made] = withBlock(ns, def, { x: at.x - BLOCK_SIZE.w / 2, y: at.y - 16 });
+      id = made;
+      return next;
+    });
+    return () => id;
+  };
+
+  // `/` with the pointer over the canvas opens quick add there (it is then not a key for
+  // the backend); so does a double-click on empty canvas.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key !== "/" || !pointer.current || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      e.preventDefault();
+      setQuick({ ...pointer.current });
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, []);
+
+  // A dragged card: plan what dropping it here would do, show that, and do it on drop.
+  const [hint, setHint] = useState<{ plan: Plan; x: number; y: number; label: string } | null>(null);
+  const plan = (def: BlockDef, x: number, y: number): Plan => {
+    // On a wire whose type the block both takes and gives: insert it.
+    const hit = document.elementsFromPoint(x, y).find((el) => el instanceof SVGElement && el.dataset.wire);
+    const wire = hit ? edges.find((w) => w.id === (hit as SVGElement).dataset.wire) : undefined;
+    if (wire) {
+      const t = wire.data?.type ?? "signal";
+      const input = def.inputs.find((q) => typeOf(q) === t);
+      const output = def.outputs.find((q) => typeOf(q) === t);
+      if (input && output) return { kind: "insert", wire, input, output };
+    }
+    // Near a free port of a type the block has: connect to it.
+    let best: { plan: Plan; d: number } | null = null;
+    for (const el of wrap.current?.querySelectorAll<HTMLElement>(".react-flow__handle") ?? []) {
+      const node = el.dataset.nodeid ?? "";
+      const handle = el.dataset.handleid ?? "";
+      if (!node || !handle || handle.includes("::")) continue;
+      const r = el.getBoundingClientRect();
+      const hx = r.left + r.width / 2;
+      const hy = r.top + r.height / 2;
+      const d = Math.hypot(hx - x, hy - y);
+      if (d > 56 || (best && best.d <= d)) continue;
+      const side = el.classList.contains("source") ? "source" : "target";
+      const t = portType(defOf(node), handle, side === "source" ? "outputs" : "inputs") ?? "signal";
+      const port = (side === "source" ? def.inputs : def.outputs).find((q) => typeOf(q) === t);
+      const taken = side === "target" && t !== "step" && edges.some((w) => w.target === node && w.targetHandle === handle);
+      if (port && !taken) best = { plan: { kind: "port", node, handle, side, port, hx, hy }, d };
+    }
+    return best?.plan ?? { kind: "place" };
+  };
+  const describe = (def: BlockDef, pl: Plan) =>
+    pl.kind === "insert"
+      ? `Insert ${def.label}: ${pl.wire.source}.${pl.wire.sourceHandle} → ${pl.input.id}, ${pl.output.id} → ${pl.wire.target}.${pl.wire.targetHandle}`
+      : pl.kind === "port"
+        ? pl.side === "source"
+          ? `Connect ${pl.node}.${pl.handle} → ${pl.port.id}`
+          : `Connect ${pl.port.id} → ${pl.node}.${pl.handle}`
+        : `Place ${def.label} here`;
+  const ours = (e: DragEvent) => e.dataTransfer.types.includes(DRAG_TYPE) && dragging.current?.kind === "block";
+  const onDragOver = (e: DragEvent) => {
+    if (!ours(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    const def = (dragging.current as Item & { kind: "block" }).def;
+    const pl = plan(def, e.clientX, e.clientY);
+    setHint({ plan: pl, x: e.clientX, y: e.clientY, label: describe(def, pl) });
+  };
+  const onDrop = (e: DragEvent) => {
+    if (!ours(e)) return;
+    e.preventDefault();
+    const def = (dragging.current as Item & { kind: "block" }).def;
+    dragging.current = null;
+    document.body.classList.remove("dragging-card");
+    setHint(null);
+    const pl = plan(def, e.clientX, e.clientY);
+    const at = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+    const id = freeId(def.type, nodes);
+    const node = { ...makeNode(def, id, Math.round(at.x - BLOCK_SIZE.w / 2), Math.round(at.y - 16)), selected: true };
+    setNodes((ns) => [...ns.map((n) => (n.selected ? { ...n, selected: false } : n)), node]);
+    if (pl.kind === "insert") {
+      const w = pl.wire;
+      const t = w.data?.type ?? "signal";
+      setEdges((ws) => {
+        const rest = ws.filter((x) => x.id !== w.id);
+        const a = connect(rest, { source: w.source, sourceHandle: w.sourceHandle ?? null, target: id, targetHandle: pl.input.id }, t);
+        return connect(a, { source: id, sourceHandle: pl.output.id, target: w.target, targetHandle: w.targetHandle ?? null }, t);
+      });
+    } else if (pl.kind === "port") {
+      const t = typeOf(pl.port);
+      const c =
+        pl.side === "source"
+          ? { source: pl.node, sourceHandle: pl.handle, target: id, targetHandle: pl.port.id }
+          : { source: id, sourceHandle: pl.port.id, target: pl.node, targetHandle: pl.handle };
+      setEdges((ws) => connect(ws, c, t));
+    }
+  };
+  const box = wrap.current?.getBoundingClientRect();
+  const rel = (x: number, y: number) => ({ x: x - (box?.left ?? 0), y: y - (box?.top ?? 0) });
+
   return (
     <GroupActions.Provider value={{ ...actions, active: runStates.active }}>
+    <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
     <div className="flow">
-      <div className="palette">
-        <div className="palette-group group-tools">
-          <span className="muted">group</span>
-          <button disabled={selected.length === 0} title="Frame the selected blocks (tidy; they run as before)" onClick={() => group("visual")}>
-            ▭ Group
-          </button>
-          <button
-            disabled={!canStory}
-            title="Make the selected signal blocks a story: one step of a Step flow that runs them for its seconds"
-            onClick={() => group("story")}
-          >
-            ▶ Story
-          </button>
-          <button disabled={!selectedFrame} onClick={() => selectedFrame && actions.ungroup(selectedFrame.id)}>
-            ⊟ Ungroup
-          </button>
-        </div>
-        {groupBlocks(blocks).map(([group, defs]) => (
-          <div key={group} className="palette-group">
-            {group && <span className="muted">{group}</span>}
-            {defs.map((b) => (
-              <button
-                key={b.type}
-                className={[...b.inputs, ...b.outputs].some((p) => p.type === "step") ? "step-block" : undefined}
-                onClick={() => setNodes((ns) => [...ns, makeNode(b, freeId(b.type, ns), 40 * ns.length, 400)])}
-              >
-                + {b.label}
-              </button>
-            ))}
-          </div>
-        ))}
+      <div className="flow-tools">
+        <span className="lbl">Selection</span>
+        <button disabled={selected.length === 0} title="Frame the selected blocks (tidy; they run as before)" onClick={() => group("visual")}>
+          ▭ Group
+        </button>
+        <button
+          disabled={!canStory}
+          title="Make the selected signal blocks a story: one step of a Step flow that runs them for its seconds"
+          onClick={() => group("story")}
+        >
+          ▶ Story
+        </button>
+        <button disabled={!selectedFrame} onClick={() => selectedFrame && actions.ungroup(selectedFrame.id)}>
+          ⊟ Ungroup
+        </button>
+        <span className="lbl flow-tip">
+          <span className="kbd">/</span> or double-click the canvas to add a block
+        </span>
       </div>
-      <ReactFlow
-        nodes={shown.nodes}
-        edges={shown.edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        isValidConnection={isValidConnection}
-        onReconnect={onReconnect}
-        onReconnectStart={() => (moved.current = false)}
-        onReconnectEnd={onReconnectEnd}
-        deleteKeyCode={["Backspace", "Delete"]}
-        multiSelectionKeyCode={["Control", "Meta"]}
-        panActivationKeyCode={null} // Space belongs to the backend (Key blocks)
-        fitView
+      <div
+        className="flow-canvas"
+        ref={wrap}
+        onMouseMove={(e) => (pointer.current = { x: e.clientX, y: e.clientY })}
+        onMouseLeave={() => (pointer.current = null)}
+        onDoubleClick={(e) => {
+          // Empty canvas only: not a block, a wire, a port or a control.
+          const t = e.target as Element;
+          if (!t.closest(".react-flow__node, .react-flow__edge, .react-flow__handle, .react-flow__panel, button, input, select"))
+            setQuick({ x: e.clientX, y: e.clientY });
+        }}
+        onDragOver={onDragOver}
+        onDragLeave={(e) => !wrap.current?.contains(e.relatedTarget as globalThis.Node | null) && setHint(null)}
+        onDrop={onDrop}
       >
-        <Background />
-      </ReactFlow>
+        <ReactFlow
+          nodes={shown.nodes}
+          edges={shown.edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          isValidConnection={isValidConnection}
+          onReconnect={onReconnect}
+          onReconnectStart={() => (moved.current = false)}
+          onReconnectEnd={onReconnectEnd}
+          deleteKeyCode={["Backspace", "Delete"]}
+          multiSelectionKeyCode={["Control", "Meta"]}
+          panActivationKeyCode={null} // Space belongs to the backend (Key blocks)
+          zoomOnDoubleClick={false} // double-click is quick add
+          fitView
+        >
+          <Background />
+        </ReactFlow>
+        {hint && (
+          <div className="drop-hint" aria-live="polite">
+            {hint.plan.kind === "place" && (
+              <div className="drop-outline" style={{ left: rel(hint.x, hint.y).x - BLOCK_SIZE.w / 2, top: rel(hint.x, hint.y).y - 16 }} />
+            )}
+            {hint.plan.kind === "port" && (
+              <svg className="drop-wire">
+                <line x1={rel(hint.plan.hx, hint.plan.hy).x} y1={rel(hint.plan.hx, hint.plan.hy).y} x2={rel(hint.x, hint.y).x} y2={rel(hint.x, hint.y).y} />
+                <circle cx={rel(hint.plan.hx, hint.plan.hy).x} cy={rel(hint.plan.hx, hint.plan.hy).y} r={5} />
+              </svg>
+            )}
+            <span className="drop-label" style={{ left: rel(hint.x, hint.y).x + 14, top: rel(hint.x, hint.y).y + 18 }}>
+              {hint.label}
+            </span>
+          </div>
+        )}
+      </div>
+      {quick && (
+        <QuickAdd
+          items={addable}
+          at={quick}
+          onClose={() => setQuick(null)}
+          onPick={(it) => {
+            if (it.kind === "block") place(it.def, quick);
+            setQuick(null);
+          }}
+        />
+      )}
       <p className="hint muted">
         Click a block or wire, then Delete or ×. Shift-drag to select several; Ctrl-click to add one. Drag a wire's end
         off its port to remove it. Group or Story the selected blocks; ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
       </p>
     </div>
+    </HotWire.Provider>
     </GroupActions.Provider>
   );
 }

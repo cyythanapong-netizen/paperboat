@@ -40,6 +40,22 @@ Blocks
 
    A signal block: outputs from inputs, once per pass.
 
+   .. py:attribute:: description
+      :type: str
+
+      One line in plain words: what it does. Shown on its card in the block browser.
+
+   .. py:attribute:: feedthrough
+      :type: bool
+
+      ``False`` for a block whose outputs this step don't depend on its inputs this step (an
+      integrator, a delay). Implement :py:meth:`current`; ``step`` then takes the inputs after
+      the pass, and a feedback loop may pass through the block. Default ``True``.
+
+   .. py:method:: current() -> dict
+
+      A block without feedthrough: what it outputs now, from its state alone.
+
    .. py:attribute:: type
       :type: str
 
@@ -113,10 +129,10 @@ Blocks
 
    .. py:method:: ends_run() -> bool
 
-   .. py:method:: outputs() -> dict
+   .. py:method:: current() -> dict
 
-      Its signal outputs (ports of a type other than ``step``), such as a progress; read a
-      clock step later.
+      Its signal outputs now (ports of a type other than ``step``), such as a progress; read
+      a clock step later.
 
 .. py:class:: Timed(params)
 

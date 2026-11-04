@@ -3,6 +3,7 @@ add_library(paperboat_toolkit
   src/bases.cpp
   src/expression.cpp
   src/registry.cpp
+  src/descriptions.cpp
   src/descriptor.cpp
   # base: what every domain needs (values: number, text, boolean; key)
   src/base/values.cpp

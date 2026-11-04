@@ -13,7 +13,7 @@ its plant).
 | `signal`  | Signals f(t): t is the block's input `t` when wired (a step's `progress`), else the run clock. C++: `clock`, and the abstract parent `generator` (f is an expression). TOML definitions on it (`src/signal/blocks.toml`): `sine`, `step`, `ramp`, `square`, `ease` (shape a 0–1 progress; `shape`: in-out, in, out, linear), `function` (f(t): type f on the block, over t, a, b, c) |
 | `math`    | Pointwise arithmetic on signals: `gain`, `sum`, `threshold`, `saturation` |
 | `dashboard` | Monitors, shown on the Dashboard as instruments: `graph` (plots its input over time), `display` (its latest value as a number or text) |
-| `control` | Dynamics that run on a clock in a Signal flow: `pid`, `integrator`, `lag`. |
+| `control` | Dynamics that run on a clock in a Signal flow: `pid`, and without direct feedthrough (a feedback loop may pass through them) `integrator`, `lag`, `delay` (`steps`, `initial`) |
 | `opencv`  | Optional, built when OpenCV is found (`paperboat::toolkit_opencv`, `register_opencv`). Image filters on `image` ports: `gray`, `blur`, `median`, `threshold`, `adaptive_threshold`, `hsv_range`, `canny`, `erode`, `dilate`, `open`, `close`, `invert`, `distance` · monitor: `view` (an image instrument) · station: `image` (a picture from a `file` prop; its linked block outputs it) |
 | `step`    | The path of a Step flow, with step ports. Hats: `start` (once), `when` (each time signal `cond` rises, e.g. a key; a path alongside the others). Then `wait` (`seconds`), `repeat` (leaves by `loop` `times` times, then `done`), `stop` (ends the whole run). Branch with a `base` logic block in its step form |
 
@@ -98,7 +98,7 @@ packages: their blocks and station objects) and `[[objects]]` (station object ty
 Domain objects are implemented by the backend (`StationObject`); toolkit ones by the
 toolkit.
 
-**Starters** (both optional, checked against the catalog when loaded):
+**Starters** (optional, checked against the catalog when loaded):
 
 ```toml
 [station]                       # station.load: the Station page's opening objects
@@ -116,7 +116,20 @@ edges = [
 ]
 ```
 
-`Catalog::graph` and `Catalog::station` hold them as the protocol's JSON. The catalog lists the domain's blocks first, then each imported package in
+A third optional table, `[dashboard]`, is the default layout of the Dashboard's grid. Its
+shape alone is checked (blocks are not: a layout may name monitors the user has not added
+yet, and the UI ignores unknown ones):
+
+```toml
+[dashboard]                     # sent in the catalog; the user's own arrangement wins
+columns = 6                     # 1 to 12; fewer on a narrow screen
+instruments = [
+  { block = "graph-theta", size = "large", at = [0, 0] },   # size: compact, normal or large
+  { block = "speed", size = "compact" },                    # at: [column, row], from 0; optional
+]
+```
+
+`Catalog::graph` and `Catalog::station` hold the starters as the protocol's JSON, `Catalog::dashboard` the layout. The catalog lists the domain's blocks first, then each imported package in
 order; every entry carries its `group`. Python example backends load the same files
 through `python/paperboat/toolkit.py`, which mirrors `base` and `step`.
 
@@ -125,6 +138,7 @@ through `python/paperboat/toolkit.py`, which mirrors `base` and `step`.
 | `use`      | required | — | template name, `<package>/<block>` |
 | `type`     | optional | required | unique id in the catalog (template default: last part of `use`) |
 | `label`    | optional | optional | palette name (default: template label, or `type`) |
+| `description` | optional | optional | one line, shown on its card in the block browser (default: the template's) |
 | `defaults` | optional | — | `{param: number}` overriding template defaults |
 | `config`   | optional | — | `{key: string}` fixed at load time, not shown in the UI |
 | `kind`     | — | required | `source`, `probe`, `function` or `monitor` |

@@ -92,7 +92,7 @@ std::vector<ParamDef> new_params(const json& obj, const std::string& at) {
 }
 
 CatalogEntry from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "params", "defaults", "config"}, at);
+  only_fields(e, {"use", "type", "label", "description", "params", "defaults", "config"}, at);
   const auto name = e.at("use").get<std::string>();
   const Template* t = registry.find(name);
   if (!t) {
@@ -104,6 +104,7 @@ CatalogEntry from_template(const json& e, const std::string& at, const Registry&
   CatalogEntry entry{.def = t->def, .from = t, .config = t->config, .group = name.substr(0, name.find('/'))};
   entry.def.type = e.value("type", t->def.type);
   entry.def.label = e.value("label", t->def.label);
+  entry.def.description = e.value("description", t->def.description);
   // A definition on a parent (TOML inheriting C++): its own params come after the parent's.
   if (e.contains("params")) {
     if (!t->extendable) throw DescriptorError(at + ": " + name + " takes no new params (it isn't a parent for definitions)");
@@ -144,13 +145,14 @@ CatalogEntry linked_entry(const ObjectDef& def, const std::string& group) {
 }
 
 ObjectEntry object_from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "defaults"}, at);
+  only_fields(e, {"use", "type", "label", "description", "defaults"}, at);
   const auto name = e.at("use").get<std::string>();
   const StationTemplate* t = registry.find_object(name);
   if (!t) throw DescriptorError(at + ": no station template \"" + name + "\"");
   ObjectEntry entry{.def = t->def, .from = t, .group = name.substr(0, name.find('/'))};
   entry.def.type = e.value("type", t->def.type);
   entry.def.label = e.value("label", t->def.label);
+  entry.def.description = e.value("description", t->def.description);
   const json defaults = e.value("defaults", json::object());
   for (const auto& [id, value] : defaults.items()) {
     auto p = std::ranges::find(entry.def.props, id, &ParamDef::id);
@@ -159,6 +161,48 @@ ObjectEntry object_from_template(const json& e, const std::string& at, const Reg
     else p->default_text = value.get<std::string>();
   }
   return entry;
+}
+
+// [dashboard]: the default layout of the Dashboard's grid, in the protocol's shape. Blocks
+// are not checked against the catalog (a layout may name monitors the user has not added;
+// the UI ignores unknown ones), only its own shape.
+void load_dashboard(const json& doc, Catalog& catalog) {
+  if (!doc.contains("dashboard")) return;
+  const json& d = doc.at("dashboard");
+  only_fields(d, {"columns", "instruments"}, "dashboard");
+  json out = json::object();
+  if (d.contains("columns")) {
+    if (!d["columns"].is_number_integer() || d["columns"] < 1 || d["columns"] > 12)
+      throw DescriptorError("dashboard.columns must be a whole number from 1 to 12");
+    out["columns"] = d["columns"];
+  }
+  json instruments = json::array();
+  std::set<std::string> seen;
+  const json list = d.value("instruments", json::array());
+  for (std::size_t i = 0; i < list.size(); ++i) {
+    const auto& e = list[i];
+    const auto at = "dashboard.instruments[" + std::to_string(i) + "]";
+    only_fields(e, {"block", "size", "at"}, at);
+    if (!e.contains("block") || !e["block"].is_string()) throw DescriptorError(at + ": needs \"block\", a monitor block's id");
+    if (!seen.insert(e["block"].get<std::string>()).second)
+      throw DescriptorError(at + ": block \"" + e["block"].get<std::string>() + "\" is placed twice");
+    json item = {{"block", e["block"]}};
+    if (e.contains("size")) {
+      const std::string size = e["size"].is_string() ? e["size"].get<std::string>() : "";
+      if (size != "compact" && size != "normal" && size != "large")
+        throw DescriptorError(at + ": size must be compact, normal or large");
+      item["size"] = size;
+    }
+    if (e.contains("at")) {
+      const auto& a = e["at"];
+      if (!a.is_array() || a.size() != 2 || !a[0].is_number_integer() || !a[1].is_number_integer() || a[0] < 0 || a[1] < 0)
+        throw DescriptorError(at + ": at must be [column, row], whole numbers from 0");
+      item["at"] = a;
+    }
+    instruments.push_back(std::move(item));
+  }
+  out["instruments"] = std::move(instruments);
+  catalog.dashboard = out.dump();
 }
 
 // [graph] and [station]: the starters, in the protocol's shapes, checked against the
@@ -324,7 +368,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
   } catch (const toml::parse_error& err) {
     throw DescriptorError("not valid TOML: " + at_line(err.source()) + ": " + std::string(err.description()));
   }
-  only_fields(doc, {"domain", "import", "blocks", "objects", "graph", "station"}, "descriptor");
+  only_fields(doc, {"domain", "import", "blocks", "objects", "graph", "station", "dashboard"}, "descriptor");
 
   Catalog catalog;
   catalog.domain = doc.value("domain", std::string{});
@@ -412,6 +456,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
   if (catalog.entries.empty() && catalog.objects.empty())
     throw DescriptorError("descriptor: the catalog is empty: import packages, use templates, or register the domain's "
                           "own under the package \"" + catalog.domain + "\"");
+  load_dashboard(doc, catalog);
   load_starters(doc, catalog);
   return catalog;
 }
@@ -487,6 +532,8 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.group.empty()) block["group"] = e.group;
     if (e.linked) block["linked"] = true;
     if (!e.def.instrument.empty()) block["instrument"] = e.def.instrument;
+    if (!e.def.description.empty()) block["description"] = e.def.description;
+    if (!e.def.feedthrough) block["feedthrough"] = false;
     if (!e.def.forms.empty()) {
       json forms = json::array();
       for (const auto& f : e.def.forms)
@@ -496,6 +543,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     blocks.push_back(std::move(block));
   }
   json msg = {{"type", "catalog"}, {"blocks", blocks}};
+  if (!catalog.dashboard.empty()) msg["dashboard"] = json::parse(catalog.dashboard);
   if (!catalog.objects.empty()) {
     json objects = json::array();
     for (const auto& o : catalog.objects) {
@@ -503,6 +551,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
                      {"props", param_list(o.def.props)}, {"links", o.def.links}};
       if (!o.group.empty()) object["group"] = o.group;
       if (o.def.block) object["block"] = o.def.block->type;
+      if (!o.def.description.empty()) object["description"] = o.def.description;
       objects.push_back(std::move(object));
     }
     msg["objects"] = std::move(objects);

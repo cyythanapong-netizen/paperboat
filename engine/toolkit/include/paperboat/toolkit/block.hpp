@@ -70,6 +70,13 @@ struct BlockDef {
   std::string instrument = {};
   // A magic block's forms (its inputs and outputs are the first's); its `form` param picks one.
   std::vector<Form> forms = {};
+  // False for a block whose outputs this step don't depend on its inputs this step (an
+  // integrator, a delay): its Block gives outputs() during the pass and reads its inputs
+  // after it, so a feedback loop through it is allowed (no algebraic loop).
+  bool feedthrough = true;
+  // One line in plain words: what the block does ("Drives an error to zero"). Shown on its
+  // card in the browser. Optional.
+  std::string description = {};
 };
 
 // The definition in form `form` (that form's ports); `def` itself if it has no forms, or
@@ -92,6 +99,7 @@ struct ObjectDef {
   std::vector<ParamDef> props = {};     // edited on the Station page only
   std::vector<std::string> links = {};  // slots that name other objects, e.g. {"parent", "child"}
   std::optional<BlockDef> block = {};   // the linked block it spawns (its type names it), if any
+  std::string description = {};         // one line: what it is; shown on its card. Optional
 };
 
 // Data the core passes along without knowing what it is: an image, a mesh, a set of
@@ -162,8 +170,13 @@ struct Context {
 class Block {
  public:
   virtual ~Block() = default;
-  // Compute outputs from inputs. An unconnected input is absent from `in`.
+  // Compute outputs from inputs. An unconnected input is absent from `in`. For a block
+  // without feedthrough (BlockDef::feedthrough false), called after the pass to take this
+  // step's inputs; what it returns is ignored, outputs() is what others read.
   virtual Values step(const Context& ctx, const Values& in) = 0;
+  // A block without feedthrough: what it outputs now, from its state alone (read during
+  // the pass, before its inputs are known). Unused for other blocks.
+  virtual Values outputs() const { return {}; }
   // What it draws on the Station after a step (a result to show); most blocks draw nothing.
   virtual std::vector<Entity> entities() const;
 };

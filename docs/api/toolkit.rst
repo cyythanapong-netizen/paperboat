@@ -81,7 +81,11 @@ control
 -------
 
 Dynamics on a clock: ``pid`` (``e`` → ``u``; ``kp``, ``ki``, ``kd``), ``integrator`` (``u`` → ``y``;
-``initial``), ``lag`` (``u`` → ``y``; ``tau``). C++ helpers ``rk4_step`` and ``euler_step`` in
+``initial``), ``lag`` (``u`` → ``y``; ``tau``; 0 is a one-step delay) and ``delay`` (``u`` → ``y``:
+its input ``steps`` clock steps ago, ``initial`` before then; any value). The last three have
+no direct feedthrough (they output their state, then take the input), so a feedback loop
+may pass through them: integrator → gain → back into the integrator is x' = −k x. A loop
+without one is an algebraic loop and fails. C++ helpers ``rk4_step`` and ``euler_step`` in
 ``paperboat/toolkit/control/simulator.hpp``.
 
 step
