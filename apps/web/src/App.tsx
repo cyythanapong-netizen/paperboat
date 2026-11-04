@@ -298,6 +298,7 @@ export function App() {
         type,
         value: typeof value === "object" ? emptyOf(type) : value,
         ...(def.type === "enum" ? { options: def.options } : {}),
+        ...(def.type === "number" && def.unit ? { unit: def.unit } : {}),
       };
       setVariables([...variables, v]);
       return name;

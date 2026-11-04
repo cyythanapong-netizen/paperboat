@@ -63,7 +63,7 @@ export function usesOf(
 export function fits(v: Variable, def: ParamDef): boolean {
   switch (def.type) {
     case "number":
-      return v.type === "number";
+      return v.type === "number" && (!def.unit || !v.unit || def.unit === v.unit);
     case "boolean":
       return v.type === "boolean";
     case "enum":

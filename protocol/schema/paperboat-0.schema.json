@@ -12,7 +12,11 @@
         },
         "type": {
           "type": "string",
-          "description": "signal (a value), step (control, in a Step flow) or a value shape (image, points, numbers...). A wire joins ports of one type."
+          "description": "signal (a value, the default), step (control in a Step flow), a value's shape (image, points, numbers…), or any (any value but a step). A wire joins ports of one type; any joins anything but a step (#4)."
+        },
+        "unit": {
+          "type": "string",
+          "description": "Its unit (N, m, rad, m/s…). A wire between two ports with units joins the same unit; a port without one takes any (#4)."
         }
       },
       "required": [
@@ -40,6 +44,10 @@
             },
             "default": {
               "type": "number"
+            },
+            "unit": {
+              "type": "string",
+              "description": "Its unit (kg, N/rad…), shown next to the field; a variable bound to it must be in the same unit."
             }
           }
         },

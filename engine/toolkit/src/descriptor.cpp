@@ -72,8 +72,9 @@ std::vector<ParamDef> new_params(const json& obj, const std::string& at) {
     else if (v.is_number()) out.push_back({.id = id, .default_value = v.get<double>()});
     else if (v.is_string()) out.push_back({.id = id, .type = "text", .default_text = v.get<std::string>()});
     else if (v.is_object()) {
-      only_fields(v, {"default", "type", "options"}, at + ".params." + id);
+      only_fields(v, {"default", "type", "options", "unit"}, at + ".params." + id);
       ParamDef p{.id = id, .type = v.value("type", std::string{"number"})};
+      p.unit = v.value("unit", std::string{});
       if (p.is_number()) p.default_value = number_of(v.at("default"));
       else p.default_text = v.at("default").get<std::string>();
       if (p.type != "number" && p.type != "boolean" && p.type != "text" && p.type != "key" && p.type != "file" && p.type != "enum")
@@ -92,8 +93,34 @@ std::vector<ParamDef> new_params(const json& obj, const std::string& at) {
   return out;
 }
 
+// `units = { force = "N", kp = "N/rad" }`: the units of a block's ports and number params
+// (or a station object's props), by id. A wire between two ports with units must keep them.
+void apply_units(const json& e, std::vector<ParamDef>& params, BlockDef* block, const std::string& at, const std::string& name) {
+  if (!e.contains("units")) return;
+  const json units = e.at("units");  // a copy: keep it alive while iterating
+  if (!units.is_object()) throw DescriptorError(at + ": units is a table: { port or param = \"unit\" }");
+  for (const auto& [id, value] : units.items()) {
+    if (!value.is_string()) throw DescriptorError(at + ": units." + id + " is text, such as \"N\"");
+    const auto unit = value.get<std::string>();
+    bool found = false;
+    if (auto p = std::ranges::find(params, id, &ParamDef::id); p != params.end()) {
+      if (p->type != "number") throw DescriptorError(at + ": " + id + " is a " + p->type + " param: only numbers have units");
+      p->unit = unit;
+      found = true;
+    }
+    if (block)
+      for (auto* ports : {&block->inputs, &block->outputs})
+        if (auto port = std::ranges::find(*ports, id, &PortDef::id); port != ports->end()) {
+          if (port->type == "step") throw DescriptorError(at + ": " + id + " is a step port: it carries no value, so no unit");
+          port->unit = unit;
+          found = true;
+        }
+    if (!found) throw DescriptorError(at + ": " + name + " has no port or param \"" + id + "\" (units)");
+  }
+}
+
 CatalogEntry from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "description", "params", "defaults", "config"}, at);
+  only_fields(e, {"use", "type", "label", "description", "params", "defaults", "config", "units"}, at);
   const auto name = e.at("use").get<std::string>();
   const Template* t = registry.find(name);
   if (!t) {
@@ -130,6 +157,7 @@ CatalogEntry from_template(const json& e, const std::string& at, const Registry&
     if (!t->config.contains(key) && !t->extendable) throw DescriptorError(at + ": " + name + " has no config \"" + key + "\"");
     entry.config[key] = value.get<std::string>();
   }
+  apply_units(e, entry.def.params, &entry.def, at, name);
   if (t->check) {
     try {
       t->check(entry.def, resolve_text(entry.def, entry.config, {}));
@@ -146,7 +174,7 @@ CatalogEntry linked_entry(const ObjectDef& def, const std::string& group) {
 }
 
 ObjectEntry object_from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "description", "defaults"}, at);
+  only_fields(e, {"use", "type", "label", "description", "defaults", "units"}, at);
   const auto name = e.at("use").get<std::string>();
   const StationTemplate* t = registry.find_object(name);
   if (!t) throw DescriptorError(at + ": no station template \"" + name + "\"");
@@ -161,6 +189,8 @@ ObjectEntry object_from_template(const json& e, const std::string& at, const Reg
     if (p->is_number()) p->default_value = number_of(value);
     else p->default_text = value.get<std::string>();
   }
+  // Units of its props and of its linked block's ports.
+  apply_units(e, entry.def.props, entry.def.block ? &*entry.def.block : nullptr, at, name);
   return entry;
 }
 
@@ -542,7 +572,11 @@ Catalog load_descriptor_file(const std::filesystem::path& path, const Registry& 
 std::string catalog_message(const Catalog& catalog, int indent) {
   auto ports = [](const std::vector<PortDef>& list) {
     json out = json::array();
-    for (const auto& p : list) out.push_back({{"id", p.id}, {"type", p.type}});
+    for (const auto& p : list) {
+      json port = {{"id", p.id}, {"type", p.type}};
+      if (!p.unit.empty()) port["unit"] = p.unit;
+      out.push_back(std::move(port));
+    }
     return out;
   };
   auto param_list = [](const std::vector<ParamDef>& list) {
@@ -552,6 +586,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
       else if (p.type == "boolean") out.push_back({{"id", p.id}, {"type", "boolean"}, {"default", p.default_value != 0}});
       else if (p.type == "enum") out.push_back({{"id", p.id}, {"type", "enum"}, {"default", p.default_text}, {"options", p.options}});
       else out.push_back({{"id", p.id}, {"type", p.type}, {"default", p.default_text}});
+      if (!p.unit.empty()) out.back()["unit"] = p.unit;
     }
     return out;
   };

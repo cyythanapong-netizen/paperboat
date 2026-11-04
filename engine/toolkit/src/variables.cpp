@@ -117,7 +117,7 @@ Variables::Variables(const json& list) {
     if (!kTypes.contains(type)) throw VariableError(name, name + ": type must be number, boolean, enum, text or file");
     const bool has_value = v.contains("value"), has_expr = v.contains("expr");
     if (has_value == has_expr) throw VariableError(name, name + ": give it a value or a formula (expr), not both");
-    Var var{.type = type, .value = nullptr, .options = {}};
+    Var var{.type = type, .value = nullptr, .options = {}, .unit = v.value("unit", std::string{})};
     if (type == "enum") {
       if (!v.contains("options") || !v["options"].is_array() || v["options"].empty())
         throw VariableError(name, name + ": an enum needs its options");
@@ -244,6 +244,8 @@ json Variables::value_for(const json& given, const ParamDef& def, std::string_vi
                     : def.type == "file"    ? var.type == "file" || var.type == "text"
                                             : false;  // a key belongs to its block
   if (!fits) throw VariableError(std::string(where), at + " is " + def.type + ", but " + name + " is a " + var.type);
+  if (!def.unit.empty() && !var.unit.empty() && def.unit != var.unit)
+    throw VariableError(std::string(where), at + " is in " + def.unit + ", but " + name + " is in " + var.unit);
   if (def.type == "enum" && def.option(var.value.get<std::string>()) < 0) {
     std::string known;
     for (const auto& o : def.options) known += (known.empty() ? "" : ", ") + o;

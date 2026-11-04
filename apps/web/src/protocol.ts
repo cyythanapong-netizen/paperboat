@@ -3,8 +3,10 @@
 
 export type PortDef = {
   id: string;
-  /** signal (a value), step (control, in a Step flow) or a value shape (image, points, numbers...). A wire joins ports of one type. */
+  /** signal (a value, the default), step (control in a Step flow), a value's shape (image, points, numbers…), or any (any value but a step). A wire joins ports of one type; any joins anything but a step (#4). */
   type: string;
+  /** Its unit (N, m, rad, m/s…). A wire between two ports with units joins the same unit; a port without one takes any (#4). */
+  unit?: string;
 };
 
 /** A setting on a block, or a property of a station object. number and boolean reach the block as numbers (boolean: a checkbox, 1 or 0); text, key (a KeyboardEvent.code, picked by pressing it) and file (a path, relative to the descriptor) as text; enum (one of options, a dropdown) as its name (and to an expression, its index). */
@@ -12,6 +14,8 @@ export type ParamDef = {
   id: string;
   type: "number";
   default: number;
+  /** Its unit (kg, N/rad…), shown next to the field; a variable bound to it must be in the same unit. */
+  unit?: string;
 } | {
   id: string;
   type: "boolean";

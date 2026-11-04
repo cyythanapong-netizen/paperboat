@@ -477,3 +477,6 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
   .mode-navigator .pages.with-vars { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
   .mode-commander .pages.with-vars { grid-template-columns: minmax(0, 1fr); grid-template-areas: "station" "flow" "dashboard" "console"; }
 }
+
+/* A port's or param's unit (#4): after its name, small and grey. */
+.unit { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }

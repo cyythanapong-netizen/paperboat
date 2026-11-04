@@ -97,9 +97,11 @@ variables: `{ "expr": "2 * sqrt(kp_theta * pole_length)" }`. The backend resolve
 references before it makes blocks and objects (a block only ever sees numbers and text)
 and fails the run on the block at fault: an unknown variable (with the nearest name), a
 type that doesn't fit, an enum value not among the param's options, a bad formula. Port `type` is `signal` (a value), `step` (control,
-in a Step flow) or a value shape (`points`, `numbers`, …). A wire joins ports of one
-type: the UI enforces step vs signal while dragging, and a backend fails a run whose
-wires mix them. A signal input takes one wire; a step output leads to one block. A run may step a clock (simulation: `scene.patch` per frame) or evaluate
+in a Step flow), a value shape (`image`, `points`, `numbers`, …) or `any` (any value but a
+step). A port, and a number param, may have a `unit` (`"N"`, `"m"`, `"rad"`). A wire joins
+ports of one type (`any` joins anything but a step), in one unit when both ends have one:
+the UI enforces it while dragging, and a backend fails a run whose wires break it. A signal
+input takes one wire; a step output leads to one block. A run may step a clock (simulation: `scene.patch` per frame) or evaluate
 once (parametric: one `scene` at the end); the UI handles both.
 
 ## Station objects

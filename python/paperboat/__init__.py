@@ -44,10 +44,13 @@ __all__ = [
 
 
 class Port(NamedTuple):
-    """A port with a type other than "signal": Port("points", "points"), Port("in", "step")."""
+    """A port with a type other than "signal" or a unit: Port("points", "points"),
+    Port("in", "step"), Port("force", unit="N"). "any" takes any value but a step; with a unit
+    on both ends a wire's units must agree."""
 
     id: str
     type: str = "signal"
+    unit: str = ""
 
 
 class Param(NamedTuple):

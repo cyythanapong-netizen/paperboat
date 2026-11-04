@@ -55,6 +55,7 @@ class Variables {
     std::string type;          // number, boolean, enum, text, file
     nlohmann::json value;      // resolved
     std::vector<std::string> options;
+    std::string unit;          // a number's; a param in another unit can't take it
   };
   double evaluate(const std::string& text, std::string_view where) const;
   std::map<std::string, Var, std::less<>> vars_;

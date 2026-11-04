@@ -102,6 +102,7 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Rail** | Numbered pages on a sunken grey rail; the current one is boxed in ink on panel grey, its name bold |
 | **Panel** | Grey, 1px edge, 6px radius; a head with its number, name and a short count on the right |
 | **Block** | Raised grey, 1px outline; head with the name and a word tag (deleted from the selection dialog or the Delete key). Step blocks are outlined in ink; linked blocks dashed; missing ones dashed red; failed ones outlined red. Params are underlined values |
+| **Port** | Its name, and its unit after it in small grey monospace (`force N`, `m x`). A wire only snaps to a port it fits: the same type (`any` takes anything but a step) and, when both have one, the same unit |
 | **Wire** | Ink, 1.2px; step wires 2px; image wires dashed; selected wires 3px |
 | **Group / story** | A visual group is a dashed frame; a story a solid ink frame |
 | **Instrument** | A display with its name (and latest value) underneath; readouts show a 30px monospace number. Four sizes on a grid of equal cells (116px tall, 12px apart), picked S, M, L, XL: **compact** 1×1 (a readout), **normal** 2×1 (a plot to read at a glance), **large** 2×2 (a plot or picture to study), **xlarge** 3×3 (the one to fill the page with); a kind's default is display compact, graph normal, image large. Before a run sends anything it is a placeholder: same frame, greyed, dashed edge, "–" |

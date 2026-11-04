@@ -333,8 +333,10 @@ std::vector<tk::PortDef> ports_from_py(nb::handle list, const std::string& at) {
     } else if (nb::isinstance<nb::tuple>(p) || nb::isinstance<nb::list>(p)) {
       const auto seq = nb::cast<nb::sequence>(p);
       const auto n = nb::len(seq);
-      if (n < 1 || n > 2) throw std::runtime_error(at + ": a port is a name or (name, type)");
-      out.push_back({.id = nb::cast<std::string>(seq[0]), .type = n > 1 ? nb::cast<std::string>(seq[1]) : "signal"});
+      if (n < 1 || n > 3) throw std::runtime_error(at + ": a port is a name or (name, type, unit)");
+      out.push_back({.id = nb::cast<std::string>(seq[0]),
+                     .type = n > 1 ? nb::cast<std::string>(seq[1]) : "signal",
+                     .unit = n > 2 ? nb::cast<std::string>(seq[2]) : ""});
     } else {
       throw std::runtime_error(at + ": a port is a name or paperboat.Port(name, type), not " +
                                nb::cast<std::string>(nb::repr(p)));

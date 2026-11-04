@@ -79,7 +79,7 @@ void add_logic(Registry& registry) {
   Template t;
   t.name = "base/if";
   t.def = magic_def("if", "If",
-                    {{.name = "signal", .inputs = signals({"cond", "a", "b"}), .outputs = {{"y"}}},
+                    {{.name = "signal", .inputs = {{"cond"}, {"a", "any"}, {"b", "any"}}, .outputs = {{"y", "any"}}},
                      {.name = "step", .inputs = {{"in", "step"}, {"cond"}}, .outputs = {{"yes", "step"}, {"no", "step"}}}});
   t.make = [](const Values&, const Config&) { return std::make_unique<Choose>(); };
   t.make_step = [](const Values& p, const Config&) {

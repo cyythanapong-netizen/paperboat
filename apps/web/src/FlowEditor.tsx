@@ -26,6 +26,7 @@ import {
 } from "@xyflow/react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
+import { wireMismatch } from "./ports";
 import { Bindable, NumberOrFormula } from "./Variables";
 import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
@@ -79,8 +80,10 @@ export function inForm(def: BlockDef, params: Record<string, ParamValue>): Block
 /** A block's ports as they are now (a magic block's: its form's). */
 export const portsOf = (n: BlockNode) => inForm(n.data.def, n.data.params);
 
+const portDef = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs") =>
+  def?.[side].find((p) => p.id === port);
 const portType = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs") =>
-  def?.[side].find((p) => p.id === port)?.type;
+  portDef(def, port, side)?.type;
 
 /** Generic node: everything it shows comes from the backend's BlockDef. */
 function Block({ id, data, selected }: NodeProps<BlockNode>) {
@@ -128,17 +131,22 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
         <div key={p.id} className={`port in port-${p.type}`}>
           <PortHandle type="target" position={Position.Left} id={p.id} />
           {p.id}
+          {p.unit && <span className="unit"> {p.unit}</span>}
         </div>
       ))}
       {def.outputs.map((p) => (
         <div key={p.id} className={`port out port-${p.type}`}>
+          {p.unit && <span className="unit">{p.unit} </span>}
           {p.id}
           <PortHandle type="source" position={Position.Right} id={p.id} />
         </div>
       ))}
       {def.params.map((p) => (
         <label key={p.id} className="param">
-          {p.id}
+          <span>
+            {p.id}
+            {"unit" in p && p.unit && <span className="unit"> {p.unit}</span>}
+          </span>
           <ParamInput
             def={p}
             value={params[p.id]}
@@ -523,10 +531,13 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   };
   const wireType = (c: Connection | Wire) => portType(defOf(c.source), c.sourceHandle, "outputs") ?? "signal";
 
-  // A wire joins ports of one type: signal to signal, step to step, image to image…
+  // A wire joins ports of one type (signal to signal, step to step; any to anything but a
+  // step), in one unit when both ends have one (#4). The engine checks again.
   const isValidConnection: IsValidConnection<Wire> = (shown) => {
     const c = real(shown as Connection);
-    return c.source !== c.target && wireType(c) === portType(defOf(c.target), c.targetHandle, "inputs");
+    const from = portDef(defOf(c.source), c.sourceHandle, "outputs");
+    const to = portDef(defOf(c.target), c.targetHandle, "inputs");
+    return c.source !== c.target && !!from && !!to && !wireMismatch(from, to);
   };
 
   const onConnect = (shown: Connection) => {
@@ -693,9 +704,10 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     const hit = document.elementsFromPoint(x, y).find((el) => el instanceof SVGElement && el.dataset.wire);
     const wire = hit ? edges.find((w) => w.id === (hit as SVGElement).dataset.wire) : undefined;
     if (wire) {
-      const t = wire.data?.type ?? "signal";
-      const input = def.inputs.find((q) => typeOf(q) === t);
-      const output = def.outputs.find((q) => typeOf(q) === t);
+      const from = portDef(defOf(wire.source), wire.sourceHandle, "outputs");
+      const to = portDef(defOf(wire.target), wire.targetHandle, "inputs");
+      const input = from && def.inputs.find((q) => !wireMismatch(from, q));
+      const output = to && def.outputs.find((q) => !wireMismatch(q, to));
       if (input && output) return { kind: "insert", wire, input, output };
     }
     // Near a free port of a type the block has: connect to it.
@@ -710,8 +722,10 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       const d = Math.hypot(hx - x, hy - y);
       if (d > 56 || (best && best.d <= d)) continue;
       const side = el.classList.contains("source") ? "source" : "target";
-      const t = portType(defOf(node), handle, side === "source" ? "outputs" : "inputs") ?? "signal";
-      const port = (side === "source" ? def.inputs : def.outputs).find((q) => typeOf(q) === t);
+      const theirs = portDef(defOf(node), handle, side === "source" ? "outputs" : "inputs");
+      if (!theirs) continue;
+      const t = typeOf(theirs);
+      const port = side === "source" ? def.inputs.find((q) => !wireMismatch(theirs, q)) : def.outputs.find((q) => !wireMismatch(q, theirs));
       const taken = side === "target" && t !== "step" && edges.some((w) => w.target === node && w.targetHandle === handle);
       if (port && !taken) best = { plan: { kind: "port", node, handle, side, port, hx, hy }, d };
     }
