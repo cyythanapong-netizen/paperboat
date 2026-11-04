@@ -16,13 +16,20 @@
 
 namespace paperboat::toolkit {
 
-// A port's type: "signal" carries a value; "step" carries control in a Step flow (the
+// A port. Its type: "signal" carries a value; "step" carries control in a Step flow (the
 // run passes along a step wire from one block to the next). Others ("points", …) carry
-// values of that shape.
+// values of that shape. A wire joins an output to an input of the same `type` ("signal", "image",
+// "numbers"…), and step ports only to step ports; "any" takes (or gives) any value but a
+// step. With a `unit` on both ends ("N", "m", "rad"…) they must agree; a port without one
+// connects to anything of its type.
 struct PortDef {
   std::string id = {};
   std::string type = "signal";
+  std::string unit = {};
 };
+
+// Why a wire may not join output `from` to input `to`, if it may not.
+std::optional<std::string> wire_mismatch(const PortDef& from, const PortDef& to);
 
 // A setting on a block or a station object, edited in the UI. Number types reach a block
 // as numbers (default_value): "number", and "boolean" (1 or 0, a checkbox). Text types
@@ -36,6 +43,7 @@ struct ParamDef {
   std::string type = "number";
   std::string default_text = {};
   std::vector<std::string> options = {};  // an enum's choices
+  std::string unit = {};                  // a number's unit ("N", "m", "rad"…), shown in the UI; "" none
 
   bool is_number() const { return type == "number" || type == "boolean"; }
   // An enum's choice by name, or -1.

@@ -317,12 +317,14 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 @media (min-width: 861px) { .bar .switch + .switch { padding-left: var(--space-4); border-left: 1px solid var(--line); } }
 
 /* ---- Adding things (#50): the Flow's tools, the collection window, quick add, drops ---- */
-.flow-tools { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--panel-pad); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.flow-tools > .lbl:first-child { margin-right: var(--space-1); }
-.flow-tools button { height: 26px; padding: 0 9px; font-size: var(--size-2xs); }
-.flow-tip { margin-left: auto; }
 .kbd { font: 500 var(--size-2xs) var(--font-mono); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: var(--radius-sm); padding: 0 5px; color: var(--text); background: var(--surface-raised); }
 .flow-canvas { position: relative; flex: 1; min-height: 0; }
+/* The selection dialog (#54): floats above several selected blocks, at any zoom. */
+.selection-dialog { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); white-space: nowrap; }
+.selection-dialog > .lbl:first-child { margin-right: var(--space-2); font-family: var(--font-mono); }
+.selection-dialog .kept { margin: 0 var(--space-2); }
+.react-flow__selection { background: transparent; border: 1px dashed var(--line-ink); }
+.react-flow__nodesselection-rect { background: transparent; border: none; }
 .key.add { font-weight: 600; border-color: var(--line-ink); }
 
 .wire-hit { fill: none; stroke: transparent; stroke-width: 18px; pointer-events: stroke; }
@@ -396,7 +398,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .glyph .ax { stroke: var(--line-strong); stroke-width: 1; }
 .glyph text { fill: var(--text); stroke: none; font: 500 17px var(--font-mono); }
 .plate-prog { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--signal); border-radius: 0 0 0 4px; }
-.plate .remove { position: absolute; top: -9px; right: -9px; width: 16px; height: 16px; z-index: 3; }
 .plate-cap { display: flex; gap: 5px; white-space: nowrap; font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .plate-val { font-family: var(--font-mono); color: var(--text); border-bottom: 1px solid var(--line-strong); }
 .cap-running { color: var(--signal); font-weight: 500; }
@@ -419,3 +420,97 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* E3: a compact block opened to the full card has a fold key in its head. */
 .fold { border: 1px solid var(--line-strong); background: transparent; border-radius: var(--radius-sm); height: 18px; padding: 0 6px; font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .fold:hover { color: var(--text); border-color: var(--line-ink); }
+/* ---- Variables (#36): a sheet beside any page; bound fields; "=" binding ---------------- */
+.mono { font-family: var(--font-mono); }
+.mode-navigator .pages.with-vars { grid-template: minmax(0, 1fr) / minmax(0, 1fr) 360px; }
+.mode-navigator .pages.with-vars > .vars-sheet { grid-area: 1 / 2; }
+.mode-commander .pages.with-vars { grid-template-columns: repeat(2, minmax(0, 1fr)) 330px; grid-template-areas: "station flow vars" "dashboard console vars"; }
+.mode-commander .pages.with-vars > .vars-sheet { grid-area: vars; }
+.vars-sheet .panel-head .x { width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); font-size: 11px; }
+.vars-tools { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); }
+.vars-tools .well { display: flex; height: 28px; padding: 0 var(--space-2); }
+.vars-tools input { flex: 1; min-width: 0; font: var(--size-2xs) var(--font-sans); }
+.vars-error { margin: 0; padding: var(--space-2) var(--space-3); color: var(--danger); font: var(--size-2xs) var(--font-mono); border-bottom: 1px solid var(--line); }
+.vars-list { flex: 1; overflow: auto; padding-bottom: var(--space-2); }
+.vars-list .empty code { font-family: var(--font-mono); }
+.vars-group { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-3) var(--space-1); font: 600 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.vars-group::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.var-row { display: grid; grid-template-columns: minmax(0, 1fr) 52px 64px 42px 46px; align-items: center; gap: 6px; padding: 5px var(--space-3); margin: 0 var(--space-1); border-radius: var(--radius-md); font-size: var(--size-xs); }
+.var-row.open { outline: var(--select-outline); outline-offset: -2px; margin: var(--space-1); background: var(--surface-raised); }
+.var-name { font: 500 var(--size-xs) var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: grab; }
+.var-name:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.var-type { font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.var-row .var-value { height: 24px; width: 100%; min-width: 0; padding: 0 6px; border: 0; text-align: right; font: var(--size-xs) var(--font-mono); color: var(--text); }
+.var-row .var-value.text { text-align: left; }
+.var-row select.var-value { text-align: left; }
+.var-row .var-value.out { background: transparent; box-shadow: none; display: flex; align-items: center; justify-content: flex-end; }
+.var-check { width: 14px; height: 14px; justify-self: start; }
+.var-unit { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.var-uses { border: 0; background: none; padding: 0; height: auto; font: var(--size-2xs) var(--font-sans); color: var(--text-muted); text-align: right; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
+.var-uses.none { text-decoration: none; }
+.var-expr { grid-column: 1 / -1; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); overflow-wrap: anywhere; }
+.var-row.bad .var-name, .bad-text { color: var(--danger); }
+.small { font-size: var(--size-2xs); }
+.grey { color: var(--text-muted); }
+.var-detail { grid-column: 1 / -1; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 7px 8px; align-items: center; margin-top: 4px; padding: var(--space-2) 0 var(--space-1); border-top: 1px solid var(--line); font-size: var(--size-2xs); }
+.var-detail .span2 { grid-column: 1 / -1; }
+.var-detail .wells { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--text-muted); min-width: 0; }
+.var-detail .well { height: 24px; padding: 0 6px; border: 0; font: var(--size-xs) var(--font-mono); color: var(--text); min-width: 0; }
+.var-detail .well.wide { flex: 1; font-family: var(--font-sans); font-size: var(--size-2xs); }
+.var-detail .well.wide.mono { font-family: var(--font-mono); font-size: var(--size-xs); }
+.var-detail .opt-num { width: 52px; text-align: right; }
+.var-detail .unit { width: 90px; }
+.var-detail .check { display: inline-flex; gap: 4px; align-items: center; }
+.var-detail .opts { display: flex; flex-wrap: wrap; gap: 2px 4px; }
+.var-detail .opts .opt { border: 0; background: none; height: 22px; padding: 0 4px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
+.var-detail .opts .opt::before { content: "\00a0 "; }
+.var-detail .opts .opt::after { content: " \00a0"; }
+.var-detail .opts .opt.on { color: var(--text); font-weight: 600; }
+.var-detail .opts .opt.on::before { content: "[ "; }
+.var-detail .opts .opt.on::after { content: " ]"; }
+.var-uses-list { grid-column: 1 / -1; display: flex; flex-direction: column; }
+.var-use { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+.var-use code { font: var(--size-2xs) var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.var-use .where { color: var(--text-muted); }
+.var-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; padding-top: var(--space-1); }
+.vars-foot { display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+button.link { border: 0; background: none; height: auto; padding: 0; font: inherit; color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.mode-commander .var-row { grid-template-columns: minmax(0, 1fr) 64px 44px 50px; }
+.mode-commander .var-row .var-type { display: none; }
+
+/* A field bound to a variable: the variable in an ink outline, its value after it. */
+.bindable { display: inline-flex; align-items: center; border-radius: var(--radius-sm); }
+.bindable.drop-on { outline: 2px dashed var(--line-ink); outline-offset: 2px; }
+.bound-box { position: relative; display: inline-flex; }
+.bound { display: inline-flex; align-items: center; gap: 6px; height: auto; padding: 0; border: 0; background: none; white-space: nowrap; }
+.bound .ref { font: 500 var(--size-2xs) var(--font-mono); color: var(--text); border: 1px solid var(--line-ink); border-radius: var(--radius-sm); padding: 0 4px; line-height: 16px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
+.bound .ref.f::before { content: "ƒ "; color: var(--text-muted); }
+.bound .val { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); min-width: 18px; text-align: right; }
+.bound.hot .ref { outline: 2px solid var(--line-ink); outline-offset: 2px; }
+.bound.bad .ref { border-color: var(--danger); color: var(--danger); }
+.formula-box { position: relative; display: inline-flex; }
+.param input.formula { width: 110px; text-align: left; font-family: var(--font-mono); border-bottom: 2px solid var(--line-ink); }
+.pop { position: absolute; z-index: 50; top: calc(100% + 6px); right: 0; width: 280px; padding: var(--space-1) 0; background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); font-size: var(--size-xs); color: var(--text); text-align: left; white-space: normal; cursor: default; }
+.pop .item { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 5px var(--space-3); cursor: pointer; }
+.pop .item.on { outline: 2px solid var(--line-ink); outline-offset: -2px; border-radius: var(--radius-md); margin: 0 var(--space-1); padding: 5px calc(var(--space-3) - var(--space-1)); }
+.pop code { font: 500 var(--size-xs) var(--font-mono); }
+.pop .v { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
+.pop .head { padding: 4px var(--space-3) 2px; font: 600 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.pop .foot { margin-top: var(--space-1); padding: 4px var(--space-3) 2px; border-top: 1px solid var(--line); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.pop .foot code { font-size: var(--size-2xs); }
+.pop .card { display: grid; gap: 8px; padding: var(--space-2) var(--space-3); }
+.pop .card .row { display: flex; align-items: center; gap: 8px; }
+.pop .card .var-value { height: 24px; width: 80px; padding: 0 6px; border: 0; text-align: right; font: var(--size-xs) var(--font-mono); }
+.pop .card .formula-input { flex: 1; height: 24px; font: var(--size-xs) var(--font-mono); }
+.pop .btns { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+
+@media (max-width: 860px) {
+  /* Narrow: the sheet is a bottom sheet over the page. */
+  .pages.with-vars > .vars-sheet { position: fixed; left: 8px; right: 8px; bottom: 8px; height: 70vh; z-index: 40; box-shadow: 0 -8px 24px rgb(0 0 0 / 0.2); }
+  .mode-navigator .pages.with-vars { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+  .mode-commander .pages.with-vars { grid-template-columns: minmax(0, 1fr); grid-template-areas: "station" "flow" "dashboard" "console"; }
+}
+
+/* A port's or param's unit (#4): after its name, small and grey. */
+.unit { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
+.var-detail .var-value.wide { flex: 1; text-align: left; height: 24px; }

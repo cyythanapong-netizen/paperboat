@@ -1,6 +1,7 @@
 import { Position } from "@xyflow/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { RemoveIcon } from "./RemoveIcon";
+import { isRef } from "./bindings";
+import { portLabel } from "./ports";
 import type { BlockDef, ParamValue } from "./protocol";
 import { PortHandle } from "./wireSnap";
 
@@ -45,8 +46,9 @@ export function Glyph({ name }: { name: string }) {
   );
 }
 
+/** A param as the caption shows it: a bound one by its variable's name or formula (#36). */
 const show = (v: ParamValue | undefined) =>
-  typeof v === "number" ? String(+v.toFixed(4)).replace("-", "−") : typeof v === "boolean" ? (v ? "on" : "off") : String(v ?? "");
+  isRef(v) ? ("var" in v ? v.var : `ƒ ${v.expr}`) : typeof v === "number" ? String(+v.toFixed(4)).replace("-", "−") : typeof v === "boolean" ? (v ? "on" : "off") : String(v ?? "");
 
 /** The caption's value: `{k}` and `{min}…{max}` with the block's params filled in. */
 export function captionValue(template: string | undefined, params: Record<string, ParamValue>): string {
@@ -67,7 +69,6 @@ export function CompactBlock({
   word,
   progress,
   onExpand,
-  onRemove,
   popover,
 }: {
   id: string;
@@ -77,7 +78,6 @@ export function CompactBlock({
   word?: "running" | "failed";
   progress?: number;
   onExpand: () => void;
-  onRemove?: () => void;
   /** The param rows shown in the popover. */
   popover: ReactNode;
 }) {
@@ -122,17 +122,12 @@ export function CompactBlock({
       >
         <Glyph name={def.view?.glyph ?? "const"} />
         {def.inputs.map((p, i) => (
-          <PortHandle key={p.id} type="target" position={Position.Left} id={p.id} top={spread(def.inputs.length, i)} label={p.id} className={`t-${p.type}`} />
+          <PortHandle key={p.id} type="target" position={Position.Left} id={p.id} top={spread(def.inputs.length, i)} label={portLabel(p)} className={`t-${p.type}`} />
         ))}
         {def.outputs.map((p, i) => (
-          <PortHandle key={p.id} type="source" position={Position.Right} id={p.id} top={spread(def.outputs.length, i)} label={p.id} className={`t-${p.type}`} />
+          <PortHandle key={p.id} type="source" position={Position.Right} id={p.id} top={spread(def.outputs.length, i)} label={portLabel(p)} className={`t-${p.type}`} />
         ))}
         {word === "running" && progress !== undefined && progress < 1 && <i className="plate-prog" style={{ width: `${progress * 100}%` }} />}
-        {selected && onRemove && (
-          <button className="remove nodrag" title="Delete block" onClick={(e) => (e.stopPropagation(), onRemove())}>
-            <RemoveIcon />
-          </button>
-        )}
       </div>
       <div className="plate-cap">
         <span className={word ? `cap-${word}` : undefined}>{word ?? def.label}</span>

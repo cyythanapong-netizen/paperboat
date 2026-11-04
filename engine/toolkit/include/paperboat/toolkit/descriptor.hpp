@@ -59,6 +59,9 @@ struct Catalog {
   // The optional [dashboard] table: the default layout of the Dashboard's grid, as the
   // protocol's JSON text ("" when absent). Sent in the catalog message.
   std::string dashboard;
+  // The optional [[variables]]: the backend's default variables (#36), as the protocol's
+  // JSON text (a list; "" when absent). Sent in variables.load; the starters may use them.
+  std::string variables;
   // How the Station page shows the station: "scene" (the built-in 2D/3D scene), "graph"
   // (station objects as nodes, their links as wires) or "web" (the backend's own page,
   // `station_page`, relative to `dir`, served by the engine).

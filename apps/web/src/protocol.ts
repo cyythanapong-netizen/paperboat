@@ -3,8 +3,10 @@
 
 export type PortDef = {
   id: string;
-  /** signal (a value), step (control, in a Step flow) or a value shape (image, points, numbers...). A wire joins ports of one type. */
+  /** signal (a value, the default), step (control in a Step flow), a value's shape (image, points, numbers…), or any (any value but a step). A wire joins ports of one type; any joins anything but a step (#4). */
   type: string;
+  /** Its unit (N, m, rad, m/s…). A wire between two ports with units joins the same unit; a port without one takes any (#4). */
+  unit?: string;
 };
 
 /** A setting on a block, or a property of a station object. number and boolean reach the block as numbers (boolean: a checkbox, 1 or 0); text, key (a KeyboardEvent.code, picked by pressing it) and file (a path, relative to the descriptor) as text; enum (one of options, a dropdown) as its name (and to an expression, its index). */
@@ -12,6 +14,8 @@ export type ParamDef = {
   id: string;
   type: "number";
   default: number;
+  /** Its unit (kg, N/rad…), shown next to the field; a variable bound to it must be in the same unit. */
+  unit?: string;
 } | {
   id: string;
   type: "boolean";
@@ -167,8 +171,14 @@ export type GraphGroup = {
 
 export type Vec3 = [number, number, number];
 
-/** A param's value: a number, true / false (a boolean param), or text (text, key and file params). */
-export type ParamValue = number | boolean | string;
+/** A param's value: a number, true / false (a boolean param), or text (text, key and file params). Or a reference (#36): {"var": name} takes a variable's value; {"expr": formula} (number and boolean params) a formula over variables. The backend resolves references before it makes blocks and objects. */
+export type ParamValue = number | boolean | string | {
+  /** A variable's name. */
+  var: string;
+} | {
+  /** A formula over number and boolean variables: + - * / ^ %, comparisons, && || ?:, sqrt, sin, min, clamp… */
+  expr: string;
+};
 
 export type RunStatus = "done" | "failed" | "cancelled";
 
@@ -216,6 +226,36 @@ export type RunSettings = {
   speed?: number;
 };
 
+/** A named, typed value (#36), used by reference in block params and station props. Exactly one of value and expr. */
+export type Variable = {
+  /** Letters, digits and _; not t, pi, e or a function's name. */
+  name: string;
+  type: "number" | "boolean" | "enum" | "text" | "file";
+  /** Of its type: a number, true / false, or text (enum: one of options). */
+  value?: number | boolean | string;
+  /** A number or boolean variable's formula over other variables, instead of a value. */
+  expr?: string;
+  /** A number's unit (m, N, rad…). */
+  unit?: string;
+  min?: number;
+  max?: number;
+  /** How much one nudge in the UI changes it. */
+  step?: number;
+  /** A whole number. */
+  whole?: boolean;
+  /** An enum's choices. */
+  options?: string[];
+  /** One line: what it's for. */
+  note?: string;
+  /** Where it's listed (Plant, Controller…). */
+  group?: string;
+  /** Also a control on the Dashboard, for operators. */
+  exposed?: boolean;
+};
+
+/** The variables of a backend (its defaults) or the user's. */
+export type Variables = Variable[];
+
 /** Every message a backend sends. */
 export type ServerMsg =
   | {
@@ -247,6 +287,17 @@ export type ServerMsg =
   | {
     type: "station.load";
     station: Station;
+  }
+  | {
+    type: "variables.load";
+    variables: Variables;
+  }
+  | {
+    type: "variables.values";
+    /** Each variable's resolved value, by name. */
+    values: Record<string, number | boolean | string>;
+    error?: string;
+    at?: string;
   }
   | {
     type: "run.started";
@@ -292,10 +343,16 @@ export type ClientMsg =
     graph: Graph;
     station?: Station;
     settings?: RunSettings;
+    /** The variables the graph's and station's references use; absent: the last ones set. */
+    variables?: Variables;
   }
   | {
     type: "station.set";
     station: Station;
+  }
+  | {
+    type: "variables.set";
+    variables: Variables;
   }
   | {
     type: "run.cancel";

@@ -87,9 +87,11 @@ void add_simulator(Registry& registry) {
   without_feedthrough(make_template(
       "control", "lag", "Lag", {"u"}, {"y"}, {{"tau", 1.0}},
       [](const Values& p, const Config&) { return std::make_unique<Lag>(get_or(p, "tau")); }));
-  without_feedthrough(make_template(
+  auto delay = make_template(
       "control", "delay", "Delay", {"u"}, {"y"}, {{"steps", 1.0}, {"initial", 0.0}},
-      [](const Values& p, const Config&) { return std::make_unique<Delay>(get_or(p, "steps"), get_or(p, "initial")); }));
+      [](const Values& p, const Config&) { return std::make_unique<Delay>(get_or(p, "steps"), get_or(p, "initial")); });
+  delay.def.inputs[0].type = delay.def.outputs[0].type = "any";  // delays any value, not only numbers
+  without_feedthrough(std::move(delay));
 }
 
 }  // namespace paperboat::toolkit::control

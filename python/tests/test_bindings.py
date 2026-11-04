@@ -93,11 +93,11 @@ edges = [
 '''
 
 
-def run_backend(tmp_path: Path, backend: str = BACKEND, descriptor: str = DESCRIPTOR) -> list[dict]:
+def run_backend(tmp_path: Path, backend: str = BACKEND, descriptor: str = DESCRIPTOR, args: tuple[str, ...] = ()) -> list[dict]:
     (tmp_path / "server.py").write_text(textwrap.dedent(backend))
     (tmp_path / "descriptor.toml").write_text(textwrap.dedent(descriptor))
     env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
-    proc = subprocess.run([sys.executable, "server.py", "--run"], cwd=tmp_path, env=env, capture_output=True,
+    proc = subprocess.run([sys.executable, "server.py", "--run", *args], cwd=tmp_path, env=env, capture_output=True,
                           text=True, timeout=120)
     assert proc.returncode == 0, proc.stderr
     return [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
@@ -131,6 +131,16 @@ def test_a_blocks_view_is_checked(tmp_path: Path) -> None:
                           text=True, timeout=120)
     assert proc.returncode != 0
     assert 'view has no key "glyf"' in proc.stderr
+
+
+def test_variables_feed_params_and_take_var_overrides(tmp_path: Path) -> None:
+    # #36: a param bound to a default variable; --var name=value sets it for the run.
+    descriptor = DESCRIPTOR.replace('params = { loud = true, name = "hello" }',
+                                    'params = { k = { var = "gain" }, loud = true, name = "hello" }')
+    descriptor += '\n[[variables]]\nname = "gain"\nvalue = 3\n'
+    doubled = lambda msgs: [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "doubled"][-1]
+    assert doubled(run_backend(tmp_path, descriptor=descriptor)) == 1.5
+    assert doubled(run_backend(tmp_path, descriptor=descriptor, args=("--var", "gain=4"))) == 2.0
 
 
 def test_a_bad_definition_is_reported(tmp_path: Path) -> None:
