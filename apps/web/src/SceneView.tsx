@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { Entity, View } from "./protocol";
+import { viewCube } from "./viewCube";
 
 /** `look` is what the geometry and material were built from; when it changes, rebuild. */
 type World = { scene: THREE.Scene; objects: Map<string, { obj: THREE.Object3D; look: string }> };
@@ -92,6 +93,10 @@ export function SceneView({ entities, view }: { entities: Record<string, Entity>
     }
     world.current = { scene, objects: new Map() };
 
+    // 3D only: the view cube in the corner (hidden in 2D views).
+    const cube = camera instanceof THREE.PerspectiveCamera ? viewCube(el, renderer, camera, controls, token) : null;
+    renderer.autoClear = false;
+
     const resize = new ResizeObserver(() => {
       renderer.setSize(el.clientWidth, el.clientHeight);
       fit(el.clientWidth / Math.max(el.clientHeight, 1));
@@ -100,12 +105,15 @@ export function SceneView({ entities, view }: { entities: Record<string, Entity>
     resize.observe(el);
     renderer.setAnimationLoop(() => {
       controls.update();
+      renderer.clear();
       renderer.render(scene, camera);
+      cube?.draw(el.clientWidth, el.clientHeight);
     });
 
     return () => {
       renderer.setAnimationLoop(null);
       resize.disconnect();
+      cube?.dispose();
       controls.dispose();
       renderer.dispose();
       el.removeChild(renderer.domElement);

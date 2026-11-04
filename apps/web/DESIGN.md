@@ -94,7 +94,6 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Label** | 12px sans, sentence case, dark grey. Names things; never shows selection |
 | **Key** (every button) | Flat, 1px outline, 5px radius. Hover inks the outline. Run has an ink outline and bold label |
 | **Choice** (view, theme) | Options in monospace; the chosen one in brackets and bold ink, the rest grey. The brackets are reserved for every option, so nothing shifts. Click one, or use the arrow keys |
-| **Remove** (round ×) | 16px or 18px circle, grid-centred, with the × drawn as two SVG strokes (`RemoveIcon`) in the button's colour. Never a text glyph: a glyph centres on its font's line box and drifts with the font |
 | **Well** | A recessed grey field for input (address, run length, speed); ink text, no spinners |
 | **Display** | Black, 5px radius; light monospace text; the signal colour for traces and live values. For output only |
 | **Bar** | The wordmark, the backend (a well with the address and engine name; Connect), the run (Run, length, speed, Cancel, status in words), view and theme, divided by a hairline |
@@ -111,6 +110,7 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Quick add** | A search floating at the cursor (`/` over the canvas, or a double-click on empty canvas): the best matches, arrows, Enter adds at that spot |
 | **Drop hint** | While a card is dragged over the Flow: a dashed outline where it lands, a thickened wire it would be inserted into, or a dashed line to the port it would connect to; with a label in words ("Insert Lag: pid.u → u, y → sum.a") |
 | **Floating panel** | The only glass: what floats over live content (the station's properties). One token (`--float-blur: none`) retires it |
+| **View cube** | A 96px cube in the 3D Station's top-right corner (hidden in 2D views): a mono label on each face, ink edges, turning with the camera. Hover marks the third of the cube a click would pick (face, edge or corner) in the signal colour; click eases the camera there (260ms, none with reduced motion); drag orbits; a Home key under it restores the opening view |
 
 Focus is a 2px ink ring. Disabled keys are grey and faded.
 
