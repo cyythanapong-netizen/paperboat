@@ -306,3 +306,23 @@ config = { f = "size * sin((fast ? 4 : 1) * t)" }
   CHECK_THROWS_WITH(tk::load_descriptor(descriptor("[[blocks]]\nuse = \"math/gain\"\nparams = { j = 1 }\n")),
                     ContainsSubstring("takes no new params"));
 }
+
+TEST_CASE("blocks and objects carry a one-line description to the catalog") {
+  const auto catalog = tk::load_descriptor(descriptor(R"(
+import = ["control", "signal"]
+[[blocks]]
+use = "math/gain"
+type = "double"
+description = "Twice its input."
+defaults = { k = 2 }
+)"));
+  const auto msg = nlohmann::json::parse(tk::catalog_message(catalog));
+  auto find = [&](const std::string& type) {
+    for (const auto& b : msg["blocks"])
+      if (b["type"] == type) return b;
+    return nlohmann::json();
+  };
+  CHECK(find("pid")["description"].get<std::string>().find("error") != std::string::npos);  // built in
+  CHECK(find("sine")["description"] == "A smooth wave: amplitude, frequency, phase.");       // from TOML
+  CHECK(find("double")["description"] == "Twice its input.");                              // the descriptor's own
+}

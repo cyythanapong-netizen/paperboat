@@ -393,6 +393,7 @@ tk::BlockDef block_def(nb::handle cls) {
   def.params = params_from_py(cls.attr("params"), at);
   if (def.kind == tk::Kind::Monitor) def.instrument = text_attr(cls, "instrument", "graph");
   if (nb::hasattr(cls, "feedthrough")) def.feedthrough = nb::cast<bool>(cls.attr("feedthrough"));
+  def.description = text_attr(cls, "description", "");
   return def;
 }
 
@@ -413,6 +414,7 @@ tk::ObjectDef object_def(nb::handle cls) {
                              .inputs = ports_from_py(linked.attr("inputs"), at + ".block"),
                              .outputs = ports_from_py(linked.attr("outputs"), at + ".block")};
   }
+  def.description = text_attr(cls, "description", "");
   return def;
 }
 

@@ -175,6 +175,10 @@
         "feedthrough": {
           "type": "boolean",
           "description": "false: its outputs this step don't depend on its inputs this step (an integrator, a delay), so a feedback loop may pass through it. Absent: true."
+        },
+        "description": {
+          "type": "string",
+          "description": "One line in plain words: what it does. Shown on its card in the block browser. Optional."
         }
       },
       "required": [
@@ -221,6 +225,10 @@
         "block": {
           "type": "string",
           "description": "The linked block type it spawns on the Flow page, if any."
+        },
+        "description": {
+          "type": "string",
+          "description": "One line in plain words: what it does. Shown on its card in the block browser. Optional."
         }
       },
       "required": [

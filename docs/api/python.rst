@@ -40,6 +40,11 @@ Blocks
 
    A signal block: outputs from inputs, once per pass.
 
+   .. py:attribute:: description
+      :type: str
+
+      One line in plain words: what it does. Shown on its card in the block browser.
+
    .. py:attribute:: feedthrough
       :type: bool
 

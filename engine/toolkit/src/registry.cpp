@@ -1,5 +1,7 @@
 #include "paperboat/toolkit/registry.hpp"
 
+#include "common.hpp"
+
 #include <algorithm>
 #include <stdexcept>
 
@@ -7,11 +9,13 @@ namespace paperboat::toolkit {
 
 void Registry::add(Template t) {
   if (find(t.name)) throw std::invalid_argument("duplicate template: " + t.name);
+  if (t.def.description.empty()) t.def.description = builtin_description(t.name);
   templates_.push_back(std::move(t));
 }
 
 void Registry::add(StationTemplate t) {
   if (find_object(t.name)) throw std::invalid_argument("duplicate station template: " + t.name);
+  if (t.def.description.empty()) t.def.description = builtin_description(t.name);
   objects_.push_back(std::move(t));
 }
 

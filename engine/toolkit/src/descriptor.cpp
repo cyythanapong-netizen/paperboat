@@ -92,7 +92,7 @@ std::vector<ParamDef> new_params(const json& obj, const std::string& at) {
 }
 
 CatalogEntry from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "params", "defaults", "config"}, at);
+  only_fields(e, {"use", "type", "label", "description", "params", "defaults", "config"}, at);
   const auto name = e.at("use").get<std::string>();
   const Template* t = registry.find(name);
   if (!t) {
@@ -104,6 +104,7 @@ CatalogEntry from_template(const json& e, const std::string& at, const Registry&
   CatalogEntry entry{.def = t->def, .from = t, .config = t->config, .group = name.substr(0, name.find('/'))};
   entry.def.type = e.value("type", t->def.type);
   entry.def.label = e.value("label", t->def.label);
+  entry.def.description = e.value("description", t->def.description);
   // A definition on a parent (TOML inheriting C++): its own params come after the parent's.
   if (e.contains("params")) {
     if (!t->extendable) throw DescriptorError(at + ": " + name + " takes no new params (it isn't a parent for definitions)");
@@ -144,13 +145,14 @@ CatalogEntry linked_entry(const ObjectDef& def, const std::string& group) {
 }
 
 ObjectEntry object_from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "defaults"}, at);
+  only_fields(e, {"use", "type", "label", "description", "defaults"}, at);
   const auto name = e.at("use").get<std::string>();
   const StationTemplate* t = registry.find_object(name);
   if (!t) throw DescriptorError(at + ": no station template \"" + name + "\"");
   ObjectEntry entry{.def = t->def, .from = t, .group = name.substr(0, name.find('/'))};
   entry.def.type = e.value("type", t->def.type);
   entry.def.label = e.value("label", t->def.label);
+  entry.def.description = e.value("description", t->def.description);
   const json defaults = e.value("defaults", json::object());
   for (const auto& [id, value] : defaults.items()) {
     auto p = std::ranges::find(entry.def.props, id, &ParamDef::id);
@@ -487,6 +489,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.group.empty()) block["group"] = e.group;
     if (e.linked) block["linked"] = true;
     if (!e.def.instrument.empty()) block["instrument"] = e.def.instrument;
+    if (!e.def.description.empty()) block["description"] = e.def.description;
     if (!e.def.feedthrough) block["feedthrough"] = false;
     if (!e.def.forms.empty()) {
       json forms = json::array();
@@ -504,6 +507,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
                      {"props", param_list(o.def.props)}, {"links", o.def.links}};
       if (!o.group.empty()) object["group"] = o.group;
       if (o.def.block) object["block"] = o.def.block->type;
+      if (!o.def.description.empty()) object["description"] = o.def.description;
       objects.push_back(std::move(object));
     }
     msg["objects"] = std::move(objects);

@@ -68,6 +68,7 @@ class Block:
     type: str = ""                       # its id in the catalog (required)
     label: str = ""                      # shown on the block (default: type)
     kind: str = "function"               # source | probe | function | monitor
+    description: str = ""                # one line: what it does; shown on its card in the browser
     inputs: list[str | Port] = []
     outputs: list[str | Port] = []
     params: dict[str, float | Param] = {}  # the defaults; an instance's self.params holds its values
@@ -175,6 +176,7 @@ class StationObject:
     type: str = ""
     label: str = ""
     role: str = "body"                   # body | joint
+    description: str = ""                # one line: what it is; shown on its card in the browser
     props: dict[str, float | Param] = {}  # the defaults; an instance's self.props holds its values
     links: list[str] = []                # slots that name other station objects
     block: Linked | None = None          # its linked block, if a flow acts on it

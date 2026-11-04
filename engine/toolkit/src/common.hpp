@@ -13,6 +13,9 @@
 
 namespace paperboat::toolkit {
 
+// The built-in templates' one-line descriptions, by name ("control/pid"); "" if none.
+std::string builtin_description(std::string_view name);
+
 // A stateless block: outputs depend only on the clock and the inputs.
 class Stateless : public Block {
  public:

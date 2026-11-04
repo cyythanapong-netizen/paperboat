@@ -91,6 +91,11 @@ initializers may leave any out.
 
       A monitor's instrument: ``"graph"``, ``"display"`` or ``"image"``.
 
+   .. cpp:member:: std::string description
+
+      One line in plain words: what the block does. Shown on its card in the block browser.
+      Optional; the built-in templates have one, and a descriptor may set ``description``.
+
    .. cpp:member:: bool feedthrough = true
 
       ``false`` for a block whose outputs this step don't depend on its inputs this step (an

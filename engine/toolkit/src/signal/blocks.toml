@@ -6,6 +6,7 @@
 [[blocks]]
 use = "signal/generator"
 type = "sine"
+description = "A smooth wave: amplitude, frequency, phase."
 label = "Sine"
 params = { amplitude = 1, frequency = 1, phase = 0, offset = 0 }
 config = { f = "offset + amplitude * sin(2 * pi * frequency * t + phase)" }
@@ -13,6 +14,7 @@ config = { f = "offset + amplitude * sin(2 * pi * frequency * t + phase)" }
 [[blocks]]
 use = "signal/generator"
 type = "step"
+description = "Jumps to a value at a time."
 label = "Step"
 params = { at = 1, value = 1 }
 config = { f = "t >= at ? value : 0" }
@@ -20,6 +22,7 @@ config = { f = "t >= at ? value : 0" }
 [[blocks]]
 use = "signal/generator"
 type = "ramp"
+description = "Rises steadily from a start."
 label = "Ramp"
 params = { start = 0, slope = 1 }
 config = { f = "slope * max(0, t - start)" }
@@ -27,6 +30,7 @@ config = { f = "slope * max(0, t - start)" }
 [[blocks]]
 use = "signal/generator"
 type = "square"
+description = "Flips between plus and minus its amplitude."
 label = "Square"
 params = { amplitude = 1, frequency = 1 }
 config = { f = "frac(frequency * t) < 0.5 ? amplitude : -amplitude" }
@@ -37,6 +41,7 @@ config = { f = "frac(frequency * t) < 0.5 ? amplitude : -amplitude" }
 [[blocks]]
 use = "signal/generator"
 type = "ease"
+description = "Shapes a 0–1 progress into a smooth curve."
 label = "Ease"
 params = { shape = { default = "in-out", type = "enum", options = ["in-out", "in", "out", "linear"] } }
 config = { f = """
@@ -49,5 +54,6 @@ config = { f = """
 [[blocks]]
 use = "signal/generator"
 type = "function"
+description = "Any f(t) you type."
 label = "f(t)"
 params = { f = "a * sin(b * t) + c", a = 1, b = 1, c = 0 }

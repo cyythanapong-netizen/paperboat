@@ -125,6 +125,7 @@ through `python/paperboat/toolkit.py`, which mirrors `base` and `step`.
 | `use`      | required | — | template name, `<package>/<block>` |
 | `type`     | optional | required | unique id in the catalog (template default: last part of `use`) |
 | `label`    | optional | optional | palette name (default: template label, or `type`) |
+| `description` | optional | optional | one line, shown on its card in the block browser (default: the template's) |
 | `defaults` | optional | — | `{param: number}` overriding template defaults |
 | `config`   | optional | — | `{key: string}` fixed at load time, not shown in the UI |
 | `kind`     | — | required | `source`, `probe`, `function` or `monitor` |

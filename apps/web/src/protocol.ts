@@ -45,6 +45,8 @@ export type BlockDef = {
   forms?: Form[];
   /** false: its outputs this step don't depend on its inputs this step (an integrator, a delay), so a feedback loop may pass through it. Absent: true. */
   feedthrough?: boolean;
+  /** One line in plain words: what it does. Shown on its card in the block browser. Optional. */
+  description?: string;
 };
 
 /** A station object type: a thing on the Station page whose props are edited only there. */
@@ -58,6 +60,8 @@ export type ObjectDef = {
   links: string[];
   /** The linked block type it spawns on the Flow page, if any. */
   block?: string;
+  /** One line in plain words: what it does. Shown on its card in the block browser. Optional. */
+  description?: string;
 };
 
 /** One shape on the Station's scene. shape: box, sphere (size[0] = radius), line (pos to `to`), image (a size[0] x size[1] picture facing +z, from src). */

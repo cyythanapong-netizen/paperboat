@@ -42,6 +42,7 @@ Default address: `ws://localhost:8765`.
 {
   "type": "sine",                  // unique id of the block type
   "label": "Sine",
+  "description": "A smooth wave: amplitude, frequency, phase.",  // optional: one line, shown on its card
   "kind": "function",              // source | probe | function | monitor
   "inputs":  [{ "id": "u", "type": "signal" }],
   "outputs": [{ "id": "y", "type": "signal" }],

@@ -74,6 +74,9 @@ struct BlockDef {
   // integrator, a delay): its Block gives outputs() during the pass and reads its inputs
   // after it, so a feedback loop through it is allowed (no algebraic loop).
   bool feedthrough = true;
+  // One line in plain words: what the block does ("Drives an error to zero"). Shown on its
+  // card in the browser. Optional.
+  std::string description = {};
 };
 
 // The definition in form `form` (that form's ports); `def` itself if it has no forms, or
@@ -96,6 +99,7 @@ struct ObjectDef {
   std::vector<ParamDef> props = {};     // edited on the Station page only
   std::vector<std::string> links = {};  // slots that name other objects, e.g. {"parent", "child"}
   std::optional<BlockDef> block = {};   // the linked block it spawns (its type names it), if any
+  std::string description = {};         // one line: what it is; shown on its card. Optional
 };
 
 // Data the core passes along without knowing what it is: an image, a mesh, a set of
