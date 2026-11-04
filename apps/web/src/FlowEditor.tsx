@@ -15,7 +15,6 @@ import {
   useInternalNode,
   useReactFlow,
   useStoreApi,
-  useUpdateNodeInternals,
   type Connection,
   type Edge,
   type EdgeProps,
@@ -25,14 +24,15 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
 } from "@xyflow/react";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type PointerEvent as ReactPointerEvent, type SetStateAction } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { CompactBlock } from "./Compact";
-import { movePort, placePorts, resetPort, SIDES, wireMismatch, type Placed, type PortSides, type Side } from "./ports";
+import { wireMismatch, type PortSides } from "./ports";
+import { usePortLayout } from "./portLayout";
 import { Bindable, NumberOrFormula } from "./Variables";
 import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
-import { connectionOf, nearestAccepting, PortHandle, SNAP, WireDragContext, type Anchor } from "./wireSnap";
+import { connectionOf, nearestAccepting, SNAP, WireDragContext, type Anchor } from "./wireSnap";
 import {
   display,
   frameAround,
@@ -91,7 +91,6 @@ const portType = (def: BlockDef | undefined, port: string | null | undefined, si
 /** Generic node: everything it shows comes from the backend's BlockDef. */
 function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { updateNodeData } = useReactFlow<BlockNode, Wire>();
-  const updateNodeInternals = useUpdateNodeInternals();
   const states = useContext(RunStates);
   const active = states.active.has(id);
   const progress = states.progress[id];
@@ -100,12 +99,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const failed = states.failed.has(id);
   // A simple block draws as a small plate (#70) until double-clicked open; fold puts it back.
   const [expanded, setExpanded] = useState(false);
-  // A port moves by dragging its name to another side of the block, or along its side.
-  // While dragged the block shows where it would go; the move is saved (one undo) on release.
-  const [moving, setMoving] = useState<{ id: string; sides: PortSides | undefined } | null>(null);
-  const sides = moving ? moving.sides : data.ports;
-  const sidesKey = JSON.stringify(sides ?? null);
-  useEffect(() => updateNodeInternals(id), [id, sidesKey, updateNodeInternals]);
+  const ports = usePortLayout({ id, def, sides: data.ports, save: (ports) => updateNodeData(id, { ports }), disabled: missing });
   if (def.view?.compact && !expanded && !missing && !hasStepPorts(def)) {
     return (
       <CompactBlock
@@ -128,72 +122,6 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
       />
     );
   }
-  const placed = placePorts(def, sides);
-  const startMove = (e: ReactPointerEvent, port: string) => {
-    // A press on the dot draws a wire; only the name moves the port.
-    if (e.button !== 0 || missing || (e.target as HTMLElement).closest(".react-flow__handle")) return;
-    const block = (e.currentTarget as HTMLElement).closest(".block") as HTMLElement | null;
-    if (!block) return;
-    const [x0, y0] = [e.clientX, e.clientY];
-    let next = data.ports;
-    let live = false;
-    const move = (ev: PointerEvent) => {
-      if (!live && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
-      live = true;
-      const r = block.getBoundingClientRect();
-      // The side nearest the pointer, and the place along it among the other ports there.
-      const d: Record<Side, number> = { left: ev.clientX - r.left, right: r.right - ev.clientX, top: ev.clientY - r.top, bottom: r.bottom - ev.clientY };
-      const side = SIDES.reduce((a, b) => (d[b] < d[a] ? b : a));
-      const across = side === "top" || side === "bottom";
-      const index = [...block.querySelectorAll<HTMLElement>(`.port[data-side="${side}"]`)]
-        .filter((o) => o.dataset.port !== port)
-        .filter((o) => {
-          const b = o.getBoundingClientRect();
-          return across ? b.left + b.width / 2 < ev.clientX : b.top + b.height / 2 < ev.clientY;
-        }).length;
-      next = movePort(def, data.ports, port, side, index);
-      setMoving({ id: port, sides: next });
-    };
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
-      setMoving(null);
-      if (live && JSON.stringify(next ?? null) !== JSON.stringify(data.ports ?? null)) updateNodeData(id, { ports: next });
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
-  };
-  const portRow = ({ port: p, dir }: Placed, side: Side) => {
-    const name = side === "right" ? (
-      <>
-        {p.unit && <span className="unit">{p.unit} </span>}
-        {p.id}
-      </>
-    ) : (
-      <>
-        {p.id}
-        {p.unit && <span className="unit"> {p.unit}</span>}
-      </>
-    );
-    return (
-      <div
-        key={`${dir}:${p.id}`}
-        className={`port ${dir} side-${side} port-${p.type} nodrag${moving?.id === p.id ? " moving" : ""}`}
-        data-side={side}
-        data-port={p.id}
-        onPointerDown={(e) => startMove(e, p.id)}
-        onDoubleClick={(e) => {
-          e.stopPropagation();
-          if (!missing) updateNodeData(id, { ports: resetPort(def, data.ports, p.id) });
-        }}
-      >
-        {name}
-        <PortHandle type={dir === "in" ? "target" : "source"} position={POSITION[side]} id={p.id} />
-      </div>
-    );
-  };
   const step = hasStepPorts(def);
   const classes = ["block", `kind-${def.kind}`, step && "step", selected && "selected", active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
   // The head's tag says what is happening to the block, else what it is: words, not colours.
@@ -215,7 +143,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
       className={classes.filter(Boolean).join(" ")}
       title={missing ? `This backend has no "${def.type}" block: its params and wires are kept. Replace or delete it.` : undefined}
     >
-      {placed.top.length > 0 && <div className="port-strip top">{placed.top.map((e) => portRow(e, "top"))}</div>}
+      {ports.top}
       <div className="block-title">
         <span className="block-name" title={def.linked ? "Linked to a station object: set its properties, or remove it, on the Station" : undefined}>
           {missing ? def.type : def.label}
@@ -233,13 +161,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           <div style={{ width: `${progress * 100}%` }} />
         </div>
       )}
-      {/* Left and right ports share rows: the first input beside the first output, and so on. */}
-      {Array.from({ length: Math.max(placed.left.length, placed.right.length) }, (_, i) => (
-        <div key={i} className="port-row">
-          {placed.left[i] ? portRow(placed.left[i], "left") : <span />}
-          {placed.right[i] ? portRow(placed.right[i], "right") : <span />}
-        </div>
-      ))}
+      {ports.rows}
       {def.params.map((p) => (
         <label key={p.id} className="param">
           <span>
@@ -254,12 +176,10 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           />
         </label>
       ))}
-      {placed.bottom.length > 0 && <div className="port-strip bottom">{placed.bottom.map((e) => portRow(e, "bottom"))}</div>}
+      {ports.bottom}
     </div>
   );
 }
-
-const POSITION: Record<Side, Position> = { left: Position.Left, right: Position.Right, top: Position.Top, bottom: Position.Bottom };
 
 /**
  * A param's (or a station property's) field. It can be bound to a variable (#36): drop one
