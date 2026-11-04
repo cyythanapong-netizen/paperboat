@@ -119,12 +119,11 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .mode-commander .pages {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: minmax(0, 1.5fr) minmax(0, 1fr);
-  grid-template-areas: "station flow" "dashboard console";
+  grid-template-areas: "station flow" "dashboard dashboard";
 }
 .mode-commander .panel-station { grid-area: station; }
 .mode-commander .panel-flow { grid-area: flow; }
 .mode-commander .panel-dashboard { grid-area: dashboard; }
-.mode-commander .panel-console { grid-area: console; }
 
 .panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
 .panel-head {
@@ -151,7 +150,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   .rail-item .name { flex: none; }
   .rail-item:not(.current) .name { display: none; }
   .conn { display: none; }
-  .mode-commander .pages { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: minmax(320px, auto); grid-template-areas: "station" "flow" "dashboard" "console"; overflow: auto; }
+  .mode-commander .pages { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: minmax(320px, auto); grid-template-areas: "station" "flow" "dashboard"; overflow: auto; }
 }
 
 /* Glass: only what floats over live content (the station's properties). */
@@ -237,6 +236,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 .react-flow__edge-path { stroke: var(--line-ink); stroke-width: 1.2px; }
 .wire-step { stroke-width: 2px !important; }
+.wire-casing { fill: none; stroke: var(--surface-panel); stroke-width: 5px; stroke-linecap: round; pointer-events: none; }
+.react-flow__edge-path, .wire-casing { transition: opacity 0.12s; }
+.react-flow__edge-path.lit { stroke-width: 2.6px !important; }
+.react-flow__edge-path.dim, .wire-casing.dim { opacity: 0.18; }
 .wire-image { stroke-dasharray: 5 3; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3px !important; }
 
@@ -307,7 +310,17 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .instrument.idle .zero { stroke: var(--line-strong); }
 
 /* ---- Console: a display of what the backend logged. -------------------------------- */
-.panel-console .panel-body { padding: var(--panel-pad); }
+.console-window {
+  position: fixed; z-index: 50; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: min(760px, calc(100vw - 32px)); height: min(480px, calc(100vh - 140px));
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface-panel); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.18);
+}
+.console-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-2) var(--panel-pad); border-bottom: 1px solid var(--line); }
+.console-head h2 { font: 600 var(--size-sm) var(--font-sans); }
+.console-head .lbl { margin-left: auto; }
+.console-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--panel-pad); }
 .logs { flex: 1; margin: 0; padding: var(--space-3) var(--space-4) var(--space-3) 44px; overflow: auto; font: var(--size-xs) / 1.75 var(--font-mono); }
 .logs li::marker { color: var(--text-on-screen-muted); }
 .log-warn { color: var(--signal); }
@@ -424,7 +437,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .mono { font-family: var(--font-mono); }
 .mode-navigator .pages.with-vars { grid-template: minmax(0, 1fr) / minmax(0, 1fr) 360px; }
 .mode-navigator .pages.with-vars > .vars-sheet { grid-area: 1 / 2; }
-.mode-commander .pages.with-vars { grid-template-columns: repeat(2, minmax(0, 1fr)) 330px; grid-template-areas: "station flow vars" "dashboard console vars"; }
+.mode-commander .pages.with-vars { grid-template-columns: repeat(2, minmax(0, 1fr)) 330px; grid-template-areas: "station flow vars" "dashboard dashboard vars"; }
 .mode-commander .pages.with-vars > .vars-sheet { grid-area: vars; }
 .vars-sheet .panel-head .x { width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); font-size: 11px; }
 .vars-tools { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); }
@@ -508,7 +521,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
   /* Narrow: the sheet is a bottom sheet over the page. */
   .pages.with-vars > .vars-sheet { position: fixed; left: 8px; right: 8px; bottom: 8px; height: 70vh; z-index: 40; box-shadow: 0 -8px 24px rgb(0 0 0 / 0.2); }
   .mode-navigator .pages.with-vars { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
-  .mode-commander .pages.with-vars { grid-template-columns: minmax(0, 1fr); grid-template-areas: "station" "flow" "dashboard" "console"; }
+  .mode-commander .pages.with-vars { grid-template-columns: minmax(0, 1fr); grid-template-areas: "station" "flow" "dashboard"; }
 }
 
 /* A port's or param's unit (#4): after its name, small and grey. */

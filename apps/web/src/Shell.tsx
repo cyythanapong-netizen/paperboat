@@ -4,9 +4,9 @@ import type { KeyboardEvent, ReactNode } from "react";
  * The app's frame (apps/web/DESIGN.md): two view modes.
  * - Navigator: one page at a time, picked on the rail (Alt+1–4). The default.
  * - Commander: every page at once, as tiles.
- * Pages are numbered for their shortcuts: 1 Station, 2 Flow, 3 Dashboard, 4 Console.
+ * Pages are numbered for their shortcuts: 1 Station, 2 Flow, 3 Dashboard. The Console is not a page: it floats over them.
  */
-export type Page = "station" | "flow" | "dashboard" | "console";
+export type Page = "station" | "flow" | "dashboard";
 export type Mode = "navigator" | "commander";
 export type Theme = "auto" | "light" | "dark";
 
@@ -14,7 +14,6 @@ export const PAGES: { id: Page; label: string; hint: string }[] = [
   { id: "station", label: "Station", hint: "The setup: what's being worked on" },
   { id: "flow", label: "Flow", hint: "The blocks and wires" },
   { id: "dashboard", label: "Dashboard", hint: "Instruments during a run" },
-  { id: "console", label: "Console", hint: "What the backend logged" },
 ];
 
 const number = (p: Page) => PAGES.findIndex((x) => x.id === p) + 1;
@@ -75,8 +74,8 @@ export function Switch<T extends string>({
   );
 }
 
-/** Navigator's rail: the four pages; the current one is boxed in ink on panel grey, the rest sit greyed on the rail. */
-export function Rail({ page, onPage, errors }: { page: Page; onPage: (p: Page) => void; errors: number }) {
+/** Navigator's rail: the pages; the current one is boxed in ink on panel grey, the rest sit greyed on the rail. */
+export function Rail({ page, onPage }: { page: Page; onPage: (p: Page) => void }) {
   return (
     <nav className="rail" aria-label="Pages">
       {PAGES.map((p, i) => (
@@ -89,7 +88,6 @@ export function Rail({ page, onPage, errors }: { page: Page; onPage: (p: Page) =
         >
           <span className="num">{i + 1}</span>
           <span className="name">{p.label}</span>
-          {p.id === "console" && errors > 0 && <span className="count" title={`${errors} errors`}>{errors}</span>}
         </button>
       ))}
     </nav>

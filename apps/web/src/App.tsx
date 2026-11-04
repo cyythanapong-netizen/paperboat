@@ -7,7 +7,7 @@ import { absolute, isFrame } from "./groups";
 import type { ParamValue, RunSettings, Station, Variable, Variables } from "./protocol";
 import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
 import { emptyOf, freeName, inlineRef, loadMine, merged, refersTo, renameInFormula, renameRef, saveMine, toToml, usesOf, type Use } from "./bindings";
-import { Console } from "./Console";
+import { ConsoleWindow } from "./Console";
 import { Dashboard } from "./Dashboard";
 import { PAGES, Panel, Rail, Switch, Wordmark, type Mode, type Page, type Theme } from "./Shell";
 import { SceneView } from "./SceneView";
@@ -90,6 +90,7 @@ export function App() {
   const variables = useMemo(() => merged(state.variables, mine), [state.variables, mine]);
   const [varsShown, setVarsShown] = remembered<"open" | "closed">("paperboat.variables", "closed", ["open", "closed"]);
   const [openVar, setOpenVar] = useState<string | null>(null);
+  const [consoleShown, setConsoleShown] = useState(false);
   const varsHistory = useRef<{ past: Variables[]; future: Variables[] }>({ past: [], future: [] });
   const keepVars = useCallback((next: Variables) => {
     setMine(next);
@@ -212,6 +213,20 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
+
+  useEffect(() => {
+    if (!consoleShown) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setConsoleShown(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [consoleShown]);
+
+  // Selecting a variable unselects the blocks and wires, so their actions don't cover its own (#79).
+  useEffect(() => {
+    if (!openVar) return;
+    setNodes((ns) => (ns.some((n) => n.selected) ? ns.map((n) => (n.selected ? { ...n, selected: false } : n)) : ns));
+    setEdges((es) => (es.some((e) => e.selected) ? es.map((e) => (e.selected ? { ...e, selected: false } : e)) : es));
+  }, [openVar, setNodes, setEdges]);
 
   // Forward the keyboard to the backend (e.g. a Key block). Typing in a field is not input.
   useEffect(() => {
@@ -415,6 +430,14 @@ export function App() {
         >
           Variables <span className="mono muted">{variables.length}</span>
         </button>
+        <button
+          className={`key small${consoleShown ? " on" : ""}`}
+          aria-pressed={consoleShown}
+          title="Console: what the backend logged"
+          onClick={() => setConsoleShown(!consoleShown)}
+        >
+          Console {errors > 0 && <span className="count" title={`${errors} errors`}>{errors}</span>}
+        </button>
         <Switch
           label="View"
           value={mode}
@@ -435,7 +458,7 @@ export function App() {
           ]}
         />
       </header>
-      {mode === "navigator" && <Rail page={page} onPage={setPage} errors={errors} />}
+      {mode === "navigator" && <Rail page={page} onPage={setPage} />}
       <VarsContext.Provider value={varsApi}>
       <main className={`pages${varsShown === "open" ? " with-vars" : ""}`}>
         <Panel {...panel("station")} actions={<>{gridKey}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
@@ -504,9 +527,6 @@ export function App() {
         >
           <Dashboard state={state} monitors={monitors} arrange={arrange} />
         </Panel>
-        <Panel {...panel("console")} info={`${count(state.logs.length, "line")}${errors ? ` · ${count(errors, "error")}` : ""}`}>
-          <Console logs={state.logs} onBlock={showBlock} />
-        </Panel>
         {varsShown === "open" && (
           <VariablesSheet
             open={openVar}
@@ -519,6 +539,7 @@ export function App() {
         )}
       </main>
       </VarsContext.Provider>
+      {consoleShown && <ConsoleWindow logs={state.logs} errors={errors} onBlock={showBlock} onClose={() => setConsoleShown(false)} />}
       {browser === "flow" && (
         <BrowserWindow title="Add a block" items={blockItems} counts={counts(nodes.filter(isBlock).map((n) => ({ type: n.data.def.type })))} place="canvas" onAdd={addBlock} onClose={() => setBrowser(null)} />
       )}

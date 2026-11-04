@@ -43,8 +43,8 @@ from the tokens and is rebuilt when the theme changes. Displays are black in bot
 
 | Mode | What it shows | When |
 | --- | --- | --- |
-| **Navigator** (default) | One page at a time, full size; the rail picks it (Alt+1 to Alt+4). The Console's rail item shows a count of errors | Building one thing: wiring a flow, setting up the station, reading a run |
-| **Commander** | Every page at once: Station and Flow on top, the Dashboard and Console below. Each head has **open**, which shows that page alone in Navigator | Running and watching |
+| **Navigator** (default) | One page at a time, full size; the rail picks it (Alt+1 to Alt+3) | Building one thing: wiring a flow, setting up the station, reading a run |
+| **Commander** | Every page at once: Station and Flow on top, the Dashboard below. Each head has **open**, which shows that page alone in Navigator | Running and watching |
 | **Monitor** (planned) | A finished program's Dashboard, Station and Console collapsible | Using a rig someone built |
 
 Switch with the view switch on the bar, or Alt+M. Every page stays mounted in both modes,
@@ -108,7 +108,7 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Group / story** | A visual group is a dashed frame; a story a solid ink frame |
 | **Instrument** | A display with its name (and latest value) underneath; readouts show a 30px monospace number. Four sizes on a grid of equal cells (116px tall, 12px apart), picked S, M, L, XL: **compact** 1×1 (a readout), **normal** 2×1 (a plot to read at a glance), **large** 2×2 (a plot or picture to study), **xlarge** 3×3 (the one to fill the page with); a kind's default is display compact, graph normal, image large. Before a run sends anything it is a placeholder: same frame, greyed, dashed edge, "–" |
 | **Arrange** | The Dashboard head's key. While on: a dashed outline round each instrument, faint dashed cells under the grid, a size picker (C N L in brackets, full names on hover) top right of each, a solid outline where a drag would land. Drag to a cell, or focus and use the arrows. Reset layout returns to the backend's default |
-| **Console** | A display; numbered lines; warnings in the signal colour, errors red; a block's id is a key that shows it on the Flow page |
+| **Console** | A floating window, centred, opened by the Console key beside Variables (its count shows errors; Esc closes); a display; numbered lines; warnings in the signal colour, errors red; a block's id is a key that shows it on the Flow page |
 | **Card** | A block or station object in the browser: name, kind in words, one-line description, ports on a well (in → out; step ports square), params with defaults, how many are already used, and Add. Draggable |
 | **Collection window** | The browser, floating over the page from its Add key: search, a kind choice in brackets, packages on the left, cards in sections. Moved by its head and remembered; Escape closes. While a card is dragged it fades and lets the pointer through |
 | **Quick add** | A search floating at the cursor (`/` over the canvas, or a double-click on empty canvas): the best matches, arrows, Enter adds at that spot |
