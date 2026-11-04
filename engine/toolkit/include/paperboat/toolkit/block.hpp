@@ -67,6 +67,30 @@ enum class Kind { Source, Probe, Function, Monitor };
 
 std::string_view to_string(Kind kind);
 
+// How a block is drawn: a hint, so a UI without it draws the normal card. Each key is
+// optional (unset = not said): a definition inherits its parent's view and overrides single
+// keys, as it does params and config.
+struct View {
+  // Draw the block as a small plate: a glyph, bare port dots (names on hover), the name and
+  // main value in a caption. Unset: the normal card.
+  std::optional<bool> compact = {};
+  // The plate's glyph: a curve name ("gain", "plus", "step", "clamp", "const") or a few
+  // characters drawn as text ("&", "≥1", "¬", ">").
+  std::string glyph = {};
+  // The caption's value, an expression of the params: "{k}", "{min}…{max}".
+  std::string value = {};
+
+  bool empty() const { return !compact && glyph.empty() && value.empty(); }
+  // This view with `over`'s keys on top.
+  View overridden_by(const View& over) const {
+    View out = *this;
+    if (over.compact) out.compact = over.compact;
+    if (!over.glyph.empty()) out.glyph = over.glyph;
+    if (!over.value.empty()) out.value = over.value;
+    return out;
+  }
+};
+
 struct BlockDef {
   std::string type = {};  // unique within a catalog, e.g. "pid" or "pid-theta"
   std::string label = {};
@@ -85,6 +109,9 @@ struct BlockDef {
   // One line in plain words: what the block does ("Drives an error to zero"). Shown on its
   // card in the browser. Optional.
   std::string description = {};
+  // How the UI draws it (a hint; see View). Built-in templates get theirs from
+  // builtin_view(); a TOML definition may set `view` and keeps its parent's other keys.
+  View view = {};
 };
 
 // The definition in form `form` (that form's ports); `def` itself if it has no forms, or

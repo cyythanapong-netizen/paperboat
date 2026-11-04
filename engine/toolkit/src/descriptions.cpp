@@ -67,4 +67,22 @@ std::string builtin_description(std::string_view name) {
   return it == text.end() ? std::string() : std::string(it->second);
 }
 
+View builtin_view(std::string_view name) {
+  // Simple maths and logic blocks are small plates (#70): a glyph, and a caption with the
+  // main value. Everything else is drawn as the normal card.
+  static const std::map<std::string_view, View> views = {
+      {"base/constant", {.compact = true, .glyph = "const", .value = "{value}"}},
+      {"base/and", {.compact = true, .glyph = "&"}},
+      {"base/or", {.compact = true, .glyph = "≥1"}},
+      {"base/not", {.compact = true, .glyph = "¬"}},
+      {"base/compare", {.compact = true, .glyph = "cmp", .value = "{op}"}},
+      {"math/gain", {.compact = true, .glyph = "gain", .value = "{k}"}},
+      {"math/sum", {.compact = true, .glyph = "plus"}},
+      {"math/threshold", {.compact = true, .glyph = "step", .value = "{level}"}},
+      {"math/saturation", {.compact = true, .glyph = "clamp", .value = "{min}…{max}"}},
+  };
+  auto it = views.find(name);
+  return it == views.end() ? View{} : it->second;
+}
+
 }  // namespace paperboat::toolkit

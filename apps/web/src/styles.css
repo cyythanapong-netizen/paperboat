@@ -387,6 +387,39 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .quick-foot { display: flex; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--line); }
 .dragging-card .browser { opacity: 0.3; pointer-events: none; }
 
+/* ---- Compact blocks (#70): a plate with a glyph, the name and value in a caption. ----- */
+.compact-block { position: relative; display: inline-flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text); font-size: var(--size-xs); }
+.plate { position: relative; display: flex; align-items: center; justify-content: center; width: 64px; height: 56px; background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-md); cursor: pointer; }
+.compact-block.selected .plate { outline: var(--select-outline); outline-offset: var(--select-offset); }
+.compact-block.active .plate { border-color: var(--signal); }
+.compact-block.failed .plate { border-color: var(--danger); }
+.plate:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.glyph { width: 30px; height: 30px; fill: none; stroke: var(--text); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.glyph .ax { stroke: var(--line-strong); stroke-width: 1; }
+.glyph text { fill: var(--text); stroke: none; font: 500 17px var(--font-mono); }
+.plate-prog { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--signal); border-radius: 0 0 0 4px; }
+.plate-cap { display: flex; gap: 5px; white-space: nowrap; font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.plate-val { font-family: var(--font-mono); color: var(--text); border-bottom: 1px solid var(--line-strong); }
+.cap-running { color: var(--signal); font-weight: 500; }
+.cap-failed { color: var(--danger); font-weight: 500; }
+/* A port's name, on hover (P1); the handle's wire hit area stays 24px. */
+.port-tip { display: none; position: absolute; top: 50%; transform: translateY(-50%); padding: 0 6px; font: 400 var(--size-2xs) / 18px var(--font-mono); color: var(--text); background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur); border: 1px solid var(--line); border-radius: var(--radius-sm); white-space: nowrap; pointer-events: none; z-index: 5; }
+.port-tip.in { right: 14px; }
+.port-tip.out { left: 14px; }
+.react-flow__handle:hover .port-tip { display: block; }
+.react-flow__handle.t-image { border-style: dashed; }
+/* E1: its params in a popover under the plate; the only glass, like the Station's properties. */
+.react-flow__node:has(.popover) { z-index: 1000 !important; }
+.popover { position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%); z-index: 5; min-width: 188px; padding: 10px 12px; cursor: default; background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.popover-title { display: flex; justify-content: space-between; gap: var(--space-3); margin-bottom: 6px; font: 600 var(--size-xs) var(--font-sans); }
+.popover-title span { font-weight: 400; color: var(--text-muted); }
+.popover .param { padding: 3px 0; }
+.popover .param input, .popover .param select { width: 84px; height: 24px; padding: 0 8px; background: var(--surface-well); box-shadow: var(--well-shadow); border: 0; border-radius: var(--radius-md); color: var(--text); font: 400 var(--size-xs) var(--font-mono); }
+.popover .param input:focus, .popover .param select:focus { border: 0; box-shadow: var(--well-shadow); outline: 2px solid var(--focus); outline-offset: 1px; }
+.popover .param .text-param { width: 116px; text-align: left; }
+/* E3: a compact block opened to the full card has a fold key in its head. */
+.fold { border: 1px solid var(--line-strong); background: transparent; border-radius: var(--radius-sm); height: 18px; padding: 0 6px; font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.fold:hover { color: var(--text); border-color: var(--line-ink); }
 /* ---- Variables (#36): a sheet beside any page; bound fields; "=" binding ---------------- */
 .mono { font-family: var(--font-mono); }
 .mode-navigator .pages.with-vars { grid-template: minmax(0, 1fr) / minmax(0, 1fr) 360px; }

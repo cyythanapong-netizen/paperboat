@@ -115,6 +115,24 @@ def test_a_python_backend_runs_on_the_engine(tmp_path: Path) -> None:
     assert any(m["text"] == "x = 1.000" for m in logs)  # the Timed step followed its curve to 1
 
 
+def test_a_blocks_view_is_checked(tmp_path: Path) -> None:
+    anchor = 'inputs, outputs = ["u"], ["y"]\n    params = {"k": 2.0,'
+
+    def backend(view: str) -> str:
+        return BACKEND.replace(anchor, f'inputs, outputs = ["u"], ["y"]\n    view = {view}\n    params = {{"k": 2.0,')
+
+    msgs = run_backend(tmp_path, backend('{"compact": True, "glyph": "gain", "value": "{k}"}'))
+    assert msgs[-1]["status"] == "done"  # a view is only a hint: the block runs as before
+
+    (tmp_path / "server.py").write_text(textwrap.dedent(backend('{"glyf": "gain"}')))
+    (tmp_path / "descriptor.toml").write_text(textwrap.dedent(DESCRIPTOR))
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
+    proc = subprocess.run([sys.executable, "server.py", "--run"], cwd=tmp_path, env=env, capture_output=True,
+                          text=True, timeout=120)
+    assert proc.returncode != 0
+    assert 'view has no key "glyf"' in proc.stderr
+
+
 def test_variables_feed_params_and_take_var_overrides(tmp_path: Path) -> None:
     # #36: a param bound to a default variable; --var name=value sets it for the run.
     descriptor = DESCRIPTOR.replace('params = { loud = true, name = "hello" }',

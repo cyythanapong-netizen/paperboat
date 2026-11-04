@@ -173,6 +173,25 @@
           "type": "string",
           "description": "A monitor's instrument on the Dashboard: graph (default), display (the latest value) or image."
         },
+        "view": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How the UI draws the block: a hint, so a UI without it (or a block without it) draws the normal card.",
+          "properties": {
+            "compact": {
+              "type": "boolean",
+              "description": "Draw a small plate: a glyph, bare port dots (names on hover), the name and main value in a caption below."
+            },
+            "glyph": {
+              "type": "string",
+              "description": "The plate's glyph: a curve name (gain, plus, step, clamp, const) or a few characters drawn as text (&, ≥1, ¬)."
+            },
+            "value": {
+              "type": "string",
+              "description": "The caption's value, an expression of the block's params: {k}, {min}…{max}."
+            }
+          }
+        },
         "forms": {
           "type": "array",
           "items": {

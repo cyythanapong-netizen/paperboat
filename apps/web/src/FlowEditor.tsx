@@ -26,6 +26,7 @@ import {
 } from "@xyflow/react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
+import { CompactBlock } from "./Compact";
 import { wireMismatch } from "./ports";
 import { Bindable, NumberOrFormula } from "./Variables";
 import { isRef } from "./bindings";
@@ -94,6 +95,30 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { params, missing } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
+  // A simple block draws as a small plate (#70) until double-clicked open; fold puts it back.
+  const [expanded, setExpanded] = useState(false);
+  if (def.view?.compact && !expanded && !missing && !hasStepPorts(def)) {
+    return (
+      <CompactBlock
+        id={id}
+        def={def}
+        params={params}
+        selected={!!selected}
+        word={failed ? "failed" : active ? "running" : undefined}
+        progress={progress}
+        onExpand={() => setExpanded(true)}
+        popover={def.params.map((p) => (
+          <label key={p.id} className="param">
+            <span>
+              {p.id}
+              {"unit" in p && p.unit && <span className="unit"> {p.unit}</span>}
+            </span>
+            <ParamInput def={p} value={params[p.id]} set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })} />
+          </label>
+        ))}
+      />
+    );
+  }
   const step = hasStepPorts(def);
   const classes = ["block", `kind-${def.kind}`, step && "step", selected && "selected", active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
   // The head's tag says what is happening to the block, else what it is: words, not colours.
@@ -121,6 +146,11 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           {def.linked && <span className="linked-tag"> {id}</span>}
         </span>
         <span className={`block-tag tag-${tag}`}>{tag}</span>
+        {def.view?.compact && (
+          <button className="fold nodrag" title="Fold back to a plate" onClick={() => setExpanded(false)}>
+            fold
+          </button>
+        )}
       </div>
       {active && progress !== undefined && progress < 1 && (
         <div className="block-progress" title={`${Math.round(progress * 100)} %`}>

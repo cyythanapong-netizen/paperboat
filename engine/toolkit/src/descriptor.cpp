@@ -93,6 +93,22 @@ std::vector<ParamDef> new_params(const json& obj, const std::string& at) {
   return out;
 }
 
+// A `view` table: compact, glyph, value (all optional).
+View view_from(const json& v, const std::string& at) {
+  only_fields(v, {"compact", "glyph", "value"}, at);
+  View out;
+  if (v.contains("compact")) {
+    if (!v["compact"].is_boolean()) throw DescriptorError(at + ".compact must be true or false");
+    out.compact = v["compact"].get<bool>();
+  }
+  for (const char* key : {"glyph", "value"}) {
+    if (!v.contains(key)) continue;
+    if (!v[key].is_string()) throw DescriptorError(at + "." + key + " must be text");
+    (std::string(key) == "glyph" ? out.glyph : out.value) = v[key].get<std::string>();
+  }
+  return out;
+}
+
 // `units = { force = "N", kp = "N/rad" }`: the units of a block's ports and number params
 // (or a station object's props), by id. A wire between two ports with units must keep them.
 void apply_units(const json& e, std::vector<ParamDef>& params, BlockDef* block, const std::string& at, const std::string& name) {
@@ -120,7 +136,7 @@ void apply_units(const json& e, std::vector<ParamDef>& params, BlockDef* block, 
 }
 
 CatalogEntry from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "description", "params", "defaults", "config", "units"}, at);
+  only_fields(e, {"use", "type", "label", "description", "params", "defaults", "config", "view", "units"}, at);
   const auto name = e.at("use").get<std::string>();
   const Template* t = registry.find(name);
   if (!t) {
@@ -133,6 +149,8 @@ CatalogEntry from_template(const json& e, const std::string& at, const Registry&
   entry.def.type = e.value("type", t->def.type);
   entry.def.label = e.value("label", t->def.label);
   entry.def.description = e.value("description", t->def.description);
+  // The look is inherited from the template; a `view` overrides single keys of it.
+  if (e.contains("view")) entry.def.view = entry.def.view.overridden_by(view_from(e.at("view"), at + ".view"));
   // A definition on a parent (TOML inheriting C++): its own params come after the parent's.
   if (e.contains("params")) {
     if (!t->extendable) throw DescriptorError(at + ": " + name + " takes no new params (it isn't a parent for definitions)");
@@ -604,6 +622,13 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.def.instrument.empty()) block["instrument"] = e.def.instrument;
     if (!e.def.description.empty()) block["description"] = e.def.description;
     if (!e.def.feedthrough) block["feedthrough"] = false;
+    if (!e.def.view.empty()) {
+      json view = json::object();
+      if (e.def.view.compact) view["compact"] = *e.def.view.compact;
+      if (!e.def.view.glyph.empty()) view["glyph"] = e.def.view.glyph;
+      if (!e.def.view.value.empty()) view["value"] = e.def.view.value;
+      block["view"] = std::move(view);
+    }
     if (!e.def.forms.empty()) {
       json forms = json::array();
       for (const auto& f : e.def.forms)

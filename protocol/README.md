@@ -54,6 +54,11 @@ Default address: `ws://localhost:8765`.
   // { "type": "text" | "key" | "file", "default": "…" },
   // { "type": "enum", "options": ["in-out", "in"], "default": "in-out" } (a choice; the block gets its index)
   "group": "base",                 // optional palette group: the domain, or a toolkit package
+  // optional, how to draw it (a hint: absent, or a UI that ignores it, draws the normal card).
+  // compact: a small plate with a glyph, bare port dots (names on hover) and a caption with the
+  // block's name and value. glyph: a curve (gain, plus, step, clamp, const) or a few characters
+  // drawn as text; value: an expression of the params. Every key is optional.
+  "view": { "compact": true, "glyph": "gain", "value": "{k}" },
   "feedthrough": false,            // optional: its outputs don't depend on this step's inputs
                                    // (an integrator, a delay), so a feedback loop may pass through it
   // optional, a magic block: one form per way to use it, each with its own ports. Its enum

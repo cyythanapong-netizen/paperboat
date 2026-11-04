@@ -72,6 +72,10 @@ class Block:
     label: str = ""                      # shown on the block (default: type)
     kind: str = "function"               # source | probe | function | monitor
     description: str = ""                # one line: what it does; shown on its card in the browser
+    # How the UI draws it (a hint; absent: the normal card). A small plate with a glyph and
+    # a caption: {"compact": True, "glyph": "gain", "value": "{k}"}. glyph is a curve name
+    # (gain, plus, step, clamp, const) or a few characters; value is an expression of params.
+    view: dict = {}
     inputs: list[str | Port] = []
     outputs: list[str | Port] = []
     params: dict[str, float | Param] = {}  # the defaults; an instance's self.params holds its values
