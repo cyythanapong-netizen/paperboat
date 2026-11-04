@@ -158,7 +158,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
       : active
         ? "running"
         : def.linked
-          ? "station"
+          ? "linked"
           : step
             ? "step"
             : def.kind === "function"
@@ -171,9 +171,9 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
     >
       {ports.top}
       <div className="block-title">
-        <span className="block-name" title={def.linked ? "Linked to a station object: set its properties, or remove it, on the Station" : undefined}>
+        <span className="block-name" title={def.linked ? `Linked to station object ${id} (⚓): set its properties, or remove it, on the Station` : undefined}>
           {missing ? def.type : def.label}
-          {def.linked && <span className="linked-tag"> {id}</span>}
+          {def.linked && <span className="linked-tag"> ⚓ {id}</span>}
         </span>
         <span className={`block-tag tag-${tag}`}>{tag}</span>
         {def.view?.compact && (

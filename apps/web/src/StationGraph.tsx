@@ -26,11 +26,12 @@ function ObjectBox({ data }: NodeProps<ObjectNode>) {
   const { object, def } = data;
   const props = Object.entries(object.props ?? {});
   return (
-    <div className={`block station-node role-${def?.role ?? "body"}${def ? "" : " missing"}`}>
+    <div className={`block object station-node role-${def?.role ?? "body"}${def ? "" : " missing"}`}>
       <div className="block-title">
-        <span>
-          {def?.label ?? object.type} <span className="linked-tag">{object.id}</span>
+        <span className="block-name" title={def?.block ? "Has a linked block on the Flow page, marked ⚓ with the same id" : undefined}>
+          {def?.label ?? object.type} <span className="linked-tag">{def?.block ? `⚓ ${object.id}` : object.id}</span>
         </span>
+        <span className={`block-tag${def ? "" : " tag-missing"}`}>{def ? (def.role === "joint" ? "joint" : "object") : "missing"}</span>
       </div>
       {(def?.links ?? []).map((slot) => (
         <div key={slot} className="port in port-link">
@@ -39,7 +40,7 @@ function ObjectBox({ data }: NodeProps<ObjectNode>) {
         </div>
       ))}
       <div className="port out port-link">
-        {def?.block ? "⚓ flow" : ""}
+        {def?.block ? "⚓ block" : ""}
         <Handle type="source" position={Position.Right} id="self" />
       </div>
       {props.length > 0 && (
