@@ -104,6 +104,10 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Group / story** | A visual group is a dashed frame; a story a solid ink frame |
 | **Instrument** | A display with its name (and latest value) underneath; readouts show a 30px monospace number |
 | **Console** | A display; numbered lines; warnings in the signal colour, errors red; a block's id is a key that shows it on the Flow page |
+| **Card** | A block or station object in the browser: name, kind in words, one-line description, ports on a well (in → out; step ports square), params with defaults, how many are already used, and Add. Draggable |
+| **Collection window** | The browser, floating over the page from its Add key: search, a kind choice in brackets, packages on the left, cards in sections. Moved by its head and remembered; Escape closes. While a card is dragged it fades and lets the pointer through |
+| **Quick add** | A search floating at the cursor (`/` over the canvas, or a double-click on empty canvas): the best matches, arrows, Enter adds at that spot |
+| **Drop hint** | While a card is dragged over the Flow: a dashed outline where it lands, a thickened wire it would be inserted into, or a dashed line to the port it would connect to; with a label in words ("Insert Lag: pid.u → u, y → sum.a") |
 | **Floating panel** | The only glass: what floats over live content (the station's properties). One token (`--float-blur: none`) retires it |
 
 Focus is a 2px ink ring. Disabled keys are grey and faded.
@@ -125,5 +129,4 @@ positions and lines.
 - A new component uses existing tokens; a new value goes in as a primitive, then a
   semantic role, then is used through the role.
 - A backend's own look belongs in a web station (`[station] view = "web"`).
-- Still open (#48, #33): the signal colour, the palette (search, drag to place), the
-  Monitor mode, the Dashboard grid (#49).
+- Still open (#33): the signal colour, the Monitor mode, the Dashboard grid (#49).
