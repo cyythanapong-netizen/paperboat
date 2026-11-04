@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { BlockDef, ClientMsg, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, View } from "./protocol";
+import type { BlockDef, ClientMsg, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, View } from "./protocol";
 
 export type Series = { t: number[]; v: number[] };
 
@@ -12,6 +12,8 @@ export type EngineState = {
   runDefaults: RunSettings;
   blocks: BlockDef[];
   objects: ObjectDef[];
+  /** The backend's default Dashboard layout (from catalog), if it shipped one. */
+  dashboard?: DashboardLayout;
   entities: Record<string, Entity>;
   view: View;
   /** Last graph the backend asked the UI to load. */
@@ -84,7 +86,7 @@ function reduce(s: EngineState, m: Action): EngineState {
     case "hello":
       return { ...s, engine: m.engine, stationView: m.station ?? { view: "scene" }, runDefaults: m.run ?? {} };
     case "catalog":
-      return { ...s, blocks: m.blocks, objects: m.objects ?? [] };
+      return { ...s, blocks: m.blocks, objects: m.objects ?? [], dashboard: m.dashboard };
     case "scene":
       return { ...s, entities: Object.fromEntries(m.entities.map((e) => [e.id, e])), view: m.view ?? s.view };
     case "graph.load":

@@ -98,7 +98,7 @@ packages: their blocks and station objects) and `[[objects]]` (station object ty
 Domain objects are implemented by the backend (`StationObject`); toolkit ones by the
 toolkit.
 
-**Starters** (both optional, checked against the catalog when loaded):
+**Starters** (optional, checked against the catalog when loaded):
 
 ```toml
 [station]                       # station.load: the Station page's opening objects
@@ -116,7 +116,20 @@ edges = [
 ]
 ```
 
-`Catalog::graph` and `Catalog::station` hold them as the protocol's JSON. The catalog lists the domain's blocks first, then each imported package in
+A third optional table, `[dashboard]`, is the default layout of the Dashboard's grid. Its
+shape alone is checked (blocks are not: a layout may name monitors the user has not added
+yet, and the UI ignores unknown ones):
+
+```toml
+[dashboard]                     # sent in the catalog; the user's own arrangement wins
+columns = 6                     # 1 to 12; fewer on a narrow screen
+instruments = [
+  { block = "graph-theta", size = "large", at = [0, 0] },   # size: compact, normal or large
+  { block = "speed", size = "compact" },                    # at: [column, row], from 0; optional
+]
+```
+
+`Catalog::graph` and `Catalog::station` hold the starters as the protocol's JSON, `Catalog::dashboard` the layout. The catalog lists the domain's blocks first, then each imported package in
 order; every entry carries its `group`. Python example backends load the same files
 through `python/paperboat/toolkit.py`, which mirrors `base` and `step`.
 

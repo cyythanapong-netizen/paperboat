@@ -225,6 +225,37 @@ TEST_CASE("[station] says how the Station page shows the station") {
                     ContainsSubstring("scene, graph or web"));
 }
 
+TEST_CASE("[dashboard] is the default layout of the Dashboard's grid") {
+  CHECK(tk::load_descriptor("domain = \"test\"\n", test_registry()).dashboard.empty());
+  const auto catalog = tk::load_descriptor(R"(domain = "test"
+[dashboard]
+columns = 6
+instruments = [
+  { block = "graph-theta", size = "large", at = [0, 0] },
+  { block = "speed" },
+]
+)", test_registry());
+  const auto msg = nlohmann::json::parse(tk::catalog_message(catalog));
+  CHECK(msg["dashboard"]["columns"] == 6);
+  CHECK(msg["dashboard"]["instruments"][0] == nlohmann::json{{"block", "graph-theta"}, {"size", "large"}, {"at", {0, 0}}});
+  CHECK(msg["dashboard"]["instruments"][1] == nlohmann::json{{"block", "speed"}});
+  CHECK_FALSE(nlohmann::json::parse(tk::catalog_message(tk::load_descriptor("domain = \"test\"\n", test_registry())))
+                  .contains("dashboard"));
+
+  auto fails_with = [](const std::string& dashboard, const std::string& text) {
+    INFO(dashboard);
+    CHECK_THROWS_WITH(tk::load_descriptor("domain = \"test\"\n[dashboard]\n" + dashboard, test_registry()),
+                      ContainsSubstring(text));
+  };
+  fails_with("columns = 0", "from 1 to 12");
+  fails_with("rows = 3", "unknown field \"rows\"");
+  fails_with("instruments = [{ size = \"large\" }]", "needs \"block\"");
+  fails_with("instruments = [{ block = \"a\", size = \"huge\" }]", "compact, normal or large");
+  fails_with("instruments = [{ block = \"a\", at = [1] }]", "[column, row]");
+  fails_with("instruments = [{ block = \"a\", at = [-1, 0] }]", "[column, row]");
+  fails_with("instruments = [{ block = \"a\" }, { block = \"a\" }]", "placed twice");
+}
+
 TEST_CASE("catalog_message matches the protocol's catalog shape") {
   const auto catalog = tk::load_descriptor(descriptor(R"(
 [[blocks]]
