@@ -70,7 +70,7 @@ TEST_CASE("starters: optional, in protocol shape, checked against the catalog") 
   const auto some = tk::load_descriptor(descriptor(R"(
 import = ["signal", "math", "rig"]
 [graph]
-nodes = [{ id = "g", type = "gain", params = { k = 2 }, pos = [0, 0] }, { id = "s", type = "sine" }]
+nodes = [{ id = "g", type = "gain", params = { k = 2 }, pos = [0, 0], ports = { top = ["u"] } }, { id = "s", type = "sine" }]
 edges = [{ from = ["s", "y"], to = ["g", "u"] }]
 [station]
 objects = [{ id = "cp", type = "slider", props = { x0 = 0.1 } }]
@@ -78,12 +78,39 @@ objects = [{ id = "cp", type = "slider", props = { x0 = 0.1 } }]
   const auto graph = nlohmann::json::parse(some.graph);
   CHECK(graph["nodes"][1]["params"] == nlohmann::json::object());  // filled in
   CHECK(graph["edges"][0]["to"] == nlohmann::json{"g", "u"});
+  CHECK(graph["nodes"][0]["ports"]["top"] == nlohmann::json{"u"});  // the UI's, kept as given
   CHECK(nlohmann::json::parse(some.station)["objects"][0]["id"] == "cp");
 
   CHECK_THROWS_WITH(tk::load_descriptor(descriptor("import = [\"base\"]\n[graph]\nnodes = [{ id = \"x\", type = \"gian\" }]\n")),
                     ContainsSubstring("graph.nodes[0]: no block type \"gian\""));
   CHECK_THROWS_WITH(tk::load_descriptor(descriptor("import = [\"base\"]\n[graph]\nedges = [{ from = [\"a\", \"y\"], to = [\"b\", \"u\"] }]\n")),
                     ContainsSubstring("no node \"a\""));
+  CHECK_THROWS_WITH(tk::load_descriptor(descriptor("import = [\"base\"]\n[graph]\nnodes = [{ id = \"x\", type = \"clock\", ports = { up = [\"t\"] } }]\n")),
+                    ContainsSubstring("graph.nodes[0].ports: unknown field \"up\""));
+}
+
+TEST_CASE("starter groups: subsystems nest, their parents checked") {
+  const auto nested = tk::load_descriptor(descriptor(R"(
+import = ["signal", "math"]
+[graph]
+nodes = [{ id = "s", type = "sine" }, { id = "g", type = "gain" }]
+edges = [{ from = ["s", "y"], to = ["g", "u"] }]
+groups = [{ id = "outer", kind = "subsystem", nodes = ["s"], ports = { left = ["g::y"] } },
+          { id = "inner", kind = "subsystem", nodes = ["g"], parent = "outer" }]
+)"));
+  const auto graph = nlohmann::json::parse(nested.graph);
+  CHECK(graph["groups"][1]["parent"] == "outer");
+  CHECK(graph["groups"][0]["ports"]["left"][0] == "g::y");
+
+  const auto bad = [](const std::string& groups) {
+    return descriptor("import = [\"signal\"]\n[graph]\nnodes = [{ id = \"s\", type = \"sine\" }]\ngroups = " + groups + "\n");
+  };
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "subsystem", nodes = ["s"], parent = "nope" }])")),
+                    ContainsSubstring("no group \"nope\" for its parent"));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "subsystem", nodes = ["s"], parent = "b" }, { id = "b", kind = "subsystem", nodes = [], parent = "a" }])")),
+                    ContainsSubstring("is inside itself"));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "box", nodes = ["s"] }])")),
+                    ContainsSubstring("kind must be subsystem, story or visual"));
 }
 
 TEST_CASE("import adds every template of a package; a customised entry wins") {

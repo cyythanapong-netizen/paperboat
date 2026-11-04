@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <fstream>
 #include <initializer_list>
+#include <map>
 #include <set>
 #include <sstream>
 
@@ -369,7 +370,8 @@ void load_starters(const json& doc, Catalog& catalog) {
   for (std::size_t i = 0; i < graph["nodes"].size(); ++i) {
     auto& n = graph["nodes"][i];
     const auto at = "graph.nodes[" + std::to_string(i) + "]";
-    only_fields(n, {"id", "type", "params", "pos"}, at);
+    only_fields(n, {"id", "type", "params", "pos", "ports"}, at);
+    if (n.contains("ports")) only_fields(n["ports"], {"left", "right", "top", "bottom"}, at + ".ports");
     if (!n.contains("id") || !n.contains("type")) throw DescriptorError(at + ": needs an id and a type");
     const auto type = n["type"].get<std::string>();
     if (!catalog.find(type)) throw DescriptorError(at + ": no block type \"" + type + "\" in this catalog");
@@ -381,13 +383,29 @@ void load_starters(const json& doc, Catalog& catalog) {
   for (std::size_t i = 0; i < groups.size(); ++i) {
     const auto& g = groups[i];
     const auto at = "graph.groups[" + std::to_string(i) + "]";
-    only_fields(g, {"id", "kind", "label", "nodes", "collapsed", "pos", "params"}, at);
+    only_fields(g, {"id", "kind", "label", "nodes", "parent", "collapsed", "pos", "params", "ports"}, at);
+    if (g.contains("ports")) only_fields(g["ports"], {"left", "right", "top", "bottom"}, at + ".ports");
     if (!g.contains("id") || !g.contains("nodes")) throw DescriptorError(at + ": needs an id and nodes");
     const auto kind = g.value("kind", std::string{"visual"});
-    if (kind != "visual" && kind != "story") throw DescriptorError(at + ": kind must be visual or story");
+    if (kind != "visual" && kind != "subsystem" && kind != "story") throw DescriptorError(at + ": kind must be subsystem, story or visual");
     if (!ids.insert(g["id"].get<std::string>()).second) throw DescriptorError(at + ": duplicate id");
     for (const auto& n : g["nodes"])
       if (!ids.contains(n.get<std::string>())) throw DescriptorError(at + ": no node \"" + n.get<std::string>() + "\"");
+  }
+  // Nesting: a group's parent is another group, and no group ends up inside itself.
+  std::map<std::string, std::string> parent_of;
+  for (const auto& g : groups)
+    if (g.contains("parent")) parent_of[g["id"].get<std::string>()] = g["parent"].get<std::string>();
+  for (std::size_t i = 0; i < groups.size(); ++i) {
+    const auto at = "graph.groups[" + std::to_string(i) + "]";
+    auto id = groups[i]["id"].get<std::string>();
+    for (std::size_t depth = 0; parent_of.contains(id); ++depth) {
+      const auto& up = parent_of.at(id);
+      if (!std::ranges::any_of(groups, [&](const json& g) { return g["id"] == up; }))
+        throw DescriptorError(at + ": no group \"" + up + "\" for its parent");
+      if (depth >= groups.size()) throw DescriptorError(at + ": is inside itself (its parents go round)");
+      id = up;
+    }
   }
   for (std::size_t i = 0; i < graph["edges"].size(); ++i) {
     const auto& e = graph["edges"][i];

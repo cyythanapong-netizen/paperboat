@@ -132,6 +132,7 @@ export type GraphNode = {
   params?: Record<string, ParamValue>;
   /** Its place on the Flow canvas; backends ignore it. */
   pos?: [number, number];
+  ports?: PortSides;
 };
 
 export type GraphEdge = {
@@ -173,13 +174,17 @@ export type DashboardLayout = {
   })[];
 };
 
-/** A group of blocks. visual: tidies the canvas only. story: runs as one step of a Step flow (ports in -> next): its blocks once per clock step for params.seconds (0: once), fresh each time if params.reset. */
+/** A group of blocks. subsystem: a block you open to see its insides, like a Simulink subsystem; its ports are the wires crossing its edge. story: a subsystem that runs as one step of a Step flow (ports in -> next): its blocks once per clock step for params.seconds (0: once), fresh each time if params.reset. visual: a frame that tidies the canvas only. Groups nest (parent); the graph's wires stay flat, block to block, so backends treat a subsystem or a frame as if it weren't there. */
 export type GraphGroup = {
   id: string;
-  kind: "visual" | "story";
+  kind: "visual" | "subsystem" | "story";
   label?: string;
+  /** Its blocks (not the groups in it: those name it as their parent). */
   nodes: string[];
+  /** The group it is in (a subsystem, story or frame); absent: the top level. */
+  parent?: string;
   collapsed?: boolean;
+  /** Its top-left on the whole canvas; backends ignore it. */
   pos?: [number, number];
   params?: {
     /** How long the story runs when a path arrives (0: once). */
@@ -187,6 +192,8 @@ export type GraphGroup = {
     /** Its blocks start afresh each time a path arrives (a story in a loop starts over). */
     reset?: boolean;
   };
+  /** Where a subsystem's or story's ports sit on its block (ids are node::port, or in and next). Backends ignore it. */
+  ports?: PortSides;
 };
 
 export type Vec3 = [number, number, number];
@@ -275,6 +282,14 @@ export type Variable = {
 
 /** The variables of a backend (its defaults) or the user's. */
 export type Variables = Variable[];
+
+/** Where a block's ports sit on the Flow canvas: the port ids on each side, in order. A port not listed keeps its place (inputs on the left, outputs on the right, after the listed ones). Backends ignore it. */
+export type PortSides = {
+  left?: string[];
+  right?: string[];
+  top?: string[];
+  bottom?: string[];
+};
 
 /** Every message a backend sends. */
 export type ServerMsg =

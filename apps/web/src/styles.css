@@ -216,7 +216,16 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .block-progress > div { height: 100%; background: var(--signal); transition: width 0.1s linear; }
 
 .port { position: relative; padding: 3px 10px; color: var(--text-muted); }
-.port.out { text-align: right; }
+.port.out, .port.side-right { text-align: right; }
+.port.side-left { text-align: left; }
+/* A port moves by dragging its name: to another side of the block, or along its side. */
+.port[data-side] { cursor: grab; user-select: none; }
+.port[data-side].moving { color: var(--text); font-weight: 600; cursor: grabbing; }
+.port-row { display: flex; justify-content: space-between; gap: var(--space-3); white-space: nowrap; }
+.port-strip { display: flex; justify-content: center; gap: var(--space-2); padding: 0 6px; }
+.port-strip.top { border-bottom: 1px solid var(--line); }
+.port-strip.bottom { border-top: 1px solid var(--line); }
+.port.side-top, .port.side-bottom { padding: 5px 4px; text-align: center; }
 .react-flow__handle { width: 8px; height: 8px; background: var(--surface-raised); border: 1.5px solid var(--line-ink); }
 .port-step { color: var(--text); font-weight: 500; }
 .port-step .react-flow__handle, .frame-head .step-handle { width: 9px; height: 9px; border-radius: 1px; background: var(--line-ink); border-color: var(--line-ink); }
@@ -269,6 +278,25 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .frame-head .remove { width: 16px; height: 16px; }
 .frame-ports { padding: var(--space-1) 0; }
 .frame-empty { font-size: var(--size-2xs); padding: 2px 8px; }
+/* A subsystem or story (#68): a block with a second card edge behind it, saying there is
+   more inside; double-click (or open) shows its own level. */
+.block.subsystem { box-shadow: 4px 4px 0 -1px var(--surface-raised), 4px 4px 0 0 var(--line-strong); }
+.block.subsystem.step { box-shadow: 4px 4px 0 -1px var(--surface-raised), 4px 4px 0 0 var(--line-ink); }
+.block.subsystem .remove { width: 16px; height: 16px; }
+.block.subsystem .frame-empty { padding: 4px 10px; }
+/* Inside a level: where you are, and the way back up. */
+.crumbs { display: flex; align-items: center; gap: var(--space-1); margin: var(--space-2); padding: 3px var(--space-2); font: var(--size-xs) var(--font-sans); background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur); border: 1px solid var(--line); border-radius: var(--radius-md); }
+.crumb { border: 0; background: transparent; padding: 2px 4px; color: var(--text-muted); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.crumb:hover { color: var(--text); }
+.crumb-step { display: inline-flex; align-items: center; gap: var(--space-1); }
+.crumb-sep { color: var(--text-muted); }
+.crumb-here { border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; background: transparent; padding: 1px 2px; font: 600 var(--size-xs) var(--font-sans); color: var(--text); }
+.crumb-kind { margin-left: var(--space-2); font-size: var(--size-2xs); color: var(--text-muted); }
+/* In and Out: where the level's wires cross its edge. */
+.boundary { position: relative; box-sizing: border-box; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; gap: var(--space-2); padding: 4px 10px; font: var(--size-2xs) var(--font-mono); color: var(--text); background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: 999px; white-space: nowrap; }
+.boundary-tag { font: 600 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.boundary-name { overflow: hidden; text-overflow: ellipsis; }
+.react-flow__node-boundary { cursor: default; }
 .group-tools button:disabled { opacity: 0.4; }
 
 /* ---- Dashboard: each instrument is a display with its name underneath. ------------- */
@@ -311,6 +339,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .arranging .deco { pointer-events: auto; cursor: grab; outline: 1px dashed var(--line-strong); outline-offset: 2px; }
 .arranging .deco:focus-visible { outline: 2px solid var(--focus); }
 .arranging .deco.picked { outline: var(--select-outline); outline-offset: var(--select-offset); z-index: 3; }
+/* A variable from the Variables sheet held over a label or section title: dropping it shows its value there. */
+.dragging-var .deco-label { pointer-events: auto; }
+.deco.var-over { outline: 2px dashed var(--line-ink); outline-offset: 2px; z-index: 3; }
 .arranging .deco.dragging { opacity: 0.4; }
 /* A section: a titled frame drawn in the gaps round its cells; it takes no cells. */
 .deco-section { margin: calc(var(--gap) / -2); border: 1px solid var(--line-strong); border-radius: var(--radius-md); outline: 0 !important; }
