@@ -127,7 +127,17 @@ instruments = [
   { block = "graph-theta", size = "large", at = [0, 0] },   # size: compact, normal or large
   { block = "speed", size = "compact" },                    # at: [column, row], from 0; optional
 ]
+tabs = ["Run", "Tuning"]        # optional pages; an instrument or decoration names its page with tab = "Run"
+decorations = [                 # optional, kinds: section, hline, vline, label, console
+  { kind = "label", text = "Speed {speed:.1f} m/s", at = [0, 0], span = [4, 1], style = "heading" },
+  { kind = "section", text = "Stores", at = [0, 1], span = [4, 2] },
+  { kind = "hline", at = [0, 3], span = 6 },                # a separator: span is a length in cells
+  { kind = "console", at = [0, 4], span = [6, 3] },         # the Console's lines in a frame
+]
 ```
+
+Text in a label or section is a formatted string: `{block}` is that monitor's latest value,
+`{block:.2f}` with that many decimals, `{{` and `}}` are braces.
 
 `Catalog::graph` and `Catalog::station` hold the starters as the protocol's JSON, `Catalog::dashboard` the layout. The catalog lists the domain's blocks first, then each imported package in
 order; every entry carries its `group`. Python example backends load the same files

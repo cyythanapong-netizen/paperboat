@@ -126,7 +126,7 @@ export type GraphEdge = {
   to: [string, string];
 };
 
-/** The Dashboard's grid: where each monitor block's instrument sits and how big it is. A backend ships one as its default (the descriptor's [dashboard]); an instrument not listed falls in where the automatic order puts it, and a block that does not exist is ignored. */
+/** The Dashboard's grid: where each monitor block's instrument sits and how big it is, plus decorations (sections, separators, labels) and tabs. A backend ships one as its default (the descriptor's [dashboard]); an instrument not listed falls in where the automatic order puts it, and a block that does not exist is ignored. Decorations and tabs belong to the layout, not the flow: the Flow canvas still decides which instruments exist. */
 export type DashboardLayout = {
   /** Grid columns; the UI fits fewer on a narrow screen. */
   columns?: number;
@@ -137,6 +137,24 @@ export type DashboardLayout = {
     size?: "compact" | "normal" | "large" | "xlarge";
     /** Top-left cell: [column, row]. */
     at?: [number, number];
+    /** The tab it is on (one of `tabs`); absent: the first. */
+    tab?: string;
+  })[];
+  /** Pages of the Dashboard, each with its own grid. A tab strip shows when there are two or more. Absent: one page. */
+  tabs?: string[];
+  /** Things that are not instruments. section: a titled frame round a group of cells (takes no cells; `at` and `span` [w, h]). hline / vline: a separator on a grid line, in the gap, along `span` columns (hline, from the top of `at`'s row) or rows (vline, down the left of `at`'s column); takes no cells. label: text that takes cells like an instrument (`span` [w, h], default [2, 1]); a section's title and a label's text may hold `{block}` or `{block:.2f}`, which show that monitor's latest value (`{{` and `}}` are braces). console: the Console's lines, in a frame that takes cells (`span` [w, h], default [4, 3]); it has no text. */
+  decorations?: ({
+    kind: "section" | "hline" | "vline" | "label" | "console";
+    /** A section's title, or a label's text. `{block}` shows the monitor block's latest value, `{block:.2f}` with that many decimals; `{{` and `}}` are literal braces. */
+    text?: string;
+    /** Top-left cell: [column, row]. */
+    at: [number, number];
+    /** A separator's length in cells (a whole number); a section's, label's or console's size [columns, rows]. */
+    span?: number | [number, number];
+    /** A label's look: heading (default) or note. */
+    style?: "heading" | "note";
+    /** The tab it is on (one of `tabs`); absent: the first. */
+    tab?: string;
   })[];
 };
 

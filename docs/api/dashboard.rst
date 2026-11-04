@@ -24,6 +24,18 @@ the width. Within a kind, instruments follow their monitor blocks on the Flow ca
 to right, then top to bottom: a pipeline's stages read in order, and moving a block moves
 its instrument.
 
+Decorations and tabs
+--------------------
+
+A backend's default layout (the descriptor's ``[dashboard]``) and the user's own arrangement
+may add things that are not instruments: a **section** (a titled frame round a group of
+cells), **separators** (``hline``, ``vline``), a **label** (a heading or a note) and the
+**console** (the Console's lines in a frame), and **tabs**, pages with a grid each. Labels
+and the console take cells; sections and separators are drawn in the gaps. Text in a label or
+section is a formatted string: ``{speed}`` shows that monitor block's latest value, ``{speed:.2f}``
+with that many decimals, ``{{`` and ``}}`` are braces. In the UI, Arrange adds and edits
+them; while editing text, click a value chip (or drag it in) to put ``{block}`` at the caret.
+
 The Console
 -----------
 
