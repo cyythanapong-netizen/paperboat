@@ -559,6 +559,37 @@
       ],
       "additionalProperties": false
     },
+    "variables.values": {
+      "type": "object",
+      "description": "What the variables come to (#36), so the UI shows formulas' values: on connect and after each variables.set. With error (and at, the variable or block at fault) when they don't hold.",
+      "properties": {
+        "type": {
+          "const": "variables.values"
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "boolean",
+              "string"
+            ]
+          },
+          "description": "Each variable's resolved value, by name."
+        },
+        "error": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ],
+      "additionalProperties": false
+    },
     "run.started": {
       "type": "object",
       "properties": {
@@ -798,6 +829,7 @@
             "graph.load",
             "station.load",
             "variables.load",
+            "variables.values",
             "run.started",
             "run.progress",
             "run.finished",
@@ -891,6 +923,18 @@
           },
           "then": {
             "$ref": "#/$defs/variables.load"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "variables.values"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/variables.values"
           }
         },
         {

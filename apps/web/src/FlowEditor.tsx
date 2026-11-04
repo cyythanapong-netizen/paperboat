@@ -23,7 +23,8 @@ import {
 } from "@xyflow/react";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
-import { NumberField } from "./NumberField";
+import { Bindable, NumberOrFormula } from "./Variables";
+import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
 import { connectionOf, nearestAccepting, PortHandle, SNAP, WireDragContext, type Anchor } from "./wireSnap";
 import {
@@ -152,8 +153,20 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   );
 }
 
+/**
+ * A param's (or a station property's) field. It can be bound to a variable (#36): drop one
+ * on it from the Variables sheet, or type = in a number field; a bound one shows as a chip.
+ */
+export function ParamInput(props: { def: ParamDef; value: ParamValue; set: (v: ParamValue) => void; disabled?: boolean }) {
+  return (
+    <Bindable def={props.def} value={props.value} set={props.set} disabled={props.disabled}>
+      {isRef(props.value) ? null : <Field {...props} />}
+    </Bindable>
+  );
+}
+
 /** A number field, or for a `key` param a field that takes the next key you press. */
-export function ParamInput({
+function Field({
   def,
   value,
   set,
@@ -212,7 +225,7 @@ export function ParamInput({
     );
   }
   return (
-    <NumberField className="nodrag num" disabled={disabled} value={Number(value)} onChange={set} />
+    <NumberOrFormula def={def} value={Number(value)} set={set} disabled={disabled} />
   );
 }
 

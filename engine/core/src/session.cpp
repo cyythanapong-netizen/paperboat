@@ -30,8 +30,10 @@ struct Session::State {
   }
   // The station as it shows: its objects made with their references resolved. Throws
   // VariableError, GraphError or json::exception.
-  void show(const json& with_station, const json& with_variables) {
+  // `report`: also send what the variables come to (variables.values), for the UI.
+  void show(const json& with_station, const json& with_variables, bool report = false) {
     const toolkit::Variables vars(with_variables);
+    if (report) emit({{"type", "variables.values"}, {"values", vars.values()}});
     const auto objects = make_station(toolkit::resolve_station(with_station, *backend.catalog, vars), *backend.catalog);
     const auto state = backend.state ? backend.state() : nullptr;
     emit(scene_message(objects, state.get(), backend.view));
@@ -46,7 +48,7 @@ Session::Session(const Backend& backend, Send send)
   if (!catalog.station_page.empty()) station_view["page"] = "/" + catalog.station_page;  // on this port, over HTTP
   s.emit({{"type", "hello"}, {"protocol", "paperboat/0"}, {"engine", backend.engine}, {"station", station_view}, {"run", settings_json(backend.run)}});
   s.emit(json::parse(toolkit::catalog_message(catalog)));
-  s.show(s.station, s.variables);  // checked at load: the starters resolve against the defaults
+  s.show(s.station, s.variables, !s.variables.empty());  // checked at load: the starters resolve against the defaults
   if (!s.variables.empty()) s.emit({{"type", "variables.load"}, {"variables", s.variables}});
   s.emit({{"type", "graph.load"}, {"graph", json::parse(catalog.graph)}});
   if (!s.station.is_null()) s.emit({{"type", "station.load"}, {"station", s.station}});
@@ -101,9 +103,12 @@ void Session::on_message(const std::string& text) {
         std::lock_guard lock(s.mutex);
         station = s.station;
       }
-      s.show(station, variables);
+      s.show(station, variables, true);
       std::lock_guard lock(s.mutex);
       s.variables = variables;
+    } catch (const toolkit::VariableError& err) {
+      s.emit({{"type", "variables.values"}, {"values", json::object()}, {"error", err.what()}, {"at", err.where}});
+      s.log("error", std::string("invalid variables: ") + err.what());
     } catch (const std::exception& err) {
       s.log("error", std::string("invalid variables: ") + err.what());
     }

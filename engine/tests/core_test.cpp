@@ -94,6 +94,21 @@ TEST_CASE("a session sends the handshake, checks station edits and runs") {
     CHECK(sent.back()["type"] == "log");
     CHECK(sent.back()["level"] == "error");
 
+    // Variables (#36): each set is answered with what they come to, or why they don't hold.
+    session.on_message(R"({"type": "variables.set", "variables": [{"name": "k", "type": "number", "value": 2},
+                                                                     {"name": "k2", "type": "number", "expr": "k * k"}]})");
+    auto last = [&](const char* type) {
+      for (auto it = sent.rbegin(); it != sent.rend(); ++it)
+        if ((*it)["type"] == type) return *it;
+      return json();
+    };
+    CHECK(last("variables.values")["values"] == json{{"k", 2.0}, {"k2", 4.0}});
+    session.on_message(R"({"type": "variables.set", "variables": [{"name": "k2", "type": "number", "expr": "kk * 2"}]})");
+    CHECK(last("variables.values")["at"] == "k2");
+    CHECK_THAT(last("variables.values")["error"].get<std::string>(), ContainsSubstring("unknown variable \"kk\""));
+    session.on_message(R"({"type": "variables.set", "variables": []})");
+    CHECK(last("variables.values")["values"] == json::object());
+
     session.on_message(R"({"type": "graph.run", "graph": )" + starter_graph().dump() + "}");
     // Wait for it: closing a session cancels its run.
     for (int i = 0; i < 500; ++i) {

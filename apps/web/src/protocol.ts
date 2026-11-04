@@ -280,6 +280,13 @@ export type ServerMsg =
     variables: Variables;
   }
   | {
+    type: "variables.values";
+    /** Each variable's resolved value, by name. */
+    values: Record<string, number | boolean | string>;
+    error?: string;
+    at?: string;
+  }
+  | {
     type: "run.started";
     run: string;
   }
