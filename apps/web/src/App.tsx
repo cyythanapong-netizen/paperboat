@@ -22,6 +22,7 @@ import { CommandSearch, MenuBar } from "./Menus";
 import { ownKeys, SEARCH_CHORD, useShortcuts, type Command } from "./commands";
 import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
+import { Toolkits } from "./Toolkits";
 
 const DEFAULT_URL =
   new URLSearchParams(location.search).get("backend") ??
@@ -762,6 +763,7 @@ export function App() {
             { value: "lookout", label: "lookout", hint: "The Board, Station and Flow at its sides (Alt+M)" },
           ]}
         />
+        <Toolkits installedGroups={new Set(state.blocks.map((b) => b.group).filter((g): g is string => !!g))} />
         <button className={`chip conn-${state.connection}`} title="Which backend: File > Backend…" onClick={() => setBackendOpen(true)}>
           <i aria-hidden="true" />
           {state.connection === "open" ? state.engine : state.connection}

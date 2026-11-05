@@ -1,0 +1,9 @@
+# Toolkits available to Paperboat. Core toolkits (base, math, signal, control, step,
+# dashboard) ship in the main repo. Optional toolkits are installed from GitHub.
+# `paperboat toolkit add <name>` fetches the repo, verifies it and builds it.
+
+[[toolkits]]
+name = "opencv"
+repo = "https://github.com/cyythanapong-netizen/paperboat-toolkit-opencv"
+description = "Image processing (OpenCV): filters, Image station object, image Dashboard instrument."
+optional = true
