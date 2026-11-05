@@ -352,25 +352,46 @@ export function Dashboard({
   const editingDeco = editing === null ? undefined : arranged.decorations.find((d) => d.index === editing);
   const shown = (d: PlacedDeco): PlacedDeco => (sizing?.index === d.index ? { ...d, ...(d.kind === "hline" ? { w: sizing.w } : d.kind === "vline" ? { h: sizing.h } : { w: sizing.w, h: sizing.h }) } : d);
 
-  const tabName = (t: string) => (
-    <span className="tab-name">
-      {renaming === t ? (
-        <EditText
-          value={t}
-          label="Tab name"
-          onDone={(v) => {
-            setRenaming(null);
-            if (v && v !== t && !tabs.includes(v)) {
-              commit(renameTab(arranged, t, v));
-              if (openTab === t) setOpenTab(v);
-            }
-          }}
-        />
-      ) : (
-        t
-      )}
-    </span>
+  // A tab's name, edited where it stands. Enter or leaving keeps it; Esc, or an empty
+  // name, drops the edit; a name another tab has stays open, marked, until it's changed.
+  const renameField = (t: string) => (
+    <input
+      className="deco-edit tab-edit"
+      autoFocus
+      aria-label={`Rename tab ${t}`}
+      defaultValue={t}
+      ref={(el) => {
+        if (el && !el.dataset.ready) {
+          el.dataset.ready = "1";
+          el.select();
+        }
+      }}
+      onChange={(e) => {
+        const v = e.currentTarget.value.trim();
+        const taken = v !== t && tabs.includes(v);
+        e.currentTarget.setAttribute("aria-invalid", String(taken));
+        e.currentTarget.title = taken ? `A tab is already called ${v}` : "";
+      }}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Escape") setRenaming(null);
+        if (e.key === "Enter") finishRename(t, e.currentTarget.value, true);
+      }}
+      onBlur={(e) => finishRename(t, e.currentTarget.value, false)}
+    />
   );
+  const finishRename = (t: string, raw: string, stay: boolean) => {
+    const v = raw.trim();
+    if (v && v !== t && tabs.includes(v)) {
+      if (!stay) setRenaming(null); // leaving with a taken name drops the edit
+      return;
+    }
+    setRenaming(null);
+    if (v && v !== t) {
+      commit(renameTab(arranged, t, v));
+      if (tab === t) setOpenTab(v);
+    }
+  };
 
   return (
     <div className="dashboard" ref={root}>
@@ -413,6 +434,7 @@ export function Dashboard({
                 const name = freshTabName(tabs.length ? tabs : ["Main"]);
                 commit(addTab(arranged, name));
                 setOpenTab(name);
+                setRenaming(name); // name it as it's made
               }}
             >
               + tab
@@ -462,16 +484,25 @@ export function Dashboard({
                 stop();
               }}
             >
-              <button
-                role="tab"
-                className="opt"
-                aria-selected={t === tab}
-                title={canEdit ? "Double-click to rename; drop an instrument here to move it to this tab" : undefined}
-                onClick={() => setOpenTab(t)}
-                onDoubleClick={() => canEdit && setRenaming(t)}
-              >
-                {tabName(t)}
-              </button>
+              {renaming === t ? (
+                renameField(t)
+              ) : (
+                <button
+                  role="tab"
+                  className="opt"
+                  aria-selected={t === tab}
+                  title={`Double-click or F2 to rename${canEdit ? "; drop an instrument here to move it to this tab" : ""}`}
+                  onClick={() => setOpenTab(t)}
+                  onDoubleClick={() => setRenaming(t)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "F2") return;
+                    e.preventDefault();
+                    setRenaming(t);
+                  }}
+                >
+                  {t}
+                </button>
+              )}
               {canEdit && tabIsEmpty(arranged, t) && (
                 <button className="tab-remove" aria-label={`Remove tab ${t}`} title="Remove this empty tab" onClick={() => commit(removeTab(arranged, t))}>
                   ×
