@@ -80,7 +80,7 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
    Live: a faster continuous ripple while a run is in progress. Values scale per instance via
    --lr (ripple travel) and --lb (bob travel), set on the svg by Logo.tsx. */
 .logo .w { transform-box: fill-box; transform-origin: center; }
-.logo-idle .logo-water .w { animation: logo-ripple-idle var(--logo-idle-cycle, 18s) var(--ease, cubic-bezier(.65,0,.25,1)) infinite; }
+.logo-idle .logo-water .w { animation: logo-ripple-idle var(--logo-idle-cycle, 6s) var(--ease, cubic-bezier(.65,0,.25,1)) infinite; }
 .logo-idle .logo-water .w1 { animation-delay: 0s; }
 .logo-idle .logo-water .w2 { animation-delay: 0.2s; }
 .logo-idle .logo-water .w3 { animation-delay: 0.4s; }

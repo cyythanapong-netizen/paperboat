@@ -191,7 +191,7 @@ the five dots lift in sequence (a crest travelling left → right, 3.75px of tra
 32px+ size) and the whole mark bobs ~1.5px as the crest passes under it, on the existing
 `--ease`, 1.4s, transform only, no layout shift.
 
-- Idle (no run): a ripple every ~18s, ripples for ~7% of the cycle, then rests.
+- Idle (no run): a ripple every ~6s, ripples for ~7% of the cycle, then rests.
 - Run live: a faster continuous ripple (1.4s) while a run is in progress, plus a single
   bob when the run starts. `running` is threaded from `App.tsx` through `Wordmark` into
   `Logo`.
