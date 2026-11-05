@@ -72,7 +72,7 @@ sideways), the bar wraps, and Commander stacks its pages in one scrolling column
 
 ## Menus, command search and the run dock (#78)
 
-The bar holds only the wordmark, the **menus**, the project's name (with a signal-coloured dot
+The bar holds only the wordmark, the **menus**, the project's name (centred on the bar like a window title, in muted monospace so it isn't taken for a key; after the menus below 1100px; a signal-coloured dot
 while there are changes not saved), the view switch, an error count when the Console has
 errors, and a connection chip (which opens File > Backend…). Everything else
 you can do is a **command** in one registry (`src/commands.ts`); the menu bar, the command

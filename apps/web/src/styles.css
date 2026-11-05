@@ -790,7 +790,15 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .key.small.err { color: var(--danger); border-color: var(--danger); }
 
 /* ---- Projects (#82): the name and the unsaved dot, notices, the undo toast ---------- */
-.proj { display: inline-flex; align-items: center; gap: var(--space-2); max-width: 240px; font: 500 var(--size-sm) var(--font-sans); }
+/* The project's name is the window's title, not a menu: centred on the bar, in muted monospace,
+   with no key-like weight; the unsaved dot rides after it. */
+.bar { position: relative; }
+.bar > .proj {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: inline-flex; align-items: center; gap: var(--space-2); max-width: min(320px, 26vw);
+  font: 400 var(--size-xs) var(--font-mono); color: var(--text-muted); pointer-events: auto; cursor: default;
+}
+@media (max-width: 1100px) { .bar > .proj { position: static; transform: none; } } /* no room to centre: after the menus */
 .proj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); }
 .notice { height: auto; width: min(480px, calc(100vw - 32px)); }
