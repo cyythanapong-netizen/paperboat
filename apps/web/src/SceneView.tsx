@@ -18,7 +18,7 @@ function dispose(obj: THREE.Object3D) {
   }
 }
 
-function createObject(e: Entity): THREE.Object3D {
+function createObject(e: Entity, flat = false): THREE.Object3D {
   const color = new THREE.Color(e.color ?? "#888888");
   if (e.shape === "line") {
     const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
@@ -32,7 +32,7 @@ function createObject(e: Entity): THREE.Object3D {
   }
   const [a, b, c] = e.size ?? [1, 1, 1];
   const geometry = e.shape === "sphere" ? new THREE.SphereGeometry(a, 24, 16) : new THREE.BoxGeometry(a, b, c);
-  return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color }));
+  return new THREE.Mesh(geometry, flat ? new THREE.MeshBasicMaterial({ color }) : new THREE.MeshStandardMaterial({ color }));
 }
 
 function applyEntity(obj: THREE.Object3D, e: Entity) {
@@ -151,7 +151,7 @@ export function SceneView({ entities, view, grid }: { entities: Record<string, E
     for (const e of Object.values(entities)) {
       let entry = w.objects.get(e.id);
       if (!entry) {
-        entry = { obj: createObject(e), look: lookOf(e) };
+        entry = { obj: createObject(e, view.mode === "2d"), look: lookOf(e) };
         w.objects.set(e.id, entry);
         w.scene.add(entry.obj);
       }
