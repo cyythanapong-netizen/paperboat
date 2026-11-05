@@ -21,25 +21,26 @@ export function Toolkits({ installedGroups }: { installedGroups: Set<string> }) 
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
-  const install = async (name: string) => {
+  const call = async (endpoint: string, name: string, done: string) => {
     setBusy(name);
     setMessage(null);
     try {
-      const res = await fetch("/api/install-toolkit", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
       const data = (await res.json()) as { ok?: boolean; output?: string; error?: string };
-      if (!res.ok || !data.ok) throw new Error(data.output || data.error || "install failed");
-      setMessage(`${name} installed. Restart the backend to load it.`);
+      if (!res.ok || !data.ok) throw new Error(data.output || data.error || "request failed");
+      setMessage(`${name} ${done}. Restart the backend to apply it.`);
     } catch (err) {
-      // In a production build there is no installer endpoint: fall back to the manual command.
-      setMessage(`Could not install in-app: ${err instanceof Error ? err.message : String(err)}. Run: python3 scripts/install_toolkit.py ${name}`);
+      setMessage(`Could not ${done} ${name} in-app: ${err instanceof Error ? err.message : String(err)}.`);
     } finally {
       setBusy(null);
     }
   };
+  const install = (name: string) => call("/api/install-toolkit", name, "installed");
+  const uninstall = (name: string) => call("/api/uninstall-toolkit", name, "uninstalled");
 
   return (
     <span className="toolkits">
@@ -57,13 +58,20 @@ export function Toolkits({ installedGroups }: { installedGroups: Set<string> }) 
                   <span className="muted">{installed ? "installed" : "not installed"}</span>
                   <span className="toolkits-desc">{t.description}</span>
                 </div>
-                <button
-                  className="key small"
-                  disabled={busy !== null}
-                  onClick={() => install(t.name)}
-                >
-                  {busy === t.name ? <Spinner size={12} /> : installed ? "Update" : "Install"}
-                </button>
+                {installed ? (
+                  <>
+                    <button className="key small" disabled={busy !== null} onClick={() => install(t.name)}>
+                      {busy === t.name ? <Spinner size={12} /> : "Reinstall"}
+                    </button>
+                    <button className="key small" disabled={busy !== null} onClick={() => uninstall(t.name)}>
+                      {busy === t.name ? <Spinner size={12} /> : "Uninstall"}
+                    </button>
+                  </>
+                ) : (
+                  <button className="key small" disabled={busy !== null} onClick={() => install(t.name)}>
+                    {busy === t.name ? <Spinner size={12} /> : "Install"}
+                  </button>
+                )}
               </div>
             );
           })}
