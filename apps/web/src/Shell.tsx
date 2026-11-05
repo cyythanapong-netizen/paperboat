@@ -6,10 +6,13 @@ import { Logo } from "./Logo";
  * - Navigator: one page at a time, picked on the rail (Alt+1–3). The pages sit in a column and
  *   the column slides to the one picked. The default.
  * - Commander: Station and Flow side by side, the Board a drawer under them.
+ * - Lookout: the Board, for whoever runs and watches the rig; Station and Flow are drawers at
+ *   its left and right, closed until wanted.
  * The Board is the `dashboard` page in code. The Console is not a page: it floats over them.
  */
 export type Page = "station" | "flow" | "dashboard";
-export type Mode = "navigator" | "commander";
+export type Mode = "navigator" | "commander" | "lookout";
+export const MODES: Mode[] = ["navigator", "commander", "lookout"];
 export type Theme = "auto" | "light" | "dark";
 
 export const PAGES: { id: Page; label: string; hint: string }[] = [
@@ -209,13 +212,27 @@ export function Rail({ page, onPage, hidden }: { page: Page; onPage: (p: Page) =
   );
 }
 
-/** Commander's Board drawer: open or closed, and its height when open. */
-export type Drawer = { open: boolean; height: number; onChange: (open: boolean, height?: number) => void; peek?: ReactNode };
+/**
+ * A page as a drawer: Commander's Board under the others, Lookout's Station and Flow at the
+ * Board's sides. Open or closed, and its size (height, or width at a side) when open.
+ */
+export type Drawer = {
+  side: "bottom" | "left" | "right";
+  open: boolean;
+  size: number;
+  onChange: (open: boolean, size?: number) => void;
+  /** Shown in the head while closed (a few live readouts). */
+  peek?: ReactNode;
+};
+
+/** A drawer is never dragged smaller than this; let go below it and it closes. */
+const DRAWER_MIN = 120;
 
 /**
  * One page as a section. In Navigator every page stays mounted in a column that slides to the
- * current one; the others are inert. In Commander its head can bring it to Navigator, and the
- * Board's head is a drawer handle: click it to open or close, drag it to any height.
+ * current one; the others are inert. Elsewhere its head can bring it to Navigator. As a drawer
+ * its head is the handle: click it to open or close, drag it (or a side drawer's inner edge)
+ * to any size. A side drawer closes to a tab: its icon and name, standing up.
  */
 export function Panel({
   page,
@@ -237,75 +254,93 @@ export function Panel({
   info?: ReactNode;
   /** Keys in the head, before Open (the page's Add). */
   actions?: ReactNode;
-  /** Commander only: this page is a drawer under the others. */
+  /** This page is a drawer in the current mode. */
   drawer?: Drawer;
   children: ReactNode;
 }) {
   const label = PAGES.find((p) => p.id === page)!.label;
   const self = useRef<HTMLElement>(null);
-  const drag = useRef<{ y: number; h: number; moved: boolean } | null>(null);
-  const asDrawer = mode === "commander" && drawer ? drawer : undefined;
-  const closed = asDrawer && !asDrawer.open;
+  const drag = useRef<{ x: number; y: number; size: number; moved: boolean } | null>(null);
+  const closed = drawer && !drawer.open;
+  const side = drawer && drawer.side !== "bottom";
 
   const onDown = (e: PointerEvent) => {
-    if (!asDrawer || (e.target as HTMLElement).closest("button, input, select")) return;
-    drag.current = { y: e.clientY, h: self.current?.offsetHeight ?? 0, moved: false };
+    if (!drawer || e.button !== 0 || (e.target as HTMLElement).closest("button, input, select, a")) return;
+    const el = self.current!;
+    drag.current = { x: e.clientX, y: e.clientY, size: side ? el.offsetWidth : el.offsetHeight, moved: false };
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
   const onMove = (e: PointerEvent) => {
     const d = drag.current, el = self.current;
-    if (!d || !el) return;
-    const dy = d.y - e.clientY;
-    if (!d.moved && Math.abs(dy) < 4) return;
+    if (!d || !el || !drawer) return;
+    const delta = drawer.side === "bottom" ? d.y - e.clientY : drawer.side === "left" ? e.clientX - d.x : d.x - e.clientX;
+    if (!d.moved && Math.abs(delta) < 4) return;
     d.moved = true;
-    const room = (el.parentElement?.clientHeight ?? 600) - 160;
+    // Room is measured on the pages, not the panel's parent: in Commander and Lookout that is the
+    // page stack, which has no box of its own (display: contents).
+    const pages = el.closest(".pages") as HTMLElement | null;
+    const room = side ? (pages?.clientWidth ?? 1200) - 360 : (pages?.clientHeight ?? 600) - 160;
+    // Never smaller than closed: a head's height, or a side tab's width (the same).
+    const least = (parseFloat(getComputedStyle(el).getPropertyValue("--panel-head-height")) || 36) + 2;
     el.classList.add("resizing");
-    el.style.height = `${Math.max(el.querySelector(".panel-head")!.clientHeight + 2, Math.min(room, d.h + dy))}px`;
+    el.style.setProperty(side ? "width" : "height", `${Math.max(least, Math.min(room, d.size + delta))}px`);
   };
   const onUp = () => {
     const d = drag.current, el = self.current;
     drag.current = null;
-    if (!d || !el || !asDrawer) return;
-    if (!d.moved) return asDrawer.onChange(!asDrawer.open);
-    const h = el.offsetHeight;
+    if (!d || !el || !drawer) return;
+    if (!d.moved) return drawer.onChange(!drawer.open);
+    const size = side ? el.offsetWidth : el.offsetHeight;
     el.classList.remove("resizing");
-    el.style.height = "";
-    if (h > 100) asDrawer.onChange(true, h);
-    else asDrawer.onChange(false);
+    el.style.removeProperty(side ? "width" : "height");
+    if (size >= DRAWER_MIN) drawer.onChange(true, size);
+    else drawer.onChange(false);
   };
+  const handle = drawer ? { onPointerDown: onDown, onPointerMove: onMove, onPointerUp: onUp, onPointerCancel: onUp } : {};
+  const toggle = drawer && (
+    <button
+      className={`key small drawer-toggle side-${drawer.side}`}
+      aria-expanded={drawer.open}
+      title={drawer.open ? `Close the ${label} (drag the head to resize)` : `Open the ${label}`}
+      onClick={() => drawer.onChange(!drawer.open)}
+    >
+      <svg viewBox="0 0 14 14" aria-hidden="true">
+        <path d="M3 9l4-4 4 4" />
+      </svg>
+    </button>
+  );
 
   return (
     <section
       ref={self}
-      className={`panel panel-${page}${current ? " current" : ""}${asDrawer ? " drawer" : ""}${closed ? " closed" : ""}`}
+      className={`panel panel-${page}${current ? " current" : ""}${drawer ? ` drawer drawer-${drawer.side}` : ""}${closed ? " closed" : ""}`}
       inert={mode === "navigator" && !current}
       aria-label={label}
-      style={{ "--i": index(page), "--at": at, ...(asDrawer ? { "--drawer-h": `${asDrawer.height}px` } : {}) } as CSSProperties}
+      style={{ "--i": index(page), "--at": at, ...(drawer ? { "--drawer-size": `${drawer.size}px` } : {}) } as CSSProperties}
     >
-      <header className="panel-head" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
-        {asDrawer && <span className="drawer-grip" aria-hidden="true" />}
-        <h2>{label}</h2>
-        {closed && asDrawer.peek ? <span className="panel-peek">{asDrawer.peek}</span> : null}
-        <span className="panel-info lbl">{info}</span>
-        {actions}
-        {asDrawer && (
-          <button
-            className="key small drawer-toggle"
-            aria-expanded={asDrawer.open}
-            title={asDrawer.open ? `Close the ${label} (drag the head to resize)` : `Open the ${label}`}
-            onClick={() => asDrawer.onChange(!asDrawer.open)}
-          >
-            <svg viewBox="0 0 14 14" aria-hidden="true">
-              <path d="M3 9l4-4 4 4" />
-            </svg>
-          </button>
-        )}
-        {mode === "commander" && (
-          <button className="key small" title={`Show ${label} on its own (Navigator)`} onClick={onOpen}>
-            Open
-          </button>
-        )}
-      </header>
+      {closed && side ? (
+        <header className="panel-head side-tab" {...handle} title={`Open the ${label}`}>
+          {toggle}
+          <PageIcon page={page} />
+          <h2>{label}</h2>
+        </header>
+      ) : (
+        <header className="panel-head" {...handle}>
+          {drawer?.side === "bottom" && <span className="drawer-grip" aria-hidden="true" />}
+          {drawer?.side === "right" && toggle}
+          <h2>{label}</h2>
+          {closed && drawer.peek ? <span className="panel-peek">{drawer.peek}</span> : null}
+          <span className="panel-info lbl">{info}</span>
+          {actions}
+          {drawer && drawer.side !== "right" && toggle}
+          {mode !== "navigator" && (
+            <button className="key small" title={`Show ${label} on its own (Navigator)`} onClick={onOpen}>
+              Open
+            </button>
+          )}
+        </header>
+      )}
+      {side && !closed && <span className="drawer-edge" aria-hidden="true" {...handle} />}
       <div className="panel-body">{children}</div>
     </section>
   );

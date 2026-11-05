@@ -62,8 +62,8 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
   transition: grid-template-columns var(--slide), column-gap var(--slide);
 }
 /* Commander: the rail steps aside (it stays mounted, so the drop is where it was on return). */
-.app.mode-commander { grid-template-columns: 0px minmax(0, 1fr); column-gap: 0px; }
-.mode-commander .rail { opacity: 0; pointer-events: none; padding-inline: 0; border-width: 0; }
+.app.mode-commander, .app.mode-lookout { grid-template-columns: 0px minmax(0, 1fr); column-gap: 0px; }
+.mode-commander .rail, .mode-lookout .rail { opacity: 0; pointer-events: none; padding-inline: 0; border-width: 0; }
 .bar, .rail, .panel { background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 
 .bar { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); min-width: 0; }
@@ -149,23 +149,56 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 }
 .mode-navigator .page-stack > .panel.current { visibility: visible; transition: transform var(--slide); }
 /* Commander: Station and Flow share the top; the Board is a drawer under them. */
-.mode-commander .page-stack { display: contents; }
+.mode-commander .page-stack, .mode-lookout .page-stack { display: contents; }
 .mode-commander .pages {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas: "station flow" "dashboard dashboard";
 }
-.panel.drawer { height: var(--drawer-h); transition: height var(--slide); }
-.panel.drawer.closed { height: calc(var(--panel-head-height) + 2px); }
+/* Lookout: the Board for whoever runs and watches the rig; Station and Flow are drawers at its sides. */
+.mode-lookout .pages {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "station dashboard flow";
+}
+.mode-lookout .panel-station { grid-area: station; }
+.mode-lookout .panel-flow { grid-area: flow; }
+.mode-lookout .panel-dashboard { grid-area: dashboard; }
+
+/* Drawers: the head is the handle (click to open or close, drag to size); a side drawer also
+   has its inner edge. Closed, the bottom one is its head; a side one a standing tab. */
+.panel.drawer { position: relative; }
+.panel.drawer-bottom { height: var(--drawer-size); transition: height var(--slide); }
+.panel.drawer-bottom.closed { height: calc(var(--panel-head-height) + 2px); }
+.panel.drawer-left, .panel.drawer-right { width: var(--drawer-size); transition: width var(--slide); }
+.panel.drawer-left.closed, .panel.drawer-right.closed { width: calc(var(--panel-head-height) + 2px); }
 .panel.drawer.resizing { transition: none; }
-.panel.drawer .panel-head { cursor: ns-resize; touch-action: none; }
+.panel.drawer-bottom .panel-head { cursor: ns-resize; touch-action: none; }
+.panel.drawer-left .panel-head, .panel.drawer-right .panel-head { cursor: ew-resize; touch-action: none; }
 .panel.drawer.closed .panel-head { border-bottom-color: transparent; }
 .panel.drawer .panel-body { transition: opacity var(--motion); }
-.panel.drawer.closed .panel-body { opacity: 0; }
+.panel.drawer.closed .panel-body { opacity: 0; visibility: hidden; }
+.drawer-edge { position: absolute; top: var(--panel-head-height); bottom: 0; width: 6px; z-index: 7; cursor: ew-resize; touch-action: none; }
+.drawer-left .drawer-edge { right: 0; }
+.drawer-right .drawer-edge { left: 0; }
+.drawer-edge:hover { background: linear-gradient(var(--line-ink), var(--line-ink)) center / 2px 100% no-repeat; }
+.panel-head.side-tab {
+  height: 100%; flex-direction: column; justify-content: flex-start; gap: var(--space-3);
+  padding: var(--space-2) 0; cursor: pointer; border-bottom: 0;
+}
+.panel-head.side-tab h2 { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: 500; }
+.panel-head.side-tab .page-icon { width: 18px; height: 18px; }
 .drawer-grip { width: 28px; height: 4px; border-radius: 4px; background: var(--line-strong); flex: none; }
-.drawer-toggle { width: 26px; padding: 0; display: grid; place-items: center; }
-.drawer-toggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; transition: transform var(--slide); }
-.drawer:not(.closed) .drawer-toggle svg { transform: rotate(180deg); }
+/* Square key, chevron centred: .key.small's side padding would push it off centre. */
+.key.drawer-toggle { width: 24px; height: 24px; padding: 0; display: inline-grid; place-items: center; flex: none; }
+.drawer-toggle svg { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; transition: transform var(--slide); }
+/* The chevron points the way the drawer will go: up/out to open, back to close. */
+.drawer-toggle.side-bottom svg { transform: rotate(0deg); }
+.drawer:not(.closed) .drawer-toggle.side-bottom svg { transform: rotate(180deg); }
+.drawer-toggle.side-left svg { transform: rotate(90deg); }
+.drawer:not(.closed) .drawer-toggle.side-left svg { transform: rotate(-90deg); }
+.drawer-toggle.side-right svg { transform: rotate(-90deg); }
+.drawer:not(.closed) .drawer-toggle.side-right svg { transform: rotate(90deg); }
 .panel-peek { display: flex; gap: var(--space-4); margin-left: var(--space-3); font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; overflow: hidden; }
 .panel-peek b { font-weight: 500; color: var(--text); }
 .mode-commander .panel-station { grid-area: station; }
@@ -194,7 +227,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   .bar { flex-wrap: wrap; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
   .rail { grid-row: 3; flex-direction: row; padding: var(--space-1); }
   .rail-face { flex-direction: row; padding: 4px 0; }
-  .mode-commander .rail { display: none; }
+  .mode-commander .rail, .mode-lookout .rail { display: none; }
   .conn { display: none; }
   .mode-commander .pages { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: minmax(320px, auto); grid-template-areas: "station" "flow" "dashboard"; overflow: auto; }
   .mode-commander .panel.drawer.closed { min-height: 0; }
@@ -232,7 +265,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* ---- Flow ------------------------------------------------------------------------- */
 .flow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.mode-commander .hint { display: none; }
+.mode-commander .hint, .mode-lookout .hint { display: none; }
 .hint { margin: 0; padding: var(--space-2) var(--panel-pad); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); border-top: 1px solid var(--line); }
 .react-flow { background: transparent; --xy-background-pattern-dots-color-default: var(--dots); --xy-edge-stroke-default: var(--line-ink); }
 .react-flow__minimap { background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: var(--radius-md); overflow: hidden; }
@@ -585,6 +618,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .mode-navigator .pages.with-vars > .vars-sheet { grid-area: 1 / 2; }
 .mode-commander .pages.with-vars { grid-template-columns: repeat(2, minmax(0, 1fr)) 330px; grid-template-areas: "station flow vars" "dashboard dashboard vars"; }
 .mode-commander .pages.with-vars > .vars-sheet { grid-area: vars; }
+.mode-lookout .pages.with-vars { grid-template-columns: auto minmax(0, 1fr) auto 330px; grid-template-areas: "station dashboard flow vars"; }
+.mode-lookout .pages.with-vars > .vars-sheet { grid-area: vars; }
 .vars-sheet .panel-head .x { width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); font-size: 11px; }
 .vars-tools { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); }
 .vars-tools .well { display: flex; height: 28px; padding: 0 var(--space-2); }
@@ -634,8 +669,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .var-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; padding-top: var(--space-1); }
 .vars-foot { display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 button.link { border: 0; background: none; height: auto; padding: 0; font: inherit; color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
-.mode-commander .var-row { grid-template-columns: minmax(0, 1fr) 64px 44px 50px; }
-.mode-commander .var-row .var-type { display: none; }
+.mode-commander .var-row, .mode-lookout .var-row { grid-template-columns: minmax(0, 1fr) 64px 44px 50px; }
+.mode-commander .var-row .var-type, .mode-lookout .var-row .var-type { display: none; }
 
 /* A field bound to a variable: the variable in an ink outline, its value after it. */
 .bindable { display: inline-flex; align-items: center; border-radius: var(--radius-sm); }
@@ -717,7 +752,9 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .mode-navigator .pages:has(.panel-flow.current) > .dock { bottom: 76px; }
 /* Commander with the Board closed: the dock rides above the Board's head, not on it. */
 .dock { transition: bottom var(--slide); }
-.mode-commander .pages:has(.drawer.closed) > .dock { bottom: calc(var(--panel-head-height) + 2px + var(--gutter) + var(--space-3)); }
+/* Lookout: the dock is the Board's, centred over it (an absolute grid child takes its area as its box). */
+.mode-lookout .pages > .dock { grid-area: dashboard; }
+.mode-commander .pages:has(.drawer-bottom.closed) > .dock { bottom: calc(var(--panel-head-height) + 2px + var(--gutter) + var(--space-3)); }
 .backend-window { height: auto; width: min(520px, calc(100vw - 32px)); }
 .backend-form { display: flex; align-items: center; gap: var(--space-3); padding: var(--panel-pad) var(--panel-pad) var(--space-2); }
 .backend-note { margin: 0; padding: 0 var(--panel-pad) var(--panel-pad); }

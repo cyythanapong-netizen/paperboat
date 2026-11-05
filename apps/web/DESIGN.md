@@ -43,11 +43,11 @@ from the tokens and is rebuilt when the theme changes. Displays are black in bot
 | Mode | What it shows | When |
 | --- | --- | --- |
 | **Navigator** (default) | One page at a time, full size; the rail picks it (Alt+1 to Alt+3, ↑/↓ or the wheel over the rail). The pages sit in a column in rail order and the column slides up or down to the one picked | Building one thing: wiring a flow, setting up the station, reading a run |
-| **Commander** | Station and Flow side by side for editing; the Board is a drawer under them. Closed, the drawer is just its head, with the latest of up to three number readouts; click the head (or its ⌃ key) to open or close it, drag the head to any height. Run opens it; it stays as left (kept in the browser). Each head has **open**, which shows that page alone in Navigator | Editing, then running and watching |
-| **Monitor** (planned) | A finished program's Board, Station and Console collapsible | Using a rig someone built |
+| **Commander** | Station and Flow side by side for editing; the Board is a drawer under them. Closed, the drawer is just its head, with the latest of up to three number readouts; click the head (or its chevron key) to open or close it, drag the head to any height. Run opens it; it stays as left (kept in the browser). Each head has **open**, which shows that page alone in Navigator | Editing, then running and watching |
+| **Lookout** | For whoever runs and watches a rig (IoT, monitoring): the Board fills the window, with Station and Flow as drawers at its left and right. Closed, a drawer is a standing tab (its icon and name); click it to open, click the head or its chevron to close, drag the head or the inner edge to any width. The run dock sits over the Board. Drawer states are kept in the browser | Running and watching a finished rig |
 
-Switch with the view switch on the bar, or Alt+M; the rail steps aside into Commander and
-back. Every page stays mounted in both modes (the pages not in view in Navigator are inert),
+Switch with the view switch on the bar, or Alt+M (it cycles the three); the rail steps aside
+into Commander or Lookout and back. Every page stays mounted in every mode (the pages not in view in Navigator are inert),
 so switching never loses a canvas, a scene or a run; a canvas fits itself again when its
 size changes. Page names are words, not numbered: Station, Flow, **Board** (the run page;
 `dashboard` in code and the protocol).
