@@ -6,6 +6,27 @@ Built-in templates, by package (``engine/toolkit``). Import a package in a descr
 not Simulink: ``base`` holds only what any domain needs; everything else lives in the
 package of what it is about. List them with ``paperboat-catalog --templates``.
 
+Package structure
+-----------------
+
+Built-in packages live in ``engine/toolkit/src/<package>/``. Each folder has a TOML
+``toolkit.toml`` manifest naming its C++ namespace and registrar functions::
+
+   name = "math"
+   register = ["add_arithmetic"]
+
+CMake discovers the manifests and source files and generates the package-registration
+dispatcher. A package's block implementation, ``BlockDef`` (including ``description`` and
+``view``), and registration function stay together. A new registration function is listed
+in the manifest; an additional block in an existing function needs no central registry or
+description-map edit. ``signal`` also uses ``definitions = "blocks.toml"`` to embed its
+definitions on the C++ ``signal/generator`` parent.
+
+Optional toolkits with external dependencies live in ``engine/toolkit/<package>/`` with a
+``toolkit.toml`` and a package-local ``CMakeLists.txt``. The engine discovers the folder;
+the package's CMake file decides whether its dependency is available. The backend links and
+registers an optional package explicitly.
+
 base
 ----
 

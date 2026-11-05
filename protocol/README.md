@@ -22,7 +22,7 @@ Default address: `ws://localhost:8765`.
 | `scene.patch`  | `entities: ({id} & Partial<Entity>)[]`      | during a run                 |
 | `run.started`  | `run: string`                               | when a run starts            |
 | `run.progress` | `run: string`, `fraction: number` (0–1)     | during a run                 |
-| `signal`       | `node: string`, `t: number`, `v: number \| string` | per sample, for monitor nodes. `t` is the x value: time in a simulation, list index otherwise; `v` is text for a display or an image's data URL |
+| `signal`       | `node: string`, `t: number`, `v: number \| string \| number[]`, `components?: VectorComponent[]` | per sample, for monitor nodes. `t` is the x value: time in a simulation, list index otherwise; a Display monitor may keep a whole vector as `number[]` with its source component labels |
 | `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them; any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
 | `node.progress` | `node: string`, `fraction: number` (0–1) | How far a block's long step has got (`Context::progress`), at most ~20 a second per block; the UI shows it on the running block |
 | `log`          | `level: "info" \| "warn" \| "error"`, `text`, `node?: string` | any time. `node`: the block or station object that wrote it, or that failed |
@@ -108,10 +108,15 @@ variables: `{ "expr": "2 * sqrt(kp_theta * pole_length)" }`. The backend resolve
 references before it makes blocks and objects (a block only ever sees numbers and text)
 and fails the run on the block at fault: an unknown variable (with the nearest name), a
 type that doesn't fit, an enum value not among the param's options, a bad formula. Port `type` is `signal` (a value), `step` (control,
-in a Step flow), a value shape (`image`, `points`, `numbers`, …) or `any` (any value but a
-step). A port, and a number param, may have a `unit` (`"N"`, `"m"`, `"rad"`). A wire joins
-ports of one type (`any` joins anything but a step), in one unit when both ends have one:
-the UI enforces it while dragging, and a backend fails a run whose wires break it. A signal
+in a Step flow), a value shape (`image`, `points`, `vector`, …) or `any` (any value but a
+step). `vector` carries an ordered JSON array of numbers on one wire; legacy `numbers` ports
+remain compatible. A vector port may declare a fixed `dimension` and ordered `components`
+(`{id, unit?}`); without them its length is dynamic and component labels/units are unknown.
+A port, and a number param, may have a `unit` (`"N"`, `"m"`, `"rad"`). On a vector, `unit`
+applies to every component unless that component has its own unit. A wire joins
+ports of one type (`any` joins anything but a step), in one unit per component when both
+ends declare one, and with matching dimensions when both are fixed: the UI enforces it while
+dragging, and a backend fails a run whose wires break it. A signal
 input takes one wire; a step output leads to one block. A run may step a clock (simulation: `scene.patch` per frame) or evaluate
 once (parametric: one `scene` at the end); the UI handles both.
 
@@ -243,8 +248,8 @@ A graph whose blocks have `step` ports is a Step flow (see `examples/backends/an
 
 ## Groups
 
-A graph may carry `groups`: `{ id, kind: "visual" | "story", label?, nodes: [ids],
-collapsed?, pos?, params?: { seconds, reset } }`. A block is in at most one group.
+A graph may carry `groups`: `{ id, kind: "visual" | "subsystem" | "story", label?, nodes: [ids],
+collapsed?, pos?, params?: { seconds, reset }, release?: [[node, port], ...] }`. A block is in at most one group.
 
 - **visual** tidies the canvas: the backend runs its blocks as if ungrouped. Collapsed,
   the UI draws it as one block whose ports are the wires crossing its edge; the wires
@@ -253,9 +258,10 @@ collapsed?, pos?, params?: { seconds, reset } }`. A block is in at most one grou
   (wire Start → a story → the next story). When a path arrives, the story's blocks (signal
   blocks only) run once per clock step for `params.seconds` (0: once), then the path
   leaves by `next`. Its blocks don't run at any other time; what they computed stays on
-  their outputs, so later stories read the results. With `params.reset` its blocks start
-  afresh each time a path arrives (a story in a loop starts over). `node.state` reports
-  the story like any step block.
+  their outputs, so later stories read the results. `release` lists outputs to drop when
+  the story leaves (useful for a controller's force, while retaining an estimate). With
+  `params.reset` its blocks start afresh each time a path arrives (a story in a loop starts
+  over). `node.state` reports the story like any step block.
 
 ## Web station
 

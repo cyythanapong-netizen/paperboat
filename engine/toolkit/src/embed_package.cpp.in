@@ -1,0 +1,5 @@
+// Generated from a package's toolkit.toml definitions field.
+namespace paperboat::toolkit {
+extern const char* const @PAPERBOAT_EMBED_SYMBOL@;
+const char* const @PAPERBOAT_EMBED_SYMBOL@ = R"pbtoml(@PAPERBOAT_EMBED_CONTENT@)pbtoml";
+}  // namespace paperboat::toolkit

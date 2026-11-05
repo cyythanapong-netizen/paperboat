@@ -1,0 +1,4 @@
+# The built-in value/key/logic package. CMake discovers these functions and the package's
+# source files automatically; adding another block only changes its source and this list.
+name = "base"
+register = ["add_values", "add_key", "add_logic"]

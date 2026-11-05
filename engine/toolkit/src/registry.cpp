@@ -1,22 +1,19 @@
 #include "paperboat/toolkit/registry.hpp"
 
-#include "common.hpp"
-
 #include <algorithm>
 #include <stdexcept>
 
 namespace paperboat::toolkit {
 
+void register_manifest_packages(Registry& registry);
+
 void Registry::add(Template t) {
   if (find(t.name)) throw std::invalid_argument("duplicate template: " + t.name);
-  if (t.def.description.empty()) t.def.description = builtin_description(t.name);
-  t.def.view = builtin_view(t.name).overridden_by(t.def.view);  // a template's own keys win
   templates_.push_back(std::move(t));
 }
 
 void Registry::add(StationTemplate t) {
   if (find_object(t.name)) throw std::invalid_argument("duplicate station template: " + t.name);
-  if (t.def.description.empty()) t.def.description = builtin_description(t.name);
   objects_.push_back(std::move(t));
 }
 
@@ -74,12 +71,7 @@ std::vector<std::string> Registry::packages() const {
 const Registry& builtins() {
   static const Registry registry = [] {
     Registry r;
-    register_base(r);
-    register_signal(r);
-    register_math(r);
-    register_dashboard(r);
-    register_control(r);
-    register_step(r);
+    register_manifest_packages(r);
     return r;
   }();
   return registry;

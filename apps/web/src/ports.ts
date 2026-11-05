@@ -11,16 +11,42 @@ import type { BlockDef, ParamValue, PortDef, PortSides } from "./protocol";
 export function wireMismatch(from: PortDef, to: PortDef): string | null {
   const a = from.type ?? "signal";
   const b = to.type ?? "signal";
+  const vectors = (type: string) => type === "vector" || type === "numbers";
+  const sameType = a === b || (vectors(a) && vectors(b));
   if ((a === "step") !== (b === "step")) return `joins ${article(a)} port to ${article(b)} port`;
-  if (a !== "step" && a !== b && a !== "any" && b !== "any") return `joins ${article(a)} port to ${article(b)} port`;
-  if (from.unit && to.unit && from.unit !== to.unit) return `carries ${from.unit} into a port in ${to.unit}`;
+  if (a !== "step" && !sameType && a !== "any" && b !== "any") return `joins ${article(a)} port to ${article(b)} port`;
+  if (vectors(a) && vectors(b)) {
+    const fromDimension = from.dimension ?? from.components?.length;
+    const toDimension = to.dimension ?? to.components?.length;
+    if (fromDimension !== undefined && toDimension !== undefined && fromDimension !== toDimension)
+      return `carries a vector of ${fromDimension} values into a port expecting ${toDimension}`;
+    const count = Math.max(from.components?.length ?? 0, to.components?.length ?? 0);
+    for (let i = 0; i < count; i++) {
+      const fromUnit = from.components?.[i]?.unit || from.unit;
+      const toUnit = to.components?.[i]?.unit || to.unit;
+      if (fromUnit && toUnit && fromUnit !== toUnit) return `carries vector component ${i} in ${fromUnit} into a port in ${toUnit}`;
+    }
+  } else if (from.unit && to.unit && from.unit !== to.unit) return `carries ${from.unit} into a port in ${to.unit}`;
   return null;
 }
 
 const article = (t: string) => `${/^[aeiou]/.test(t) ? "an" : "a"} ${t}`;
 
 /** A port's name with its unit, for labels and titles: "force (N)". */
-export const portLabel = (p: PortDef) => (p.unit ? `${p.id} (${p.unit})` : p.id);
+export const portLabel = (p: PortDef) => {
+  const unit = p.unit ? ` (${p.unit})` : "";
+  const dimension = p.dimension ?? p.components?.length;
+  const size = (p.type === "vector" || p.type === "numbers") && dimension !== undefined ? ` [${dimension}]` : "";
+  return `${p.id}${unit}${size}`;
+};
+
+/** A vector port's generic shape and components, for a hover title. */
+export function portHint(p: PortDef): string | undefined {
+  if (p.type !== "vector" && p.type !== "numbers") return p.unit ? `Unit: ${p.unit}` : undefined;
+  const dimension = p.dimension ?? p.components?.length;
+  const names = p.components?.map((c) => `${c.id}${c.unit ? ` (${c.unit})` : ""}`).join(", ");
+  return `Ordered numeric vector${dimension === undefined ? " (dynamic length)" : ` (${dimension} values)`}${names ? `: ${names}` : p.unit ? `; unit: ${p.unit}` : ""}`;
+}
 
 /** A side of a block a port can sit on. */
 export type Side = "left" | "right" | "top" | "bottom";

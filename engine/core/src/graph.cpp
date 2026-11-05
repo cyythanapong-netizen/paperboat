@@ -54,7 +54,7 @@ toolkit::BlockDef story_def() {
   return {.type = "story",
           .label = "Story",
           .kind = toolkit::Kind::Function,
-          .inputs = {{"in", "step"}},
+          .inputs = {{"in", "step"}, {"until", "signal"}},
           .outputs = {{"next", "step"}},
           .params = {{.id = "seconds", .default_value = 0}}};
 }
@@ -68,6 +68,7 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
   // Story groups first: which blocks belong to which story.
   std::map<std::string, double> story_seconds;
   std::map<std::string, bool> story_reset;
+  std::map<std::string, std::vector<PortRef>> story_release;
   for (const auto& g : graph.value("groups", json::array())) {
     if (g.value("kind", std::string{"visual"}) != "story") continue;
     const auto gid = g.at("id").get<std::string>();
@@ -75,6 +76,10 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     if (!story_seconds.emplace(gid, number_param(gp, "seconds", 0.0)).second)
       throw GraphError(gid, "two groups are called " + gid);
     story_reset[gid] = number_param(gp, "reset", 0.0) != 0;
+    for (const auto& r : g.value("release", json::array())) {
+      if (!r.is_array() || r.size() != 2) throw GraphError(gid, "story " + gid + ": release lists outputs as [node, port]");
+      story_release[gid].emplace_back(r[0].get<std::string>(), r[1].get<std::string>());
+    }
     for (const auto& n : g.value("nodes", json::array())) {
       if (!out.story_of.emplace(n.get<std::string>(), gid).second)
         throw GraphError(n.get<std::string>(), "block " + n.get<std::string>() + " is in two story groups");
@@ -141,12 +146,24 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
   }
 
   // Each story becomes a step node of its own.
+  const auto until_wired = [&](const std::string& gid) {
+    return std::ranges::any_of(graph.at("edges"), [&](const json& e) { return e.at("to")[0] == gid && e.at("to")[1] == "until"; });
+  };
   for (const auto& [gid, seconds] : story_seconds) {
     if (out.nodes.contains(gid)) throw GraphError(gid, "group " + gid + " has the id of a block");
     out.own.push_back({.def = story_def(), .from = nullptr, .config = {}, .group = {}, .linked = false});
-    auto step = std::make_unique<StoryStep>(seconds);
+    auto step = std::make_unique<StoryStep>(seconds, until_wired(gid));
     out.stories[gid].step = step.get();
     out.stories[gid].reset = story_reset[gid];
+    for (const auto& [node, port] : story_release[gid]) {
+      auto it = out.story_of.find(node);
+      if (it == out.story_of.end() || it->second != gid)
+        throw GraphError(gid, "story " + gid + " releases " + node + "." + port + ", but " + node + " isn't one of its blocks");
+      const auto& outputs = out.nodes.at(node).def.outputs;
+      if (std::ranges::find(outputs, port, &toolkit::PortDef::id) == outputs.end())
+        throw GraphError(gid, "story " + gid + " releases " + node + "." + port + ", which " + node + " doesn't have");
+    }
+    out.stories[gid].release = story_release[gid];
     out.nodes.emplace(gid, Node{.id = gid, .entry = &out.own.back(), .def = story_def(), .block = nullptr,
                                 .step = std::move(step), .object = nullptr, .monitor = nullptr});
     out.has_steps = true;

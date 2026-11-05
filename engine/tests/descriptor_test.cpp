@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -111,6 +112,14 @@ groups = [{ id = "outer", kind = "subsystem", nodes = ["s"], ports = { left = ["
                     ContainsSubstring("is inside itself"));
   CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "box", nodes = ["s"] }])")),
                     ContainsSubstring("kind must be subsystem, story or visual"));
+  // A story's released outputs: [node, port] of a block in the story; only stories release.
+  CHECK_NOTHROW(tk::load_descriptor(bad(R"([{ id = "a", kind = "story", nodes = ["s"], release = [["s", "y"]] }])")));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "subsystem", nodes = ["s"], release = [["s", "y"]] }])")),
+                    ContainsSubstring("only a story releases outputs"));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "story", nodes = [], release = [["s", "y"]] }])")),
+                    ContainsSubstring("which isn't in the story"));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "story", nodes = ["s"], release = ["s.y"] }])")),
+                    ContainsSubstring("release lists outputs as [node, port]"));
 }
 
 TEST_CASE("import adds every template of a package; a customised entry wins") {
@@ -473,4 +482,11 @@ defaults = { k = 2 }
   CHECK(find("pid")["description"].get<std::string>().find("error") != std::string::npos);  // built in
   CHECK(find("sine")["description"] == "A smooth wave: amplitude, frequency, phase.");       // from TOML
   CHECK(find("double")["description"] == "Twice its input.");                              // the descriptor's own
+}
+
+TEST_CASE("built-in templates carry their own descriptions") {
+  std::vector<std::string> missing;
+  for (const auto* entry : tk::builtins().all())
+    if (!entry->abstract && entry->def.description.empty()) missing.push_back(entry->name);
+  CHECK(missing.empty());
 }

@@ -1,6 +1,6 @@
 import { Position, useUpdateNodeInternals } from "@xyflow/react";
 import { useEffect, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { movePort, placePorts, resetPort, SIDES, type Placed, type PortSides, type Side } from "./ports";
+import { movePort, placePorts, portHint, resetPort, SIDES, type Placed, type PortSides, type Side } from "./ports";
 import type { BlockDef, PortDef } from "./protocol";
 import { PortHandle } from "./wireSnap";
 
@@ -82,6 +82,7 @@ export function usePortLayout(options: {
         className={`port ${dir} side-${side} port-${p.type ?? "signal"} nodrag${moving?.id === p.id ? " moving" : ""}`}
         data-side={side}
         data-port={p.id}
+        title={portHint(p)}
         onPointerDown={(e) => startMove(e, p.id)}
         onDoubleClick={(e) => {
           e.stopPropagation();

@@ -383,7 +383,7 @@ void load_starters(const json& doc, Catalog& catalog) {
   for (std::size_t i = 0; i < groups.size(); ++i) {
     const auto& g = groups[i];
     const auto at = "graph.groups[" + std::to_string(i) + "]";
-    only_fields(g, {"id", "kind", "label", "nodes", "parent", "collapsed", "pos", "params", "ports"}, at);
+    only_fields(g, {"id", "kind", "label", "nodes", "parent", "collapsed", "pos", "params", "ports", "release"}, at);
     if (g.contains("ports")) only_fields(g["ports"], {"left", "right", "top", "bottom"}, at + ".ports");
     if (!g.contains("id") || !g.contains("nodes")) throw DescriptorError(at + ": needs an id and nodes");
     const auto kind = g.value("kind", std::string{"visual"});
@@ -391,6 +391,15 @@ void load_starters(const json& doc, Catalog& catalog) {
     if (!ids.insert(g["id"].get<std::string>()).second) throw DescriptorError(at + ": duplicate id");
     for (const auto& n : g["nodes"])
       if (!ids.contains(n.get<std::string>())) throw DescriptorError(at + ": no node \"" + n.get<std::string>() + "\"");
+    // A story's outputs that drop when it ends: [node, port], each a block of the story.
+    for (const auto& r : g.value("release", json::array())) {
+      if (kind != "story") throw DescriptorError(at + ": only a story releases outputs");
+      if (!r.is_array() || r.size() != 2 || !r[0].is_string() || !r[1].is_string())
+        throw DescriptorError(at + ": release lists outputs as [node, port]");
+      if (!std::ranges::any_of(g["nodes"], [&](const json& n) { return n == r[0]; }))
+        throw DescriptorError(at + ": releases " + r[0].get<std::string>() + "." + r[1].get<std::string>() +
+                              ", which isn't in the story");
+    }
   }
   // Nesting: a group's parent is another group, and no group ends up inside itself.
   std::map<std::string, std::string> parent_of;
@@ -690,6 +699,16 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     for (const auto& p : list) {
       json port = {{"id", p.id}, {"type", p.type}};
       if (!p.unit.empty()) port["unit"] = p.unit;
+      if (p.dimension) port["dimension"] = *p.dimension;
+      if (!p.components.empty()) {
+        json components = json::array();
+        for (const auto& component : p.components) {
+          json item = {{"id", component.id}};
+          if (!component.unit.empty()) item["unit"] = component.unit;
+          components.push_back(std::move(item));
+        }
+        port["components"] = std::move(components);
+      }
       out.push_back(std::move(port));
     }
     return out;

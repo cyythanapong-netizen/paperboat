@@ -1,0 +1,3 @@
+# Arithmetic signal blocks.
+name = "math"
+register = ["add_arithmetic"]

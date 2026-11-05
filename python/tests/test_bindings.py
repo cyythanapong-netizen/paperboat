@@ -66,6 +66,45 @@ paperboat.serve(paperboat.Backend(engine="test", descriptor="descriptor.toml", b
                                   objects=[Weight, Hook], state=World, dt=0.1, duration=5.0, emit_every=1))
 '''
 
+VECTOR_BACKEND = '''
+import paperboat
+from paperboat import Vector, vector_port
+
+class Position(paperboat.Block):
+    type, label = "position", "Position"
+    outputs = [vector_port("state", components=[("x", "m"), ("y", "m")])]
+    def step(self, ctx, inputs):
+        return {"state": Vector([2.0, 3.0])}
+
+class AddCoordinates(paperboat.Block):
+    type, label = "add-coordinates", "Add coordinates"
+    inputs = [vector_port("state", components=[("horizontal", "m"), ("vertical", "m")])]
+    outputs = ["total"]
+    def step(self, ctx, inputs):
+        x, y = inputs["state"]
+        return {"total": x + y}
+
+paperboat.serve(paperboat.Backend(engine="test-vectors", descriptor="descriptor.toml",
+                                  blocks=[Position, AddCoordinates], mode="once"))
+'''
+
+VECTOR_DESCRIPTOR = '''
+domain = "vectors"
+import = ["dashboard"]
+[graph]
+nodes = [
+  { id = "position", type = "position" },
+  { id = "add", type = "add-coordinates" },
+  { id = "show", type = "display" },
+  { id = "vector-show", type = "display" },
+]
+edges = [
+  { from = ["position", "state"], to = ["add", "state"] },
+  { from = ["add", "total"], to = ["show", "in"] },
+  { from = ["position", "state"], to = ["vector-show", "in"] },
+]
+'''
+
 DESCRIPTOR = '''
 domain = "t"
 import = ["base", "step", "signal", "dashboard"]
@@ -93,13 +132,14 @@ edges = [
 '''
 
 
-def run_backend(tmp_path: Path, backend: str = BACKEND, descriptor: str = DESCRIPTOR, args: tuple[str, ...] = ()) -> list[dict]:
+def run_backend(tmp_path: Path, backend: str = BACKEND, descriptor: str = DESCRIPTOR,
+                args: tuple[str, ...] = (), success: bool = True) -> list[dict]:
     (tmp_path / "server.py").write_text(textwrap.dedent(backend))
     (tmp_path / "descriptor.toml").write_text(textwrap.dedent(descriptor))
     env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
     proc = subprocess.run([sys.executable, "server.py", "--run", *args], cwd=tmp_path, env=env, capture_output=True,
                           text=True, timeout=120)
-    assert proc.returncode == 0, proc.stderr
+    assert (proc.returncode == 0) == success, proc.stderr
     return [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
 
 
@@ -113,6 +153,40 @@ def test_a_python_backend_runs_on_the_engine(tmp_path: Path) -> None:
     logs = [m for m in msgs if m["type"] == "log"]
     assert any(m.get("node") == "d" and m["text"] == "hello" for m in logs)  # ctx.log, its text param
     assert any(m["text"] == "x = 1.000" for m in logs)  # the Timed step followed its curve to 1
+
+
+def test_a_python_vector_uses_one_typed_wire_with_component_metadata(tmp_path: Path) -> None:
+    msgs = run_backend(tmp_path, backend=VECTOR_BACKEND, descriptor=VECTOR_DESCRIPTOR)
+    signal = next(m for m in msgs if m["type"] == "signal" and m["node"] == "show")
+    assert signal["v"] == 5.0
+    vector_signal = next(m for m in msgs if m["type"] == "signal" and m["node"] == "vector-show")
+    assert vector_signal["v"] == [2.0, 3.0]
+    assert vector_signal["components"] == [{"id": "x", "unit": "m"}, {"id": "y", "unit": "m"}]
+
+
+def test_a_python_vector_must_match_its_declared_dimension(tmp_path: Path) -> None:
+    backend = VECTOR_BACKEND.replace(
+        'vector_port("state", components=[("x", "m"), ("y", "m")])',
+        'vector_port("state", 3)',
+        1,
+    )
+    backend = backend.replace(
+        'inputs = [vector_port("state", components=[("horizontal", "m"), ("vertical", "m")])]',
+        'inputs = [vector_port("state")]',
+    )
+    msgs = run_backend(tmp_path, backend=backend, descriptor=VECTOR_DESCRIPTOR, success=False)
+    assert msgs[-1]["type"] == "run.finished" and msgs[-1]["status"] == "failed"
+    assert any(m.get("node") == "position" and "expected 3" in m.get("text", "") for m in msgs)
+
+
+def test_python_vector_component_units_are_checked_on_a_wire(tmp_path: Path) -> None:
+    backend = VECTOR_BACKEND.replace(
+        '("horizontal", "m"), ("vertical", "m")',
+        '("horizontal", "cm"), ("vertical", "m")',
+    )
+    msgs = run_backend(tmp_path, backend=backend, descriptor=VECTOR_DESCRIPTOR, success=False)
+    assert msgs[-1]["type"] == "run.finished" and msgs[-1]["status"] == "failed"
+    assert any("vector component 0 in m" in m.get("text", "") for m in msgs if m["type"] == "log")
 
 
 def test_a_blocks_view_is_checked(tmp_path: Path) -> None:
@@ -196,3 +270,72 @@ def test_a_python_block_without_feedthrough_closes_a_loop(tmp_path: Path) -> Non
     assert msgs[-1]["status"] == "done"
     counts = [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "count"]
     assert counts == [float(k) for k in range(11)]  # one more each clock step, 0 to 10
+
+
+MODEL_BACKEND = '''
+import math
+import paperboat
+from paperboat import Linked, Param, scene
+
+class Mass(paperboat.Model):
+    """x'' = (force - k x) / m, stepped by the engine's solver."""
+    type, label = "mass", "Mass on a spring"
+    props = {"k": 4.0, "x0": 1.0, "solver": Param("rk4", "enum", paperboat.solve.names())}
+    block = Linked(inputs=["force"], outputs=["x"])
+
+    def initial(self):
+        return [self.props["x0"], 0.0]
+
+    def derivatives(self, t, x, inputs):
+        return [x[1], inputs.get("force", 0.0) - self.props["k"] * x[0]]
+
+    def read(self):
+        return {"x": self.x[0]}
+
+    def entities(self, id, z):
+        return [scene.rect(f"{id}/mass", self.x[0], 0, 0.4, 0.4, "#2f5d62", z=z),
+                scene.spring(f"{id}/spring", (-2, 0), (self.x[0] - 0.2, 0), coils=6)]
+
+paperboat.serve(paperboat.Backend(engine="model", descriptor="descriptor.toml", objects=[Mass],
+                                  dt=0.01, duration=1.0, emit_every=100))
+'''
+
+MODEL_DESCRIPTOR = '''
+domain = "model"
+import = ["dashboard"]
+
+[station]
+objects = [{ id = "m", type = "mass", props = { solver = "SOLVER" } }]
+
+[graph]
+nodes = [{ id = "m", type = "mass" }, { id = "x", type = "display" }]
+edges = [{ from = ["m", "x"], to = ["x", "in"] }]
+'''
+
+
+def test_a_python_model_is_stepped_by_the_engines_solver(tmp_path: Path) -> None:
+    import math
+    for solver, tolerance in (("rk4", 1e-7), ("rk45", 1e-5), ("euler", 0.1)):
+        msgs = run_backend(tmp_path, MODEL_BACKEND, MODEL_DESCRIPTOR.replace("SOLVER", solver))
+        assert msgs[-1]["status"] == "done", msgs
+        x = [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "x"][-1]
+        # The display shows x before the last step: t = 0.99 at the run's last pass (ω = 2).
+        assert abs(x - math.cos(2 * 1.0)) < tolerance or abs(x - math.cos(2 * 0.99)) < tolerance, (solver, x)
+        scene = [m for m in msgs if m["type"] == "scene"][0]["entities"]
+        ids = {e["id"] for e in scene}
+        assert "m/mass" in ids and "m/spring/0" in ids  # scene builders, a spring's lines flattened in
+
+
+def test_scene_and_solve_are_bound() -> None:
+    sys.path.insert(0, str(ROOT / "python"))
+    import paperboat
+    rod = paperboat.scene.rod("r", (0, 0), (0, 2), 0.1)
+    assert rod.pos == [0.0, 1.0, 0.0] and abs(rod.size[0] - 2) < 1e-12
+    x = paperboat.solve.step("rk4", lambda t, x: [x[1], -x[0]], [1.0, 0.0], 0.0, 0.1)
+    assert abs(x[0] - 0.9950041666666667) < 1e-15
+    try:
+        paperboat.solve.Solver("ode23")
+    except ValueError as err:
+        assert "rk4, rk45" in str(err)
+    else:
+        raise AssertionError("an unknown solver must be refused")

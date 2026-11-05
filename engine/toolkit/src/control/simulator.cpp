@@ -83,13 +83,16 @@ void add_simulator(Registry& registry) {
   };
   without_feedthrough(make_template(
       "control", "integrator", "Integrator", {"u"}, {"y"}, {{"initial", 0.0}},
-      [](const Values& p, const Config&) { return std::make_unique<Integrator>(get_or(p, "initial")); }));
+      [](const Values& p, const Config&) { return std::make_unique<Integrator>(get_or(p, "initial")); },
+      "Accumulates its input over time. A feedback loop may pass through it."));
   without_feedthrough(make_template(
       "control", "lag", "Lag", {"u"}, {"y"}, {{"tau", 1.0}},
-      [](const Values& p, const Config&) { return std::make_unique<Lag>(get_or(p, "tau")); }));
+      [](const Values& p, const Config&) { return std::make_unique<Lag>(get_or(p, "tau")); },
+      "Smooths its input with a time constant: a first-order lag."));
   auto delay = make_template(
       "control", "delay", "Delay", {"u"}, {"y"}, {{"steps", 1.0}, {"initial", 0.0}},
-      [](const Values& p, const Config&) { return std::make_unique<Delay>(get_or(p, "steps"), get_or(p, "initial")); });
+      [](const Values& p, const Config&) { return std::make_unique<Delay>(get_or(p, "steps"), get_or(p, "initial")); },
+      "Its input from a number of clock steps ago; any value.");
   delay.def.inputs[0].type = delay.def.outputs[0].type = "any";  // delays any value, not only numbers
   without_feedthrough(std::move(delay));
 }

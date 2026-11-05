@@ -20,6 +20,7 @@
 #include <utility>
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/array.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/tuple.h>
@@ -27,6 +28,9 @@
 #include <nanobind/stl/vector.h>
 #include <paperboat/core/backend.hpp>
 #include <paperboat/toolkit/bases.hpp>
+#include <paperboat/toolkit/model.hpp>
+#include <paperboat/toolkit/scene.hpp>
+#include <paperboat/toolkit/solve.hpp>
 
 namespace nb = nanobind;
 namespace tk = paperboat::toolkit;
@@ -130,6 +134,10 @@ std::array<double, 3> vec3(nb::handle h, std::array<double, 3> fallback) {
 }
 
 tk::Entity entity_from_py(nb::handle h) {
+  if (nb::isinstance<tk::Entity>(h)) return nb::cast<tk::Entity>(h);  // from paperboat.scene
+  if (!nb::isinstance<nb::dict>(h))
+    throw std::runtime_error("an entity is a paperboat.scene shape (scene.rect(…)) or a dict, not " +
+                             nb::cast<std::string>(nb::repr(h)));
   const auto d = nb::cast<nb::dict>(h);
   auto get = [&](const char* key) -> nb::object {
     if (!d.contains(key)) return nb::none();
@@ -151,10 +159,34 @@ tk::Entity entity_from_py(nb::handle h) {
           .src = text("src", "")};
 }
 
+// A list of entities; lists in it are flattened, so scene.spring(…) (a list) goes in as is.
+void entities_into(nb::handle h, std::vector<tk::Entity>& out) {
+  for (nb::handle e : h) {
+    if (nb::isinstance<nb::list>(e) || nb::isinstance<nb::tuple>(e)) entities_into(e, out);
+    else out.push_back(entity_from_py(e));
+  }
+}
+
 std::vector<tk::Entity> entities_from_py(nb::handle h) {
   std::vector<tk::Entity> out;
-  if (!h.is_none())
-    for (nb::handle e : h) out.push_back(entity_from_py(e));
+  if (!h.is_none()) entities_into(h, out);
+  return out;
+}
+
+// A state from Python: any sequence of numbers (a list, a tuple, a numpy array).
+tk::solve::State state_from_py(nb::handle h, const char* what) {
+  tk::solve::State out;
+  try {
+    for (nb::handle v : h) out.push_back(nb::cast<double>(v));
+  } catch (const std::exception&) {
+    throw std::runtime_error(std::string(what) + " must be a list of numbers, not " + nb::cast<std::string>(nb::repr(h)));
+  }
+  return out;
+}
+
+nb::list state_to_py(const tk::solve::State& x) {
+  nb::list out;
+  for (double v : x) out.append(nb::float_(v));
   return out;
 }
 
@@ -311,6 +343,32 @@ struct ObjectAdapter final : tk::StationObject {
   Owned py;
 };
 
+// paperboat.Model: the engine's Model (a solver advances the state) calling the Python
+// class's derivatives(t, x, inputs). Its `x` is kept current for read() and entities().
+struct ModelAdapter final : tk::Model {
+  ModelAdapter(nb::object obj, tk::solve::State initial, const std::string& solver)
+      : tk::Model(std::move(initial), solver), py(std::move(obj)) {}
+  tk::solve::State derivatives(double t, const tk::solve::State& x, const tk::Values&) const override {
+    // Called with the GIL held, from step(); `inputs_` is this step's inputs as a dict.
+    nb::object dx = (*py).attr("derivatives")(t, state_to_py(x), inputs_);
+    return state_from_py(dx, "derivatives()");
+  }
+  void step(const tk::Context& ctx, const tk::Values& in) override {
+    with_python([&] {
+      inputs_ = to_py(in);
+      tk::Model::step(ctx, in);
+      inputs_ = nb::object();
+      (*py).attr("x") = state_to_py(x());
+    });
+  }
+  tk::Values read() const override { return with_python([&] { return values_from_py((*py).attr("read")()); }); }
+  std::vector<tk::Entity> entities(const std::string& id, double z) const override {
+    return with_python([&] { return entities_from_py((*py).attr("entities")(nb::str(id.c_str()), z)); });
+  }
+  Owned py;
+  nb::object inputs_;
+};
+
 // --- Definitions: a Python class's attributes as a BlockDef or ObjectDef -----------------
 
 std::string class_name(nb::handle cls) { return nb::cast<std::string>(cls.attr("__name__")); }
@@ -323,6 +381,22 @@ std::string text_attr(nb::handle obj, const char* name, const std::string& fallb
   return out.empty() ? fallback : out;
 }
 
+tk::VectorComponent vector_component_from_py(nb::handle value, const std::string& at) {
+  if (nb::isinstance<nb::str>(value)) return {.id = nb::cast<std::string>(value)};
+  if (nb::hasattr(value, "id")) {
+    tk::VectorComponent out{.id = nb::cast<std::string>(value.attr("id"))};
+    if (nb::hasattr(value, "unit")) out.unit = text_attr(value, "unit");
+    return out;
+  }
+  if (nb::isinstance<nb::tuple>(value) || nb::isinstance<nb::list>(value)) {
+    const auto pair = nb::cast<nb::sequence>(value);
+    const auto n = nb::len(pair);
+    if (n == 1 || n == 2)
+      return {.id = nb::cast<std::string>(pair[0]), .unit = n == 2 ? nb::cast<std::string>(pair[1]) : ""};
+  }
+  throw std::runtime_error(at + ": a vector component is a name, (name, unit) or VectorComponent");
+}
+
 // A port: "force", ("x", "position") or paperboat.Port("x", "position").
 std::vector<tk::PortDef> ports_from_py(nb::handle list, const std::string& at) {
   std::vector<tk::PortDef> out;
@@ -330,6 +404,27 @@ std::vector<tk::PortDef> ports_from_py(nb::handle list, const std::string& at) {
   for (nb::handle p : list) {
     if (nb::isinstance<nb::str>(p)) {
       out.push_back({.id = nb::cast<std::string>(p)});
+    } else if (nb::hasattr(p, "id") && nb::hasattr(p, "type")) {
+      tk::PortDef port{.id = nb::cast<std::string>(p.attr("id")),
+                       .type = nb::cast<std::string>(p.attr("type"))};
+      if (nb::hasattr(p, "unit")) port.unit = text_attr(p, "unit");
+      if (nb::hasattr(p, "dimension") && !p.attr("dimension").is_none()) {
+        const int dimension = nb::cast<int>(p.attr("dimension"));
+        if (dimension < 1) throw std::runtime_error(at + ": a vector dimension must be positive");
+        port.dimension = static_cast<std::size_t>(dimension);
+      }
+      if (nb::hasattr(p, "components") && !p.attr("components").is_none())
+        for (nb::handle component : p.attr("components"))
+          port.components.push_back(vector_component_from_py(component, at));
+      if (!port.components.empty()) {
+        if (!tk::is_vector_type(port.type)) throw std::runtime_error(at + ": components are only valid on a vector port");
+        if (port.dimension && *port.dimension != port.components.size())
+          throw std::runtime_error(at + ": vector dimension does not match its components");
+        port.dimension = port.components.size();
+      }
+      if (port.dimension && !tk::is_vector_type(port.type))
+        throw std::runtime_error(at + ": dimension is only valid on a vector port");
+      out.push_back(std::move(port));
     } else if (nb::isinstance<nb::tuple>(p) || nb::isinstance<nb::list>(p)) {
       const auto seq = nb::cast<nb::sequence>(p);
       const auto n = nb::len(seq);
@@ -534,9 +629,22 @@ std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descr
     tk::StationTemplate t;
     t.def = object_def(cls);
     t.name = domain + "/" + t.def.type;
-    t.make = [cls](const tk::Values& props) -> std::unique_ptr<tk::StationObject> {
-      return with_python([&] { return std::make_unique<ObjectAdapter>(cls(to_py(props))); });
-    };
+    if (text_attr(cls, "_paperboat") == "model") {
+      t.make = [cls](const tk::Values& props) -> std::unique_ptr<tk::StationObject> {
+        return with_python([&]() -> std::unique_ptr<tk::StationObject> {
+          nb::object obj = cls(to_py(props));
+          auto initial = state_from_py(obj.attr("initial")(), "initial()");
+          // A `solver` prop (an enum the user picks) wins over the class's `solver`.
+          const std::string solver = tk::get_text(props, "solver", text_attr(cls, "solver", "rk4"));
+          obj.attr("x") = state_to_py(initial);
+          return std::make_unique<ModelAdapter>(obj, std::move(initial), solver);
+        });
+      };
+    } else {
+      t.make = [cls](const tk::Values& props) -> std::unique_ptr<tk::StationObject> {
+        return with_python([&] { return std::make_unique<ObjectAdapter>(cls(to_py(props))); });
+      };
+    }
     h->registry.add(std::move(t));
   }
   h->classes = keep;
@@ -590,6 +698,80 @@ NB_MODULE(_engine, m) {
   m.def("make", &make, nb::arg("engine"), nb::arg("descriptor"), nb::arg("blocks"), nb::arg("objects"),
         nb::arg("state").none(), nb::arg("mode"), nb::arg("dt"), nb::arg("duration"), nb::arg("emit_every"),
         nb::arg("view").none(), nb::arg("speed") = 1.0, "Register the domain's classes and load the descriptor.");
+
+  // --- Domain code's tools: the scene builders and solvers, bound from the toolkit ---
+
+  nb::class_<tk::Entity>(m, "Entity", "One shape in the scene (the protocol's Entity); made by paperboat.scene.")
+      .def(nb::init<>())
+      .def_rw("id", &tk::Entity::id)
+      .def_rw("shape", &tk::Entity::shape)
+      .def_rw("pos", &tk::Entity::pos)
+      .def_rw("size", &tk::Entity::size)
+      .def_rw("rot", &tk::Entity::rot)
+      .def_rw("color", &tk::Entity::color)
+      .def_rw("scale", &tk::Entity::scale)
+      .def_rw("to", &tk::Entity::to)
+      .def_rw("src", &tk::Entity::src)
+      .def("__repr__", [](const tk::Entity& e) {
+        return "Entity(" + e.shape + " " + e.id + " at " + std::to_string(e.pos[0]) + ", " + std::to_string(e.pos[1]) +
+               ", " + std::to_string(e.pos[2]) + ")";
+      });
+
+  // Points are (x, y) or (x, y, z): a 2D scene needn't say z.
+  auto point = [](nb::handle h) { return vec3(h, {0, 0, 0}); };
+  nb::module_ scene = m.def_submodule("scene", "Scene builders: entities by what they are (paperboat.scene.rect…).");
+  scene.def("box", [point](std::string id, nb::handle pos, nb::handle size, std::string color, nb::handle rot) {
+      return tk::scene::box(std::move(id), point(pos), vec3(size, {1, 1, 1}), std::move(color), point(rot));
+    }, nb::arg("id"), nb::arg("pos"), nb::arg("size"), nb::arg("color") = "#888888", nb::arg("rot") = nb::none(),
+    "A box centred at pos, turned by rot (radians, about x, then y, then z).");
+  scene.def("sphere", [point](std::string id, nb::handle pos, double radius, std::string color) {
+      return tk::scene::sphere(std::move(id), point(pos), radius, std::move(color));
+    }, nb::arg("id"), nb::arg("pos"), nb::arg("radius"), nb::arg("color") = "#888888", "A ball centred at pos.");
+  scene.def("line", [point](std::string id, nb::handle a, nb::handle b, std::string color) {
+      return tk::scene::line(std::move(id), point(a), point(b), std::move(color));
+    }, nb::arg("id"), nb::arg("a"), nb::arg("b"), nb::arg("color") = "#888888", "A straight line from a to b.");
+  scene.def("image", [point](std::string id, nb::handle pos, double width, double height, std::string src) {
+      return tk::scene::image(std::move(id), point(pos), width, height, std::move(src));
+    }, nb::arg("id"), nb::arg("pos"), nb::arg("width"), nb::arg("height"), nb::arg("src"),
+    "A picture width × height facing +z, centred at pos: a URL or a data: URL.");
+  scene.def("rect", &tk::scene::rect, nb::arg("id"), nb::arg("x"), nb::arg("y"), nb::arg("width"), nb::arg("height"),
+            nb::arg("color") = "#888888", nb::arg("angle") = 0.0, nb::arg("z") = 0.0,
+            "A rectangle in the x-y plane centred at (x, y), turned by angle (radians, anticlockwise).");
+  scene.def("circle", &tk::scene::circle, nb::arg("id"), nb::arg("x"), nb::arg("y"), nb::arg("radius"),
+            nb::arg("color") = "#888888", nb::arg("z") = 0.0, "A disc in the x-y plane centred at (x, y).");
+  scene.def("rod", [point](std::string id, nb::handle a, nb::handle b, double thickness, std::string color) {
+      return tk::scene::rod(std::move(id), point(a), point(b), thickness, std::move(color));
+    }, nb::arg("id"), nb::arg("a"), nb::arg("b"), nb::arg("thickness"), nb::arg("color") = "#888888",
+    "A bar of square section from a to b (a link, a pole, a strut).");
+  scene.def("spring", [point](const std::string& id, nb::handle a, nb::handle b, int coils, double width, const std::string& color) {
+      return tk::scene::spring(id, point(a), point(b), coils, width, color);
+    }, nb::arg("id"), nb::arg("a"), nb::arg("b"), nb::arg("coils") = 8, nb::arg("width") = 0.2, nb::arg("color") = "#888888",
+    "A coil spring from a to b: a list of lines (ids id/0, id/1…), the same number at any length.");
+
+  nb::module_ solve = m.def_submodule("solve", "Solvers: advance x' = f(t, x) (or x[k+1] = f(t, x)) by a clock step.");
+  struct PySolver {
+    std::unique_ptr<tk::solve::Solver> solver;
+    nb::list step(nb::callable f, nb::handle x, double t, double dt) {
+      auto state = state_from_py(x, "x");
+      solver->step(state, t, dt, [&](double at, const tk::solve::State& s) {
+        return state_from_py(f(at, state_to_py(s)), "f(t, x)");
+      });
+      return state_to_py(state);
+    }
+  };
+  nb::class_<PySolver>(solve, "Solver", "A solver by name (paperboat.solve.names()); rk45 keeps its step size between calls.")
+      .def("__init__", [](PySolver* self, const std::string& name, double rtol, double atol, int max_steps) {
+          new (self) PySolver{tk::solve::make(name, {.rtol = rtol, .atol = atol, .max_steps = max_steps})};
+        }, nb::arg("name") = "rk4", nb::arg("rtol") = 1e-6, nb::arg("atol") = 1e-9, nb::arg("max_steps") = 100000)
+      .def("step", &PySolver::step, nb::arg("f"), nb::arg("x"), nb::arg("t"), nb::arg("dt"),
+           "x advanced from t to t + dt under f(t, x) (dx/dt, or the next x for discrete): a new list.")
+      .def_prop_ro("name", [](const PySolver& s) { return std::string(s.solver->name()); });
+  solve.def("names", [] { return tk::solve::names(); }, "The solvers, the default first: rk4, rk45, rk2, euler, discrete.");
+  solve.def("step", [](const std::string& name, nb::callable f, nb::handle x, double t, double dt) {
+      PySolver s{tk::solve::make(name)};
+      return s.step(std::move(f), x, t, dt);
+    }, nb::arg("solver"), nb::arg("f"), nb::arg("x"), nb::arg("t"), nb::arg("dt"),
+    "One step with a fresh solver of that name: x advanced from t to t + dt, a new list.");
 
   m.def(
       "options",

@@ -33,7 +33,7 @@ void add_pid(Registry& registry) {
       "control", "pid", "PID", {"e"}, {"u"}, {{"kp", 1.0}, {"ki", 0.0}, {"kd", 0.0}},
       [](const Values& p, const Config&) {
         return std::make_unique<Pid>(get_or(p, "kp"), get_or(p, "ki"), get_or(p, "kd"));
-      }));
+      }, "Drives an error to zero: proportional, integral and derivative terms."));
 }
 
 }  // namespace paperboat::toolkit::control

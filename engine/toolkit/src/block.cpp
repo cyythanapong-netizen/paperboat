@@ -3,6 +3,7 @@
 #include "paperboat/toolkit/station.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 #include <string_view>
 
 namespace paperboat::toolkit {
@@ -70,10 +71,60 @@ std::string a_port(const std::string& type) {
 std::optional<std::string> wire_mismatch(const PortDef& from, const PortDef& to) {
   const bool step_from = from.type == "step", step_to = to.type == "step";
   if (step_from != step_to) return "joins " + a_port(from.type) + " to " + a_port(to.type);
-  if (!step_from && from.type != to.type && from.type != "any" && to.type != "any")
+  const bool same_type = from.type == to.type || (is_vector_type(from.type) && is_vector_type(to.type));
+  if (!step_from && !same_type && from.type != "any" && to.type != "any")
     return "joins " + a_port(from.type) + " to " + a_port(to.type);
-  if (!from.unit.empty() && !to.unit.empty() && from.unit != to.unit)
+  if (is_vector_type(from.type) && is_vector_type(to.type)) {
+    const auto from_size = vector_dimension(from);
+    const auto to_size = vector_dimension(to);
+    if (from_size && to_size && *from_size != *to_size)
+      return "carries a vector of " + std::to_string(*from_size) + " values into a port expecting " +
+             std::to_string(*to_size);
+    const std::size_t components = std::max(from.components.size(), to.components.size());
+    const auto unit_at = [](const PortDef& p, std::size_t i) -> std::string_view {
+      if (i < p.components.size() && !p.components[i].unit.empty()) return p.components[i].unit;
+      return p.unit;
+    };
+    for (std::size_t i = 0; i < components; ++i) {
+      const auto from_unit = unit_at(from, i);
+      const auto to_unit = unit_at(to, i);
+      if (!from_unit.empty() && !to_unit.empty() && from_unit != to_unit)
+        return "carries vector component " + std::to_string(i) + " in " + std::string(from_unit) +
+               " into a port in " + std::string(to_unit);
+    }
+  } else if (!from.unit.empty() && !to.unit.empty() && from.unit != to.unit) {
     return "carries " + from.unit + " into a port in " + to.unit;
+  }
+  return std::nullopt;
+}
+
+bool is_vector_type(std::string_view type) { return type == "vector" || type == "numbers"; }
+
+std::optional<std::size_t> vector_dimension(const PortDef& port) {
+  if (port.dimension) return port.dimension;
+  if (!port.components.empty()) return port.components.size();
+  return std::nullopt;
+}
+
+PortDef vector_port(std::string id) { return {.id = std::move(id), .type = "vector"}; }
+
+PortDef vector_port(std::string id, std::size_t dimension) {
+  if (dimension == 0) throw std::invalid_argument("a vector dimension must be positive");
+  return {.id = std::move(id), .type = "vector", .dimension = dimension};
+}
+
+PortDef vector_port(std::string id, std::vector<VectorComponent> components) {
+  std::optional<std::size_t> dimension;
+  if (!components.empty()) dimension = components.size();
+  return {.id = std::move(id), .type = "vector", .dimension = dimension, .components = std::move(components)};
+}
+
+std::optional<std::string> vector_value_mismatch(const PortDef& port, const Value& value) {
+  if (!is_vector_type(port.type)) return std::nullopt;
+  const auto* vector = std::get_if<Vector>(&value);
+  if (!vector) return "expects a vector value";
+  if (const auto dimension = vector_dimension(port); dimension && vector->size() != *dimension)
+    return "has " + std::to_string(vector->size()) + " values, expected " + std::to_string(*dimension);
   return std::nullopt;
 }
 

@@ -6,6 +6,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -39,11 +40,13 @@ class Filter final : public Block {
   Values params_;
 };
 
-void filter(Registry& registry, std::string type, std::string label, std::vector<ParamDef> params, Filter::Fn fn) {
+void filter(Registry& registry, std::string type, std::string label, std::vector<ParamDef> params, Filter::Fn fn,
+            std::string description) {
   Template t;
   t.name = "opencv/" + type;
   t.def = {.type = std::move(type), .label = std::move(label), .kind = Kind::Function,
-           .inputs = {image_port("image")}, .outputs = {image_port("image")}, .params = std::move(params)};
+           .inputs = {image_port("image")}, .outputs = {image_port("image")}, .params = std::move(params),
+           .description = std::move(description)};
   t.make = [fn = std::move(fn)](const Values& q, const Config&) { return std::make_unique<Filter>(fn, q); };
   registry.add(std::move(t));
 }
@@ -70,20 +73,21 @@ struct View final : Block {
 void register_opencv(Registry& registry) {
   add_image_object(registry);
 
-  filter(registry, "gray", "Gray", {}, [](const cv::Mat& im, const Values&) { return as_gray(im); });
+  filter(registry, "gray", "Gray", {}, [](const cv::Mat& im, const Values&) { return as_gray(im); },
+         "Turns an image to grey.");
 
   filter(registry, "blur", "Blur (Gaussian)", {{"size", 5.0}}, [](const cv::Mat& im, const Values& q) {
     cv::Mat out;
     const int k = odd(p(q, "size"));
     cv::GaussianBlur(im, out, {k, k}, 0);
     return out;
-  });
+  }, "Softens an image.");
 
   filter(registry, "median", "Blur (median)", {{"size", 5.0}}, [](const cv::Mat& im, const Values& q) {
     cv::Mat out;
     cv::medianBlur(im, out, std::max(3, odd(p(q, "size"))));
     return out;
-  });
+  }, "Removes speckle noise, keeping edges.");
 
   // Gray → black and white at `level` (0–255). otsu = 1 picks the level from the picture;
   // invert = 1 makes dark things white (parts on a light background).
@@ -94,7 +98,7 @@ void register_opencv(Registry& registry) {
                             (p(q, "otsu") > 0 ? cv::THRESH_OTSU : 0);
            cv::threshold(as_gray(im), out, p(q, "level"), 255, type);
            return out;
-         });
+         }, "Splits an image into black and white at a level.");
 
   // Threshold against the local mean: for uneven lighting.
   filter(registry, "adaptive_threshold", "Threshold (adaptive)", {{"size", 31.0}, {"c", 5.0}, {"invert", 0.0}},
@@ -104,7 +108,7 @@ void register_opencv(Registry& registry) {
                                  p(q, "invert") > 0 ? cv::THRESH_BINARY_INV : cv::THRESH_BINARY,
                                  std::max(3, odd(p(q, "size"))), p(q, "c"));
            return out;
-         });
+         }, "Black and white by local brightness: for uneven light.");
 
   // A mask of the pixels in an HSV box. Hue is 0–180; h_min > h_max wraps around red.
   filter(registry, "hsv_range", "HSV range",
@@ -121,26 +125,31 @@ void register_opencv(Registry& registry) {
            };
            const double h0 = p(q, "h_min"), h1 = p(q, "h_max");
            return h0 <= h1 ? range(h0, h1) : cv::Mat(range(h0, 180) | range(0, h1));
-         });
+         }, "Keeps the pixels within a range of colour.");
 
   filter(registry, "canny", "Edges (Canny)", {{"low", 50.0}, {"high", 150.0}}, [](const cv::Mat& im, const Values& q) {
     cv::Mat out;
     cv::Canny(as_gray(im), out, p(q, "low"), p(q, "high"));
     return out;
-  });
+  }, "Finds edges.");
 
   for (auto [type, label, op] : {std::tuple{"erode", "Erode", cv::MORPH_ERODE}, {"dilate", "Dilate", cv::MORPH_DILATE},
                                  {"open", "Open (remove specks)", cv::MORPH_OPEN},
                                  {"close", "Close (fill gaps)", cv::MORPH_CLOSE}}) {
+    const std::string_view type_name(type);
+    const std::string description = type_name == "erode" ? "Shrinks white areas."
+                                  : type_name == "dilate" ? "Grows white areas."
+                                  : type_name == "open" ? "Removes small white specks."
+                                                        : "Fills small black holes.";
     filter(registry, type, label, {{"size", 5.0}, {"iterations", 1.0}},
-           [op = op](const cv::Mat& im, const Values& q) { return morph(im, q, op); });
+           [op = op](const cv::Mat& im, const Values& q) { return morph(im, q, op); }, description);
   }
 
   filter(registry, "invert", "Invert", {}, [](const cv::Mat& im, const Values&) {
     cv::Mat out;
     cv::bitwise_not(im, out);
     return out;
-  });
+  }, "Swaps black and white.");
 
   // How far each white pixel is from black: touching blobs get one peak each.
   filter(registry, "distance", "Distance", {}, [](const cv::Mat& im, const Values&) {
@@ -148,12 +157,12 @@ void register_opencv(Registry& registry) {
     cv::distanceTransform(as_gray(im), dist, cv::DIST_L2, 5);
     cv::normalize(dist, out, 0, 255, cv::NORM_MINMAX, CV_8U);
     return out;
-  });
+  }, "How far each white pixel is from black.");
 
   Template view;
   view.name = "opencv/view";
   view.def = {.type = "view", .label = "Image view", .kind = Kind::Monitor, .inputs = {image_port("image")},
-              .outputs = {}, .params = {}, .instrument = "image"};
+              .outputs = {}, .params = {}, .instrument = "image", .description = "Shows an image on the Dashboard."};
   view.make = [](const Values&, const Config&) { return std::make_unique<View>(); };
   registry.add(std::move(view));
 }

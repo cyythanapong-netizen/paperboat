@@ -98,14 +98,6 @@ StationTemplate define_object(const std::string& package, ObjectDef def) {
   return t;
 }
 
-// Each package registers its templates. Defined next to the blocks they register.
-void register_base(Registry& registry);     // what every domain needs: values, key, logic (magic)
-void register_signal(Registry& registry);   // clock, sine, step, ramp, square; ease
-void register_math(Registry& registry);     // arithmetic on signals: gain, sum, threshold, saturation
-void register_control(Registry& registry);  // dynamics on a clock: pid, integrator, lag
-void register_dashboard(Registry& registry);  // monitors: graph, display
-void register_step(Registry& registry);     // a Step flow's path: start, when, wait, if, repeat, stop
-
 // Every built-in template.
 const Registry& builtins();
 

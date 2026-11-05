@@ -509,6 +509,7 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
       collapsed: g.collapsed,
       seconds: g.params?.seconds,
       reset: g.params?.reset,
+      release: g.release,
       pos: g.pos,
       sides: g.ports,
     });

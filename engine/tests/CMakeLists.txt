@@ -1,6 +1,7 @@
 add_executable(paperboat_tests
   descriptor_test.cpp
   control_test.cpp
+  solve_test.cpp
   interactive_test.cpp
   step_test.cpp
   station_test.cpp
