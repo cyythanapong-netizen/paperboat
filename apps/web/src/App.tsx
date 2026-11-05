@@ -740,7 +740,7 @@ export function App() {
       </header>
       <Rail page={page} onPage={setPage} hidden={mode !== "navigator"} />
       <VarsContext.Provider value={varsApi}>
-      <main className={`pages${varsShown === "open" ? " with-vars" : ""}`}>
+      <main className="pages">
         <div className="page-stack">
         <Panel {...panel("station")} actions={<>{gridKey}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
           <div
@@ -812,16 +812,16 @@ export function App() {
           <Dashboard state={state} monitors={monitors} arrange={arrange} onBlock={showBlock} saved={dashSaved} onSave={saveDash} />
         </Panel>
         </div>
-        {varsShown === "open" && (
-          <VariablesSheet
-            open={openVar}
-            onOpen={setOpenVar}
-            onClose={() => setVarsShown("closed")}
-            onShow={showUse}
-            onUndo={undoVars}
-            toml={() => toToml(variables)}
-          />
-        )}
+        <VariablesSheet
+          sheetOpen={varsShown === "open"}
+          onShowSheet={() => setVarsShown("open")}
+          open={openVar}
+          onOpen={setOpenVar}
+          onClose={() => setVarsShown("closed")}
+          onShow={showUse}
+          onUndo={undoVars}
+          toml={() => toToml(variables)}
+        />
         <Dock
           canRun={canRun}
           whyNot={running ? "A run is in progress" : "Not connected to a backend"}

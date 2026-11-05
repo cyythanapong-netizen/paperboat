@@ -341,6 +341,8 @@ const TYPES: Variable["type"][] = ["number", "boolean", "enum", "text", "file"];
 // The sheet: every variable, beside whatever page is open.
 
 export function VariablesSheet({
+  sheetOpen,
+  onShowSheet,
   open,
   onOpen,
   onClose,
@@ -348,6 +350,9 @@ export function VariablesSheet({
   onUndo,
   toml,
 }: {
+  /** The sheet is open; closed, it is a standing tab at the pages' right edge. */
+  sheetOpen: boolean;
+  onShowSheet: () => void;
   open: string | null;
   onOpen: (name: string | null) => void;
   onClose: () => void;
@@ -389,7 +394,7 @@ export function VariablesSheet({
   };
   return (
     <section
-      className="panel vars-sheet"
+      className={`panel vars-sheet drawer drawer-right${sheetOpen ? "" : " closed"}`}
       aria-label="Variables"
       ref={root}
       onKeyDown={(e) => {
@@ -404,8 +409,24 @@ export function VariablesSheet({
         }
       }}
     >
-      <header className="panel-head">
-        <span className="num mono">=</span>
+      {/* Closed: a standing tab, like Lookout's side drawers. */}
+      <header className="panel-head side-tab" onClick={onShowSheet} title="Open the Variables (Alt+V)" hidden={sheetOpen}>
+        <button className="key small drawer-toggle side-right" aria-expanded={false} aria-label="Open the Variables" tabIndex={sheetOpen ? -1 : 0}>
+          <svg viewBox="0 0 14 14" aria-hidden="true">
+            <path d="M3 9l4-4 4 4" />
+          </svg>
+        </button>
+        <span className="vars-glyph mono" aria-hidden="true">=</span>
+        <h2>Variables</h2>
+        <span className="lbl">{vars.list.length}</span>
+      </header>
+      <header className="panel-head" hidden={!sheetOpen}>
+        <button className="key small drawer-toggle side-right" aria-expanded onClick={onClose} title="Close (Alt+V, Esc)" aria-label="Close the Variables">
+          <svg viewBox="0 0 14 14" aria-hidden="true">
+            <path d="M3 9l4-4 4 4" />
+          </svg>
+        </button>
+        <span className="vars-glyph mono">=</span>
         <h2>Variables</h2>
         <span className="panel-info lbl">
           {vars.list.length}
@@ -413,9 +434,6 @@ export function VariablesSheet({
         </span>
         <button className="key small" disabled={vars.locked} onClick={add} title="A new number variable">
           + New
-        </button>
-        <button className="key small x" onClick={onClose} title="Close (Alt+V, Esc)" aria-label="Close the Variables">
-          ✕
         </button>
       </header>
       <div className="vars-tools">
