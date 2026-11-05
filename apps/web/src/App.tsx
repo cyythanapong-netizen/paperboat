@@ -714,7 +714,7 @@ export function App() {
   return (
     <div className={`app mode-${mode}`}>
       <header className="bar">
-        <Wordmark />
+        <Wordmark running={running} />
         <MenuBar commands={commands} />
         <ProjectLabel name={projectTitle} dirty={dirty} />
         <span className="spacer" />

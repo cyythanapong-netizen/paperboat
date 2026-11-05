@@ -1,41 +1,95 @@
 /**
  * The Paperboat mark (apps/web/DESIGN.md, "Logo"): a two-tone paper boat in pixels, over
  * a row of larger water pixels. The boat is 31 columns of 2-unit pixels; the water is
- * five 6-unit pixels, so the mark is 62 × 42 units. Drawn from tokens, so it follows the
- * theme; the favicon (public/favicon.svg) is the same geometry in the brand colours.
+ * five 6-unit pixels, so the mark is 62 × 42 units.
+ *
+ * Below ~32px the 2-unit pixels stop reading, so the mark switches to a smooth geometric
+ * variant (S2): a two-tone triangle sail + a trapezoid hull, keeping the original pixel
+ * water dots. At < 20px the sail and hull merge (no gap) for legibility.
+ *
+ * The water is the signal colour and means "live". When `running` is true the water ripples
+ * (W2) and the whole mark bobs once; otherwise an idle ripple passes every ~18s. Motion
+ * respects prefers-reduced-motion (tokens drop to 0).
+ *
+ * Drawn from tokens, so it follows the theme; the favicon (public/favicon.svg) is the same
+ * geometry in the brand colours and stays pixel art.
  */
 const run = (x: number, y: number, w: number, h: number) => `M${x} ${y}h${w}v${h}h-${w}z`;
 
 export const LOGO_SIZE = { width: 62, height: 42 };
 
-/** Path data for each part of the mark. */
-export function logoPaths() {
-  let light = "";
-  let shade = "";
-  let hull = "";
-  let water = "";
-  for (let r = 0; r < 8; r++) {
-    light += run((15 - r) * 2, r * 2, (r + 1) * 2, 2);
-    if (r > 0) shade += run(32, r * 2, r * 2, 2);
-  }
-  [31, 27, 25, 23, 21, 19, 17].forEach((cols, i) => {
-    hull += run(31 - cols, (9 + i) * 2, cols * 2, 2);
-  });
-  for (let k = 0; k < 5; k++) water += run(k * 14, 36, 6, 6);
-  return { light, shade, hull, water };
-}
+const WATER_XS = [0, 14, 28, 42, 56];
 
-const PATHS = logoPaths();
-
-/** The mark alone; `height` in CSS pixels. */
-export function Logo({ height = 24 }: { height?: number }) {
+/** A block of water dots, each wrapped so the ripple can lift them in sequence. */
+export function Logo({ height = 24, running = false }: { height?: number; running?: boolean }) {
   const width = (height * LOGO_SIZE.width) / LOGO_SIZE.height;
+  const variant: "pixel" | "s2" | "s2-merged" =
+    height >= 32 ? "pixel" : height >= 20 ? "s2" : "s2-merged";
+
+  // Ripple amplitude scales with the mark so small marks stay subtle.
+  const lr = height >= 32 ? "3.75px" : height >= 20 ? "1.9px" : "1.5px";
+  const lb = height >= 32 ? "1.5px" : height >= 20 ? "0.5px" : "0.3px";
+
+  const cls = `${running ? "logo-live" : "logo-idle"}`;
+
+  if (variant === "pixel") {
+    let light = "", shade = "", hull = "";
+    for (let r = 0; r < 8; r++) {
+      light += run((15 - r) * 2, r * 2, (r + 1) * 2, 2);
+      if (r > 0) shade += run(32, r * 2, r * 2, 2);
+    }
+    [31, 27, 25, 23, 21, 19, 17].forEach((cols, i) => {
+      hull += run(31 - cols, (9 + i) * 2, cols * 2, 2);
+    });
+    return (
+      <svg
+        className={`logo ${cls}`}
+        width={width}
+        height={height}
+        viewBox={`0 0 ${LOGO_SIZE.width} ${LOGO_SIZE.height}`}
+        shapeRendering="crispEdges"
+        aria-hidden="true"
+        style={{ ["--lr" as any]: lr, ["--lb" as any]: lb }}
+      >
+        <path className="logo-light" d={light} />
+        <path className="logo-shade" d={shade} />
+        <path className="logo-light" d={hull} />
+        <g className="logo-water" shapeRendering="crispEdges">
+          {WATER_XS.map((x, i) => (
+            <g key={i} className={`w w${i + 1}`}>
+              <rect x={x} y={36} width={6} height={6} />
+            </g>
+          ))}
+        </g>
+      </svg>
+    );
+  }
+
+  const merged = variant === "s2-merged";
+  const hull = merged
+    ? "M0 16 L62 16 L48 30 L14 30 Z"
+    : "M0 18 L62 18 L48 32 L14 32 Z";
+
   return (
-    <svg className="logo" width={width} height={height} viewBox={`0 0 ${LOGO_SIZE.width} ${LOGO_SIZE.height}`} shapeRendering="crispEdges" aria-hidden="true">
-      <path className="logo-light" d={PATHS.light} />
-      <path className="logo-shade" d={PATHS.shade} />
-      <path className="logo-light" d={PATHS.hull} />
-      <path className="logo-water" d={PATHS.water} />
+    <svg
+      className={`logo ${cls}`}
+      width={width}
+      height={height}
+      viewBox={`0 0 ${LOGO_SIZE.width} ${LOGO_SIZE.height}`}
+      shapeRendering="geometricPrecision"
+      aria-hidden="true"
+      style={{ ["--lr" as any]: lr, ["--lb" as any]: lb }}
+    >
+      <path className="logo-light" d="M31 0 L31 16 L16 16 Z" />
+      <path className="logo-shade" d="M31 0 L46 16 L31 16 Z" />
+      <path className="logo-hull" d={hull} />
+      <g className="logo-water" shapeRendering="crispEdges">
+        {WATER_XS.map((x, i) => (
+          <g key={i} className={`w w${i + 1}`}>
+            <rect x={x} y={36} width={6} height={6} />
+          </g>
+        ))}
+      </g>
     </svg>
   );
 }

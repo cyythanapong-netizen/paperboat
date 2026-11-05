@@ -168,20 +168,45 @@ Focus is a 2px ink ring. Disabled keys are grey and faded.
 
 ## Logo
 
-A two-tone paper boat in pixels over a row of larger water pixels. The boat is 31 columns
-of 2-unit pixels: a sail rising to a peak, light on the left half and shaded on the right,
+A two-tone paper boat over a row of larger water pixels. The boat is 31 columns of
+2-unit pixels: a sail rising to a peak, light on the left half and shaded on the right,
 a gap, then a wide hull whose ends taper to points. The water is five 6-unit pixels, so
 the whole mark is 62 × 42 units. The pixels are hard-edged (`shape-rendering:
-crispEdges`); never smooth, fill with gradients or add shadow.
+crispEdges`); never smooth, fill with gradients or add shadow. The water is the signal
+colour and means "live".
+
+**Small-size variant (S2).** Below ~32px the 2-unit pixels stop reading, so the mark
+switches to a smooth geometric form: a two-tone triangle sail (light left, shade right)
+and a trapezoid hull, keeping the original five pixel water dots. The 62 × 42 viewBox is
+unchanged, so the mark's footprint and spacing never change.
+
+- `height >= 32`: pixel mark (the brand).
+- `20 <= height < 32`: S2 with a 2-unit gap between the sail's base and the hull's top.
+- `height < 20`: S2 with the sail and hull merged (no gap) for legibility.
+
+The bar logo (24px) is S2. The favicon (64px, brand palette) stays pixel art.
+
+**Water ripple (W2).** The water means "live". A ripple passes through it now and then:
+the five dots lift in sequence (a crest travelling left → right, 3.75px of travel at the
+32px+ size) and the whole mark bobs ~1.5px as the crest passes under it, on the existing
+`--ease`, 1.4s, transform only, no layout shift.
+
+- Idle (no run): a ripple every ~6s, ripples for ~7% of the cycle, then rests.
+- Run live: a faster continuous ripple (1.4s) while a run is in progress, plus a single
+  bob when the run starts. `running` is threaded from `App.tsx` through `Wordmark` into
+  `Logo`.
+- Reduced motion: `@media (prefers-reduced-motion: reduce)` sets the logo animations to
+  `none`.
+
+Ripple amplitudes scale with the mark (`--lr`, `--lb` set on the svg by `Logo.tsx`).
 
 | Where | Colours |
 | --- | --- |
 | **Bar and in the app** ([`Logo.tsx`](src/Logo.tsx)) | From the theme: sail light and hull in `--text`, sail shade in `--text-muted`, water in `--signal`. Mono, with the one colour as the water |
 | **Favicon and app icon** ([`public/favicon.svg`](public/favicon.svg)) | The brand palette, `--brand-*` in `tokens.css`, on a rounded tile: `#241f31` ground, `#e4e0ea` sail light and hull, `#8d849e` sail shade, `#c6738f` water. A muted violet |
 
-The name is always lowercase, Geist Sans 600, tracking −0.01em, after the mark. Below 24px
-tall the mark is still readable; below 16px use the favicon. Keep the favicon and
-`Logo.tsx` on the same geometry: change both together.
+The name is always lowercase, Geist Sans 600, tracking −0.01em, after the mark. Keep the
+favicon and `Logo.tsx` on the same geometry: change both together.
 
 ## Motion
 
