@@ -99,7 +99,7 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 
 /* Navigator's rail: the pages share its height and the current one sits in ink brackets, like
    a chosen option in a switch (`[ navigator ]`). Shell.tsx places them from the key's icon and
-   name, plus room, and flies them to a new key one after the other. Selection is never a fill. */
+   name, plus room, and glides the pair to a new key with the page column. Selection is never a fill. */
 .rail {
   position: relative; display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2);
   background: var(--surface-sunken); overflow: hidden; user-select: none; min-width: 0;
@@ -111,15 +111,15 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .rail-item {
   position: relative; z-index: 1; flex: 1; min-height: 0; display: grid; place-items: center;
   border: 0; background: none; border-radius: var(--radius-md); padding: 0; color: var(--text-muted);
-  transition: color 420ms cubic-bezier(.65, 0, .25, 1);
+  transition: color var(--slide);
 }
 .rail-item:hover, .rail-item.current { color: var(--text); }
 .rail-item:focus-visible { outline: none; }
 .rail-item:focus-visible .rail-face { outline: 2px solid var(--focus); outline-offset: 10px; border-radius: 10px; }
 .rail-face { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-/* The current key lifts its icon a little; leaving and arriving ease together, in step with the
-   brackets. The name keeps one weight (a weight change jumps), so ink colour and brackets mark it. */
-.rail-face .page-icon { width: 20px; height: 20px; transform: scale(0.94); transition: transform 460ms cubic-bezier(.65, 0, .25, 1); }
+/* The current key lifts its icon a little; leaving and arriving ease on the slide's curve, in
+   step with the brackets. The name keeps one weight (a weight change jumps), so ink colour and brackets mark it. */
+.rail-face .page-icon { width: 20px; height: 20px; transform: scale(0.94); transition: transform var(--slide); }
 .rail-item.current .page-icon { transform: translateY(-2px) scale(1.08); }
 .rail-face .name { font: 500 var(--size-2xs) var(--font-mono); }
 .page-icon, .link-mark { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; flex: none; }

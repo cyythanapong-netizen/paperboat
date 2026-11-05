@@ -100,23 +100,15 @@ export function Switch<T extends string>({
 }
 
 const reduceMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-/**
- * How the brackets travel: each one's leading end leaves first and quick, its trailing end
- * follows, so it stretches on the way and pulls back to size on arrival. The second bracket
- * sets off a beat after the first.
- */
-const LEAD = 340;
-const TRAIL = 460;
-const BEAT = 90;
-const EASE_LEAD = "cubic-bezier(.3, 1.25, .4, 1)";
-const EASE_TRAIL = "cubic-bezier(.3, 1.15, .4, 1)";
+/** The brackets glide as one pair, on the page column's own curve and time, so the rail and the page move as one. */
+const GLIDE = "top var(--slide), bottom var(--slide), left var(--slide), right var(--slide)";
 /** Room between a key's icon and name and the brackets round them. */
 const PAD = 8;
 
 /**
  * Navigator's rail: the pages share its whole height, and the current one sits in ink
- * brackets, like a chosen option in a switch (`[ navigator ]`). On a change the brackets fly
- * to the new key one after the other, opening out in transit and closing round it. They are
+ * brackets, like a chosen option in a switch (`[ navigator ]`). On a change the pair glides
+ * to the new key with the page column. They are
  * placed from the key's face (icon and name) plus room, so they never touch the name.
  * ↑/↓ and the wheel over the rail move between pages.
  */
@@ -149,27 +141,13 @@ export function Rail({ page, onPage, hidden }: { page: Page; onPage: (p: Page) =
         right: across ? side : rb.right - fb.right - PAD,
       };
       const still = !dir || reduceMotion();
-      const [ahead, behind] = across ? (dir > 0 ? ["bottom", "top"] : ["top", "bottom"]) : dir > 0 ? ["right", "left"] : ["left", "right"];
       brackets.current.forEach((el, k) => {
         if (!el) return;
-        const wait = k * BEAT;
-        el.style.transition = still
-          ? "none"
-          : ["top", "bottom", "left", "right"]
-              .map((e) => (e === ahead ? `${e} ${LEAD}ms ${EASE_LEAD} ${wait}ms` : e === behind ? `${e} ${TRAIL}ms ${EASE_TRAIL} ${wait + 120}ms` : `${e} ${LEAD}ms ${EASE_LEAD} ${wait}ms`))
-              .join(", ");
+        el.style.transition = still ? "none" : GLIDE;
         el.style.top = `${box.top}px`;
         el.style.bottom = `${box.bottom}px`;
         if (k === 0) el.style.left = `${box.left}px`;
         else el.style.right = `${box.right}px`;
-        // In transit each bracket opens outward, away from the name, and snaps back on arrival.
-        if (!still) {
-          const out = k === 0 ? -1 : 1;
-          el.animate(
-            [{ transform: "none" }, { transform: across ? `translateX(${out * 7}px)` : `translateY(${out * 5}px)`, offset: 0.35 }, { transform: "none" }],
-            { duration: TRAIL + 120, delay: wait, easing: "cubic-bezier(.3, 1.3, .4, 1)" },
-          );
-        }
       });
     };
     place(was.current >= 0 ? Math.sign(at - was.current) : 0);
