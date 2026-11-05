@@ -1,0 +1,123 @@
+/* Paperboat docs styling: built on the app's tokens (see tokens.css, synced from
+   apps/web/src/tokens.css). Flat mono design system (apps/web/DESIGN.md). */
+
+@import "tokens.css";
+
+@font-face {
+  font-family: "Geist Sans";
+  src: url("fonts/geist-sans-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Sans";
+  src: url("fonts/geist-sans-latin-500-normal.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Sans";
+  src: url("fonts/geist-sans-latin-600-normal.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("fonts/geist-mono-latin-400-normal.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Geist Mono";
+  src: url("fonts/geist-mono-latin-500-normal.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+}
+
+html, body {
+  font-family: var(--font-sans);
+  background: var(--surface-ground);
+  color: var(--text);
+  font-size: var(--size-sm);
+}
+
+/* Alabaster layout overrides: flat panels, hairlines, mono code. */
+body { background: var(--surface-ground); }
+
+.document { background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-md); }
+
+h1, h2, h3, h4 {
+  font-family: var(--font-sans);
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+a:hover { color: var(--signal); }
+
+/* Sidebar / rail-like. */
+.sphinxsidebar { background: var(--surface-sunken); border-right: 1px solid var(--line); }
+.sphinxsidebar h3, .sphinxsidebar h4 { color: var(--text-muted); font-size: var(--size-2xs); text-transform: uppercase; letter-spacing: 0.08em; }
+.sphinxsidebar a { color: var(--text); text-decoration: none; }
+.sphinxsidebar a:hover { color: var(--signal); }
+
+/* Code in recessed wells, monochrome. */
+pre, code, .highlight {
+  font-family: var(--font-mono);
+  background: var(--surface-well);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  box-shadow: var(--well-shadow);
+}
+.highlight pre { background: var(--surface-well); }
+
+/* Tables like app panels. */
+table.docutils { border: 1px solid var(--line); border-collapse: collapse; background: var(--surface-panel); }
+table.docutils th, table.docutils td { border: 1px solid var(--line); padding: var(--space-2); }
+table.docutils th { background: var(--surface-raised); color: var(--text); font-weight: 600; }
+
+/* Admonitions: signal for note, danger for warning. */
+div.admonition { border: 1px solid var(--line); border-left: 3px solid var(--signal); background: var(--surface-panel); border-radius: var(--radius-sm); }
+div.admonition.warning, div.admonition.danger, div.admonition.error { border-left-color: var(--danger); }
+
+/* Theme switch widget (injected by theme.js). */
+#pb-theme-switch {
+  position: fixed;
+  bottom: var(--space-3);
+  right: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--size-2xs);
+  background: var(--surface-float);
+  backdrop-filter: var(--float-blur);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-round);
+  padding: var(--space-1) var(--space-2);
+  color: var(--text);
+  z-index: 1000;
+  display: flex;
+  gap: var(--space-1);
+}
+#pb-theme-switch button {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  padding: 0 var(--space-1);
+}
+#pb-theme-switch button[aria-pressed="true"] { color: var(--text); font-weight: 600; }

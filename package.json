@@ -19,7 +19,7 @@
     "backend:supply": "npm run build:python --silent && PYTHONPATH=python python3 examples/backends/supply-python/server.py",
     "build:python": "cmake -S python -B python/build > /dev/null && cmake --build python/build",
     "golden": "npm run build:python --silent && python3 protocol/golden.py",
-    "docs": "sphinx-build -W -b html docs/api docs/api/_build",
+    "docs": "bash scripts/sync-doc-assets.sh && sphinx-build -W -b html docs/api docs/api/_build",
     "publish:dev": "python3 scripts/publish.py",
     "test:python": "npm run build:python --silent && python3 -m pytest -q python/tests",
     "gen:protocol": "python3 protocol/gen_ts.py"

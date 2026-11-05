@@ -209,3 +209,13 @@ positions and lines.
   semantic role, then is used through the role.
 - A backend's own look belongs in a web station (`[station] view = "web"`).
 - Still open (#33): the signal colour, the Monitor mode.
+
+## Docs
+
+The docs follow the same tokens as the app, from one source (`apps/web/src/tokens.css`,
+synced into `docs/api/_static/tokens.css` by `scripts/sync-doc-assets.sh`). A docs-only
+value is not allowed: it goes in as a token first. The API reference (`docs/api`) and the
+plan page (`docs/plan.html`) use Geist and Geist Mono self-hosted from
+`docs/api/_static/fonts/` (no CDN), light and dark follow the system and can be switched
+with the bracketed `[ auto ] light dark` control remembered in the browser. Code samples
+stay monochrome (`highlight_language = "none"`). `sphinx-build -W` must stay clean.
