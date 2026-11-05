@@ -26,6 +26,8 @@ import {
 import type { Monitor, PlacedDeco } from "./dashboardLayout";
 import type { DashboardLayout } from "./protocol";
 import { Console } from "./Console";
+import { WebStation } from "./WebStation";
+import { SceneView } from "./SceneView";
 import { VAR_DRAG, VarsContext } from "./Variables";
 import { RemoveIcon } from "./RemoveIcon";
 import { GlideBrackets } from "./Shell";
@@ -215,6 +217,10 @@ export function Dashboard({
   onBlock,
   saved,
   onSave,
+  url,
+  subscribe,
+  send,
+  gridOn = true,
 }: {
   state: EngineState;
   monitors: Record<string, Monitor>;
@@ -223,6 +229,11 @@ export function Dashboard({
   /** The user's layout for this backend (App keeps it, so renaming a variable can rewrite the text that uses it). */
   saved: DashboardLayout | undefined;
   onSave: (next: DashboardLayout | undefined) => void;
+  /** Backend WebSocket URL, for the read-only Station view (web station pages). */
+  url?: string;
+  subscribe?: (listen: (m: any) => void) => () => void;
+  send?: (m: any) => void;
+  gridOn?: boolean;
 }) {
   const vars = useContext(VarsContext);
   const layout = saved ?? state.dashboard;
@@ -422,6 +433,7 @@ export function Dashboard({
                 ["section", "Section", "A titled frame round a group of cells"],
                 ["label", "Label", "A heading or a note; {block} in it shows that block's value"],
                 ["console", "Console", "What the backend logged, in a frame"],
+                ["station", "Station", "A read-only view of the Station"],
                 ["hline", "Separator —", "A horizontal rule between rows"],
                 ["vline", "Separator |", "A vertical rule between columns"],
               ] as const
@@ -582,6 +594,17 @@ export function Dashboard({
                 {d.kind === "console" && (
                   <div className="deco-console">
                     <Console logs={state.logs} onBlock={onBlock} />
+                  </div>
+                )}
+                {d.kind === "station" && (
+                  <div className="deco-station">
+                    {state.stationView.view === "web" && state.stationView.page && url && subscribe && send ? (
+                      <WebStation backend={url} page={state.stationView.page} state={state} subscribe={subscribe} send={send} onStation={() => {}} />
+                    ) : state.stationView.view === "graph" ? (
+                      <div className="deco-station-fallback">Station graph view is not available in the Board.</div>
+                    ) : (
+                      <SceneView view={state.view} grid={gridOn} entities={state.entities} />
+                    )}
                   </div>
                 )}
                 {canEdit && picked === d.index && (

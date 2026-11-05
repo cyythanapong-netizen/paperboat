@@ -49,12 +49,12 @@ export function autoOrder(monitors: Record<string, Monitor>): string[] {
 }
 
 /** A label and the console take cells like an instrument; a section and a separator are drawn in the gaps. */
-const takesCells = (kind: DecoKind) => kind === "label" || kind === "console";
+const takesCells = (kind: DecoKind) => kind === "label" || kind === "console" || kind === "station";
 
 /** A decoration's size in cells: a separator is one cell wide or tall and runs `span` cells. */
 function decoCells(d: Deco, columns: number): [number, number] {
   const n = typeof d.span === "number" ? d.span : 1;
-  const [w, h] = Array.isArray(d.span) ? d.span : d.kind === "section" ? [2, 2] : d.kind === "console" ? [4, 3] : [2, 1];
+  const [w, h] = Array.isArray(d.span) ? d.span : d.kind === "section" ? [2, 2] : d.kind === "console" || d.kind === "station" ? [4, 3] : [2, 1];
   const cells: [number, number] = d.kind === "hline" ? [n, 1] : d.kind === "vline" ? [1, n] : [w, h];
   return [Math.min(Math.max(1, cells[0]), columns), Math.max(1, cells[1])];
 }
@@ -224,7 +224,7 @@ export const moveToTab = (a: Arranged, block: string, tab: string) =>
 export const addDecoration = (a: Arranged, kind: DecoKind, tab: string) =>
   edit(a, (m) => {
     const bottom = rowsOf(m, tab);
-    const [w, h] = kind === "section" ? [3, 2] : kind === "console" ? [4, 3] : kind === "label" ? [2, 1] : kind === "hline" ? [m.columns, 1] : [1, Math.max(2, bottom)];
+    const [w, h] = kind === "section" ? [3, 2] : kind === "console" || kind === "station" ? [4, 3] : kind === "label" ? [2, 1] : kind === "hline" ? [m.columns, 1] : [1, Math.max(2, bottom)];
     m.decorations.push({
       index: m.decorations.length,
       kind,

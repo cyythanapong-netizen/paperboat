@@ -154,11 +154,12 @@ instruments = [
   { block = "speed", size = "compact" },                    # at: [column, row], from 0; optional
 ]
 tabs = ["Run", "Tuning"]        # optional pages; an instrument or decoration names its page with tab = "Run"
-decorations = [                 # optional, kinds: section, hline, vline, label, console
+decorations = [                 # optional, kinds: section, hline, vline, label, console, station
   { kind = "label", text = "Speed {speed:.1f} m/s", at = [0, 0], span = [4, 1], style = "heading" },
   { kind = "section", text = "Stores", at = [0, 1], span = [4, 2] },
   { kind = "hline", at = [0, 3], span = 6 },                # a separator: span is a length in cells
   { kind = "console", at = [0, 4], span = [6, 3] },         # the Console's lines in a frame
+  { kind = "station", at = [0, 7], span = [6, 3] },         # a read-only view of the Station
 ]
 ```
 

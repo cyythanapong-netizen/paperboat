@@ -327,7 +327,7 @@ decorations = [
     CHECK_THROWS_WITH(tk::load_descriptor("domain = \"test\"\n[dashboard]\ncolumns = 6\ntabs = [\"Run\"]\n" + dashboard, test_registry()),
                       ContainsSubstring(text));
   };
-  fails_with("decorations = [{ kind = \"frame\", at = [0, 0] }]", "kind must be section, hline, vline, label or console");
+  fails_with("decorations = [{ kind = \"frame\", at = [0, 0] }]", "kind must be section, hline, vline, label, console or station");
   fails_with("decorations = [{ kind = \"label\", text = \"x\" }]", "needs \"at\"");
   fails_with("decorations = [{ kind = \"label\", at = [0, 0] }]", "a label needs its text");
   fails_with("decorations = [{ kind = \"label\", text = \"x\", at = [6, 0] }]", "past the last of 6");
@@ -340,6 +340,8 @@ decorations = [
   fails_with("decorations = [{ kind = \"section\", at = [0, 0], span = [2, 2], style = \"note\" }]", "only a label has a style");
   fails_with("decorations = [{ kind = \"console\", at = [0, 0], text = \"x\" }]", "the console has no text");
   fails_with("decorations = [{ kind = \"console\", at = [0, 0], span = 3 }]", "[columns, rows]");
+  fails_with("decorations = [{ kind = \"station\", at = [0, 0], text = \"x\" }]", "the station has no text");
+  fails_with("decorations = [{ kind = \"station\", at = [0, 0], span = 3 }]", "[columns, rows]");
   fails_with("decorations = [{ kind = \"label\", text = \"x\", at = [0, 0], style = \"big\" }]", "heading or note");
   fails_with("decorations = [{ kind = \"label\", text = \"x\", at = [0, 0], tab = \"Other\" }]", "tab must be one of dashboard.tabs");
   fails_with("instruments = [{ block = \"a\", tab = \"Other\" }]", "tab must be one of dashboard.tabs");

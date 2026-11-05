@@ -811,7 +811,7 @@ export function App() {
           }
           info={count(Object.keys(monitors).length, "instrument")}
         >
-          <Dashboard state={state} monitors={monitors} arrange={arrange} onBlock={showBlock} saved={dashSaved} onSave={saveDash} />
+          <Dashboard state={state} monitors={monitors} arrange={arrange} onBlock={showBlock} saved={dashSaved} onSave={saveDash} url={url} subscribe={subscribe} send={send} gridOn={gridOn} />
         </Panel>
         </div>
         <VariablesSheet
