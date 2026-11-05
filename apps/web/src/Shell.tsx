@@ -50,11 +50,11 @@ export function PageIcon({ page, className = "page-icon" }: { page: Page; classN
   );
 }
 
-/** The mark and the name. */
-export function Wordmark() {
+/** The mark and the name. `running` ripples the water (W2) while a run is live. */
+export function Wordmark({ running = false }: { running?: boolean }) {
   return (
     <span className="wordmark">
-      <Logo height={24} />
+      <Logo height={24} running={running} />
       paperboat
     </span>
   );
