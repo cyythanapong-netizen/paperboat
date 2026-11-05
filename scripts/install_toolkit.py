@@ -67,22 +67,60 @@ def install(name, manifest):
     print(f"{name}: installed at {dest}")
 
 
+def read_requirements(path):
+    """Read a backend's toolkit_requirements.toml (or a toolkits.toml)."""
+    p = Path(path)
+    if p.is_dir():
+        for cand in ("toolkit_requirements.toml", "toolkits.toml"):
+            if (p / cand).exists():
+                p = p / cand
+                break
+    if not p.exists():
+        return []
+    with p.open("rb") as f:
+        data = tomllib.load(f)
+    out = []
+    for t in data.get("toolkits", []):
+        out.append(t)
+    return out
+
+
+def install_from_requirements(req_path, manifest):
+    reqs = read_requirements(req_path)
+    if not reqs:
+        print(f"no toolkit requirements in {req_path}")
+        return
+    for r in reqs:
+        name = r["name"]
+        # merge repo override from requirements into manifest view
+        m = dict(manifest)
+        if name not in m:
+            m[name] = r
+        elif "repo" in r:
+            m[name] = {**m[name], "repo": r["repo"]}
+        install(name, m)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("name", nargs="?")
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--all", action="store_true")
+    ap.add_argument("--requirements", metavar="PATH", help="install toolkits from a backend's toolkit_requirements.toml")
     args = ap.parse_args()
     manifest = load_manifest()
     if args.list:
         list_toolkits(manifest)
+        return
+    if args.requirements:
+        install_from_requirements(args.requirements, manifest)
         return
     if args.all:
         for name in manifest:
             install(name, manifest)
         return
     if not args.name:
-        ap.error("provide a toolkit name, or use --list / --all")
+        ap.error("provide a toolkit name, or use --list / --all, or --requirements <path>")
     install(args.name, manifest)
 
 
