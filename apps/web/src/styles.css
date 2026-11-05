@@ -74,13 +74,14 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .logo-light { fill: var(--text); }
 .logo-shade { fill: var(--text-muted); }
 .logo-water { fill: var(--signal); }
+.logo-hull { fill: var(--text); }
 
 /* Logo ripple (W2): the water dots lift in sequence (a crest travels left → right) and the
    whole mark bobs once when a run starts. Idle: a ripple every ~18s (the "once in a while").
    Live: a faster continuous ripple while a run is in progress. Values scale per instance via
    --lr (ripple travel) and --lb (bob travel), set on the svg by Logo.tsx. */
 .logo .w { transform-box: fill-box; transform-origin: center; }
-.logo-idle .logo-water .w { animation: logo-ripple-idle var(--logo-idle-cycle, 6s) var(--ease, cubic-bezier(.65,0,.25,1)) infinite; }
+.logo-idle .logo-water .w { animation: logo-ripple-idle var(--logo-idle-cycle, 18s) var(--ease, cubic-bezier(.65,0,.25,1)) infinite; }
 .logo-idle .logo-water .w1 { animation-delay: 0s; }
 .logo-idle .logo-water .w2 { animation-delay: 0.2s; }
 .logo-idle .logo-water .w3 { animation-delay: 0.4s; }
@@ -95,18 +96,18 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .logo-live.logo { animation: logo-bob 1.4s var(--ease, cubic-bezier(.65,0,.25,1)) 1; }
 @keyframes logo-ripple-idle {
   0%, 7%, 100% { transform: translateY(0); }
-  3.5% { transform: translateY(calc(var(--lr, 2.5px) * -0.67)); }
+  3.5% { transform: translateY(calc(var(--lr, 4.5px) * -0.67)); }
 }
 @keyframes logo-ripple-live {
   0% { transform: translateY(0); }
-  30% { transform: translateY(calc(var(--lr, 3.75px) * -1)); }
-  60% { transform: translateY(calc(var(--lr, 3.75px) * 0.33)); }
+  30% { transform: translateY(calc(var(--lr, 4.5px) * -1)); }
+  60% { transform: translateY(calc(var(--lr, 4.5px) * 0.33)); }
   100% { transform: translateY(0); }
 }
 @keyframes logo-bob {
   0% { transform: translateY(0); }
-  30% { transform: translateY(calc(var(--lb, 1px) * -1)); }
-  60% { transform: translateY(calc(var(--lb, 1px) * 0.33)); }
+  30% { transform: translateY(calc(var(--lb, 1.5px) * -1)); }
+  60% { transform: translateY(calc(var(--lb, 1.5px) * 0.33)); }
   100% { transform: translateY(0); }
 }
 .field { display: inline-flex; align-items: center; gap: var(--space-2); height: 30px; padding: 0 var(--space-3); }
