@@ -24,11 +24,21 @@ export function Toolkits({ installedGroups }: { installedGroups: Set<string> }) 
   const install = async (name: string) => {
     setBusy(name);
     setMessage(null);
-    // The browser cannot compile a C++ toolkit; defer to the CLI. Keep the spinner
-    // visible long enough to feel like work, then show the command to run.
-    await new Promise((r) => setTimeout(r, 600));
-    setBusy(null);
-    setMessage(`Run in a terminal: python3 scripts/install_toolkit.py ${name}  (then rebuild the backend)`);
+    try {
+      const res = await fetch("/api/install-toolkit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = (await res.json()) as { ok?: boolean; output?: string; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.output || data.error || "install failed");
+      setMessage(`${name} installed. Restart the backend to load it.`);
+    } catch (err) {
+      // In a production build there is no installer endpoint: fall back to the manual command.
+      setMessage(`Could not install in-app: ${err instanceof Error ? err.message : String(err)}. Run: python3 scripts/install_toolkit.py ${name}`);
+    } finally {
+      setBusy(null);
+    }
   };
 
   return (
