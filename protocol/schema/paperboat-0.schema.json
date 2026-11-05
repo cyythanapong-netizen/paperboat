@@ -906,6 +906,36 @@
       ],
       "additionalProperties": false
     },
+    "toolkit.install": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "toolkit.install"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "toolkit.uninstall": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "toolkit.uninstall"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
     "input": {
       "type": "object",
       "properties": {
@@ -1151,7 +1181,9 @@
             "variables.set",
             "run.cancel",
             "input",
-            "backend.restart"
+            "backend.restart",
+            "toolkit.install",
+            "toolkit.uninstall"
           ]
         }
       },

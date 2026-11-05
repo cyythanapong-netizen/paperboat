@@ -119,6 +119,27 @@ void Session::on_message(const std::string& text) {
     s.log("info", "restarting backend…");
     // Let the message leave before replacing the process.
     std::thread([] { std::this_thread::sleep_for(std::chrono::milliseconds(100)); restart_backend(); }).detach();
+  } else if (type == "toolkit.install" || type == "toolkit.uninstall") {
+    const std::string name = msg.value("name", "opencv");
+    const bool install = type == "toolkit.install";
+    s.log("info", (install ? "installing" : "uninstalling") + std::string(" toolkit ") + name + "…");
+    std::thread([&, name, install] {
+      std::filesystem::path root = std::filesystem::current_path();
+      for (int i = 0; i < 8 && !(std::filesystem::exists(root / "scripts" / "install_toolkit.py")); ++i) root = root.parent_path();
+      if (install) {
+        std::string cmd = "python3 " + (root / "scripts" / "install_toolkit.py").string() + " " + name;
+        if (std::system(cmd.c_str()) != 0) { s.log("error", "toolkit " + name + " install failed"); return; }
+      } else {
+        std::error_code ec;
+        std::filesystem::remove_all(root / "engine" / "toolkit" / name, ec);
+        if (ec) { s.log("error", "toolkit " + name + " uninstall failed: " + ec.message()); return; }
+      }
+      std::string cfg = "cmake -S " + (root / "engine").string() + " -B " + (root / "engine" / "build").string() + " -G Ninja -DCMAKE_BUILD_TYPE=Debug";
+      if (std::system(cfg.c_str()) != 0) { s.log("error", "toolkit cmake configure failed"); return; }
+      std::string build = "cmake --build " + (root / "engine" / "build").string();
+      if (std::system(build.c_str()) != 0) { s.log("error", "toolkit cmake build failed"); return; }
+      s.log("info", "toolkit " + name + (install ? " installed" : " uninstalled") + "; restart the backend to apply it");
+    }).detach();
   } else if (type == "input") {  // read by Key blocks
     const std::string key = msg.value("key", "");
     std::lock_guard lock(s.mutex);

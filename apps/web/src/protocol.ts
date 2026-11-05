@@ -441,4 +441,12 @@ export type ClientMsg =
   }
   | {
     type: "backend.restart";
+  }
+  | {
+    type: "toolkit.install";
+    name?: string;
+  }
+  | {
+    type: "toolkit.uninstall";
+    name?: string;
   };

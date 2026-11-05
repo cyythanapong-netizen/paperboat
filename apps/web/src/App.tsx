@@ -764,7 +764,7 @@ export function App() {
             { value: "lookout", label: "lookout", hint: "The Board, Station and Flow at its sides (Alt+M)" },
           ]}
         />
-        <Toolkits installedGroups={new Set(state.blocks.map((b) => b.group).filter((g): g is string => !!g))} />
+        <Toolkits installedGroups={new Set(state.blocks.map((b) => b.group).filter((g): g is string => !!g))} send={send} logs={state.logs} />
         <button className={`chip conn-${state.connection}`} title="Which backend: File > Backend…" onClick={() => setBackendOpen(true)}>
           <i aria-hidden="true" />
           {state.connection === "open" ? state.engine : state.connection}

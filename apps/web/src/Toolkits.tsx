@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ClientMsg } from "./protocol";
 import { Spinner } from "./Spinner";
 
 type Toolkit = { name: string; repo: string; description: string };
@@ -19,11 +20,11 @@ async function fetchInstalled(): Promise<Set<string>> {
 }
 
 /**
- * Top-bar control for optional toolkits. In a dev build the Install/Uninstall buttons
- * run the real installer through the Vite dev server; in a production build they fall
- * back to showing the manual command.
+ * Top-bar control for optional toolkits. Installing runs in the backend, so its progress
+ * and result appear in Paperboat's Console; the button only starts it and shows a spinner
+ * until the backend reports that it is done.
  */
-export function Toolkits({ installedGroups }: { installedGroups: Set<string> }) {
+export function Toolkits({ installedGroups, send, logs }: { installedGroups: Set<string>; send: (m: ClientMsg) => void; logs: { level: string; text: string }[] }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -33,27 +34,28 @@ export function Toolkits({ installedGroups }: { installedGroups: Set<string> }) 
     fetchInstalled().then(setInstalled);
   }, []);
 
-  const refresh = async () => setInstalled(await fetchInstalled());
+  useEffect(() => {
+    if (!busy) return;
+    const last = logs[logs.length - 1];
+    if (!last) return;
+    if (!last.text.includes(busy)) return;
+    if (last.text.includes("installed") || last.text.includes("uninstalled") || last.text.includes("failed")) {
+      setBusy(null);
+      setMessage(last.text);
+      fetchInstalled().then(setInstalled);
+    }
+  }, [logs, busy]);
 
-  const call = async (endpoint: string, name: string, done: string) => {
+  const install = (name: string) => {
     setBusy(name);
     setMessage(null);
-    try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      const data = (await res.json()) as { ok?: boolean; output?: string; error?: string };
-      if (!res.ok || !data.ok) throw new Error(data.output || data.error || "request failed");
-      console.log(`[toolkit ${done}] ${name}\n${data.output ?? ""}`);
-      setMessage(`${name} ${done}. Restart the backend to apply it.`);
-      await refresh();
-    } catch (err) {
-      setMessage(`Could not ${done} ${name} in-app: ${err instanceof Error ? err.message : String(err)}.`);
-    } finally {
-      setBusy(null);
-    }
+    send({ type: "toolkit.install", name });
+  };
+
+  const uninstall = (name: string) => {
+    setBusy(name);
+    setMessage(null);
+    send({ type: "toolkit.uninstall", name });
   };
 
   const isInstalled = (name: string) => installed.has(name) || installedGroups.has(name);
@@ -76,15 +78,15 @@ export function Toolkits({ installedGroups }: { installedGroups: Set<string> }) 
                 </div>
                 {done ? (
                   <>
-                    <button className="key small" disabled={busy !== null} onClick={() => call("/api/install-toolkit", t.name, "reinstalled")}>
+                    <button className="key small" disabled={busy !== null} onClick={() => install(t.name)}>
                       {busy === t.name ? <Spinner size={12} /> : "Reinstall"}
                     </button>
-                    <button className="key small" disabled={busy !== null} onClick={() => call("/api/uninstall-toolkit", t.name, "uninstalled")}>
+                    <button className="key small" disabled={busy !== null} onClick={() => uninstall(t.name)}>
                       {busy === t.name ? <Spinner size={12} /> : "Uninstall"}
                     </button>
                   </>
                 ) : (
-                  <button className="key small" disabled={busy !== null} onClick={() => call("/api/install-toolkit", t.name, "installed")}>
+                  <button className="key small" disabled={busy !== null} onClick={() => install(t.name)}>
                     {busy === t.name ? <Spinner size={12} /> : "Install"}
                   </button>
                 )}
