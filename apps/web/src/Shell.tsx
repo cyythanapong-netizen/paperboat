@@ -60,6 +60,76 @@ export function Wordmark() {
   );
 }
 
+/** The chosen option in a bracketed choice: a switch's `.opt.on`, or a tab's `[aria-selected]`. */
+const CHOSEN = ".opt.on, .opt[aria-checked='true'], .opt[aria-selected='true']";
+
+/**
+ * The brackets of a bracketed choice (`[ navigator ]  commander`), drawn once for the whole
+ * group so they glide to a new choice instead of blinking there: the same motion as the rail's.
+ * Put it inside the group; the group gets `glide` (its options' own bracket glyphs only keep
+ * their room, so nothing shifts). The options are found by `CHOSEN`, and watched, so a choice
+ * made anywhere (a click, a key, a command) moves the brackets.
+ */
+export function GlideBrackets() {
+  const open = useRef<HTMLSpanElement>(null);
+  const close = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const a = open.current, b = close.current, host = a?.parentElement;
+    if (!a || !b || !host) return;
+    host.classList.add("glide");
+    let shown = false;
+    const place = (animate: boolean) => {
+      const on = host.querySelector<HTMLElement>(CHOSEN);
+      if (!on || !on.offsetParent) {
+        a.style.opacity = b.style.opacity = "0";
+        shown = false;
+        return;
+      }
+      const hb = host.getBoundingClientRect(), ob = on.getBoundingClientRect(), cs = getComputedStyle(on);
+      // The option's own glyphs sit just inside its padding: draw ours exactly there.
+      for (const el of [a, b]) {
+        el.style.font = cs.font;
+        el.style.color = cs.color;
+        el.style.top = `${ob.top - hb.top + host.scrollTop}px`;
+        el.style.height = `${ob.height}px`;
+      }
+      const left = ob.left - hb.left + host.scrollLeft + parseFloat(cs.paddingLeft);
+      const right = ob.right - hb.left + host.scrollLeft - parseFloat(cs.paddingRight) - b.offsetWidth;
+      const glide = animate && shown && !reduceMotion();
+      for (const el of [a, b]) el.style.transition = glide ? "left var(--glide), color var(--glide)" : "none";
+      a.style.left = `${left}px`;
+      b.style.left = `${right}px`;
+      a.style.opacity = b.style.opacity = "1";
+      shown = true;
+    };
+    place(false);
+    // Measured in the fallback font before the web font arrives: measure again once it has.
+    let live = true;
+    void document.fonts?.ready.then(() => live && place(false));
+    const mo = new MutationObserver(() => place(true));
+    mo.observe(host, { subtree: true, attributes: true, attributeFilter: ["class", "aria-checked", "aria-selected"], childList: true, characterData: true });
+    let started = false;
+    const ro = new ResizeObserver(() => (started ? place(false) : (started = true)));
+    ro.observe(host);
+    return () => {
+      live = false;
+      mo.disconnect();
+      ro.disconnect();
+      host.classList.remove("glide");
+    };
+  }, []);
+  return (
+    <>
+      <span ref={open} className="glide-bracket" aria-hidden="true">
+        [
+      </span>
+      <span ref={close} className="glide-bracket" aria-hidden="true">
+        ]
+      </span>
+    </>
+  );
+}
+
 /**
  * A choice of one, instrument-panel style: the chosen option sits in brackets in bold ink,
  * the others plain and grey. Click one; arrow keys move the choice.
@@ -98,6 +168,7 @@ export function Switch<T extends string>({
           {o.label}
         </button>
       ))}
+      <GlideBrackets />
     </div>
   );
 }

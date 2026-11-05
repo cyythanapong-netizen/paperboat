@@ -96,6 +96,12 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .switch .opt.on { color: var(--text); font-weight: 500; }
 .switch .opt.on::before, .switch .opt.on::after { visibility: visible; }
 .switch .opt:hover { color: var(--text); }
+.switch .opt { transition: color var(--glide); }
+/* Gliding brackets (GlideBrackets in Shell.tsx): drawn once per group and moved to the chosen
+   option; the options' own glyphs only keep their room. */
+.glide { position: relative; }
+.glide .opt::before, .glide .opt::after { visibility: hidden !important; }
+.glide-bracket { position: absolute; display: flex; align-items: center; pointer-events: none; opacity: 0; white-space: pre; }
 
 /* Navigator's rail: the pages share its height and the current one sits in ink brackets, like
    a chosen option in a switch (`[ navigator ]`). Shell.tsx places them from the key's icon and
@@ -265,8 +271,22 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* ---- Flow ------------------------------------------------------------------------- */
 .flow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.mode-commander .hint, .mode-lookout .hint { display: none; }
-.hint { margin: 0; padding: var(--space-2) var(--panel-pad); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); border-top: 1px solid var(--line); }
+/* The canvas's help: a line in the middle of an empty canvas, and a "?" key (bottom left) that
+   opens the gestures as a short list. Nothing permanent under the canvas. */
+.canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 4; font: var(--size-sm) var(--font-sans); color: var(--text-muted); }
+.canvas-empty .kbd { margin: 0 2px; }
+.help-key { position: absolute; left: var(--space-3); bottom: var(--space-3); z-index: 6; width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); font: 500 var(--size-xs) var(--font-mono); }
+.help-pop {
+  position: absolute; left: var(--space-3); bottom: calc(var(--space-3) + 34px); z-index: 7; width: min(480px, calc(100% - 24px));
+  padding: var(--space-3) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.12); animation: pop-in var(--glide);
+}
+@keyframes pop-in { from { opacity: 0; transform: translateY(6px); } }
+.help-pop h3 { margin: 0 0 var(--space-2); font: 600 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.help-pop dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--space-4); font-size: var(--size-xs); }
+.help-pop dt { color: var(--text-muted); }
+.help-pop dd { margin: 0; color: var(--text); }
 .react-flow { background: transparent; --xy-background-pattern-dots-color-default: var(--dots); --xy-edge-stroke-default: var(--line-ink); }
 .react-flow__minimap { background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: var(--radius-md); overflow: hidden; }
 .react-flow__attribution { background: transparent !important; }
@@ -291,6 +311,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .block.linked { border-top: 3px solid var(--line-ink); }
 /* Selected: a 2px ink outline set off from the block; unmistakable in either theme. */
 .block.selected, .frame.selected-frame { outline: var(--select-outline); outline-offset: var(--select-offset); }
+/* A selection settles in from further out, on the shared ease (the brackets' and the rail's). */
+@keyframes select-in { from { outline-color: transparent; outline-offset: calc(var(--select-offset) + 8px); } }
+.block.selected, .frame.selected-frame, .react-flow__node.selected > .frame, .compact-block.selected .plate,
+.arranging .deco.picked, .var-row.open { animation: select-in var(--glide); }
 .react-flow__node.selected > .frame { outline: var(--select-outline); outline-offset: var(--select-offset); }
 .block.failed { border-color: var(--danger); }
 .block.missing { border: 1.5px dashed var(--danger); }
@@ -334,6 +358,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .react-flow__edge-path.dim, .wire-casing.dim { opacity: 0.18; }
 .wire-image { stroke-dasharray: 5 3; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3px !important; }
+.react-flow__edge-path { transition: stroke-width var(--glide); }
 
 .remove {
   display: grid; place-items: center;
@@ -713,7 +738,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 /* The open menu title is boxed in ink like the current page on the rail; a chosen item sits in brackets. */
 .menubar { display: flex; gap: 2px; }
 .menu-wrap { position: relative; display: inline-flex; }
-.menu-title { height: 28px; padding: 0 var(--space-3); border: 1.5px solid transparent; background: none; color: var(--text-muted); font: 400 var(--size-sm) var(--font-sans); }
+.menu-title { transition: color var(--motion), border-color var(--glide); height: 28px; padding: 0 var(--space-3); border: 1.5px solid transparent; background: none; color: var(--text-muted); font: 400 var(--size-sm) var(--font-sans); }
 .menu-title:hover { color: var(--text); background: color-mix(in srgb, var(--surface-panel) 50%, transparent); border-color: transparent; }
 .menu-title[aria-expanded="true"] { color: var(--text); font-weight: 600; border-color: var(--line-ink); background: none; }
 .menu, .cmd-search { background: var(--surface-panel); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); }
@@ -749,7 +774,6 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
   border: 1px solid var(--line-strong); border-radius: var(--radius-lg);
 }
 /* On the Flow page the helper line sits under the canvas (up to three lines): the dock rides above it. */
-.mode-navigator .pages:has(.panel-flow.current) > .dock { bottom: 76px; }
 /* Commander with the Board closed: the dock rides above the Board's head, not on it. */
 .dock { transition: bottom var(--slide); }
 /* Lookout: the dock is the Board's, centred over it (an absolute grid child takes its area as its box). */

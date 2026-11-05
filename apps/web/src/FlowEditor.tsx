@@ -27,7 +27,7 @@ import {
   type Viewport,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type MutableRefObject, type SetStateAction } from "react";
+import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type MutableRefObject, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { ownKeys } from "./commands";
 import { CompactBlock } from "./Compact";
@@ -1210,6 +1210,14 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
           </NodeToolbar>
         </ReactFlow>
         </WireDragContext.Provider>
+        {shown.nodes.length === 0 && (
+          <p className="canvas-empty">
+            <span>
+              <span className="kbd">/</span> or double-click to add a block
+            </span>
+          </p>
+        )}
+        <CanvasHelp />
         {hint && (
           <div className="drop-hint" aria-live="polite">
             {hint.plan.kind === "place" && (
@@ -1238,16 +1246,63 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
           }}
         />
       )}
-      <p className="hint muted">
-        <span className="kbd">/</span> or double-click the canvas adds a block. Click a block, or Ctrl-drag a box (Ctrl-click
-        adds one): the dialog above it deletes, groups or makes a story. Drag the canvas to pan; the wheel zooms. Drag a
-        wire's end off its port to remove it. Drag a port's name to another side of its block (double-click puts it back). Group makes a
-        subsystem: double-click it to open, Alt+↑ or Escape to come back; ▾ collapses a group. Ctrl+Z undoes, Ctrl+Shift+Z redoes.
-      </p>
     </div>
     </Lit.Provider>
     </HotWire.Provider>
     </GroupActions.Provider>
+  );
+}
+
+/** What the canvas does with a pointer and keys, one line each. */
+const GESTURES: [string, string][] = [
+  ["Add a block", "/ or double-click the canvas"],
+  ["Select", "Click a block · Ctrl-drag a box · Ctrl-click adds"],
+  ["Act on a selection", "The dialog above it: delete, group, story"],
+  ["Pan · zoom", "Drag the canvas · the wheel"],
+  ["Remove a wire", "Drag its end off the port"],
+  ["Move a port", "Drag its name to another side · double-click puts it back"],
+  ["Open a group", "Double-click it · Alt+↑ or Esc comes back · ▾ collapses"],
+  ["Undo · redo", "Ctrl+Z · Ctrl+Shift+Z"],
+];
+
+/** The canvas's "?" key: the gestures as a short list, on demand. Esc or a click elsewhere closes it. */
+function CanvasHelp() {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation(); // not "go up a level" as well
+      setOpen(false);
+    };
+    const onDown = (e: PointerEvent) => !box.current?.contains(e.target as globalThis.Node) && setOpen(false);
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("pointerdown", onDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("pointerdown", onDown, true);
+    };
+  }, [open]);
+  return (
+    <div ref={box} className="nodrag">
+      {open && (
+        <section className="help-pop" role="dialog" aria-label="Canvas gestures">
+          <h3>On the canvas</h3>
+          <dl>
+            {GESTURES.map(([what, how]) => (
+              <Fragment key={what}>
+                <dt>{what}</dt>
+                <dd>{how}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        </section>
+      )}
+      <button className={`key small help-key${open ? " on" : ""}`} aria-expanded={open} title="What the canvas does" onClick={() => setOpen(!open)}>
+        ?
+      </button>
+    </div>
   );
 }
 
