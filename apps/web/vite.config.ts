@@ -17,6 +17,17 @@ function toolkitInstaller(): Plugin {
         return output.join("\n");
       };
 
+      server.middlewares.use("/api/toolkits", (req, res) => {
+        if (req.method !== "GET") {
+          res.statusCode = 405;
+          res.end(JSON.stringify({ error: "method not allowed" }));
+          return;
+        }
+        const installed = ["opencv"].filter((name) => fs.existsSync(path.join(root, "engine", "toolkit", name)));
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ installed }));
+      });
+
       server.middlewares.use("/api/install-toolkit", (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
