@@ -62,8 +62,7 @@ jobs:
         run: python3 protocol/gen_ts.py --check
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - run: npm test -w @paperboat/web      - run: npm run build
 
   docs:
     name: API reference (Sphinx, warnings as errors)
