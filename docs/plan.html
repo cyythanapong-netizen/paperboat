@@ -447,7 +447,7 @@ void register_structural(Domain&amp; d) {
       <li>A block's output is cached by a hash of its inputs and params, so editing one block re-runs only what depends on it.</li>
       <li>Domains are separate CMake targets: <code>paperboat_structural</code>, <code>paperboat_control</code>, <code>paperboat_cfd</code>. They link statically at first; loadable shared libraries behind a C ABI come later.</li>
       <li>The toolkit (<code>engine/toolkit</code>) is built and tested: packages <code>base</code>, the simple things meant for every flow type (constant, gain, sum, threshold, saturation, sine, step, ramp, square, key, graph), and <code>control</code>, dynamics on a clock (PID, integrator, lag, plus <code>rk4_step</code> for plants). A descriptor's <code>config</code> fixes load-time settings, so one template can appear twice, e.g. Key ← and Key →.</li>
-      <li>Station entities (Joint, Member) get a descriptor section of their own later; Lua scripting can be added for expression blocks without changing the format.</li>
+      <li>Station entities (Joint, Member) get a descriptor section of their own later. Scripting: none — expressions, TOML definitions and variables with <code>expr</code> cover expression nodes and parametric scenes (Lua dropped, paperboat#28).</li>
       <li>Block definitions are data once they leave the engine, so a domain can also be prototyped in any language that speaks the protocol (<code>examples/backends/</code>) before it is ported to C++.</li>
     </ul>
   </div>
