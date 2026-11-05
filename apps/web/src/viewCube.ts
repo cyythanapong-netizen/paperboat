@@ -4,6 +4,7 @@ import type { OrbitControls } from "three/addons/controls/OrbitControls.js";
 /** Side of the cube's corner of the scene, and its distance from the edges, in px. */
 const SIZE = 96;
 const MARGIN = 8;
+const HOME = 26; // the Home key's size
 const FACES = ["RIGHT", "LEFT", "TOP", "BOTTOM", "FRONT", "BACK"]; // BoxGeometry's order: +x -x +y -y +z -z
 const THIRD = 1 / 3;
 
@@ -62,10 +63,12 @@ export function viewCube(
   overlay.className = "view-cube";
   overlay.style.cssText = `position:absolute;top:${MARGIN}px;right:${MARGIN}px;width:${SIZE}px;height:${SIZE}px;touch-action:none;`;
   const homeKey = document.createElement("button");
-  homeKey.className = "key small view-cube-home";
-  homeKey.textContent = "Home";
-  homeKey.title = "Back to the opening view";
-  homeKey.style.cssText = `position:absolute;top:${MARGIN + SIZE + 4}px;right:${MARGIN}px;width:${SIZE}px;`;
+  // A round key with a house, centred under the cube; greyed while the view is already home.
+  homeKey.className = "key small view-cube-home at-home";
+  homeKey.setAttribute("aria-label", "Home");
+  homeKey.title = "Home: back to the opening view";
+  homeKey.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 7.5L8 3l5.5 4.5M4 6.5V13h3V9.5h2V13h3V6.5"/></svg>';
+  homeKey.style.cssText = `position:absolute;top:${MARGIN + SIZE + 6}px;right:${MARGIN + (SIZE - HOME) / 2}px;`;
   host.append(overlay, homeKey);
 
   // Turning the camera: the offset from the target eases to a new direction.
@@ -157,6 +160,8 @@ export function viewCube(
     /** Draw the cube over the scene just rendered, `width` x `height` px. */
     draw(width: number, height: number) {
       step();
+      const atHome = camera.position.distanceToSquared(home.position) < 1e-6 && controls.target.distanceToSquared(home.target) < 1e-6;
+      if (atHome !== homeKey.classList.contains("at-home")) homeKey.classList.toggle("at-home", atHome);
       // The cube's camera looks at it from where the scene's camera looks at its target.
       eye.quaternion.copy(camera.quaternion);
       eye.position.set(0, 0, 4).applyQuaternion(camera.quaternion);

@@ -335,6 +335,40 @@
             "grid": {
               "type": "boolean",
               "description": "Show the floor grid (default true). The user can switch it on or off on the Station page, and that choice wins."
+            },
+            "camera": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "eye"
+              ],
+              "description": "Where the camera opens, and where Home on the view cube returns it. Default: eye [2, 4, 8], looking at [0, 0, 0].",
+              "properties": {
+                "eye": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "description": "The camera's position."
+                },
+                "target": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "description": "The point it looks at and orbits (default [0, 0, 0])."
+                },
+                "fov": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "exclusiveMaximum": 180,
+                  "description": "Vertical field of view in degrees (default 50)."
+                }
+              }
             }
           }
         },

@@ -84,6 +84,8 @@ Default address: `ws://localhost:8765`.
 
 // View: camera hint sent with a scene (default 3d)
 { "mode": "3d" }                                   // "grid": false hides the floor grid (default true; the user's own switch wins)
+{ "mode": "3d", "camera": { "eye": [3, 2, 6], "target": [0, 0.5, 0], "fov": 40 } }
+                                                   // where the camera opens and Home returns (default eye [2, 4, 8] at [0, 0, 0], fov 50)
 { "mode": "2d", "center": [6, 5], "height": 11 }   // orthographic, looking down −z
 
 // RunSettings: hello.run (the backend's defaults) and graph.run.settings (this run's
