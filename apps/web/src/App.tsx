@@ -1,5 +1,5 @@
 import { useEdgesState, useNodesState, useReactFlow } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "./engine";
 import { BrowserWindow, DRAG_TYPE, dragging, type Item } from "./Browser";
 import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toFlow, toGraph, withBlock, type FlowControls, type FlowNode, type Wire } from "./FlowEditor";
@@ -14,7 +14,7 @@ import { ConsoleWindow } from "./Console";
 import { Dashboard } from "./Dashboard";
 import { inlineInText, loadSaved, mapTexts, renameInText, save as saveLayout, textUsing } from "./dashboardLayout";
 import { MODES, PAGES, Panel, Rail, Switch, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
-import { SceneView } from "./SceneView";
+const SceneView = lazy(() => import("./SceneView").then((m) => ({ default: m.SceneView })));
 import { StationGraph } from "./StationGraph";
 import { StationPanel, withObject } from "./StationPanel";
 import { BackendWindow, Dock } from "./Dock";
@@ -770,7 +770,9 @@ export function App() {
             ) : view === "graph" ? (
               <StationGraph objects={state.objects} station={station ?? { objects: [] }} onChange={editStation} locked={running} />
             ) : (
-              <SceneView key={`${theme}:${JSON.stringify(state.view)}`} view={state.view} grid={gridOn} entities={state.entities} />
+              <Suspense fallback={null}>
+                <SceneView key={`${theme}:${JSON.stringify(state.view)}`} view={state.view} grid={gridOn} entities={state.entities} />
+              </Suspense>
             )}
             {station && state.objects.length > 0 && (
               <StationPanel
