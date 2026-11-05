@@ -3,6 +3,7 @@ import { ParamInput } from "./FlowEditor";
 import { RemoveIcon } from "./RemoveIcon";
 import type { ObjectDef, Station, StationObject } from "./protocol";
 import { withoutObject } from "./StationGraph";
+import { PageIcon } from "./Shell";
 
 type Props = {
   objects: ObjectDef[];
@@ -51,7 +52,7 @@ export function StationPanel({ objects, station, onChange, locked }: Props) {
               <div key={o.id} className="station-object">
                 <div className="block-title">
                   <span>
-                    {def?.label ?? o.type} <span className="linked-tag">{def?.block ? `⚓ ${o.id}` : o.id}</span>
+                    {def?.label ?? o.type} <span className="linked-tag">{def?.block && <PageIcon page="station" className="link-mark" />}{o.id}</span>
                   </span>
                   <button className="remove" disabled={locked} title="Remove (and its linked block)" onClick={() => remove(o.id)}>
                     <RemoveIcon />

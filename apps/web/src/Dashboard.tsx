@@ -407,7 +407,7 @@ export function Dashboard({
             <button
               className="key small"
               disabled={!canEdit}
-              title="Another page of the Dashboard"
+              title="Another page of the Board"
               onClick={() => {
                 const name = freshTabName(tabs.length ? tabs : ["Main"]);
                 commit(addTab(arranged, name));
@@ -444,7 +444,7 @@ export function Dashboard({
         </div>
       )}
       {tabs.length >= 2 && (
-        <div className="dash-tabs" role="tablist" aria-label="Dashboard pages">
+        <div className="dash-tabs" role="tablist" aria-label="Board pages">
           {tabs.map((t) => (
             <span
               key={t}

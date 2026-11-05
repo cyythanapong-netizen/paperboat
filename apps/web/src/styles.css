@@ -59,8 +59,11 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
   grid-template-rows: var(--bar-height) minmax(0, 1fr);
   gap: var(--gutter);
   padding: var(--gutter);
+  transition: grid-template-columns var(--slide), column-gap var(--slide);
 }
-.app.mode-commander { grid-template-columns: minmax(0, 1fr); }
+/* Commander: the rail steps aside (it stays mounted, so the drop is where it was on return). */
+.app.mode-commander { grid-template-columns: 0px minmax(0, 1fr); column-gap: 0px; }
+.mode-commander .rail { opacity: 0; pointer-events: none; padding-inline: 0; border-width: 0; }
 .bar, .rail, .panel { background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 
 .bar { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); min-width: 0; }
@@ -94,34 +97,77 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .switch .opt.on::before, .switch .opt.on::after { visibility: visible; }
 .switch .opt:hover { color: var(--text); }
 
-/* Navigator's rail: the pages sit greyed on a sunken rail; the current one is boxed in ink
-   on panel grey, like a tab pulled forward. */
-.rail { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2); background: var(--surface-sunken); }
-.rail-item {
-  display: flex; align-items: center; gap: var(--space-2);
-  border: 1.5px solid transparent; background: transparent; border-radius: var(--radius-md);
-  padding: var(--space-2); color: var(--text-muted); text-align: left; font-size: var(--size-sm);
+/* Navigator's rail: the pages share its height and the current one sits in ink brackets, like
+   a chosen option in a switch (`[ navigator ]`). Shell.tsx places them from the key's icon and
+   name, plus room, and flies them to a new key one after the other. Selection is never a fill. */
+.rail {
+  position: relative; display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2);
+  background: var(--surface-sunken); overflow: hidden; user-select: none; min-width: 0;
+  transition: opacity var(--motion);
 }
-.rail-item .name { flex: 1; }
-.rail-item:hover { color: var(--text); background: color-mix(in srgb, var(--surface-panel) 50%, transparent); }
-.rail-item.current { color: var(--text); font-weight: 600; background: var(--surface-panel); border-color: var(--line-ink); }
+.rail-bracket { position: absolute; width: 8px; pointer-events: none; border: 2px solid var(--line-ink); border-radius: 0; }
+.rail-bracket.open { border-right: 0; }
+.rail-bracket.close { border-left: 0; }
+.rail-item {
+  position: relative; z-index: 1; flex: 1; min-height: 0; display: grid; place-items: center;
+  border: 0; background: none; border-radius: var(--radius-md); padding: 0; color: var(--text-muted);
+  transition: color 420ms cubic-bezier(.65, 0, .25, 1);
+}
+.rail-item:hover, .rail-item.current { color: var(--text); }
+.rail-item:focus-visible { outline: none; }
+.rail-item:focus-visible .rail-face { outline: 2px solid var(--focus); outline-offset: 10px; border-radius: 10px; }
+.rail-face { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+/* The current key lifts its icon a little; leaving and arriving ease together, in step with the
+   brackets. The name keeps one weight (a weight change jumps), so ink colour and brackets mark it. */
+.rail-face .page-icon { width: 20px; height: 20px; transform: scale(0.94); transition: transform 460ms cubic-bezier(.65, 0, .25, 1); }
+.rail-item.current .page-icon { transform: translateY(-2px) scale(1.08); }
+.rail-face .name { font: 500 var(--size-2xs) var(--font-mono); }
+.page-icon, .link-mark { fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; flex: none; }
+/* The Station glyph marks a linked pair: a station object and its block on the Flow (#53). */
+.link-mark { width: 1em; height: 1em; margin-right: 3px; vertical-align: -0.15em; }
 .num {
   flex: none; display: inline-grid; place-items: center; width: 20px; height: 20px;
   font: 500 var(--size-2xs) var(--font-mono); color: var(--text-muted);
   border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
 }
-.rail-item.current .num, .panel-head .num { color: var(--text); border-color: var(--line-ink); }
 .count { font: 500 var(--size-2xs) var(--font-mono); color: var(--danger); }
 
 /* Pages: one at a time (Navigator), or all as tiles (Commander). */
 .pages { min-height: 0; min-width: 0; display: grid; gap: var(--gutter); }
 .mode-navigator .pages { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
-.mode-navigator .panel { grid-area: 1 / 1; }
+/* Navigator: the pages sit in a column, in rail order, and the column slides to the current
+   one. Each page is offset by its place minus the current one's (--i, --at from Shell.tsx). */
+.mode-navigator .page-stack {
+  grid-area: 1 / 1; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  min-height: 0; min-width: 0; overflow: clip; border-radius: var(--radius-lg);
+}
+.mode-navigator .page-stack > .panel {
+  grid-area: 1 / 1;
+  transform: translateY(calc((var(--i) - var(--at)) * (100% + var(--gutter))));
+  transition: transform var(--slide), visibility 0s linear var(--slide-time);
+  visibility: hidden;
+}
+.mode-navigator .page-stack > .panel.current { visibility: visible; transition: transform var(--slide); }
+/* Commander: Station and Flow share the top; the Board is a drawer under them. */
+.mode-commander .page-stack { display: contents; }
 .mode-commander .pages {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1.5fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas: "station flow" "dashboard dashboard";
 }
+.panel.drawer { height: var(--drawer-h); transition: height var(--slide); }
+.panel.drawer.closed { height: calc(var(--panel-head-height) + 2px); }
+.panel.drawer.resizing { transition: none; }
+.panel.drawer .panel-head { cursor: ns-resize; touch-action: none; }
+.panel.drawer.closed .panel-head { border-bottom-color: transparent; }
+.panel.drawer .panel-body { transition: opacity var(--motion); }
+.panel.drawer.closed .panel-body { opacity: 0; }
+.drawer-grip { width: 28px; height: 4px; border-radius: 4px; background: var(--line-strong); flex: none; }
+.drawer-toggle { width: 26px; padding: 0; display: grid; place-items: center; }
+.drawer-toggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; transition: transform var(--slide); }
+.drawer:not(.closed) .drawer-toggle svg { transform: rotate(180deg); }
+.panel-peek { display: flex; gap: var(--space-4); margin-left: var(--space-3); font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; overflow: hidden; }
+.panel-peek b { font-weight: 500; color: var(--text); }
 .mode-commander .panel-station { grid-area: station; }
 .mode-commander .panel-flow { grid-area: flow; }
 .mode-commander .panel-dashboard { grid-area: dashboard; }
@@ -147,11 +193,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; --gutter: 8px; }
   .bar { flex-wrap: wrap; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
   .rail { grid-row: 3; flex-direction: row; padding: var(--space-1); }
-  .rail-item { flex: 1; justify-content: center; padding: var(--space-2); }
-  .rail-item .name { flex: none; }
-  .rail-item:not(.current) .name { display: none; }
+  .rail-face { flex-direction: row; padding: 4px 0; }
+  .mode-commander .rail { display: none; }
   .conn { display: none; }
   .mode-commander .pages { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: minmax(320px, auto); grid-template-areas: "station" "flow" "dashboard"; overflow: auto; }
+  .mode-commander .panel.drawer.closed { min-height: 0; }
 }
 
 /* Glass: only what floats over live content (the station's properties). */
@@ -668,7 +714,10 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
   border: 1px solid var(--line-strong); border-radius: var(--radius-lg);
 }
 /* On the Flow page the helper line sits under the canvas (up to three lines): the dock rides above it. */
-.mode-navigator .pages:has(.panel-flow:not([hidden])) > .dock { bottom: 76px; }
+.mode-navigator .pages:has(.panel-flow.current) > .dock { bottom: 76px; }
+/* Commander with the Board closed: the dock rides above the Board's head, not on it. */
+.dock { transition: bottom var(--slide); }
+.mode-commander .pages:has(.drawer.closed) > .dock { bottom: calc(var(--panel-head-height) + 2px + var(--gutter) + var(--space-3)); }
 .backend-window { height: auto; width: min(520px, calc(100vw - 32px)); }
 .backend-form { display: flex; align-items: center; gap: var(--space-3); padding: var(--panel-pad) var(--panel-pad) var(--space-2); }
 .backend-note { margin: 0; padding: 0 var(--panel-pad) var(--panel-pad); }

@@ -58,6 +58,7 @@ import {
   type GroupNode,
 } from "./groups";
 import type { BlockDef, Graph, ObjectDef, ParamDef, ParamValue, PortDef, Station } from "./protocol";
+import { PageIcon } from "./Shell";
 
 /**
  * `missing`: the backend's catalog has no block of this type (an old graph, another
@@ -171,9 +172,9 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
     >
       {ports.top}
       <div className="block-title">
-        <span className="block-name" title={def.linked ? `Linked to station object ${id} (⚓): set its properties, or remove it, on the Station` : undefined}>
+        <span className="block-name" title={def.linked ? `Linked to station object ${id}: set its properties, or remove it, on the Station` : undefined}>
           {missing ? def.type : def.label}
-          {def.linked && <span className="linked-tag"> ⚓ {id}</span>}
+          {def.linked && <span className="linked-tag"> <PageIcon page="station" className="link-mark" />{id}</span>}
         </span>
         <span className={`block-tag tag-${tag}`}>{tag}</span>
         {def.view?.compact && (

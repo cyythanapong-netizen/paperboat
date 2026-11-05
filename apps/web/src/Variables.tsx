@@ -469,7 +469,7 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
         className="var-name"
         draggable={!vars.locked}
         tabIndex={0}
-        title="Click to open; drag onto a field to bind it, or onto a Dashboard label to show its value"
+        title="Click to open; drag onto a field to bind it, or onto a Board label to show its value"
         onClick={onOpen}
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen())}
         onDragStart={(e) => {
@@ -606,7 +606,7 @@ function Detail({ v, uses, onChange, onShow }: { v: Variable; uses: Use[]; onCha
           {uses.map((u) => (
             <div key={`${u.page}:${u.id}:${u.field}`} className="var-use">
               <code>{u.field ? `${u.id} · ${u.field}` : u.id}</code>
-              <span className="where">{u.page === "variables" ? "in its formula" : u.formula ? "a formula" : u.page === "flow" ? "Flow" : u.page === "dashboard" ? "Dashboard" : "Station"}</span>
+              <span className="where">{u.page === "variables" ? "in its formula" : u.formula ? "a formula" : u.page === "flow" ? "Flow" : u.page === "dashboard" ? "Board" : "Station"}</span>
               <button className="key small" onClick={() => onShow(u)}>
                 Show
               </button>

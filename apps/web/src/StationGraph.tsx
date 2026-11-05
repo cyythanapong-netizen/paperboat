@@ -16,6 +16,7 @@ import {
 } from "@xyflow/react";
 import { useEffect, useRef } from "react";
 import type { ObjectDef, Station, StationObject } from "./protocol";
+import { PageIcon } from "./Shell";
 
 type ObjectData = { object: StationObject; def?: ObjectDef };
 type ObjectNode = Node<ObjectData, "object">;
@@ -28,8 +29,8 @@ function ObjectBox({ data }: NodeProps<ObjectNode>) {
   return (
     <div className={`block object station-node role-${def?.role ?? "body"}${def ? "" : " missing"}`}>
       <div className="block-title">
-        <span className="block-name" title={def?.block ? "Has a linked block on the Flow page, marked ⚓ with the same id" : undefined}>
-          {def?.label ?? object.type} <span className="linked-tag">{def?.block ? `⚓ ${object.id}` : object.id}</span>
+        <span className="block-name" title={def?.block ? "Has a linked block on the Flow page, marked with the Station glyph and the same id" : undefined}>
+          {def?.label ?? object.type} <span className="linked-tag">{def?.block && <PageIcon page="station" className="link-mark" />}{object.id}</span>
         </span>
         <span className={`block-tag${def ? "" : " tag-missing"}`}>{def ? (def.role === "joint" ? "joint" : "object") : "missing"}</span>
       </div>
@@ -40,7 +41,7 @@ function ObjectBox({ data }: NodeProps<ObjectNode>) {
         </div>
       ))}
       <div className="port out port-link">
-        {def?.block ? "⚓ block" : ""}
+        {def?.block ? <><PageIcon page="station" className="link-mark" />block</> : ""}
         <Handle type="source" position={Position.Right} id="self" />
       </div>
       {props.length > 0 && (
