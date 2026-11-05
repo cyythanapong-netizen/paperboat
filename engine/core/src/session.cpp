@@ -1,3 +1,4 @@
+#include <chrono>
 #include <fstream>
 #include <mutex>
 #include <thread>
@@ -114,6 +115,10 @@ void Session::on_message(const std::string& text) {
     }
   } else if (type == "run.cancel") {
     s.run.request_stop();
+  } else if (type == "backend.restart") {
+    s.log("info", "restarting backend…");
+    // Let the message leave before replacing the process.
+    std::thread([] { std::this_thread::sleep_for(std::chrono::milliseconds(100)); restart_backend(); }).detach();
   } else if (type == "input") {  // read by Key blocks
     const std::string key = msg.value("key", "");
     std::lock_guard lock(s.mutex);

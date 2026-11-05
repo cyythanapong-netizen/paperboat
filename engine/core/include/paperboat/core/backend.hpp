@@ -56,6 +56,11 @@ std::string run_starter(const Backend& backend, std::ostream& out,
 // read as its variable's type. Throws std::invalid_argument.
 json with_vars(const toolkit::Catalog& catalog, const std::vector<std::pair<std::string, std::string>>& vars);
 
+// Remember the command line so a backend can restart itself (File > Restart backend).
+void remember_args(int argc, char** argv);
+// Replace this process with a fresh copy of itself, using the remembered arguments.
+void restart_backend();
+
 // What a backend's main() returns: parse the options, then serve or run the starter.
 int main(const Backend& backend, int argc, char** argv, int default_port);
 

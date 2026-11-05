@@ -894,6 +894,18 @@
       ],
       "additionalProperties": false
     },
+    "backend.restart": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "backend.restart"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
     "input": {
       "type": "object",
       "properties": {
@@ -1138,7 +1150,8 @@
             "station.set",
             "variables.set",
             "run.cancel",
-            "input"
+            "input",
+            "backend.restart"
           ]
         }
       },

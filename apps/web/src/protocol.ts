@@ -438,4 +438,7 @@ export type ClientMsg =
     type: "input";
     key: string;
     down: boolean;
+  }
+  | {
+    type: "backend.restart";
   };

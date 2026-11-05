@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <unistd.h>
 
 #include "paperboat/core/backend.hpp"
 
@@ -73,7 +74,35 @@ std::string run_starter(const Backend& backend, std::ostream& out, const std::ve
   return status;
 }
 
+namespace {
+int g_argc = 0;
+char** g_argv = nullptr;
+}  // namespace
+
+void remember_args(int argc, char** argv) {
+  g_argc = argc;
+  g_argv = argv;
+}
+
+void restart_backend() {
+  if (g_argv == nullptr) return;
+  const pid_t child = fork();
+  if (child == 0) {
+    // The inherited listening socket would keep the port busy; drop every descriptor
+    // except stdin/stdout/stderr before becoming the new backend.
+    for (int fd = 3; fd < 1024; ++fd) close(fd);
+    // Give the parent time to release the listening socket.
+    sleep(2);
+    execv(g_argv[0], g_argv);
+    _exit(127);
+  }
+  if (child > 0) {
+    _exit(0);
+  }
+}
+
 int main(const Backend& backend, int argc, char** argv, int default_port) {
+  remember_args(argc, argv);
   Options options;
   try {
     options = parse_options(argc, argv, default_port);
