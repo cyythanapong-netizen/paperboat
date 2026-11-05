@@ -111,6 +111,14 @@ groups = [{ id = "outer", kind = "subsystem", nodes = ["s"], ports = { left = ["
                     ContainsSubstring("is inside itself"));
   CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "box", nodes = ["s"] }])")),
                     ContainsSubstring("kind must be subsystem, story or visual"));
+  // A story's released outputs: [node, port] of a block in the story; only stories release.
+  CHECK_NOTHROW(tk::load_descriptor(bad(R"([{ id = "a", kind = "story", nodes = ["s"], release = [["s", "y"]] }])")));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "subsystem", nodes = ["s"], release = [["s", "y"]] }])")),
+                    ContainsSubstring("only a story releases outputs"));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "story", nodes = [], release = [["s", "y"]] }])")),
+                    ContainsSubstring("which isn't in the story"));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "story", nodes = ["s"], release = ["s.y"] }])")),
+                    ContainsSubstring("release lists outputs as [node, port]"));
 }
 
 TEST_CASE("import adds every template of a package; a customised entry wins") {

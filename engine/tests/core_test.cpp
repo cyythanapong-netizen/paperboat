@@ -536,6 +536,72 @@ TEST_CASE("a story with reset starts its blocks afresh each time a path arrives"
   CHECK(fresh.last_signal("shown") == 3.0);  // a fresh block the second time
 }
 
+TEST_CASE("a story ends when its until input says so, and drops what it releases") {
+  const auto& catalog = catalog_of(R"(
+domain = "until"
+import = ["step", "base", "signal", "math", "dashboard"]
+)");
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.1, .duration = 5, .emit_every = 1, .real_time = false}};
+  // Start → [drive: ramp → push, estimate; until ramp > 0.45] → [after: 2 s].
+  // push (released) drives something; estimate (held) is a result.
+  auto graph = [](json until_from, double seconds) {
+    json g = {
+        {"nodes",
+         {{{"id", "start"}, {"type", "start"}},
+          {{"id", "ramp"}, {"type", "ramp"}, {"params", {{"start", 0}, {"slope", 1}}}},
+          {{"id", "push"}, {"type", "gain"}, {"params", {{"k", 1}}}},
+          {{"id", "estimate"}, {"type", "gain"}, {"params", {{"k", 2}}}},
+          {{"id", "over"}, {"type", "threshold"}, {"params", {{"level", 0.45}}}},
+          {{"id", "wait"}, {"type", "constant"}},
+          {{"id", "force"}, {"type", "display"}},
+          {{"id", "result"}, {"type", "display"}}}},
+        {"edges",
+         {{{"from", {"start", "next"}}, {"to", {"drive", "in"}}},
+          {{"from", {"drive", "next"}}, {"to", {"after", "in"}}},
+          {{"from", {"ramp", "y"}}, {"to", {"push", "u"}}},
+          {{"from", {"ramp", "y"}}, {"to", {"estimate", "u"}}},
+          {{"from", {"ramp", "y"}}, {"to", {"over", "u"}}},
+          {{"from", {"push", "y"}}, {"to", {"force", "in"}}},
+          {{"from", {"estimate", "y"}}, {"to", {"result", "in"}}}}},
+        {"groups",
+         {{{"id", "drive"}, {"kind", "story"}, {"nodes", {"ramp", "push", "estimate", "over"}},
+           {"params", {{"seconds", seconds}}}, {"release", json::array({json::array({"push", "y"})})}},
+          {{"id", "after"}, {"kind", "story"}, {"nodes", {"wait"}}, {"params", {{"seconds", 2}}}}}}};
+    if (!until_from.is_null()) g["edges"].push_back({{"from", until_from}, {"to", {"drive", "until"}}});
+    return g;
+  };
+  auto left_at = [](const Collected& out) {
+    // When drive's path moved on: the time of the frame in which `after` started (its
+    // node.state comes before that frame's signals).
+    bool started = false;
+    for (const auto& m : out.messages) {
+      if (m["type"] == "node.state" && m["node"] == "after" && m["state"] == "running") started = true;
+      if (started && m["type"] == "signal" && m["node"] == "force") return m["t"].get<double>();
+    }
+    return -1.0;
+  };
+
+  Collected out;
+  CHECK(core::run("r", graph({"over", "y"}, 0), nullptr, backend, out.emit(), nullptr, {}) == "done");
+  // ramp passes 0.45 on the pass at t = 0.5; `until` reads it a clock step later.
+  CHECK_THAT(left_at(out), WithinAbs(0.6, 1e-9));
+  CHECK(out.last_signal("force") == 0.0);                  // released: unwired once drive is over
+  CHECK_THAT(out.last_signal("result"), WithinAbs(1.2, 1e-9));  // held: drive's last estimate
+
+  // `seconds` is then a time limit: a condition that never comes still ends the story.
+  Collected limited;
+  CHECK(core::run("r", graph({"wait", "y"}, 0.3), nullptr, backend, limited.emit(), nullptr, {}) == "done");
+  CHECK_THAT(left_at(limited), WithinAbs(0.2, 1e-9));
+
+  // A release that isn't the story's output is refused, naming the story.
+  core::Station none;
+  json bad = graph(nullptr, 1);
+  bad["groups"][0]["release"] = json::array({json::array({"wait", "y"})});
+  CHECK_THROWS_WITH(core::prepare_graph(bad, catalog, none), ContainsSubstring("isn't one of its blocks"));
+  bad["groups"][0]["release"] = json::array({json::array({"push", "nope"})});
+  CHECK_THROWS_WITH(core::prepare_graph(bad, catalog, none), ContainsSubstring("which push doesn't have"));
+}
+
 TEST_CASE("a magic block takes the ports of its form in a run") {
   const auto& catalog = catalog_of(R"(
 domain = "magic"

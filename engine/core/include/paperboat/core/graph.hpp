@@ -30,25 +30,32 @@ struct Node {
 };
 
 // A story group's step: when a path arrives it runs the story's blocks (`pass`, set by
-// the run) once per clock step for `seconds` (0: once), then leaves by "next". Their
-// outputs keep their last values, so what comes after reads the story's results.
+// the run) once per clock step for `seconds` (0: once), then leaves by "next". With its
+// `until` input wired it leaves as soon as `until` is positive, and `seconds` is a time
+// limit (0: none). Their outputs keep their last values, so what comes after reads the
+// story's results, except those the group releases (`on_leave` drops them).
 class StoryStep final : public toolkit::Step {
  public:
-  explicit StoryStep(double seconds) : seconds_(seconds) {}
+  StoryStep(double seconds, bool until) : seconds_(seconds), until_(until) {}
   std::function<void()> pass;
   std::function<void()> on_enter;  // set by the run for a story that starts afresh
+  std::function<void()> on_leave;  // set by the run for a story that releases outputs
   void enter(const toolkit::Context&, const toolkit::Values&) override {
     elapsed_ = 0;
     if (on_enter) on_enter();
   }
-  std::string tick(const toolkit::Context& ctx, const toolkit::Values&) override {
+  std::string tick(const toolkit::Context& ctx, const toolkit::Values& in) override {
     if (pass) pass();
     elapsed_ += ctx.dt;
-    return elapsed_ >= seconds_ - ctx.dt / 2 ? "next" : "";
+    const bool timed_out = elapsed_ >= seconds_ - ctx.dt / 2;
+    const bool done = until_ ? toolkit::get_or(in, "until") > 0 || (seconds_ > 0 && timed_out) : timed_out;
+    if (done && on_leave) on_leave();
+    return done ? "next" : "";
   }
 
  private:
   double seconds_;
+  bool until_;  // its `until` input is wired
   double elapsed_ = 0;
 };
 
@@ -57,6 +64,7 @@ struct Story {
   std::vector<std::string> order;  // its blocks, dependencies first
   StoryStep* step = nullptr;       // owned by its node
   bool reset = false;              // params.reset: its blocks start afresh each time a path arrives
+  std::vector<PortRef> release;    // outputs that read as unwired once the path leaves
 };
 
 struct Graph {
@@ -73,8 +81,9 @@ struct Graph {
 
 // Check `graph` against the catalog and the station; make its blocks. `groups` (optional):
 // a "visual" group only tidies the canvas and changes nothing here; a "story" group
-// becomes one step node (same id as the group, step ports in → next, params `seconds` and
-// `reset`) whose blocks run only while a path is at it.
+// becomes one step node (same id as the group, step ports in → next and a signal input
+// `until`, params `seconds` and `reset`) whose blocks run only while a path is at it;
+// its `release` lists outputs ([node, port]) that drop when the path leaves.
 // Wires must join ports of one type (step, signal, image…); a step output leads to one block;
 // signal wires may not loop (linked blocks have no feedthrough, so wires into them don't
 // count). Throws GraphError.

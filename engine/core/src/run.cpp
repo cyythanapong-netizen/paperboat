@@ -109,6 +109,14 @@ std::string Run::go(const json& graph_given, const json& station_given, const js
         for (const auto& sample : pass_over(*order)) latest[sample["node"]].push_back(sample);
         for (auto& [node, list] : latest) story_samples_[node] = std::move(list);
       };
+      if (!story.release.empty()) {
+        // Released outputs read as unwired once the path leaves: a story that drives
+        // something stops driving it, while its results hold for what comes after.
+        story.step->on_leave = [this, release = &story.release] {
+          for (const auto& [node, port] : *release)
+            if (auto it = outputs_.find(node); it != outputs_.end()) it->second.erase(port);
+        };
+      }
       if (story.reset) {
         // Fresh blocks each time a path arrives: a story run twice (in a loop) starts over.
         story.step->on_enter = [this, order = &story.order] {
