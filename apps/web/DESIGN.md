@@ -43,11 +43,11 @@ from the tokens and is rebuilt when the theme changes. Displays are black in bot
 | Mode | What it shows | When |
 | --- | --- | --- |
 | **Navigator** (default) | One page at a time, full size; the rail picks it (Alt+1 to Alt+3, ↑/↓ or the wheel over the rail). The pages sit in a column in rail order and the column slides up or down to the one picked | Building one thing: wiring a flow, setting up the station, reading a run |
-| **Commander** | Station and Flow side by side for editing; the Board is a drawer under them. Closed, the drawer is just its head, with the latest of up to three number readouts; click the head (or its ⌃ key) to open or close it, drag the head to any height. Run opens it; it stays as left (kept in the browser). Each head has **open**, which shows that page alone in Navigator | Editing, then running and watching |
-| **Monitor** (planned) | A finished program's Board, Station and Console collapsible | Using a rig someone built |
+| **Commander** | Station and Flow side by side for editing; the Board is a drawer under them. Closed, the drawer is just its head, with the latest of up to three number readouts; click the head (or its chevron key) to open or close it, drag the head to any height. Run opens it; it stays as left (kept in the browser). Each head has **open**, which shows that page alone in Navigator | Editing, then running and watching |
+| **Lookout** | For whoever runs and watches a rig (IoT, monitoring): the Board fills the window, with Station and Flow as drawers at its left and right. Closed, a drawer is a standing tab (its icon and name); click it to open, click the head or its chevron to close, drag the head or the inner edge to any width. The run dock sits over the Board. Drawer states are kept in the browser | Running and watching a finished rig |
 
-Switch with the view switch on the bar, or Alt+M; the rail steps aside into Commander and
-back. Every page stays mounted in both modes (the pages not in view in Navigator are inert),
+Switch with the view switch on the bar, or Alt+M (it cycles the three); the rail steps aside
+into Commander or Lookout and back. Every page stays mounted in every mode (the pages not in view in Navigator are inert),
 so switching never loses a canvas, a scene or a run; a canvas fits itself again when its
 size changes. Page names are words, not numbered: Station, Flow, **Board** (the run page;
 `dashboard` in code and the protocol).
@@ -72,7 +72,7 @@ sideways), the bar wraps, and Commander stacks its pages in one scrolling column
 
 ## Menus, command search and the run dock (#78)
 
-The bar holds only the wordmark, the **menus**, the project's name (with a signal-coloured dot
+The bar holds only the wordmark, the **menus**, the project's name (centred on the bar like a window title, in muted monospace so it isn't taken for a key; after the menus below 1100px; a signal-coloured dot
 while there are changes not saved), the view switch, an error count when the Console has
 errors, and a connection chip (which opens File > Backend…). Everything else
 you can do is a **command** in one registry (`src/commands.ts`); the menu bar, the command
@@ -91,7 +91,7 @@ something is available can't drift between them.
   canvas.
 - **Run dock** (`Dock.tsx`): Run, Cancel, the next run's length and speed, and where the
   run is, floating at the bottom of the pages. It is glass, because it floats over live
-  content (the one place glass is for); on the Flow page it rides above the helper line.
+  content (the one place glass is for). In Lookout it sits over the Board.
 - **Projects** (#82, `project.ts`, `ProjectUI.tsx`): File > Open (Ctrl+O), Save (Ctrl+S), Save as,
   Restore last session and Recent projects; a file dropped on the window opens too. Anything
   that needs a word first (another backend, unsaved changes, a file that can't be read, the
@@ -152,12 +152,13 @@ blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`
 | **Collection window** | The browser, floating over the page from its Add key: search, a kind choice in brackets, packages on the left, cards in sections. Moved by its head and remembered; Escape closes. While a card is dragged it fades and lets the pointer through |
 | **Quick add** | A search floating at the cursor (`/` over the canvas, or a double-click on empty canvas): the best matches, arrows, Enter adds at that spot |
 | **Selection dialog** | Floats above what's selected (below it when that is at the top of the canvas) (one or more blocks or groups, with any wires), like quick add: raised grey, ink outline. Says what's picked in words ("3 blocks · 1 wire"), then Delete, Group (a subsystem), Story, Frame, Ungroup, each greyed when it doesn't apply; linked blocks stay and it says so. Hides while dragging; Escape clears the selection |
+| **Canvas help** | No permanent help under the canvas. An empty canvas says "/ or double-click to add a block" in its middle, in grey. A round `?` key at the canvas's bottom left opens the gestures as a two-column list (what · how) on glass; Esc or a click elsewhere closes it |
 | **Drop hint** | While a card is dragged over the Flow: a dashed outline where it lands, a thickened wire it would be inserted into, or a dashed line to the port it would connect to; with a label in words ("Insert Lag: pid.u → u, y → sum.a") |
 | **Port (while a wire is dragged)** | A 24px hit area round the 8px dot. A drop within 40px of a port that accepts the wire joins it (a wire's end is grabbed within 20px; both in `SNAP`, `wireSnap.tsx`). The port it would join is enlarged, ringed, in the signal colour, with its name bold; ports that can't take the wire (wrong type, same block) dim to 30%. The nearest port that accepts wins, not the nearest port |
-| **Variables sheet** (#36) | A panel docked at the right of the pages, beside whatever page is open: 360px in Navigator, a column beside the tiles in Commander, a bottom sheet below 860px. Closed until wanted: the bar's **Variables** key (with the count) or Alt+V; Esc closes. Rows by group: name in monospace (drag it onto a field to bind, or onto a Board label or section title to show its value there: `{name}` goes at the end of the text, which is outlined dashed while the variable is over it, in or out of Arrange), type in words, value in a well, unit, "2 uses" or "unused". A number's well is one field like a spreadsheet cell: a number or a formula over other variables (`kp_theta / 5`); it shows the result, and the formula while editing (and on a line below the row); a number applies as you type, a formula on Enter. The open row has an ink outline: name, type as bracketed choices, value, unit, range, note, group, where it's used (Show), Reset to default or Delete. Errors in words, red. Copy as TOML in the foot |
+| **Variables sheet** (#36) | A drawer at the right edge of the pages in every view: 360px in Navigator, 330px in Commander and Lookout, a bottom sheet below 860px. Closed, it is a standing tab like Lookout's side drawers (chevron, `=`, "Variables", the count); click it, Alt+V or Edit > Variables opens it, sliding out on `--slide` with its content uncovered at full width, never squeezed; the head's chevron, Alt+V or Esc closes it. Rows by group: name in monospace (drag it onto a field to bind, or onto a Board label or section title to show its value there: `{name}` goes at the end of the text, which is outlined dashed while the variable is over it, in or out of Arrange), type in words, value in a well, unit, "2 uses" or "unused". A number's well is one field like a spreadsheet cell: a number or a formula over other variables (`kp_theta / 5`); it shows the result, and the formula while editing (and on a line below the row); a number applies as you type, a formula on Enter. The open row has an ink outline: name, type as bracketed choices, value, unit, range, note, group, where it's used (Show), Reset to default or Delete. Errors in words, red. Copy as TOML in the foot |
 | **Bound field** | A param or property bound to a variable: the variable's name in an ink outline (a formula marked ƒ), what it comes to after it in grey. Click: edit the variable in place, Show in Variables, Unbind (keeps the value). Typing **=** in a number field lists the variables that fit, takes a formula, or makes a variable of the value. A variable dragged over a field it fits gets a dashed outline |
 | **Floating panel** | The only glass: what floats over live content (the station's properties). One token (`--float-blur: none`) retires it |
-| **View cube** | A 96px cube in the 3D Station's top-right corner (hidden in 2D views): a mono label on each face, ink edges, turning with the camera. Hover marks the third of the cube a click would pick (face, edge or corner) in the signal colour; click eases the camera there (260ms, none with reduced motion); drag orbits; a Home key under it restores the opening view |
+| **View cube** | A 96px cube in the 3D Station's top-right corner (hidden in 2D views): a mono label on each face, ink edges, turning with the camera. Hover marks the third of the cube a click would pick (face, edge or corner) in the signal colour; click eases the camera there (260ms, none with reduced motion); drag orbits; a round Home key (a house) centred under it eases back to the opening view: grey while the view is already there, ink once it has moved. The opening view is the backend's `view.camera` (eye, target, fov), else eye [2, 4, 8] at the origin |
 
 The Variables are shared by the Station and the Flow, so they belong to neither page: a sheet beside the page you're working on, never a page of their own (#36 weighs the options).
 
@@ -184,8 +185,16 @@ tall the mark is still readable; below 16px use the favicon. Keep the favicon an
 
 ## Motion
 
-Only in answer to an action: a switch's knob slides (150ms). Nothing moves on its own; with
-reduced motion nothing animates.
+Only in answer to an action, and all on one ease (`--ease`, an even in-and-out), so the app
+moves as one thing; only the time differs with the distance:
+
+| Token | Time | For |
+| --- | --- | --- |
+| `--motion` | 150ms | Hover, colour |
+| `--glide` | 300ms | A choice moving: the brackets of every bracketed choice (view switch, Kind in the block browser, Board tabs, an instrument's size, a label's style) glide to the new option instead of blinking there (`GlideBrackets` in `Shell.tsx`); a selection settles in (a block's outline closes in from 8px further out; a wire thickens); a popover rises in |
+| `--slide` | 560ms | A surface moving: a page sliding into view, the rail's brackets (in step with the page), the rail stepping aside, a drawer |
+
+Nothing moves on its own; with reduced motion nothing animates (the tokens drop to 0).
 
 ## Accessibility
 

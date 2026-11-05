@@ -28,6 +28,7 @@ import type { DashboardLayout } from "./protocol";
 import { Console } from "./Console";
 import { VAR_DRAG, VarsContext } from "./Variables";
 import { RemoveIcon } from "./RemoveIcon";
+import { GlideBrackets } from "./Shell";
 
 export type { Monitor } from "./dashboardLayout";
 
@@ -478,6 +479,7 @@ export function Dashboard({
               )}
             </span>
           ))}
+          <GlideBrackets />
         </div>
       )}
       {empty && (
@@ -559,6 +561,7 @@ export function Dashboard({
                             {s}
                           </button>
                         ))}
+                        <GlideBrackets />
                       </span>
                     )}
                     <span
@@ -612,6 +615,7 @@ export function Dashboard({
                       {SIZE_LABEL[s]}
                     </button>
                   ))}
+                  <GlideBrackets />
                 </div>
               )}
             </div>

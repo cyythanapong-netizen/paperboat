@@ -100,6 +100,15 @@ export type View = {
   mode: "3d";
   /** Show the floor grid (default true). The user can switch it on or off on the Station page, and that choice wins. */
   grid?: boolean;
+  /** Where the camera opens, and where Home on the view cube returns it. Default: eye [2, 4, 8], looking at [0, 0, 0]. */
+  camera?: {
+    /** The camera's position. */
+    eye: [number, number, number];
+    /** The point it looks at and orbits (default [0, 0, 0]). */
+    target?: [number, number, number];
+    /** Vertical field of view in degrees (default 50). */
+    fov?: number;
+  };
 } | {
   mode: "2d";
   center: [number, number];

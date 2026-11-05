@@ -62,8 +62,8 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
   transition: grid-template-columns var(--slide), column-gap var(--slide);
 }
 /* Commander: the rail steps aside (it stays mounted, so the drop is where it was on return). */
-.app.mode-commander { grid-template-columns: 0px minmax(0, 1fr); column-gap: 0px; }
-.mode-commander .rail { opacity: 0; pointer-events: none; padding-inline: 0; border-width: 0; }
+.app.mode-commander, .app.mode-lookout { grid-template-columns: 0px minmax(0, 1fr); column-gap: 0px; }
+.mode-commander .rail, .mode-lookout .rail { opacity: 0; pointer-events: none; padding-inline: 0; border-width: 0; }
 .bar, .rail, .panel { background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 
 .bar { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); min-width: 0; }
@@ -96,6 +96,12 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .switch .opt.on { color: var(--text); font-weight: 500; }
 .switch .opt.on::before, .switch .opt.on::after { visibility: visible; }
 .switch .opt:hover { color: var(--text); }
+.switch .opt { transition: color var(--glide); }
+/* Gliding brackets (GlideBrackets in Shell.tsx): drawn once per group and moved to the chosen
+   option; the options' own glyphs only keep their room. */
+.glide { position: relative; }
+.glide .opt::before, .glide .opt::after { visibility: hidden !important; }
+.glide-bracket { position: absolute; display: flex; align-items: center; pointer-events: none; opacity: 0; white-space: pre; }
 
 /* Navigator's rail: the pages share its height and the current one sits in ink brackets, like
    a chosen option in a switch (`[ navigator ]`). Shell.tsx places them from the key's icon and
@@ -149,23 +155,56 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 }
 .mode-navigator .page-stack > .panel.current { visibility: visible; transition: transform var(--slide); }
 /* Commander: Station and Flow share the top; the Board is a drawer under them. */
-.mode-commander .page-stack { display: contents; }
+.mode-commander .page-stack, .mode-lookout .page-stack { display: contents; }
 .mode-commander .pages {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-template-rows: minmax(0, 1fr) auto;
   grid-template-areas: "station flow" "dashboard dashboard";
 }
-.panel.drawer { height: var(--drawer-h); transition: height var(--slide); }
-.panel.drawer.closed { height: calc(var(--panel-head-height) + 2px); }
+/* Lookout: the Board for whoever runs and watches the rig; Station and Flow are drawers at its sides. */
+.mode-lookout .pages {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "station dashboard flow";
+}
+.mode-lookout .panel-station { grid-area: station; }
+.mode-lookout .panel-flow { grid-area: flow; }
+.mode-lookout .panel-dashboard { grid-area: dashboard; }
+
+/* Drawers: the head is the handle (click to open or close, drag to size); a side drawer also
+   has its inner edge. Closed, the bottom one is its head; a side one a standing tab. */
+.panel.drawer { position: relative; }
+.panel.drawer-bottom { height: var(--drawer-size); transition: height var(--slide); }
+.panel.drawer-bottom.closed { height: calc(var(--panel-head-height) + 2px); }
+.panel.drawer-left, .panel.drawer-right { width: var(--drawer-size); transition: width var(--slide); }
+.panel.drawer-left.closed, .panel.drawer-right.closed { width: calc(var(--panel-head-height) + 2px); }
 .panel.drawer.resizing { transition: none; }
-.panel.drawer .panel-head { cursor: ns-resize; touch-action: none; }
+.panel.drawer-bottom .panel-head { cursor: ns-resize; touch-action: none; }
+.panel.drawer-left .panel-head, .panel.drawer-right .panel-head { cursor: ew-resize; touch-action: none; }
 .panel.drawer.closed .panel-head { border-bottom-color: transparent; }
 .panel.drawer .panel-body { transition: opacity var(--motion); }
-.panel.drawer.closed .panel-body { opacity: 0; }
+.panel.drawer.closed .panel-body { opacity: 0; visibility: hidden; }
+.drawer-edge { position: absolute; top: var(--panel-head-height); bottom: 0; width: 6px; z-index: 7; cursor: ew-resize; touch-action: none; }
+.drawer-left .drawer-edge { right: 0; }
+.drawer-right .drawer-edge { left: 0; }
+.drawer-edge:hover { background: linear-gradient(var(--line-ink), var(--line-ink)) center / 2px 100% no-repeat; }
+.panel-head.side-tab {
+  height: 100%; flex-direction: column; justify-content: flex-start; gap: var(--space-3);
+  padding: var(--space-2) 0; cursor: pointer; border-bottom: 0;
+}
+.panel-head.side-tab h2 { writing-mode: vertical-rl; transform: rotate(180deg); font-weight: 500; }
+.panel-head.side-tab .page-icon { width: 18px; height: 18px; }
 .drawer-grip { width: 28px; height: 4px; border-radius: 4px; background: var(--line-strong); flex: none; }
-.drawer-toggle { width: 26px; padding: 0; display: grid; place-items: center; }
-.drawer-toggle svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; transition: transform var(--slide); }
-.drawer:not(.closed) .drawer-toggle svg { transform: rotate(180deg); }
+/* Square key, chevron centred: .key.small's side padding would push it off centre. */
+.key.drawer-toggle { width: 24px; height: 24px; padding: 0; display: inline-grid; place-items: center; flex: none; }
+.drawer-toggle svg { display: block; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; transition: transform var(--slide); }
+/* The chevron points the way the drawer will go: up/out to open, back to close. */
+.drawer-toggle.side-bottom svg { transform: rotate(0deg); }
+.drawer:not(.closed) .drawer-toggle.side-bottom svg { transform: rotate(180deg); }
+.drawer-toggle.side-left svg { transform: rotate(90deg); }
+.drawer:not(.closed) .drawer-toggle.side-left svg { transform: rotate(-90deg); }
+.drawer-toggle.side-right svg { transform: rotate(-90deg); }
+.drawer:not(.closed) .drawer-toggle.side-right svg { transform: rotate(90deg); }
 .panel-peek { display: flex; gap: var(--space-4); margin-left: var(--space-3); font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; overflow: hidden; }
 .panel-peek b { font-weight: 500; color: var(--text); }
 .mode-commander .panel-station { grid-area: station; }
@@ -194,7 +233,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   .bar { flex-wrap: wrap; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
   .rail { grid-row: 3; flex-direction: row; padding: var(--space-1); }
   .rail-face { flex-direction: row; padding: 4px 0; }
-  .mode-commander .rail { display: none; }
+  .mode-commander .rail, .mode-lookout .rail { display: none; }
   .conn { display: none; }
   .mode-commander .pages { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-auto-rows: minmax(320px, auto); grid-template-areas: "station" "flow" "dashboard"; overflow: auto; }
   .mode-commander .panel.drawer.closed { min-height: 0; }
@@ -217,7 +256,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* ---- Station ---------------------------------------------------------------------- */
 .station { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .scene { position: relative; width: 100%; height: 100%; overflow: hidden; }
-.view-cube-home { font-family: var(--font-mono); }
+.key.view-cube-home { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); transition: color var(--motion), border-color var(--motion), opacity var(--motion); }
+.view-cube-home svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+.view-cube-home.at-home { color: var(--text-muted); border-color: var(--line); }
 .station.view-graph .station-panel, .station.view-web .station-panel { left: auto; right: var(--space-3); }
 .web-station { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface-raised); }
 .station-graph { position: absolute; inset: 0; }
@@ -232,8 +273,22 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 /* ---- Flow ------------------------------------------------------------------------- */
 .flow { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.mode-commander .hint { display: none; }
-.hint { margin: 0; padding: var(--space-2) var(--panel-pad); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); border-top: 1px solid var(--line); }
+/* The canvas's help: a line in the middle of an empty canvas, and a "?" key (bottom left) that
+   opens the gestures as a short list. Nothing permanent under the canvas. */
+.canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 4; font: var(--size-sm) var(--font-sans); color: var(--text-muted); }
+.canvas-empty .kbd { margin: 0 2px; }
+.help-key { position: absolute; left: var(--space-3); bottom: var(--space-3); z-index: 6; width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); font: 500 var(--size-xs) var(--font-mono); }
+.help-pop {
+  position: absolute; left: var(--space-3); bottom: calc(var(--space-3) + 34px); z-index: 7; width: min(480px, calc(100% - 24px));
+  padding: var(--space-3) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.12); animation: pop-in var(--glide);
+}
+@keyframes pop-in { from { opacity: 0; transform: translateY(6px); } }
+.help-pop h3 { margin: 0 0 var(--space-2); font: 600 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.help-pop dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--space-4); font-size: var(--size-xs); }
+.help-pop dt { color: var(--text-muted); }
+.help-pop dd { margin: 0; color: var(--text); }
 .react-flow { background: transparent; --xy-background-pattern-dots-color-default: var(--dots); --xy-edge-stroke-default: var(--line-ink); }
 .react-flow__minimap { background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: var(--radius-md); overflow: hidden; }
 .react-flow__attribution { background: transparent !important; }
@@ -258,6 +313,10 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .block.linked { border-top: 3px solid var(--line-ink); }
 /* Selected: a 2px ink outline set off from the block; unmistakable in either theme. */
 .block.selected, .frame.selected-frame { outline: var(--select-outline); outline-offset: var(--select-offset); }
+/* A selection settles in from further out, on the shared ease (the brackets' and the rail's). */
+@keyframes select-in { from { outline-color: transparent; outline-offset: calc(var(--select-offset) + 8px); } }
+.block.selected, .frame.selected-frame, .react-flow__node.selected > .frame, .compact-block.selected .plate,
+.arranging .deco.picked, .var-row.open { animation: select-in var(--glide); }
 .react-flow__node.selected > .frame { outline: var(--select-outline); outline-offset: var(--select-offset); }
 .block.failed { border-color: var(--danger); }
 .block.missing { border: 1.5px dashed var(--danger); }
@@ -301,6 +360,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .react-flow__edge-path.dim, .wire-casing.dim { opacity: 0.18; }
 .wire-image { stroke-dasharray: 5 3; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3px !important; }
+.react-flow__edge-path { transition: stroke-width var(--glide); }
 
 .remove {
   display: grid; place-items: center;
@@ -581,10 +641,22 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .fold:hover { color: var(--text); border-color: var(--line-ink); }
 /* ---- Variables (#36): a sheet beside any page; bound fields; "=" binding ---------------- */
 .mono { font-family: var(--font-mono); }
-.mode-navigator .pages.with-vars { grid-template: minmax(0, 1fr) / minmax(0, 1fr) 360px; }
-.mode-navigator .pages.with-vars > .vars-sheet { grid-area: 1 / 2; }
-.mode-commander .pages.with-vars { grid-template-columns: repeat(2, minmax(0, 1fr)) 330px; grid-template-areas: "station flow vars" "dashboard dashboard vars"; }
-.mode-commander .pages.with-vars > .vars-sheet { grid-area: vars; }
+/* The sheet is a drawer at the pages' right edge in every mode: closed, a standing tab (as
+   Lookout's side drawers); open, it slides out on the same --slide as every drawer. */
+.mode-navigator .pages { grid-template: minmax(0, 1fr) / minmax(0, 1fr) auto; }
+.mode-navigator .pages > .vars-sheet { grid-area: 1 / 2; }
+.mode-commander .pages { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; grid-template-areas: "station flow vars" "dashboard dashboard vars"; }
+.mode-lookout .pages { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "station dashboard flow vars"; }
+.mode-commander .pages > .vars-sheet, .mode-lookout .pages > .vars-sheet { grid-area: vars; }
+.vars-sheet { --drawer-size: 360px; }
+.mode-commander .vars-sheet, .mode-lookout .vars-sheet { --drawer-size: 330px; }
+.vars-sheet > [hidden] { display: none; }
+.vars-sheet.closed > :not(.side-tab) { display: none; }
+/* Open, the content keeps its width and is uncovered as the sheet slides out, never squeezed. */
+.vars-sheet > :not(.side-tab) { min-width: calc(var(--drawer-size) - 2px); }
+.vars-glyph { font-weight: 600; color: var(--text); }
+.vars-sheet .panel-head { cursor: default; }
+.vars-sheet .panel-head.side-tab { cursor: pointer; }
 .vars-sheet .panel-head .x { width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); font-size: 11px; }
 .vars-tools { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); }
 .vars-tools .well { display: flex; height: 28px; padding: 0 var(--space-2); }
@@ -634,8 +706,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .var-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; padding-top: var(--space-1); }
 .vars-foot { display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 button.link { border: 0; background: none; height: auto; padding: 0; font: inherit; color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
-.mode-commander .var-row { grid-template-columns: minmax(0, 1fr) 64px 44px 50px; }
-.mode-commander .var-row .var-type { display: none; }
+.mode-commander .var-row, .mode-lookout .var-row { grid-template-columns: minmax(0, 1fr) 64px 44px 50px; }
+.mode-commander .var-row .var-type, .mode-lookout .var-row .var-type { display: none; }
 
 /* A field bound to a variable: the variable in an ink outline, its value after it. */
 .bindable { display: inline-flex; align-items: center; border-radius: var(--radius-sm); }
@@ -665,9 +737,11 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 
 @media (max-width: 860px) {
   /* Narrow: the sheet is a bottom sheet over the page. */
-  .pages.with-vars > .vars-sheet { position: fixed; left: 8px; right: 8px; bottom: 8px; height: 70vh; z-index: 40; box-shadow: 0 -8px 24px rgb(0 0 0 / 0.2); }
-  .mode-navigator .pages.with-vars { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
-  .mode-commander .pages.with-vars { grid-template-columns: minmax(0, 1fr); grid-template-areas: "station" "flow" "dashboard"; }
+  .pages > .vars-sheet:not(.closed) { position: fixed; left: 8px; right: 8px; bottom: 8px; width: auto; height: 70vh; z-index: 40; box-shadow: 0 -8px 24px rgb(0 0 0 / 0.2); }
+  .pages > .vars-sheet:not(.closed) > * { min-width: 0; }
+  .pages > .vars-sheet.closed { display: none; } /* Edit > Variables or Alt+V opens it */
+  .mode-navigator .pages { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+  .mode-commander .pages { grid-template-columns: minmax(0, 1fr); grid-template-areas: "station" "flow" "dashboard"; }
 }
 
 /* A port's or param's unit (#4): after its name, small and grey. */
@@ -678,7 +752,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 /* The open menu title is boxed in ink like the current page on the rail; a chosen item sits in brackets. */
 .menubar { display: flex; gap: 2px; }
 .menu-wrap { position: relative; display: inline-flex; }
-.menu-title { height: 28px; padding: 0 var(--space-3); border: 1.5px solid transparent; background: none; color: var(--text-muted); font: 400 var(--size-sm) var(--font-sans); }
+.menu-title { transition: color var(--motion), border-color var(--glide); height: 28px; padding: 0 var(--space-3); border: 1.5px solid transparent; background: none; color: var(--text-muted); font: 400 var(--size-sm) var(--font-sans); }
 .menu-title:hover { color: var(--text); background: color-mix(in srgb, var(--surface-panel) 50%, transparent); border-color: transparent; }
 .menu-title[aria-expanded="true"] { color: var(--text); font-weight: 600; border-color: var(--line-ink); background: none; }
 .menu, .cmd-search { background: var(--surface-panel); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); }
@@ -714,10 +788,11 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
   border: 1px solid var(--line-strong); border-radius: var(--radius-lg);
 }
 /* On the Flow page the helper line sits under the canvas (up to three lines): the dock rides above it. */
-.mode-navigator .pages:has(.panel-flow.current) > .dock { bottom: 76px; }
 /* Commander with the Board closed: the dock rides above the Board's head, not on it. */
 .dock { transition: bottom var(--slide); }
-.mode-commander .pages:has(.drawer.closed) > .dock { bottom: calc(var(--panel-head-height) + 2px + var(--gutter) + var(--space-3)); }
+/* Lookout: the dock is the Board's, centred over it (an absolute grid child takes its area as its box). */
+.mode-lookout .pages > .dock { grid-area: dashboard; }
+.mode-commander .pages:has(.drawer-bottom.closed) > .dock { bottom: calc(var(--panel-head-height) + 2px + var(--gutter) + var(--space-3)); }
 .backend-window { height: auto; width: min(520px, calc(100vw - 32px)); }
 .backend-form { display: flex; align-items: center; gap: var(--space-3); padding: var(--panel-pad) var(--panel-pad) var(--space-2); }
 .backend-note { margin: 0; padding: 0 var(--panel-pad) var(--panel-pad); }
@@ -727,7 +802,15 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .key.small.err { color: var(--danger); border-color: var(--danger); }
 
 /* ---- Projects (#82): the name and the unsaved dot, notices, the undo toast ---------- */
-.proj { display: inline-flex; align-items: center; gap: var(--space-2); max-width: 240px; font: 500 var(--size-sm) var(--font-sans); }
+/* The project's name is the window's title, not a menu: centred on the bar, in muted monospace,
+   with no key-like weight; the unsaved dot rides after it. */
+.bar { position: relative; }
+.bar > .proj {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  display: inline-flex; align-items: center; gap: var(--space-2); max-width: min(320px, 26vw);
+  font: 400 var(--size-xs) var(--font-mono); color: var(--text-muted); pointer-events: auto; cursor: default;
+}
+@media (max-width: 1100px) { .bar > .proj { position: static; transform: none; } } /* no room to centre: after the menus */
 .proj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); }
 .notice { height: auto; width: min(480px, calc(100vw - 32px)); }

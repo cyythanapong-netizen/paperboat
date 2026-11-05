@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { BlockDef, ObjectDef, ParamDef, PortDef } from "./protocol";
+import { GlideBrackets } from "./Shell";
 
 /**
  * The block and object browser (#50, DESIGN.md): every block or station object is a card
@@ -214,6 +215,7 @@ export function BrowserWindow({
               {k}
             </button>
           ))}
+          <GlideBrackets />
         </div>
         <span className="lbl found">{found.length} {found.length === 1 ? "match" : "matches"}</span>
         <button className="key small" title="Close (Esc)" onClick={onClose}>

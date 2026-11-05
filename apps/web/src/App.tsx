@@ -13,7 +13,7 @@ import { emptyOf, freeName, inlineRef, loadMine, merged, refersTo, renameInFormu
 import { ConsoleWindow } from "./Console";
 import { Dashboard } from "./Dashboard";
 import { inlineInText, loadSaved, mapTexts, renameInText, save as saveLayout, textUsing } from "./dashboardLayout";
-import { PAGES, Panel, Rail, Switch, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
+import { MODES, PAGES, Panel, Rail, Switch, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
 import { SceneView } from "./SceneView";
 import { StationGraph } from "./StationGraph";
 import { StationPanel, withObject } from "./StationPanel";
@@ -49,6 +49,34 @@ function remembered<T extends string>(key: string, fallback: T, allowed: readonl
   return [value, set];
 }
 
+/** A drawer's open state and size, kept in this browser. */
+function useDrawer(key: string, open: boolean, size: number, side: Drawer["side"]): Drawer & { setOpen: (o: boolean) => void } {
+  const [isOpen, setIsOpen] = remembered<"open" | "closed">(`paperboat.${key}`, open ? "open" : "closed", ["open", "closed"]);
+  const [px, setPx] = useState(() => {
+    try {
+      return Number(localStorage.getItem(`paperboat.${key}Size`)) || size;
+    } catch {
+      return size;
+    }
+  });
+  return {
+    side,
+    open: isOpen === "open",
+    size: px,
+    setOpen: (o) => setIsOpen(o ? "open" : "closed"),
+    onChange: (o, next) => {
+      setIsOpen(o ? "open" : "closed");
+      if (!next) return;
+      setPx(next);
+      try {
+        localStorage.setItem(`paperboat.${key}Size`, String(Math.round(next)));
+      } catch {
+        /* private window: not kept */
+      }
+    },
+  };
+}
+
 const PAGE_IDS = PAGES.map((p) => p.id);
 
 /** "1 object", "2 objects". */
@@ -73,16 +101,11 @@ function useTheme(choice: Theme): "light" | "dark" {
 }
 
 export function App() {
-  const [mode, setMode] = remembered<Mode>("paperboat.mode", "navigator", ["navigator", "commander"]);
-  // Commander's Board drawer: open or closed, and how tall it was left.
-  const [boardOpen, setBoardOpen] = remembered<"open" | "closed">("paperboat.board", "closed", ["open", "closed"]);
-  const [boardHeight, setBoardHeight] = useState(() => {
-    try {
-      return Number(localStorage.getItem("paperboat.boardHeight")) || 300;
-    } catch {
-      return 300;
-    }
-  });
+  const [mode, setMode] = remembered<Mode>("paperboat.mode", "navigator", MODES);
+  // The drawers: Commander's Board under Station and Flow; Lookout's Station and Flow beside the Board.
+  const boardDrawer = useDrawer("board", false, 300, "bottom");
+  const stationDrawer = useDrawer("lookoutStation", false, 420, "left");
+  const flowDrawer = useDrawer("lookoutFlow", false, 520, "right");
   const [arrange, setArrange] = useState(false);
   // The floor grid of a 3D Station: the user's switch wins, else the backend's `view.grid`, else shown.
   const [gridChoice, setGridChoice] = remembered<"auto" | "on" | "off">("paperboat.grid", "auto", ["auto", "on", "off"]);
@@ -217,7 +240,7 @@ export function App() {
     // After the rail has stepped aside or the column has slid (both about half a second).
     const t = window.setTimeout(() => fitView({ duration: 200 }), 520);
     return () => window.clearTimeout(t);
-  }, [mode, page, boardOpen, fitView]);
+  }, [mode, page, boardDrawer.open, flowDrawer.open, fitView]);
 
   // (Alt+1–3, Alt+M, Alt+V and Ctrl+K are commands now: see `commands` below.)
 
@@ -399,7 +422,7 @@ export function App() {
     setMode("navigator");
   };
   const at = PAGES.findIndex((p) => p.id === page);
-  const panel = (p: Page) => ({ page: p, mode, current: page === p, at, onOpen: () => open(p) });
+  const panel = (p: Page) => ({ page: p, mode, current: page === p, at, onOpen: () => open(p), drawer: drawerOf(p) });
   // Closed, the Board's head still shows the latest of its first few number readouts.
   const peek = Object.keys(monitors)
     .filter((id) => typeof state.latest[id] === "number")
@@ -409,24 +432,16 @@ export function App() {
         {id} <b>{+(state.latest[id] as number).toPrecision(4)}</b>
       </span>
     ));
-  const board: Drawer = {
-    open: boardOpen === "open",
-    height: boardHeight,
-    peek: peek.length ? peek : undefined,
-    onChange: (o, h) => {
-      setBoardOpen(o ? "open" : "closed");
-      if (h) {
-        setBoardHeight(h);
-        try {
-          localStorage.setItem("paperboat.boardHeight", String(Math.round(h)));
-        } catch {
-          /* private window: not kept */
-        }
-      }
-    },
-  };
+  const drawerOf = (p: Page): Drawer | undefined =>
+    mode === "commander" && p === "dashboard"
+      ? { ...boardDrawer, peek: peek.length ? peek : undefined }
+      : mode === "lookout" && p === "station"
+        ? stationDrawer
+        : mode === "lookout" && p === "flow"
+          ? flowDrawer
+          : undefined;
   const run = () => {
-    if (mode === "commander") setBoardOpen("open"); // a run is watched on the Board
+    if (mode === "commander") boardDrawer.setOpen(true); // a run is watched on the Board
     send({
       type: "graph.run",
       graph: toGraph(nodes, edges),
@@ -616,7 +631,7 @@ export function App() {
   // ---- The commands (#78): what the menus, the command search and the shortcuts all run ----
   // Only what the app already does; backends' commands come with their issue (#85).
   const canRun = state.connection === "open" && !running;
-  const flowInView = mode === "commander" || page === "flow";
+  const flowInView = mode === "commander" || (mode === "lookout" ? flowDrawer.open : page === "flow");
   /** An Edit action on the canvas: on while the Flow is in view and the canvas allows it. */
   const onCanvas = (can: (c: FlowControls["can"]) => boolean) => () => flowInView && !!flow.current && can(flow.current.can);
   const canvasWhy = (why: string) => (flowInView ? why : "Open the Flow page first");
@@ -663,7 +678,8 @@ export function App() {
     })),
     { id: "view.mode.navigator", label: "Navigator", menu: "view", group: "mode", checked: mode === "navigator", run: () => setMode("navigator") },
     { id: "view.mode.commander", label: "Commander", menu: "view", group: "mode", checked: mode === "commander", run: () => setMode("commander") },
-    { id: "view.mode.switch", label: "Switch view mode", menu: "view", group: "mode", shortcut: "Alt+M", chord: { key: "m", alt: true }, run: () => setMode(mode === "navigator" ? "commander" : "navigator") },
+    { id: "view.mode.lookout", label: "Lookout", menu: "view", group: "mode", checked: mode === "lookout", run: () => setMode("lookout") },
+    { id: "view.mode.switch", label: "Switch view mode", menu: "view", group: "mode", shortcut: "Alt+M", chord: { key: "m", alt: true }, run: () => setMode(MODES[(MODES.indexOf(mode) + 1) % MODES.length]) },
     { id: "view.theme.auto", label: "Auto", menu: "view", group: "theme", checked: themeChoice === "auto", run: () => setThemeChoice("auto") },
     { id: "view.theme.light", label: "Light", menu: "view", group: "theme", checked: themeChoice === "light", run: () => setThemeChoice("light") },
     { id: "view.theme.dark", label: "Dark", menu: "view", group: "theme", checked: themeChoice === "dark", run: () => setThemeChoice("dark") },
@@ -713,7 +729,8 @@ export function App() {
           onChange={setMode}
           options={[
             { value: "navigator", label: "navigator", hint: "One page at a time (Alt+M)" },
-            { value: "commander", label: "commander", hint: "Every page at once (Alt+M)" },
+            { value: "commander", label: "commander", hint: "Station and Flow, the Board under them (Alt+M)" },
+            { value: "lookout", label: "lookout", hint: "The Board, Station and Flow at its sides (Alt+M)" },
           ]}
         />
         <button className={`chip conn-${state.connection}`} title="Which backend: File > Backend…" onClick={() => setBackendOpen(true)}>
@@ -721,9 +738,9 @@ export function App() {
           {state.connection === "open" ? state.engine : state.connection}
         </button>
       </header>
-      <Rail page={page} onPage={setPage} hidden={mode === "commander"} />
+      <Rail page={page} onPage={setPage} hidden={mode !== "navigator"} />
       <VarsContext.Provider value={varsApi}>
-      <main className={`pages${varsShown === "open" ? " with-vars" : ""}`}>
+      <main className="pages">
         <div className="page-stack">
         <Panel {...panel("station")} actions={<>{gridKey}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
           <div
@@ -785,7 +802,6 @@ export function App() {
         </Panel>
         <Panel
           {...panel("dashboard")}
-          drawer={board}
           actions={
             <button className={`key small${arrange ? " on" : ""}`} aria-pressed={arrange} title="Move instruments and pick their sizes" onClick={() => setArrange(!arrange)}>
               {arrange ? "Done" : "Arrange"}
@@ -796,16 +812,16 @@ export function App() {
           <Dashboard state={state} monitors={monitors} arrange={arrange} onBlock={showBlock} saved={dashSaved} onSave={saveDash} />
         </Panel>
         </div>
-        {varsShown === "open" && (
-          <VariablesSheet
-            open={openVar}
-            onOpen={setOpenVar}
-            onClose={() => setVarsShown("closed")}
-            onShow={showUse}
-            onUndo={undoVars}
-            toml={() => toToml(variables)}
-          />
-        )}
+        <VariablesSheet
+          sheetOpen={varsShown === "open"}
+          onShowSheet={() => setVarsShown("open")}
+          open={openVar}
+          onOpen={setOpenVar}
+          onClose={() => setVarsShown("closed")}
+          onShow={showUse}
+          onUndo={undoVars}
+          toml={() => toToml(variables)}
+        />
         <Dock
           canRun={canRun}
           whyNot={running ? "A run is in progress" : "Not connected to a backend"}

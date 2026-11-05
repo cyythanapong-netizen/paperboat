@@ -91,8 +91,10 @@ export function SceneView({ entities, view, grid }: { entities: Record<string, E
       floor.visible = showGrid.current;
       floorGrid.current = floor;
       scene.add(floor);
-      const persp = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
-      persp.position.set(2, 4, 8);
+      // The backend may say where the camera opens (and so where Home returns): view.camera.
+      const cam = view.camera;
+      const persp = new THREE.PerspectiveCamera(cam?.fov ?? 50, 1, 0.1, 1000);
+      persp.position.set(...(cam?.eye ?? [2, 4, 8]));
       fit = (aspect) => (persp.aspect = aspect);
       camera = persp;
     }
@@ -100,7 +102,10 @@ export function SceneView({ entities, view, grid }: { entities: Record<string, E
     if (view.mode === "2d") {
       controls.target.set(view.center[0], view.center[1], 0);
       controls.enableRotate = false;
+    } else if (view.camera?.target) {
+      controls.target.set(...view.camera.target);
     }
+    controls.update(); // look at the target before the view cube takes it as home
     world.current = { scene, objects: new Map() };
 
     // 3D only: the view cube in the corner (hidden in 2D views).
