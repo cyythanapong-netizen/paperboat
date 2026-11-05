@@ -164,3 +164,6 @@
 @media (prefers-reduced-motion: reduce) {
   :root { --motion: 0ms linear; --glide: 0ms linear; --slide-time: 0ms; }
 }
+@media (prefers-reduced-motion: reduce) {
+  .logo-idle .logo-water .w, .logo-live .logo-water .w, .logo-live.logo { animation: none !important; }
+}
