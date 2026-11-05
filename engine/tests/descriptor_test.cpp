@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
@@ -481,4 +482,11 @@ defaults = { k = 2 }
   CHECK(find("pid")["description"].get<std::string>().find("error") != std::string::npos);  // built in
   CHECK(find("sine")["description"] == "A smooth wave: amplitude, frequency, phase.");       // from TOML
   CHECK(find("double")["description"] == "Twice its input.");                              // the descriptor's own
+}
+
+TEST_CASE("built-in templates carry their own descriptions") {
+  std::vector<std::string> missing;
+  for (const auto* entry : tk::builtins().all())
+    if (!entry->abstract && entry->def.description.empty()) missing.push_back(entry->name);
+  CHECK(missing.empty());
 }

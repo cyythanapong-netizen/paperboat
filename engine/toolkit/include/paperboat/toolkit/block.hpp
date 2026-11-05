@@ -16,20 +16,38 @@
 
 namespace paperboat::toolkit {
 
+// A vector component's optional label and unit. Components are ordered; labels are for
+// people, and units are checked by position.
+struct VectorComponent {
+  std::string id = {};
+  std::string unit = {};
+};
+
 // A port. Its type: "signal" carries a value; "step" carries control in a Step flow (the
 // run passes along a step wire from one block to the next). Others ("points", …) carry
 // values of that shape. A wire joins an output to an input of the same `type` ("signal", "image",
 // "numbers"…), and step ports only to step ports; "any" takes (or gives) any value but a
 // step. With a `unit` on both ends ("N", "m", "rad"…) they must agree; a port without one
-// connects to anything of its type.
+// connects to anything of its type. A vector port may declare a fixed `dimension`, and
+// optionally ordered `components` with labels and per-component units.
 struct PortDef {
   std::string id = {};
   std::string type = "signal";
   std::string unit = {};
+  std::optional<std::size_t> dimension = {};
+  std::vector<VectorComponent> components = {};
 };
 
 // Why a wire may not join output `from` to input `to`, if it may not.
 std::optional<std::string> wire_mismatch(const PortDef& from, const PortDef& to);
+bool is_vector_type(std::string_view type);
+std::optional<std::size_t> vector_dimension(const PortDef& port);
+
+// A typed vector port. With no dimension it accepts any length; component metadata also
+// fixes the length. A single `unit` applies to every component not given its own unit.
+PortDef vector_port(std::string id);
+PortDef vector_port(std::string id, std::size_t dimension);
+PortDef vector_port(std::string id, std::vector<VectorComponent> components);
 
 // A setting on a block or a station object, edited in the UI. Number types reach a block
 // as numbers (default_value): "number", and "boolean" (1 or 0, a checkbox). Text types
@@ -112,8 +130,8 @@ struct BlockDef {
   // One line in plain words: what the block does ("Drives an error to zero"). Shown on its
   // card in the browser. Optional.
   std::string description = {};
-  // How the UI draws it (a hint; see View). Built-in templates get theirs from
-  // builtin_view(); a TOML definition may set `view` and keeps its parent's other keys.
+  // How the UI draws it (a hint; see View). A TOML definition may set `view` and keeps its
+  // parent's other keys; package defaults live with the block definition.
   View view = {};
 };
 
@@ -163,9 +181,10 @@ Handle make_handle(std::string kind, T value) {
 
 // What a wire carries. Most blocks pass numbers; others pass a list of numbers, a table
 // (a list of rows, such as points as [x, z]), text, or a handle. The port's type says which.
-using List = std::vector<double>;
+using Vector = std::vector<double>;
+using List = Vector;  // source-compatible name for existing numeric-list values
 using Table = std::vector<std::vector<double>>;
-struct Value : std::variant<double, List, Table, std::string, Handle> {
+struct Value : std::variant<double, Vector, Table, std::string, Handle> {
   using variant::variant;
   // Any number is a double, so {"k", 5} works as well as {"k", 5.0}.
   template <class T>
@@ -181,6 +200,10 @@ struct Value : std::variant<double, List, Table, std::string, Handle> {
 using Values = std::map<std::string, Value, std::less<>>;        // port or param id → value
 using Config = std::map<std::string, std::string, std::less<>>;  // set once in a descriptor
 using KeySet = std::set<std::string, std::less<>>;               // KeyboardEvent.code values
+
+// Why a value doesn't fit a declared vector port, if it doesn't. Used on block inputs and
+// outputs so a dynamic vector is still checked against a fixed-size port at run time.
+std::optional<std::string> vector_value_mismatch(const PortDef& port, const Value& value);
 
 class DomainState;
 struct Entity;
@@ -274,6 +297,8 @@ const T* get_if(const Values& values, std::string_view id) {
   auto it = values.find(id);
   return it == values.end() ? nullptr : std::get_if<T>(&it->second);
 }
+
+inline const Vector* get_vector(const Values& values, std::string_view id) { return get_if<Vector>(values, id); }
 
 // The object behind a handle of `kind` at `id`, or null.
 template <class T>

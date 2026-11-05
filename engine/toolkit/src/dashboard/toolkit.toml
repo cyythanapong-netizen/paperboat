@@ -1,0 +1,3 @@
+# Generic run instruments.
+name = "dashboard"
+register = ["add_instruments"]

@@ -40,7 +40,9 @@ domain), ``probe`` (reads it), ``function`` (computes), ``monitor`` (shows a val
 Dashboard as an instrument).
 
 Ports have a **type**: ``signal`` (a value), ``step`` (control, in a Step flow), or a shape
-such as ``image``, ``points``, ``numbers``. A wire joins ports of one type.
+such as ``image``, ``points`` or ``vector`` (an ordered numeric value on one wire; ``numbers``
+remains a compatible name). A vector may declare its length and component labels/units. A
+wire joins compatible ports of one type.
 
 Definitions live in **code**, next to what the block does: C++ ``define_block``, Python
 class attributes. The **toolkit** offers packages of them (``base``, ``signal``, ``math``,

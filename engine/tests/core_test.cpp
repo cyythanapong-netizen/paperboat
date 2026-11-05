@@ -46,6 +46,32 @@ struct Collected {
   }
 };
 
+class WrongVector final : public tk::Block {
+ public:
+  tk::Values step(const tk::Context&, const tk::Values&) override { return {{"state", tk::Vector{1, 2}}}; }
+};
+
+const tk::Registry& vector_registry() {
+  static const tk::Registry registry = [] {
+    tk::Registry r = tk::builtins();
+    r.add(tk::define_block<WrongVector>("vectors", {.type = "wrong-vector",
+                                                       .label = "Wrong vector",
+                                                       .outputs = {tk::vector_port("state", 3)}}));
+    return r;
+  }();
+  return registry;
+}
+
+const tk::Catalog& vector_catalog() {
+  static const tk::Catalog catalog = tk::load_descriptor(R"(
+domain = "vectors"
+[graph]
+nodes = [{ id = "bad", type = "wrong-vector" }]
+edges = []
+)", vector_registry());
+  return catalog;
+}
+
 }  // namespace
 
 TEST_CASE("the starter run matches the reference result") {
@@ -59,6 +85,29 @@ TEST_CASE("the starter run matches the reference result") {
   // within e^-15 ≈ 3e-7 of rest.
   CHECK_THAT(out.last_signal("graph-x"), WithinAbs(3.597e-07, 1e-10));
   CHECK_THAT(out.last_signal("graph-v"), WithinAbs(-4.420e-07, 1e-10));
+}
+
+TEST_CASE("a vector output must match its declared dimension") {
+  const core::Backend backend{.engine = "test", .catalog = &vector_catalog(), .run = {.real_time = false}};
+  const json catalog = json::parse(tk::catalog_message(vector_catalog()));
+  const auto definition = std::ranges::find_if(catalog.at("blocks"), [](const json& block) {
+    return block.at("type") == "wrong-vector";
+  });
+  REQUIRE(definition != catalog.at("blocks").end());
+  CHECK(definition->at("outputs").at(0).at("type") == "vector");
+  CHECK(definition->at("outputs").at(0).at("dimension") == 3);
+
+  Collected out;
+  const auto graph = json::parse(vector_catalog().graph);
+  CHECK(core::run("r", graph, nullptr, backend, out.emit(), nullptr, {}) == "failed");
+  CHECK(std::ranges::any_of(out.messages, [](const json& message) {
+    return message.value("type", "") == "node.state" && message.value("node", "") == "bad" &&
+           message.value("state", "") == "failed";
+  }));
+  CHECK(std::ranges::any_of(out.messages, [](const json& message) {
+    return message.value("type", "") == "log" &&
+           message.value("text", std::string{}).find("output bad.state has 2 values, expected 3") != std::string::npos;
+  }));
 }
 
 TEST_CASE("a wire into a linked block is not a cycle; a missing station object fails") {

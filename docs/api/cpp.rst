@@ -23,10 +23,42 @@ initializers may leave any out.
 
    .. cpp:member:: std::string id
 
-   .. cpp:member:: std::string type = "signal"
+    .. cpp:member:: std::string type = "signal"
 
-      ``"signal"`` (a value), ``"step"`` (control, in a Step flow) or a shape: ``"image"``,
-      ``"points"``, ``"numbers"``… A wire joins ports of one type.
+       ``"signal"`` (a value), ``"step"`` (control, in a Step flow) or a shape: ``"image"``,
+       ``"points"``, ``"vector"``… A wire joins ports of one type. ``"numbers"`` remains a
+       compatible name for numeric vectors.
+
+    .. cpp:member:: std::string unit
+
+       A shared unit, or the fallback unit for vector components without their own.
+
+    .. cpp:member:: std::optional<std::size_t> dimension
+
+       A vector's fixed length. Absent: dynamic length; component metadata also fixes it.
+
+    .. cpp:member:: std::vector<VectorComponent> components
+
+       Optional ordered component labels and units. Names are descriptive; dimensions and
+       units, not labels, decide whether two vector ports fit.
+
+.. cpp:struct:: VectorComponent
+
+   .. cpp:member:: std::string id
+
+      The component's label, in vector order.
+
+   .. cpp:member:: std::string unit
+
+      Its optional unit.
+
+.. cpp:function:: PortDef vector_port(std::string id)
+.. cpp:function:: PortDef vector_port(std::string id, std::size_t dimension)
+.. cpp:function:: PortDef vector_port(std::string id, std::vector<VectorComponent> components)
+
+   Make a ``"vector"`` port. For example,
+   ``vector_port("state", {{"x", "m"}, {"angle", "rad"}})`` puts a mixed-unit state on one
+   wire while retaining the names and units of its components.
 
 .. cpp:struct:: ParamDef
 
@@ -177,12 +209,19 @@ initializers may leave any out.
 Values
 ------
 
-.. cpp:struct:: Value : std::variant<double, List, Table, std::string, Handle>
+.. cpp:struct:: Value : std::variant<double, Vector, Table, std::string, Handle>
 
-   What a wire carries: a number, a list of numbers, a table (rows, such as points as
+   What a wire carries: a number, a vector of numbers, a table (rows, such as points as
    ``[x, z]``), text, or a handle. Any arithmetic type converts to ``double``.
 
-.. cpp:type:: List = std::vector<double>
+.. cpp:type:: Vector = std::vector<double>
+
+   Ordered numeric data. The port's type (``"vector"``), optional dimension and component
+   metadata describe its wire contract.
+
+.. cpp:type:: List = Vector
+
+   Compatibility name for ``Vector``.
 
 .. cpp:type:: Table = std::vector<std::vector<double>>
 
@@ -214,7 +253,11 @@ Values
 
 .. cpp:function:: template<class T> const T *get_if(const Values &values, std::string_view id)
 
-   The list, table or text at ``id``, or null.
+   The vector/list, table or text at ``id``, or null.
+
+.. cpp:function:: const Vector *get_vector(const Values &values, std::string_view id)
+
+   The numeric vector at ``id``, or null. A Python block reads the same value as a list.
 
 .. cpp:function:: template<class T> const T *get_handle(const Values &values, std::string_view id, std::string_view kind)
 

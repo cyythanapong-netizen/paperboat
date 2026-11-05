@@ -1,12 +1,23 @@
 // Generated from protocol/schema/paperboat-0.schema.json by protocol/gen_ts.py.
 // Do not edit: change the schema and run `npm run gen:protocol`.
 
+export type VectorComponent = {
+  /** The component's label, in vector order. */
+  id: string;
+  /** The component's unit (m, rad…). */
+  unit?: string;
+};
+
 export type PortDef = {
   id: string;
-  /** signal (a value, the default), step (control in a Step flow), a value's shape (image, points, numbers…), or any (any value but a step). A wire joins ports of one type; any joins anything but a step (#4). */
+  /** signal (a value, the default), step (control in a Step flow), a value's shape (image, points, vector…), or any (any value but a step). A wire joins ports of one type; vector and legacy numbers are compatible. */
   type: string;
   /** Its unit (N, m, rad, m/s…). A wire between two ports with units joins the same unit; a port without one takes any (#4). */
   unit?: string;
+  /** A vector's fixed number of values. Absent: any length. */
+  dimension?: number;
+  /** A vector's ordered component labels and optional per-component units; its length fixes the dimension. */
+  components?: VectorComponent[];
 };
 
 /** A setting on a block, or a property of a station object. number and boolean reach the block as numbers (boolean: a checkbox, 1 or 0); text, key (a KeyboardEvent.code, picked by pressing it) and file (a path, relative to the descriptor) as text; enum (one of options, a dropdown) as its name (and to an expression, its index). */
@@ -203,6 +214,8 @@ export type GraphGroup = {
   };
   /** Where a subsystem's or story's ports sit on its block (ids are node::port, or in and next). Backends ignore it. */
   ports?: PortSides;
+  /** Story outputs that read as unwired after its path leaves. */
+  release?: [string, string][];
 };
 
 export type Vec3 = [number, number, number];
@@ -378,7 +391,10 @@ export type ServerMsg =
     type: "signal";
     node: string;
     t: number;
-    v: number | string;
+    /** The latest scalar or text sample, or a whole numeric vector on a Display monitor. */
+    v: number | string | number[];
+    /** Labels and units for a vector Display sample, in vector order. */
+    components?: VectorComponent[];
   }
   | {
     type: "node.state";

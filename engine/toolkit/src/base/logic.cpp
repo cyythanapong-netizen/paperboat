@@ -63,10 +63,13 @@ std::vector<Form> forms(std::initializer_list<const char*> inputs) {
 }
 
 void add_test(Registry& registry, const std::string& type, const std::string& label,
-              std::initializer_list<const char*> inputs, std::vector<ParamDef> params, Test test) {
+              std::initializer_list<const char*> inputs, std::vector<ParamDef> params, Test test,
+              std::string description, View view = {}) {
   Template t;
   t.name = "base/" + type;
   t.def = magic_def(type, label, forms(inputs), std::move(params));
+  t.def.description = std::move(description);
+  t.def.view = std::move(view);
   t.make = [test](const Values& p, const Config&) { return std::make_unique<LogicValue>(test, p); };
   t.make_step = [test](const Values& p, const Config&) { return std::make_unique<Branch>(test, p); };
   registry.add(std::move(t));
@@ -81,6 +84,7 @@ void add_logic(Registry& registry) {
   t.def = magic_def("if", "If",
                     {{.name = "signal", .inputs = {{"cond"}, {"a", "any"}, {"b", "any"}}, .outputs = {{"y", "any"}}},
                      {.name = "step", .inputs = {{"in", "step"}, {"cond"}}, .outputs = {{"yes", "step"}, {"no", "step"}}}});
+  t.def.description = "Picks a or b by a condition; on a Step flow, branches the path.";
   t.make = [](const Values&, const Config&) { return std::make_unique<Choose>(); };
   t.make_step = [](const Values& p, const Config&) {
     return std::make_unique<Branch>([](const Values& in, const Values&) { return holds(in, "cond"); }, p);
@@ -88,10 +92,13 @@ void add_logic(Registry& registry) {
   registry.add(std::move(t));
 
   add_test(registry, "and", "And", {"a", "b"}, {},
-           [](const Values& in, const Values&) { return holds(in, "a") && holds(in, "b"); });
+           [](const Values& in, const Values&) { return holds(in, "a") && holds(in, "b"); },
+           "Holds when a and b both hold.", {.compact = true, .glyph = "&"});
   add_test(registry, "or", "Or", {"a", "b"}, {},
-           [](const Values& in, const Values&) { return holds(in, "a") || holds(in, "b"); });
-  add_test(registry, "not", "Not", {"u"}, {}, [](const Values& in, const Values&) { return !holds(in, "u"); });
+           [](const Values& in, const Values&) { return holds(in, "a") || holds(in, "b"); },
+           "Holds when a or b holds.", {.compact = true, .glyph = "≥1"});
+  add_test(registry, "not", "Not", {"u"}, {}, [](const Values& in, const Values&) { return !holds(in, "u"); },
+           "Holds when its input doesn't.", {.compact = true, .glyph = "¬"});
   add_test(registry, "compare", "Compare", {"a", "b"},
            {{.id = "op", .type = "enum", .default_text = ">", .options = {">", ">=", "<", "<=", "==", "!="}}},
            [](const Values& in, const Values& p) {
@@ -101,10 +108,10 @@ void add_logic(Registry& registry) {
                case 1: return a >= b;
                case 2: return a < b;
                case 3: return a <= b;
-               case 4: return a == b;
-               default: return a != b;
-             }
-           });
+                case 4: return a == b;
+                default: return a != b;
+              }
+            }, "Compares a with b: greater, less, equal…", {.compact = true, .glyph = "cmp", .value = "{op}"});
 }
 
 }  // namespace paperboat::toolkit::base

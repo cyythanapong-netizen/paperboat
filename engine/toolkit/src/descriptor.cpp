@@ -699,6 +699,16 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     for (const auto& p : list) {
       json port = {{"id", p.id}, {"type", p.type}};
       if (!p.unit.empty()) port["unit"] = p.unit;
+      if (p.dimension) port["dimension"] = *p.dimension;
+      if (!p.components.empty()) {
+        json components = json::array();
+        for (const auto& component : p.components) {
+          json item = {{"id", component.id}};
+          if (!component.unit.empty()) item["unit"] = component.unit;
+          components.push_back(std::move(item));
+        }
+        port["components"] = std::move(components);
+      }
       out.push_back(std::move(port));
     }
     return out;

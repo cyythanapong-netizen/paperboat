@@ -1,0 +1,5 @@
+# Optional image-processing toolkit. Its CMakeLists handles OpenCV and the backend
+# explicitly registers `opencv::register_opencv` when it links this package.
+name = "opencv"
+optional = true
+register = ["register_opencv"]

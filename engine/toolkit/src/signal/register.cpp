@@ -5,9 +5,12 @@ namespace paperboat::toolkit {
 
 extern const char* const kSignalBlocks;  // blocks.toml, embedded at build time
 
-void register_signal(Registry& registry) {
-  signal::add_waves(registry);                       // C++: clock, generator (the parent)
-  define_blocks(registry, "signal", kSignalBlocks);  // TOML on it: sine, step, ramp, square, ease, f(t)
+namespace signal {
+
+void add_definitions(Registry& registry) {
+  define_blocks(registry, "signal", kSignalBlocks);  // TOML on the C++ parent: sine, step, ramp, square, ease, f(t)
 }
+
+}  // namespace signal
 
 }  // namespace paperboat::toolkit

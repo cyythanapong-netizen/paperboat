@@ -37,20 +37,51 @@ from typing import Callable, NamedTuple
 
 from ._engine import Context, Entity, Handle, make, options, scene, solve
 
+Vector = list[float]
+
 __all__ = [
     "Backend", "Block", "Context", "DomainState", "Entity", "Generator", "Handle", "Linked", "Model", "Monitor", "Param",
-    "Port", "StationObject", "Step", "Timed", "scene", "serve", "solve",
+    "Port", "StationObject", "Step", "Timed", "Vector", "VectorComponent", "scene", "serve", "solve", "vector_port",
 ]
 
 
+class VectorComponent(NamedTuple):
+    """One ordered vector element's label and optional unit."""
+
+    id: str
+    unit: str = ""
+
+
 class Port(NamedTuple):
-    """A port with a type other than "signal" or a unit: Port("points", "points"),
-    Port("in", "step"), Port("force", unit="N"). "any" takes any value but a step; with a unit
-    on both ends a wire's units must agree."""
+    """A typed port, optionally sized: Port("points", "points"), Port("in", "step"),
+    Port("force", unit="N"). Vector ports may declare a dimension or component labels/units.
+    "any" takes any value but a step; units must agree where both ends declare them."""
 
     id: str
     type: str = "signal"
     unit: str = ""
+    dimension: int | None = None
+    components: tuple[VectorComponent, ...] = ()
+
+
+def vector_port(id: str, dimension: int | None = None, components=()) -> Port:
+    """A numeric vector port. Components may be names, (name, unit) pairs, or VectorComponents.
+
+    Example: ``vector_port("state", components=[("x", "m"), ("angle", "rad")])``.
+    """
+    parts = tuple(
+        component if isinstance(component, VectorComponent)
+        else VectorComponent(component) if isinstance(component, str)
+        else VectorComponent(*component)
+        for component in components
+    )
+    if dimension is not None and dimension < 1:
+        raise ValueError("a vector dimension must be positive")
+    if parts:
+        if dimension is not None and dimension != len(parts):
+            raise ValueError(f"vector dimension {dimension} does not match {len(parts)} components")
+        dimension = len(parts)
+    return Port(id, "vector", dimension=dimension, components=parts)
 
 
 class Param(NamedTuple):
@@ -232,13 +263,13 @@ class Model(StationObject):
 
     _paperboat = "model"
     solver: str = "rk4"                  # rk4 | rk45 | rk2 | euler | discrete (paperboat.solve.names())
-    x: list[float] = []                  # the state now, set by the engine
+    x: Vector = []                       # the state now, set by the engine
 
-    def initial(self) -> list[float]:
+    def initial(self) -> Vector:
         """The state when a run starts."""
         return []
 
-    def derivatives(self, t: float, x: list[float], inputs: dict) -> list[float]:
+    def derivatives(self, t: float, x: Vector, inputs: dict) -> Vector:
         """dx/dt at time t in state x, under the linked block's inputs (for "discrete": the next x)."""
         return [0.0] * len(x)
 

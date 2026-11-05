@@ -66,6 +66,45 @@ paperboat.serve(paperboat.Backend(engine="test", descriptor="descriptor.toml", b
                                   objects=[Weight, Hook], state=World, dt=0.1, duration=5.0, emit_every=1))
 '''
 
+VECTOR_BACKEND = '''
+import paperboat
+from paperboat import Vector, vector_port
+
+class Position(paperboat.Block):
+    type, label = "position", "Position"
+    outputs = [vector_port("state", components=[("x", "m"), ("y", "m")])]
+    def step(self, ctx, inputs):
+        return {"state": Vector([2.0, 3.0])}
+
+class AddCoordinates(paperboat.Block):
+    type, label = "add-coordinates", "Add coordinates"
+    inputs = [vector_port("state", components=[("horizontal", "m"), ("vertical", "m")])]
+    outputs = ["total"]
+    def step(self, ctx, inputs):
+        x, y = inputs["state"]
+        return {"total": x + y}
+
+paperboat.serve(paperboat.Backend(engine="test-vectors", descriptor="descriptor.toml",
+                                  blocks=[Position, AddCoordinates], mode="once"))
+'''
+
+VECTOR_DESCRIPTOR = '''
+domain = "vectors"
+import = ["dashboard"]
+[graph]
+nodes = [
+  { id = "position", type = "position" },
+  { id = "add", type = "add-coordinates" },
+  { id = "show", type = "display" },
+  { id = "vector-show", type = "display" },
+]
+edges = [
+  { from = ["position", "state"], to = ["add", "state"] },
+  { from = ["add", "total"], to = ["show", "in"] },
+  { from = ["position", "state"], to = ["vector-show", "in"] },
+]
+'''
+
 DESCRIPTOR = '''
 domain = "t"
 import = ["base", "step", "signal", "dashboard"]
@@ -93,13 +132,14 @@ edges = [
 '''
 
 
-def run_backend(tmp_path: Path, backend: str = BACKEND, descriptor: str = DESCRIPTOR, args: tuple[str, ...] = ()) -> list[dict]:
+def run_backend(tmp_path: Path, backend: str = BACKEND, descriptor: str = DESCRIPTOR,
+                args: tuple[str, ...] = (), success: bool = True) -> list[dict]:
     (tmp_path / "server.py").write_text(textwrap.dedent(backend))
     (tmp_path / "descriptor.toml").write_text(textwrap.dedent(descriptor))
     env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
     proc = subprocess.run([sys.executable, "server.py", "--run", *args], cwd=tmp_path, env=env, capture_output=True,
                           text=True, timeout=120)
-    assert proc.returncode == 0, proc.stderr
+    assert (proc.returncode == 0) == success, proc.stderr
     return [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
 
 
@@ -113,6 +153,40 @@ def test_a_python_backend_runs_on_the_engine(tmp_path: Path) -> None:
     logs = [m for m in msgs if m["type"] == "log"]
     assert any(m.get("node") == "d" and m["text"] == "hello" for m in logs)  # ctx.log, its text param
     assert any(m["text"] == "x = 1.000" for m in logs)  # the Timed step followed its curve to 1
+
+
+def test_a_python_vector_uses_one_typed_wire_with_component_metadata(tmp_path: Path) -> None:
+    msgs = run_backend(tmp_path, backend=VECTOR_BACKEND, descriptor=VECTOR_DESCRIPTOR)
+    signal = next(m for m in msgs if m["type"] == "signal" and m["node"] == "show")
+    assert signal["v"] == 5.0
+    vector_signal = next(m for m in msgs if m["type"] == "signal" and m["node"] == "vector-show")
+    assert vector_signal["v"] == [2.0, 3.0]
+    assert vector_signal["components"] == [{"id": "x", "unit": "m"}, {"id": "y", "unit": "m"}]
+
+
+def test_a_python_vector_must_match_its_declared_dimension(tmp_path: Path) -> None:
+    backend = VECTOR_BACKEND.replace(
+        'vector_port("state", components=[("x", "m"), ("y", "m")])',
+        'vector_port("state", 3)',
+        1,
+    )
+    backend = backend.replace(
+        'inputs = [vector_port("state", components=[("horizontal", "m"), ("vertical", "m")])]',
+        'inputs = [vector_port("state")]',
+    )
+    msgs = run_backend(tmp_path, backend=backend, descriptor=VECTOR_DESCRIPTOR, success=False)
+    assert msgs[-1]["type"] == "run.finished" and msgs[-1]["status"] == "failed"
+    assert any(m.get("node") == "position" and "expected 3" in m.get("text", "") for m in msgs)
+
+
+def test_python_vector_component_units_are_checked_on_a_wire(tmp_path: Path) -> None:
+    backend = VECTOR_BACKEND.replace(
+        '("horizontal", "m"), ("vertical", "m")',
+        '("horizontal", "cm"), ("vertical", "m")',
+    )
+    msgs = run_backend(tmp_path, backend=backend, descriptor=VECTOR_DESCRIPTOR, success=False)
+    assert msgs[-1]["type"] == "run.finished" and msgs[-1]["status"] == "failed"
+    assert any("vector component 0 in m" in m.get("text", "") for m in msgs if m["type"] == "log")
 
 
 def test_a_blocks_view_is_checked(tmp_path: Path) -> None:

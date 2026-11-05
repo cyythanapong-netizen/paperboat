@@ -74,11 +74,15 @@ using toolkit::Handle;
 using toolkit::KeySet;
 using toolkit::List;
 using toolkit::Table;
+using toolkit::Vector;
+using toolkit::VectorComponent;
+using toolkit::vector_port;
 using toolkit::Value;
 using toolkit::Values;
 using toolkit::get_handle;
 using toolkit::get_if;
 using toolkit::get_or;
+using toolkit::get_vector;
 using toolkit::get_text;
 using toolkit::make_handle;
 

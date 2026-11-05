@@ -16,10 +16,27 @@ developing). Never implement a framework feature here: add it to the engine and 
 Definitions
 -----------
 
-.. py:class:: Port(id, type="signal")
+.. py:class:: Port(id, type="signal", unit="", dimension=None, components=())
 
-   A port with a type other than ``"signal"``: ``Port("points", "points")``,
-   ``Port("in", "step")``. Plain strings are signal ports.
+    A port with a type other than ``"signal"``: ``Port("points", "points")``,
+    ``Port("in", "step")``. Plain strings are signal ports. A ``"vector"`` port carries
+    an ordered list of numbers on one wire. ``dimension`` declares a fixed length;
+    ``components`` can name the entries and their units.
+
+.. py:class:: VectorComponent(id, unit="")
+
+    One ordered vector component's label and optional unit. A component can also be written
+    as a name or ``(name, unit)`` pair.
+
+.. py:function:: vector_port(id, dimension=None, components=())
+
+    Make a vector :py:class:`Port`. For example::
+
+       outputs = [vector_port("state", components=[("x", "m"), ("angle", "rad")])]
+
+    The port's ordered components travel together; names are descriptive, while known
+    dimensions and units are checked on the wire. Use ``paperboat.Vector`` (an alias for
+    ``list[float]``) to annotate a block's numeric vector values.
 
 .. py:class:: Param(default, type="number", options=())
 
@@ -98,9 +115,9 @@ Blocks
 
    .. py:method:: step(ctx, inputs) -> dict
 
-      Outputs from inputs (dicts by port id). Values are numbers, lists, tables (lists of
-      rows), text or :py:class:`Handle`. An unconnected input is absent. Raise to fail the
-      run; the error names this block.
+       Outputs from inputs (dicts by port id). Values are numbers, vectors (``Vector``, a
+       list of numbers), tables (lists of rows), text or :py:class:`Handle`. An unconnected
+       input is absent. Raise to fail the run; the error names this block.
 
 .. py:class:: Generator(params)
 

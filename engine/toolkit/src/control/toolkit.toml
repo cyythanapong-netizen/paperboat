@@ -1,0 +1,3 @@
+# Clocked dynamic blocks.
+name = "control"
+register = ["add_pid", "add_simulator"]

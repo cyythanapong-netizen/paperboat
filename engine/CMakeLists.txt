@@ -38,13 +38,16 @@ FetchContent_MakeAvailable(ixwebsocket)
 add_subdirectory(toolkit)
 add_subdirectory(core)
 
-# Optional toolkit packages, each its own library because of its dependency.
-find_package(OpenCV QUIET COMPONENTS core imgproc imgcodecs)
-option(PAPERBOAT_WITH_OPENCV "Build the opencv toolkit package (paperboat::toolkit_opencv)" ${OpenCV_FOUND})
-if(PAPERBOAT_WITH_OPENCV)
-  find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
-  add_subdirectory(toolkit/opencv)
-endif()
+# Optional toolkit packages are self-contained folders with a toolkit.toml and a
+# CMakeLists.txt. The folder decides whether its dependency is available/enabled.
+file(GLOB optional_toolkit_manifests CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/toolkit/*/toolkit.toml")
+foreach(manifest IN LISTS optional_toolkit_manifests)
+  get_filename_component(toolkit_dir "${manifest}" DIRECTORY)
+  if(EXISTS "${toolkit_dir}/CMakeLists.txt")
+    get_filename_component(toolkit_name "${toolkit_dir}" NAME)
+    add_subdirectory("${toolkit_dir}" "toolkit/${toolkit_name}")
+  endif()
+endforeach()
 if(PAPERBOAT_BUILD_TOOLS)
   add_subdirectory(tools)
 endif()

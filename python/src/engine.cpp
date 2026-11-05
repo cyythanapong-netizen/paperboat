@@ -381,6 +381,22 @@ std::string text_attr(nb::handle obj, const char* name, const std::string& fallb
   return out.empty() ? fallback : out;
 }
 
+tk::VectorComponent vector_component_from_py(nb::handle value, const std::string& at) {
+  if (nb::isinstance<nb::str>(value)) return {.id = nb::cast<std::string>(value)};
+  if (nb::hasattr(value, "id")) {
+    tk::VectorComponent out{.id = nb::cast<std::string>(value.attr("id"))};
+    if (nb::hasattr(value, "unit")) out.unit = text_attr(value, "unit");
+    return out;
+  }
+  if (nb::isinstance<nb::tuple>(value) || nb::isinstance<nb::list>(value)) {
+    const auto pair = nb::cast<nb::sequence>(value);
+    const auto n = nb::len(pair);
+    if (n == 1 || n == 2)
+      return {.id = nb::cast<std::string>(pair[0]), .unit = n == 2 ? nb::cast<std::string>(pair[1]) : ""};
+  }
+  throw std::runtime_error(at + ": a vector component is a name, (name, unit) or VectorComponent");
+}
+
 // A port: "force", ("x", "position") or paperboat.Port("x", "position").
 std::vector<tk::PortDef> ports_from_py(nb::handle list, const std::string& at) {
   std::vector<tk::PortDef> out;
@@ -388,6 +404,27 @@ std::vector<tk::PortDef> ports_from_py(nb::handle list, const std::string& at) {
   for (nb::handle p : list) {
     if (nb::isinstance<nb::str>(p)) {
       out.push_back({.id = nb::cast<std::string>(p)});
+    } else if (nb::hasattr(p, "id") && nb::hasattr(p, "type")) {
+      tk::PortDef port{.id = nb::cast<std::string>(p.attr("id")),
+                       .type = nb::cast<std::string>(p.attr("type"))};
+      if (nb::hasattr(p, "unit")) port.unit = text_attr(p, "unit");
+      if (nb::hasattr(p, "dimension") && !p.attr("dimension").is_none()) {
+        const int dimension = nb::cast<int>(p.attr("dimension"));
+        if (dimension < 1) throw std::runtime_error(at + ": a vector dimension must be positive");
+        port.dimension = static_cast<std::size_t>(dimension);
+      }
+      if (nb::hasattr(p, "components") && !p.attr("components").is_none())
+        for (nb::handle component : p.attr("components"))
+          port.components.push_back(vector_component_from_py(component, at));
+      if (!port.components.empty()) {
+        if (!tk::is_vector_type(port.type)) throw std::runtime_error(at + ": components are only valid on a vector port");
+        if (port.dimension && *port.dimension != port.components.size())
+          throw std::runtime_error(at + ": vector dimension does not match its components");
+        port.dimension = port.components.size();
+      }
+      if (port.dimension && !tk::is_vector_type(port.type))
+        throw std::runtime_error(at + ": dimension is only valid on a vector port");
+      out.push_back(std::move(port));
     } else if (nb::isinstance<nb::tuple>(p) || nb::isinstance<nb::list>(p)) {
       const auto seq = nb::cast<nb::sequence>(p);
       const auto n = nb::len(seq);

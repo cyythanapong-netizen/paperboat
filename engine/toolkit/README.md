@@ -17,6 +17,32 @@ its domain state).
 | `opencv`  | Optional, built when OpenCV is found (`paperboat::toolkit_opencv`, `register_opencv`). Image filters on `image` ports: `gray`, `blur`, `median`, `threshold`, `adaptive_threshold`, `hsv_range`, `canny`, `erode`, `dilate`, `open`, `close`, `invert`, `distance` · monitor: `view` (an image instrument) · station: `image` (a picture from a `file` prop; its linked block outputs it) |
 | `step`    | The path of a Step flow, with step ports. Hats: `start` (once), `when` (each time signal `cond` rises, e.g. a key; a path alongside the others). Then `wait` (`seconds`), `repeat` (leaves by `loop` `times` times, then `done`), `stop` (ends the whole run). Branch with a `base` logic block in its step form |
 
+## Package layout
+
+Each built-in package lives in `src/<package>/` and has a TOML manifest:
+
+```toml
+name = "math"
+register = ["add_arithmetic"]
+```
+
+The manifest's `name` is its namespace and palette group. `register` lists the package's
+functions that add templates to a `Registry`; CMake discovers the manifest, compiles that
+folder's C++ files, and generates the registry dispatcher. A package can embed TOML
+definitions on a C++ parent with `definitions = "blocks.toml"` (see `signal`). There is no
+central list of packages, block descriptions or UI views to update.
+
+Descriptions and view defaults belong to the block definition in its source file. A
+descriptor that defines a block on a parent inherits its description/view and can override
+the description or individual view keys. This keeps a block's behavior, palette entry and
+look together.
+
+An optional toolkit with extra dependencies (such as OpenCV) lives in
+`engine/toolkit/<package>/`, with its own `toolkit.toml` and `CMakeLists.txt`. The engine
+discovers that folder; its CMake file decides whether the dependency is available and which
+target to build. A backend opts into an optional package by linking its target and adding
+its registrar to the `Registry`.
+
 Step templates make a `Step` (`enter`, then `tick` once per clock step until it names the
 step output to leave by; a hat is ticked while idle and has `may_start()`) instead of a `Block`: use `CatalogEntry::make_step()` for them
 and `make()` for the rest. A domain's own step blocks declare step ports in its
@@ -164,7 +190,8 @@ hint, sent as `view` in the catalog. A definition inherits its template's view a
 overrides single keys: `view = { glyph = "plus" }` on `math/gain` keeps `compact` and
 `value`; `view = { compact = false }` draws it as a card. The simple `math` blocks (gain, sum,
 threshold, saturation) and the `base` constant and logic blocks are compact by default
-(`builtin_view()`). A Python block sets a `view` class attribute (a dict of the same keys).
+(`BlockDef::view` in each package's source). A Python block sets a `view` class attribute (a
+dict of the same keys).
 
 Mistakes fail loudly with their location, e.g.
 `blocks[2] (control/pid): control/pid has no param "kq"`, and unknown fields are
@@ -194,8 +221,12 @@ graph and station).
 
 ## Adding a template
 
-1. Write the block in `src/<package>/` as a small struct deriving from `Block` (or
-   `Step` for a Step flow's path); keep its state in the struct.
-2. Register it in that package's `register_<package>()` with a `Template`
-   (`name`, `def`, `config`, and `make` or `make_step`).
-3. Add tests in `tests/`.
+1. Write the block in `src/<package>/<block>.cpp` as a small struct deriving from `Block`
+   (or `Step` for a Step flow's path); keep its state in the struct.
+2. Define its `BlockDef` (including description and optional view) and register it from a
+   function in the package namespace. If it is a new registration function, list it in that
+   package's `toolkit.toml`; adding another block to an existing function needs no manifest
+   change. CMake picks up new C++ files automatically.
+3. Add C++ tests in `engine/tests/`. If it is a new built-in package, create
+   `src/<package>/toolkit.toml` with its `name` and registrar functions; the built-in registry
+   and build discover it without edits to `registry.cpp` or the top-level toolkit source list.
