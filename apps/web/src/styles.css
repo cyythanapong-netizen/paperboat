@@ -443,7 +443,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .tab-remove { border: 0; background: none; padding: 0 3px; color: var(--text-muted); font: 400 var(--size-md) / 1 var(--font-sans); cursor: pointer; }
 .tab-remove:hover { color: var(--danger); }
 .deco-edit { width: 100%; min-width: 8ch; height: 24px; padding: 0 var(--space-2); background: var(--surface-well); box-shadow: var(--well-shadow); border: 0; border-radius: var(--radius-sm); color: var(--text); font: inherit; }
-.dash-tab .deco-edit { width: 12ch; }
+.dash-tab .tab-edit { width: 14ch; height: 22px; font: 400 var(--size-xs) var(--font-mono); }
+.dash-tab .tab-edit[aria-invalid="true"] { outline: 1.5px solid var(--danger); outline-offset: 1px; }
 
 .deco { position: relative; z-index: 0; min-width: 0; pointer-events: none; }
 .arranging .deco { pointer-events: auto; cursor: grab; outline: 1px dashed var(--line-strong); outline-offset: 2px; }
