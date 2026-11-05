@@ -97,7 +97,9 @@
 
   /* ---- Component ----------------------------------------------------------------- */
   --bar-height: 56px;
-  --rail-width: 128px;
+  --rail-width: 84px;            /* fits the widest key name ("station") with room for the drop */
+  --slide-time: 560ms;            /* a page sliding into view, the rail stepping aside, the Board drawer */
+  --slide: var(--slide-time) cubic-bezier(.65, 0, .25, 1);
   --panel-head-height: 36px;
   --gutter: 14px;                 /* between sections, and around the app */
   --panel-pad: 16px;              /* inside a section */

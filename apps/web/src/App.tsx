@@ -13,7 +13,7 @@ import { emptyOf, freeName, inlineRef, loadMine, merged, refersTo, renameInFormu
 import { ConsoleWindow } from "./Console";
 import { Dashboard } from "./Dashboard";
 import { inlineInText, loadSaved, mapTexts, renameInText, save as saveLayout, textUsing } from "./dashboardLayout";
-import { PAGES, Panel, Rail, Switch, Wordmark, type Mode, type Page, type Theme } from "./Shell";
+import { PAGES, Panel, Rail, Switch, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
 import { SceneView } from "./SceneView";
 import { StationGraph } from "./StationGraph";
 import { StationPanel, withObject } from "./StationPanel";
@@ -74,6 +74,15 @@ function useTheme(choice: Theme): "light" | "dark" {
 
 export function App() {
   const [mode, setMode] = remembered<Mode>("paperboat.mode", "navigator", ["navigator", "commander"]);
+  // Commander's Board drawer: open or closed, and how tall it was left.
+  const [boardOpen, setBoardOpen] = remembered<"open" | "closed">("paperboat.board", "closed", ["open", "closed"]);
+  const [boardHeight, setBoardHeight] = useState(() => {
+    try {
+      return Number(localStorage.getItem("paperboat.boardHeight")) || 300;
+    } catch {
+      return 300;
+    }
+  });
   const [arrange, setArrange] = useState(false);
   // The floor grid of a 3D Station: the user's switch wins, else the backend's `view.grid`, else shown.
   const [gridChoice, setGridChoice] = remembered<"auto" | "on" | "off">("paperboat.grid", "auto", ["auto", "on", "off"]);
@@ -205,9 +214,10 @@ export function App() {
   // A page that changes size (another mode, or brought into view) fits its flow again.
   useEffect(() => {
     if (mode === "navigator" && page !== "flow") return;
-    const t = window.setTimeout(() => fitView({ duration: 200 }), 60);
+    // After the rail has stepped aside or the column has slid (both about half a second).
+    const t = window.setTimeout(() => fitView({ duration: 200 }), 520);
     return () => window.clearTimeout(t);
-  }, [mode, page, fitView]);
+  }, [mode, page, boardOpen, fitView]);
 
   // (Alt+1–3, Alt+M, Alt+V and Ctrl+K are commands now: see `commands` below.)
 
@@ -388,8 +398,35 @@ export function App() {
     setPage(p);
     setMode("navigator");
   };
-  const panel = (p: Page) => ({ page: p, mode, current: page === p, onOpen: () => open(p) });
-  const run = () =>
+  const at = PAGES.findIndex((p) => p.id === page);
+  const panel = (p: Page) => ({ page: p, mode, current: page === p, at, onOpen: () => open(p) });
+  // Closed, the Board's head still shows the latest of its first few number readouts.
+  const peek = Object.keys(monitors)
+    .filter((id) => typeof state.latest[id] === "number")
+    .slice(0, 3)
+    .map((id) => (
+      <span key={id}>
+        {id} <b>{+(state.latest[id] as number).toPrecision(4)}</b>
+      </span>
+    ));
+  const board: Drawer = {
+    open: boardOpen === "open",
+    height: boardHeight,
+    peek: peek.length ? peek : undefined,
+    onChange: (o, h) => {
+      setBoardOpen(o ? "open" : "closed");
+      if (h) {
+        setBoardHeight(h);
+        try {
+          localStorage.setItem("paperboat.boardHeight", String(Math.round(h)));
+        } catch {
+          /* private window: not kept */
+        }
+      }
+    },
+  };
+  const run = () => {
+    if (mode === "commander") setBoardOpen("open"); // a run is watched on the Board
     send({
       type: "graph.run",
       graph: toGraph(nodes, edges),
@@ -397,6 +434,7 @@ export function App() {
       ...(Object.keys(runSettings).length ? { settings: runSettings } : {}),
       variables,
     });
+  };
 
   const status = state.run?.status;
   const elapsed = state.run ? `${(state.run.progress * (Number(runSettings.duration ?? state.runDefaults.duration) || 0)).toFixed(1)} / ${runSettings.duration ?? state.runDefaults.duration ?? "?"} s` : "";
@@ -642,7 +680,7 @@ export function App() {
     },
     {
       id: "view.arrange",
-      label: "Arrange Dashboard",
+      label: "Arrange Board",
       menu: "view",
       group: "windows",
       checked: arrange,
@@ -683,9 +721,10 @@ export function App() {
           {state.connection === "open" ? state.engine : state.connection}
         </button>
       </header>
-      {mode === "navigator" && <Rail page={page} onPage={setPage} />}
+      <Rail page={page} onPage={setPage} hidden={mode === "commander"} />
       <VarsContext.Provider value={varsApi}>
       <main className={`pages${varsShown === "open" ? " with-vars" : ""}`}>
+        <div className="page-stack">
         <Panel {...panel("station")} actions={<>{gridKey}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
           <div
             className={`station view-${view}`}
@@ -746,6 +785,7 @@ export function App() {
         </Panel>
         <Panel
           {...panel("dashboard")}
+          drawer={board}
           actions={
             <button className={`key small${arrange ? " on" : ""}`} aria-pressed={arrange} title="Move instruments and pick their sizes" onClick={() => setArrange(!arrange)}>
               {arrange ? "Done" : "Arrange"}
@@ -755,6 +795,7 @@ export function App() {
         >
           <Dashboard state={state} monitors={monitors} arrange={arrange} onBlock={showBlock} saved={dashSaved} onSave={saveDash} />
         </Panel>
+        </div>
         {varsShown === "open" && (
           <VariablesSheet
             open={openVar}
