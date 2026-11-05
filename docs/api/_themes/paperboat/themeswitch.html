@@ -1,0 +1,24 @@
+<div class="theme-switch" role="group" aria-label="Theme">
+  <span class="lbl">Theme</span>
+  <button class="opt" type="button" data-choice="auto">auto</button>
+  <button class="opt" type="button" data-choice="light">light</button>
+  <button class="opt" type="button" data-choice="dark">dark</button>
+</div>
+<script>
+(function () {
+  var KEY = "paperboat.docs.theme", root = document.documentElement;
+  var buttons = document.querySelectorAll(".theme-switch .opt");
+  function chosen() { try { var t = localStorage.getItem(KEY); return t === "light" || t === "dark" ? t : "auto"; } catch (e) { return "auto"; } }
+  function show(c) {
+    if (c === "auto") delete root.dataset.theme; else root.dataset.theme = c;
+    buttons.forEach(function (b) { var on = b.dataset.choice === c; b.classList.toggle("on", on); b.setAttribute("aria-pressed", on); });
+  }
+  buttons.forEach(function (b) {
+    b.addEventListener("click", function () {
+      try { if (b.dataset.choice === "auto") localStorage.removeItem(KEY); else localStorage.setItem(KEY, b.dataset.choice); } catch (e) {}
+      show(b.dataset.choice);
+    });
+  });
+  show(chosen());
+})();
+</script>

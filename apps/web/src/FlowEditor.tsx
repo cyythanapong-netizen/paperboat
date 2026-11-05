@@ -38,6 +38,7 @@ import { Bindable, NumberOrFormula } from "./Variables";
 import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
 import { connectionOf, nearestAccepting, SNAP, WireDragContext, type Anchor } from "./wireSnap";
+import { arrangeFlowNodes, canArrangeFlow } from "./flowLayout";
 import {
   absolute,
   Boundary,
@@ -614,7 +615,9 @@ type Props = {
   /** The subsystem or story open on the canvas (#68); null: the top level. */
   level: string | null;
   setLevel: (level: string | null) => void;
-  /** Filled with what the Edit menu calls: the same actions as the keys and the selection dialog. */
+  /** A run locks arranging: the station and its linked blocks must stay put. */
+  locked: boolean;
+  /** Filled with what the menus call: the same actions as the keys and the selection dialog. */
   controls?: MutableRefObject<FlowControls | null>;
 };
 
@@ -629,11 +632,13 @@ export type FlowControls = {
   remove: () => void;
   group: (kind: GroupData["kind"]) => void;
   ungroup: () => void;
-  can: { copy: boolean; paste: boolean; remove: boolean; group: boolean; frame: boolean; story: boolean; ungroup: boolean };
+  /** Arrange this level and its contents; false when locked or already arranged. */
+  arrange: () => boolean;
+  can: { copy: boolean; paste: boolean; remove: boolean; group: boolean; frame: boolean; story: boolean; ungroup: boolean; arrange: boolean };
 };
 
 /** Blocks by palette group, groups in catalog order. */
-export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, controls }: Props) {
+export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls }: Props) {
   const states = useContext(RunStates);
   // The open level, if it is still there (undo or ungroup may have taken it away).
   const level = wanted && isLevel(nodes.find((n) => n.id === wanted)) ? wanted : null;
@@ -805,8 +810,19 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   // ---- Copy, cut and paste: Ctrl+C / X / V (⌘ on a Mac) on the Flow page, except while typing ----
   const store = useStoreApi();
   const copied = useRef<{ clip: Clip; pastes: number } | null>(null);
-  const latest = useRef({ nodes, edges });
-  latest.current = { nodes, edges };
+  const latest = useRef({ nodes, edges, level });
+  latest.current = { nodes, edges, level };
+  // One state update makes the whole recursive arrangement one undo step (#103).
+  const arrange = (): boolean => {
+    if (locked) return false;
+    const current = latest.current;
+    const next = arrangeFlowNodes(current.nodes, current.edges, current.level);
+    if (next === current.nodes) return false;
+    latest.current = { ...current, nodes: next };
+    setNodes(next);
+    window.setTimeout(() => fitView({ padding: 0.2, duration: 200, maxZoom: 1.2 }), 30);
+    return true;
+  };
   // The three actions, shared by the keys below and the Edit menu. Each says whether it did anything.
   const copySelected = (cut: boolean): boolean => {
     const { nodes: ns, edges: es } = latest.current;
@@ -940,6 +956,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       remove: removePicked,
       group,
       ungroup: () => pickedFrames.forEach((f) => actions.ungroup(f.id)),
+      arrange,
       can: {
         copy: copySelection(nodes, edges) !== null,
         get paste() {
@@ -950,9 +967,13 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
         frame: canFrame,
         story: canStory,
         ungroup: pickedFrames.length > 0,
+        arrange: !locked && canArrangeFlow(nodes, level),
       },
     };
   }
+  useEffect(() => () => {
+    if (controls) controls.current = null;
+  }, [controls]);
   useEffect(() => {
     if (!many) return;
     const onKey = (e: KeyboardEvent) => {

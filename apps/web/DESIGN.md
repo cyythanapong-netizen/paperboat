@@ -102,6 +102,12 @@ something is available can't drift between them.
   themselves: elements marked `data-own-keys` are not forwarded to the backend. A
   command's `chord` is handled by the registry (Alt+1–3, Alt+M, Alt+V, Ctrl+K); undo and
   copy/cut/paste stay with the canvas, which the Edit menu reaches through `FlowControls`.
+- **Arrange Blocks** (#103): View > Arrange Blocks lays out the visible node canvases left to
+  right, following their wires; the Flow and Station-graph heads have an **Arrange** key for
+  their own canvas. The deterministic layout (`graphLayout.ts`) ignores back-edges in loops,
+  orders each layer by its neighbours, and uses measured block sizes. Flow arrangement works
+  inside the open level and every group below it, refits visual frames, and is one undo step;
+  Station arrangement is one Station edit. Both are disabled during a run.
 
 ## Tokens
 
@@ -234,3 +240,24 @@ positions and lines.
   semantic role, then is used through the role.
 - A backend's own look belongs in a web station (`[station] view = "web"`).
 - Still open (#33): the signal colour, the Monitor mode.
+
+## Docs
+
+The docs follow the same design system (#72): the API reference (`docs/api`, Sphinx) and the
+plan page (`docs/plan.html`) use the app's tokens and fonts, so a change to a token changes
+all three. `docs/gen_tokens.py` writes `docs/_static/tokens.css` from `src/tokens.css` (its
+font imports become `@font-face` rules for the Geist files in `docs/_static/fonts`, so the
+docs make no network requests); CI fails if it is out of date. Run it after changing a token.
+
+- **API reference:** a theme on Sphinx's `basic` (`docs/api/_themes/paperboat`), rules in
+  `docs/_static/docs.css`. The rail on the left holds the contents (the current page boxed in
+  ink, the rest grey), search (a well and a key) and the theme choice; the page is a panel.
+  Text is 15px sans (reading, not UI), code is mono in a recessed grey well, signatures are
+  raised grey plates with the name in weight, tables have hairlines only. Links are ink with
+  an underline, never blue; code has no colour beyond ink and grey. Notes are plates with a
+  hairline: the signal colour for a warning, red for danger.
+- **Themes:** light and dark follow the system; `[ auto ]  light  dark` in the rail picks one
+  (kept in this browser, key `paperboat.docs.theme`, also read by the plan page).
+- **Plan page:** its own names (`--bg`, `--accent`…) are aliases of the tokens, so it needs no
+  palette of its own: ink and grey, with the signal colour for what is live.
+- A docs-only value is not allowed: it goes in as a token first, like any other.

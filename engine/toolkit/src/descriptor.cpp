@@ -286,8 +286,8 @@ void load_dashboard(const json& doc, Catalog& catalog) {
       only_fields(e, {"kind", "text", "at", "span", "style", "tab"}, at);
       const std::string kind = e.contains("kind") && e["kind"].is_string() ? e["kind"].get<std::string>() : "";
       if (kind != "section" && kind != "hline" && kind != "vline" && kind != "label" &&
-          kind != "console")
-        throw DescriptorError(at + ": kind must be section, hline, vline, label or console");
+          kind != "console" && kind != "station")
+        throw DescriptorError(at + ": kind must be section, hline, vline, label, console or station");
       if (!e.contains("at")) throw DescriptorError(at + ": needs \"at\": [column, row]");
       check_at(e["at"], at);
       if (e["at"][0].get<int>() >= columns)
@@ -313,8 +313,8 @@ void load_dashboard(const json& doc, Catalog& catalog) {
         throw DescriptorError(at + ": a separator needs a span: how many cells it runs");
       }
       if (e.contains("text")) {
-        if (line || kind == "console" || !e["text"].is_string())
-          throw DescriptorError(at + (line ? ": a separator has no text" : kind == "console" ? ": the console has no text" : ": text must be text"));
+        if (line || kind == "console" || kind == "station" || !e["text"].is_string())
+          throw DescriptorError(at + (line ? ": a separator has no text" : kind == "console" ? ": the console has no text" : kind == "station" ? ": the station has no text" : ": text must be text"));
         item["text"] = e["text"];
       } else if (kind == "label") {
         throw DescriptorError(at + ": a label needs its text");

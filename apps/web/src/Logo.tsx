@@ -27,8 +27,10 @@ export function Logo({ height = 24, running = false }: { height?: number; runnin
     height >= 32 ? "pixel" : height >= 20 ? "s2" : "s2-merged";
 
   // Ripple amplitude scales with the mark so small marks stay subtle.
-  const lr = height >= 32 ? "3.75px" : height >= 20 ? "1.9px" : "1.5px";
-  const lb = height >= 32 ? "1.5px" : height >= 20 ? "0.5px" : "0.3px";
+  // W2: wave 25% higher (3.0 → 3.75), boat bob 1.0 (was 1.5). Made a touch taller so
+  // the crest reads at the bar size.
+  const lr = height >= 32 ? "4.5px" : height >= 20 ? "2.4px" : "1.8px";
+  const lb = height >= 32 ? "1.5px" : height >= 20 ? "0.8px" : "0.5px";
 
   const cls = `${running ? "logo-live" : "logo-idle"}`;
 
