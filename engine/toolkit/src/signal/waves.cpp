@@ -54,7 +54,9 @@ class Expression final : public Generator {
 }  // namespace
 
 void add_waves(Registry& registry) {
-  registry.add(define_block<Clock>("signal", generator_def("clock", "Clock", {}, "t")));
+  auto clock = define_block<Clock>("signal", generator_def("clock", "Clock", {}, "t"));
+  clock.def.description = "The run's time, in seconds.";
+  registry.add(std::move(clock));
 
   // The parent: f(t) as an expression `f` (config, or a text param a user edits) over t and
   // the params a definition adds. Not in a palette by itself.

@@ -47,6 +47,15 @@ json entities_json(const std::vector<toolkit::Entity>& list) {
   return out;
 }
 
+void validate_vector_outputs(const Node& node, const toolkit::Values& values) {
+  for (const auto& port : node.def.outputs) {
+    const auto value = values.find(port.id);
+    if (value == values.end()) continue;
+    if (const auto mismatch = toolkit::vector_value_mismatch(port, value->second))
+      throw GraphError(node.id, "output " + node.id + "." + port.id + " " + *mismatch);
+  }
+}
+
 }  // namespace
 
 Calling::Calling(toolkit::Context& ctx, std::string_view node, std::string& failed)
@@ -109,6 +118,14 @@ std::string Run::go(const json& graph_given, const json& station_given, const js
         for (const auto& sample : pass_over(*order)) latest[sample["node"]].push_back(sample);
         for (auto& [node, list] : latest) story_samples_[node] = std::move(list);
       };
+      if (!story.release.empty()) {
+        // Released outputs read as unwired once the path leaves: a story that drives
+        // something stops driving it, while its results hold for what comes after.
+        story.step->on_leave = [this, release = &story.release] {
+          for (const auto& [node, port] : *release)
+            if (auto it = outputs_.find(node); it != outputs_.end()) it->second.erase(port);
+        };
+      }
       if (story.reset) {
         // Fresh blocks each time a path arrives: a story run twice (in a loop) starts over.
         story.step->on_enter = [this, order = &story.order] {
@@ -188,7 +205,11 @@ toolkit::Values Run::inputs_of(const Node& node) {
     auto wire = g_.wires.find({node.id, port.id});
     if (wire == g_.wires.end()) continue;
     const auto& from = outputs_[wire->second.first];
-    if (auto v = from.find(wire->second.second); v != from.end()) in[port.id] = v->second;
+    if (auto v = from.find(wire->second.second); v != from.end()) {
+      if (const auto mismatch = toolkit::vector_value_mismatch(port, v->second))
+        throw GraphError(node.id, "input " + node.id + "." + port.id + " " + *mismatch);
+      in[port.id] = v->second;
+    }
   }
   return in;
 }
@@ -202,19 +223,42 @@ json Run::pass_over(const std::vector<std::string>& order) {
     const auto call = calling(id);
     if (node.object) {
       outputs_[id] = node.object->read();
+      validate_vector_outputs(node, outputs_[id]);
     } else if (node.block && !node.def.feedthrough) {
       outputs_[id] = node.block->outputs();  // its inputs come after the pass
+      validate_vector_outputs(node, outputs_[id]);
     } else if (node.block) {
       outputs_[id] = node.block->step(ctx_, inputs_of(node));
+      validate_vector_outputs(node, outputs_[id]);
     } else {  // a monitor: what it shows is its "value" output, or its input
       auto in = inputs_of(node);
       if (node.monitor)
         if (auto shown = node.monitor->step(ctx_, in); shown.contains("value")) in["in"] = shown.at("value");
       if (const auto* text = toolkit::get_if<std::string>(in, "in")) {
         samples.push_back({{"type", "signal"}, {"node", id}, {"t", std::round(ctx_.t * 1e4) / 1e4}, {"v", *text}});
-      } else if (const auto* list = toolkit::get_if<toolkit::List>(in, "in")) {
-        for (std::size_t i = 0; i < list->size(); ++i)
-          samples.push_back({{"type", "signal"}, {"node", id}, {"t", i}, {"v", (*list)[i]}});
+      } else if (const auto* vector = toolkit::get_vector(in, "in")) {
+        if (node.def.instrument == "display") {
+          // A Display is a readout: preserve the vector as one value. A Graph keeps its
+          // existing list-as-samples behavior (index is x), useful for point series.
+          json sample = {{"type", "signal"}, {"node", id}, {"t", std::round(ctx_.t * 1e4) / 1e4}, {"v", *vector}};
+          if (const auto wire = g_.wires.find({id, "in"}); wire != g_.wires.end()) {
+            const auto& source = g_.nodes.at(wire->second.first);
+            const auto port = std::ranges::find(source.def.outputs, wire->second.second, &toolkit::PortDef::id);
+            if (port != source.def.outputs.end() && !port->components.empty()) {
+              json components = json::array();
+              for (const auto& component : port->components) {
+                json item = {{"id", component.id}};
+                if (!component.unit.empty()) item["unit"] = component.unit;
+                components.push_back(std::move(item));
+              }
+              sample["components"] = std::move(components);
+            }
+          }
+          samples.push_back(std::move(sample));
+        } else {
+          for (std::size_t i = 0; i < vector->size(); ++i)
+            samples.push_back({{"type", "signal"}, {"node", id}, {"t", i}, {"v", (*vector)[i]}});
+        }
       } else {
         samples.push_back({{"type", "signal"}, {"node", id}, {"t", std::round(ctx_.t * 1e4) / 1e4},
                            {"v", toolkit::get_or(in, "in")}});
@@ -238,7 +282,10 @@ void Run::store_step_outputs() {
 
 void Run::store_step_outputs(const std::string& id) {
   const auto call = calling(id);
-  if (auto values = g_.nodes.at(id).step->outputs(); !values.empty()) outputs_[id] = std::move(values);
+  if (auto values = g_.nodes.at(id).step->outputs(); !values.empty()) {
+    validate_vector_outputs(g_.nodes.at(id), values);
+    outputs_[id] = std::move(values);
+  }
 }
 
 std::optional<std::string> Run::advance() {

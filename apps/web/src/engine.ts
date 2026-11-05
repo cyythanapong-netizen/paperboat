@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { BlockDef, ClientMsg, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, Variables, View } from "./protocol";
+import type { BlockDef, ClientMsg, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, Variables, VectorComponent, View } from "./protocol";
 
 export type Series = { t: number[]; v: number[] };
 
@@ -28,7 +28,9 @@ export type EngineState = {
   run: { id: string; progress: number; status: "running" | RunStatus } | null;
   signals: Record<string, Series>;
   /** The latest value each monitor sent: what a Display or Image view shows. */
-  latest: Record<string, number | string>;
+  latest: Record<string, number | string | number[]>;
+  /** Component labels for a vector shown by a Display monitor. */
+  vectorComponents: Record<string, VectorComponent[]>;
   /** Blocks whose last `node.state` was running (where a Step flow run is). */
   active: string[];
   /** Blocks the last run named as failing it. */
@@ -56,6 +58,7 @@ const initial: EngineState = {
   run: null,
   signals: {},
   latest: {},
+  vectorComponents: {},
   active: [],
   failed: [],
   progress: {},
@@ -111,7 +114,7 @@ function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, entities };
     }
     case "run.started":
-      return { ...s, run: { id: m.run, progress: 0, status: "running" }, signals: {}, latest: {}, active: [], failed: [], progress: {} };
+      return { ...s, run: { id: m.run, progress: 0, status: "running" }, signals: {}, latest: {}, vectorComponents: {}, active: [], failed: [], progress: {} };
     case "run.progress":
       return s.run?.id === m.run ? { ...s, run: { ...s.run, progress: m.fraction } } : s;
     case "run.finished":
@@ -125,8 +128,9 @@ function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, progress: { ...s.progress, [m.node]: m.fraction } };
     case "signal": {
       const latest = { ...s.latest, [m.node]: m.v };
-      if (typeof m.v !== "number") return { ...s, latest };
-      return { ...s, latest, signals: { ...s.signals, [m.node]: append(s.signals[m.node], m.t, m.v) } };
+      const vectorComponents = m.components ? { ...s.vectorComponents, [m.node]: m.components } : s.vectorComponents;
+      if (typeof m.v !== "number") return { ...s, latest, vectorComponents };
+      return { ...s, latest, vectorComponents, signals: { ...s.signals, [m.node]: append(s.signals[m.node], m.t, m.v) } };
     }
     case "log":
       return { ...s, logs: [...s.logs.slice(-199), { level: m.level, text: m.text, node: m.node }] };

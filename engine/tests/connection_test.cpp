@@ -33,6 +33,25 @@ TEST_CASE("wire_mismatch: types, any, steps and units") {
   CHECK(why({"y"}, {"force", "signal", "N"}) == "ok");
 }
 
+TEST_CASE("vector ports keep one wire and check declared shape and component units") {
+  auto why = [](tk::PortDef from, tk::PortDef to) { return tk::wire_mismatch(from, to).value_or("ok"); };
+  const auto state = tk::vector_port("state", std::vector<tk::VectorComponent>{{"x", "m"}, {"angle", "rad"}});
+  const tk::PortDef same_size{.id = "state", .type = "numbers", .dimension = 2,
+                              .components = {{"position", "m"}, {"heading", "rad"}}};
+  CHECK(state.type == "vector");
+  CHECK(tk::vector_dimension(state) == 2);
+  CHECK(why(state, same_size) == "ok");  // names don't constrain compatibility; units are positional
+  CHECK(why(tk::vector_port("v", 2), tk::vector_port("v", 3)) ==
+        "carries a vector of 2 values into a port expecting 3");
+  const auto wrong_unit = tk::vector_port("v", std::vector<tk::VectorComponent>{{"x", "cm"}, {"angle", "rad"}});
+  CHECK(why(state, wrong_unit) == "carries vector component 0 in m into a port in cm");
+  CHECK(why(state, {"v", "any"}) == "ok");
+
+  CHECK_FALSE(tk::vector_value_mismatch(state, tk::Value{tk::Vector{1, 2}}));
+  CHECK(tk::vector_value_mismatch(state, tk::Value{tk::Vector{1}}) == "has 1 values, expected 2");
+  CHECK(tk::vector_value_mismatch(state, tk::Value{3.0}) == "expects a vector value");
+}
+
 namespace {
 
 const tk::Catalog& catalog() {

@@ -29,6 +29,7 @@ void add_key(Registry& registry) {
   t.def.label = "Key";
   t.def.kind = Kind::Function;
   t.def.outputs = {{"pressed"}};
+  t.def.description = "1 while a key is held down in the app.";
   // Which key: a KeyboardEvent.code, set on the block in the UI (or its default in a
   // descriptor's `defaults`). It reaches make() through `config`, like every text param.
   t.def.params = {{.id = "key", .default_value = 0.0, .type = "key", .default_text = "Space"}};

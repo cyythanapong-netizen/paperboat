@@ -16,10 +16,27 @@ developing). Never implement a framework feature here: add it to the engine and 
 Definitions
 -----------
 
-.. py:class:: Port(id, type="signal")
+.. py:class:: Port(id, type="signal", unit="", dimension=None, components=())
 
-   A port with a type other than ``"signal"``: ``Port("points", "points")``,
-   ``Port("in", "step")``. Plain strings are signal ports.
+    A port with a type other than ``"signal"``: ``Port("points", "points")``,
+    ``Port("in", "step")``. Plain strings are signal ports. A ``"vector"`` port carries
+    an ordered list of numbers on one wire. ``dimension`` declares a fixed length;
+    ``components`` can name the entries and their units.
+
+.. py:class:: VectorComponent(id, unit="")
+
+    One ordered vector component's label and optional unit. A component can also be written
+    as a name or ``(name, unit)`` pair.
+
+.. py:function:: vector_port(id, dimension=None, components=())
+
+    Make a vector :py:class:`Port`. For example::
+
+       outputs = [vector_port("state", components=[("x", "m"), ("angle", "rad")])]
+
+    The port's ordered components travel together; names are descriptive, while known
+    dimensions and units are checked on the wire. Use ``paperboat.Vector`` (an alias for
+    ``list[float]``) to annotate a block's numeric vector values.
 
 .. py:class:: Param(default, type="number", options=())
 
@@ -98,9 +115,9 @@ Blocks
 
    .. py:method:: step(ctx, inputs) -> dict
 
-      Outputs from inputs (dicts by port id). Values are numbers, lists, tables (lists of
-      rows), text or :py:class:`Handle`. An unconnected input is absent. Raise to fail the
-      run; the error names this block.
+       Outputs from inputs (dicts by port id). Values are numbers, vectors (``Vector``, a
+       list of numbers), tables (lists of rows), text or :py:class:`Handle`. An unconnected
+       input is absent. Raise to fail the run; the error names this block.
 
 .. py:class:: Generator(params)
 
@@ -205,14 +222,100 @@ Station objects
 
       Advance one clock step under the linked block's inputs.
 
-   .. py:method:: entities(id, z) -> list[dict]
+   .. py:method:: entities(id, z) -> list
 
-      Its shapes (protocol entities), ids prefixed with ``id + "/"``, at depth ``z``.
+      Its shapes (``paperboat.scene`` builders, or protocol entity dicts), ids prefixed
+      with ``id + "/"``, at depth ``z``.
 
    .. py:method:: link(slot, other)
 
       Another station object fills one of its slots, once, before a run (``other`` is
       ``None`` for a toolkit object, which Python can't reach).
+
+Models, solvers and scenes
+--------------------------
+
+Bound from the engine's toolkit (C++: :cpp:class:`Model`, ``paperboat::solve``,
+``paperboat::scene``), so a domain writes its equations and its look, not its stepping.
+
+.. py:class:: Model(props)
+
+   A :py:class:`StationObject` that is a system of differential equations: it gives its
+   initial state and ``derivatives()``, and the engine's solver advances it each clock step.
+
+   .. py:attribute:: solver
+      :type: str
+
+      ``"rk4"`` (default), ``"rk45"``, ``"rk2"``, ``"euler"`` or ``"discrete"``. A
+      ``solver`` prop (``Param("rk4", "enum", paperboat.solve.names())``) wins, so the user
+      can pick one on the Station page.
+
+   .. py:attribute:: x
+      :type: list[float]
+
+      The state now, kept current by the engine: use it in ``read()`` and ``entities()``.
+
+   .. py:method:: initial() -> list[float]
+
+      The state when a run starts.
+
+   .. py:method:: derivatives(t, x, inputs) -> list[float]
+
+      ``dx/dt`` at time ``t`` in state ``x``, under the linked block's inputs (a dict;
+      unwired ones absent). For ``"discrete"``, the next state.
+
+.. code-block:: python
+
+   class Mass(paperboat.Model):
+       type, label = "mass", "Mass on a spring"
+       props = {"k": 4.0, "x0": 1.0}
+       block = paperboat.Linked(inputs=["force"], outputs=["x", "v"])
+
+       def initial(self):
+           return [self.props["x0"], 0.0]
+
+       def derivatives(self, t, x, inputs):
+           return [x[1], inputs.get("force", 0.0) - self.props["k"] * x[0]]
+
+       def read(self):
+           return {"x": self.x[0], "v": self.x[1]}
+
+       def entities(self, id, z):
+           return [paperboat.scene.rect(f"{id}/mass", self.x[0], 0, 0.4, 0.4, "#2f5d62", z=z),
+                   paperboat.scene.spring(f"{id}/spring", (-2, 0), (self.x[0] - 0.2, 0))]
+
+.. py:function:: solve.step(solver, f, x, t, dt) -> list[float]
+
+   One step with a fresh solver: ``x`` advanced from ``t`` to ``t + dt`` under
+   ``f(t, x)``. ``x`` and what ``f`` returns may be any sequence of numbers (a list, a
+   tuple, a numpy array).
+
+.. py:class:: solve.Solver(name="rk4", rtol=1e-6, atol=1e-9, max_steps=100000)
+
+   A solver kept between steps (``rk45`` carries its step size). ``step(f, x, t, dt)``
+   returns the new state. An unknown name raises ``ValueError`` naming the solvers.
+
+.. py:function:: solve.names() -> list[str]
+
+The scene builders return :py:class:`Entity` objects; ``entities()`` may return them,
+dicts, or lists of them (a spring), mixed. Points are ``(x, y)`` or ``(x, y, z)``.
+
+.. py:function:: scene.rect(id, x, y, width, height, color="#888888", angle=0, z=0)
+.. py:function:: scene.circle(id, x, y, radius, color="#888888", z=0)
+.. py:function:: scene.box(id, pos, size, color="#888888", rot=None)
+.. py:function:: scene.sphere(id, pos, radius, color="#888888")
+.. py:function:: scene.line(id, a, b, color="#888888")
+.. py:function:: scene.image(id, pos, width, height, src)
+.. py:function:: scene.rod(id, a, b, thickness, color="#888888")
+
+   A bar from ``a`` to ``b``.
+
+.. py:function:: scene.spring(id, a, b, coils=8, width=0.2, color="#888888") -> list[Entity]
+
+.. py:class:: Entity
+
+   One shape: ``id``, ``shape``, ``pos``, ``size``, ``rot``, ``color``, ``scale``, ``to``,
+   ``src``, each settable.
 
 Domain state
 ------------

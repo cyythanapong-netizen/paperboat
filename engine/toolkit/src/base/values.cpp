@@ -21,16 +21,18 @@ class TextValue final : public Block {
 
 void add_values(Registry& registry) {
   // "constant" for what it was called before it had siblings; shown as Number.
-  registry.add(make_template(
+  auto number = make_template(
       "base", "constant", "Number", {}, {"y"}, {{"value", 1.0}}, [](const Values& p, const Config&) {
         double value = get_or(p, "value");
         return std::make_unique<Stateless>([=](const Context&, const Values&) { return Values{{"y", value}}; });
-      }));
+      }, "A number you set.", {.compact = true, .glyph = "const", .value = "{value}"});
+  registry.add(std::move(number));
 
   Template text;
   text.name = "base/text";
   text.def = {.type = "text", .label = "Text", .outputs = {{"y"}},
-              .params = {{.id = "value", .type = "text", .default_text = "hello"}}};
+              .params = {{.id = "value", .type = "text", .default_text = "hello"}},
+              .description = "A piece of text you set."};
   text.make = [](const Values&, const Config& config) {
     auto it = config.find("value");
     return std::make_unique<TextValue>(it == config.end() ? "" : it->second);
@@ -42,7 +44,7 @@ void add_values(Registry& registry) {
       [](const Values& p, const Config&) {
         const double value = get_or(p, "value") != 0 ? 1.0 : 0.0;
         return std::make_unique<Stateless>([=](const Context&, const Values&) { return Values{{"y", value}}; });
-      }));
+      }, "On or off: 1 or 0."));
 }
 
 }  // namespace paperboat::toolkit::base

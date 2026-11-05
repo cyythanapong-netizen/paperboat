@@ -71,6 +71,13 @@ function Plot({ name, series, idle }: { name: string; series: Series; idle: bool
 function Instrument({ name, kind, state }: { name: string; kind: string; state: EngineState }) {
   const latest = state.latest[name];
   const idle = latest === undefined;
+  const vector = Array.isArray(latest)
+    ? latest.map((v, i) => {
+        const component = state.vectorComponents[name]?.[i];
+        const label = component?.id ?? String(i);
+        return `${label}: ${v.toFixed(4)}${component?.unit ? ` ${component.unit}` : ""}`;
+      }).join(", ")
+    : undefined;
   if (kind === "image")
     return (
       <figure className={`instrument image${idle ? " idle" : ""}`}>
@@ -85,7 +92,13 @@ function Instrument({ name, kind, state }: { name: string; kind: string; state: 
     return (
       <figure className={`instrument display${idle ? " idle" : ""}`}>
         <div className="screen">
-          <output>{typeof latest === "number" ? +latest.toFixed(4) : (latest ?? "–")}</output>
+          <output>
+            {typeof latest === "number"
+              ? +latest.toFixed(4)
+              : Array.isArray(latest)
+                ? `[${vector ?? latest.map((v) => +v.toFixed(4)).join(", ")}]`
+                : (latest ?? "–")}
+          </output>
         </div>
         <figcaption>
           <span>{name}</span>

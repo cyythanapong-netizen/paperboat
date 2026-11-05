@@ -17,7 +17,7 @@ PortDef step_port(std::string id) { return {std::move(id), "step"}; }
 
 Template make_step_template(std::string type, std::string label, std::vector<PortDef> inputs,
                             std::vector<PortDef> outputs, std::vector<ParamDef> params,
-                            decltype(Template::make_step) make) {
+                            decltype(Template::make_step) make, std::string description) {
   Template t;
   t.name = "step/" + type;
   t.def.type = std::move(type);
@@ -26,6 +26,7 @@ Template make_step_template(std::string type, std::string label, std::vector<Por
   t.def.inputs = std::move(inputs);
   t.def.outputs = std::move(outputs);
   t.def.params = std::move(params);
+  t.def.description = std::move(description);
   t.make_step = std::move(make);
   return t;
 }
@@ -180,37 +181,40 @@ struct Stop final : Step {
 
 void add_flow(Registry& registry) {
   registry.add(make_step_template("start", "Start", {}, {step_port("next")}, {},
-                                  [](const Values&, const Config&) { return std::make_unique<Start>(); }));
+                                  [](const Values&, const Config&) { return std::make_unique<Start>(); },
+                                  "Starts a path once, when the run begins."));
   registry.add(make_step_template(
       "when", "When", {{"cond"}}, {step_port("next")},
       {{.id = "on", .type = "enum", .default_text = "rise", .options = {"rise", "fall"}},
        {.id = "running", .type = "enum", .default_text = "keep", .options = {"keep", "restart"}}},
-      [](const Values& p, const Config&) {
-        return std::make_unique<When>(get_or(p, "on") == 1, get_or(p, "running") == 1);  // by index in options
-      }));
+       [](const Values& p, const Config&) {
+         return std::make_unique<When>(get_or(p, "on") == 1, get_or(p, "running") == 1);  // by index in options
+       }, "Starts a path each time its condition rises (or falls): a key, a threshold."));
   registry.add(make_step_template("wait", "Wait", {step_port("in")}, {step_port("next")}, {{"seconds", 1.0}},
-                                  [](const Values& p, const Config&) {
-                                    return std::make_unique<Wait>(get_or(p, "seconds"));
-                                  }));
+                                   [](const Values& p, const Config&) {
+                                     return std::make_unique<Wait>(get_or(p, "seconds"));
+                                   }, "Holds the path for a while."));
   registry.add(make_step_template("repeat", "Repeat", {step_port("in")},
                                   {step_port("loop"), step_port("done"), {"count"}},
-                                  {{"times", 3.0}}, [](const Values& p, const Config&) {
-                                    return std::make_unique<Repeat>(get_or(p, "times"));
-                                  }));
+                                   {{"times", 3.0}}, [](const Values& p, const Config&) {
+                                     return std::make_unique<Repeat>(get_or(p, "times"));
+                                   }, "Leaves by loop a number of times, then by done; count is the lap."));
   registry.add(make_step_template("while", "While", {step_port("in"), {"cond"}}, {step_port("loop"), step_port("done")},
-                                  {}, [](const Values&, const Config&) { return std::make_unique<While>(); }));
+                                  {}, [](const Values&, const Config&) { return std::make_unique<While>(); },
+                                  "Leaves by loop while its condition holds."));
   registry.add(make_step_template("say", "Say", {step_port("in"), {"value", "any"}}, {step_port("next")},
                                   {{.id = "text", .type = "text", .default_text = "hello"}},
                                   [](const Values&, const Config& c) {
-                                    auto it = c.find("text");
-                                    return std::make_unique<Say>(it == c.end() ? "hello" : it->second);
-                                  }));
+                                     auto it = c.find("text");
+                                     return std::make_unique<Say>(it == c.end() ? "hello" : it->second);
+                                   }, "Writes a line to the Console as the path passes."));
   registry.add(make_step_template("join", "Join", {step_port("in")}, {step_port("next")}, {{"paths", 2.0}},
-                                  [](const Values& p, const Config&) {
-                                    return std::make_unique<Join>(get_or(p, "paths"));
-                                  }));
+                                   [](const Values& p, const Config&) {
+                                     return std::make_unique<Join>(get_or(p, "paths"));
+                                   }, "Waits for paths to arrive, then goes on as one."));
   registry.add(make_step_template("stop", "Stop", {step_port("in")}, {}, {},
-                                  [](const Values&, const Config&) { return std::make_unique<Stop>(); }));
+                                  [](const Values&, const Config&) { return std::make_unique<Stop>(); },
+                                  "Ends the whole run."));
 }
 
 }  // namespace paperboat::toolkit::step

@@ -12,11 +12,11 @@ struct Passive final : Block {
   Values step(const Context&, const Values&) override { return {}; }
 };
 
-Template monitor(std::string type, std::string label, std::string instrument) {
+Template monitor(std::string type, std::string label, std::string instrument, std::string description) {
   Template t;
   t.name = "dashboard/" + type;
   t.def = {.type = std::move(type), .label = std::move(label), .kind = Kind::Monitor, .inputs = {{"in", "any"}},
-           .outputs = {}, .params = {}, .instrument = std::move(instrument)};
+           .outputs = {}, .params = {}, .instrument = std::move(instrument), .description = std::move(description)};
   t.make = [](const Values&, const Config&) { return std::make_unique<Passive>(); };
   return t;
 }
@@ -24,8 +24,8 @@ Template monitor(std::string type, std::string label, std::string instrument) {
 }  // namespace
 
 void add_instruments(Registry& registry) {
-  registry.add(monitor("graph", "Graph", "graph"));      // a value over time (or a list by index)
-  registry.add(monitor("display", "Display", "display"));  // the latest value as a number or text
+  registry.add(monitor("graph", "Graph", "graph", "Plots its input over time on the Dashboard."));
+  registry.add(monitor("display", "Display", "display", "Shows its latest value on the Dashboard."));
 }
 
 }  // namespace paperboat::toolkit::dashboard

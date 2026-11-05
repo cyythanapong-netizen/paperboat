@@ -26,6 +26,8 @@ export type GroupData = {
   seconds: number;
   /** A story's blocks start afresh each time a path arrives. */
   reset: boolean;
+  /** A story's outputs to clear when its path leaves. */
+  release?: [string, string][];
   /** A frame's size when open. */
   size: { w: number; h: number };
   /** Where the user put its ports (as a block's `ports`). */
@@ -370,7 +372,7 @@ export function frameAround<N extends AnyNode>(
   id: string,
   kind: GroupData["kind"],
   children: N[],
-  options: { label?: string; collapsed?: boolean; seconds?: number; reset?: boolean; pos?: [number, number]; sides?: PortSides; inFrame?: boolean } = {},
+  options: { label?: string; collapsed?: boolean; seconds?: number; reset?: boolean; release?: [string, string][]; pos?: [number, number]; sides?: PortSides; inFrame?: boolean } = {},
 ): { frame: GroupNode; children: N[] } {
   const xs = children.map((n) => n.position.x);
   const ys = children.map((n) => n.position.y);
@@ -394,6 +396,7 @@ export function frameAround<N extends AnyNode>(
       collapsed: options.collapsed ?? false,
       seconds: options.seconds ?? (kind === "story" ? 1 : 0),
       reset: options.reset ?? false,
+      ...(options.release ? { release: options.release } : {}),
       size,
       ...(options.sides ? { sides: options.sides } : {}),
     },
@@ -456,6 +459,7 @@ export function toGroups(nodes: AnyNode[]): GraphGroup[] {
       ...(g.data.kind === "visual" ? { collapsed: g.data.collapsed } : {}),
       pos: [Math.round(at.x), Math.round(at.y)],
       ...(g.data.kind === "story" ? { params: { seconds: g.data.seconds, reset: g.data.reset } } : {}),
+      ...(g.data.kind === "story" && g.data.release ? { release: g.data.release } : {}),
       ...(g.data.sides ? { ports: g.data.sides } : {}),
     };
   });

@@ -23,10 +23,42 @@ initializers may leave any out.
 
    .. cpp:member:: std::string id
 
-   .. cpp:member:: std::string type = "signal"
+    .. cpp:member:: std::string type = "signal"
 
-      ``"signal"`` (a value), ``"step"`` (control, in a Step flow) or a shape: ``"image"``,
-      ``"points"``, ``"numbers"``… A wire joins ports of one type.
+       ``"signal"`` (a value), ``"step"`` (control, in a Step flow) or a shape: ``"image"``,
+       ``"points"``, ``"vector"``… A wire joins ports of one type. ``"numbers"`` remains a
+       compatible name for numeric vectors.
+
+    .. cpp:member:: std::string unit
+
+       A shared unit, or the fallback unit for vector components without their own.
+
+    .. cpp:member:: std::optional<std::size_t> dimension
+
+       A vector's fixed length. Absent: dynamic length; component metadata also fixes it.
+
+    .. cpp:member:: std::vector<VectorComponent> components
+
+       Optional ordered component labels and units. Names are descriptive; dimensions and
+       units, not labels, decide whether two vector ports fit.
+
+.. cpp:struct:: VectorComponent
+
+   .. cpp:member:: std::string id
+
+      The component's label, in vector order.
+
+   .. cpp:member:: std::string unit
+
+      Its optional unit.
+
+.. cpp:function:: PortDef vector_port(std::string id)
+.. cpp:function:: PortDef vector_port(std::string id, std::size_t dimension)
+.. cpp:function:: PortDef vector_port(std::string id, std::vector<VectorComponent> components)
+
+   Make a ``"vector"`` port. For example,
+   ``vector_port("state", {{"x", "m"}, {"angle", "rad"}})`` puts a mixed-unit state on one
+   wire while retaining the names and units of its components.
 
 .. cpp:struct:: ParamDef
 
@@ -177,12 +209,19 @@ initializers may leave any out.
 Values
 ------
 
-.. cpp:struct:: Value : std::variant<double, List, Table, std::string, Handle>
+.. cpp:struct:: Value : std::variant<double, Vector, Table, std::string, Handle>
 
-   What a wire carries: a number, a list of numbers, a table (rows, such as points as
+   What a wire carries: a number, a vector of numbers, a table (rows, such as points as
    ``[x, z]``), text, or a handle. Any arithmetic type converts to ``double``.
 
-.. cpp:type:: List = std::vector<double>
+.. cpp:type:: Vector = std::vector<double>
+
+   Ordered numeric data. The port's type (``"vector"``), optional dimension and component
+   metadata describe its wire contract.
+
+.. cpp:type:: List = Vector
+
+   Compatibility name for ``Vector``.
 
 .. cpp:type:: Table = std::vector<std::vector<double>>
 
@@ -214,7 +253,11 @@ Values
 
 .. cpp:function:: template<class T> const T *get_if(const Values &values, std::string_view id)
 
-   The list, table or text at ``id``, or null.
+   The vector/list, table or text at ``id``, or null.
+
+.. cpp:function:: const Vector *get_vector(const Values &values, std::string_view id)
+
+   The numeric vector at ``id``, or null. A Python block reads the same value as a list.
 
 .. cpp:function:: template<class T> const T *get_handle(const Values &values, std::string_view id, std::string_view kind)
 
@@ -450,6 +493,129 @@ particular. Python has the same (:py:class:`paperboat.Generator`, :py:class:`pap
    .. cpp:function:: double operator()(std::span<const double> values) const
 
       Values in ``variables`` order.
+
+Domain tools
+------------
+
+What domain code writes with, so it gives its equations and its look, never the stepping
+or the entity fields (``paperboat/toolkit/solve.hpp``, ``model.hpp``, ``scene.hpp``, all
+through ``sdk.hpp``).
+
+Solvers
+~~~~~~~
+
+.. cpp:type:: solve::State = std::vector<double>
+
+   A state of any size, known at run time.
+
+.. cpp:type:: solve::Deriv = std::function<State(double t, const State &x)>
+
+   ``dx/dt`` at ``(t, x)``; for ``discrete``, the next state.
+
+.. cpp:struct:: solve::Options
+
+   ``rk45``'s error control: ``rtol`` (``1e-6``), ``atol`` (``1e-9``) per component, and
+   ``max_steps`` (``100000``) sub-steps in one clock step before it gives up.
+
+.. cpp:class:: solve::Solver
+
+   .. cpp:function:: virtual void step(State &x, double t, double dt, const Deriv &f) = 0
+
+      Advance ``x`` from ``t`` to ``t + dt``. Throws ``std::runtime_error`` when ``f``
+      returns a state of another size, or ``rk45`` can't meet its tolerances.
+
+.. cpp:function:: std::unique_ptr<solve::Solver> solve::make(std::string_view name, Options options = {})
+
+   A solver by name: ``rk4`` (classic Runge–Kutta, the default), ``rk45`` (Dormand–Prince,
+   MATLAB's ``ode45``: adaptive, it sub-steps inside the clock step to meet its tolerance, so
+   signals still arrive on the clock), ``rk2`` (Heun), ``euler``, ``discrete`` (a difference
+   equation ``x[k+1] = f(t, x[k])``). Throws ``std::invalid_argument`` naming them.
+
+.. cpp:function:: void solve::step(std::string_view solver, State &x, double t, double dt, const Deriv &f, Options options = {})
+
+   One step with a fresh solver of that name.
+
+.. cpp:function:: const std::vector<std::string> &solve::names()
+
+.. cpp:function:: ParamDef solve::param(std::string fallback = "rk4")
+
+   An enum param or prop ``solver``, so the user picks one on the Station page.
+
+.. code-block:: cpp
+
+   paperboat::solve::State x = {1.0, 0.0};
+   auto rk45 = paperboat::solve::make("rk45", {.rtol = 1e-8});
+   rk45->step(x, ctx.t, ctx.dt, [&](double, const paperboat::solve::State& s) {
+     return paperboat::solve::State{s[1], -k / m * s[0]};
+   });
+
+Model
+~~~~~
+
+.. cpp:class:: Model : public StationObject
+
+   A station object that is a system of differential equations. It gives its initial
+   state and ``derivatives()``; the solver advances it each clock step, with the linked
+   block's inputs held through the step. It still implements ``read()`` and
+   ``entities()``.
+
+   .. cpp:function:: explicit Model(solve::State initial, std::string_view solver = "rk4", solve::Options options = {})
+
+   .. cpp:function:: virtual solve::State derivatives(double t, const solve::State &x, const Values &in) const = 0
+
+   .. cpp:function:: const solve::State &x() const
+
+      The state now.
+
+   .. cpp:function:: protected solve::State &state()
+
+      For a model that changes its own state between steps (a bounce, a reset).
+
+.. code-block:: cpp
+
+   struct Mass final : paperboat::Model {
+     explicit Mass(const paperboat::Values& p)
+         : Model({paperboat::get_or(p, "x0"), 0.0}, paperboat::get_text(p, "solver", "rk4")),
+           k(paperboat::get_or(p, "k")) {}
+     paperboat::solve::State derivatives(double, const paperboat::solve::State& x,
+                                         const paperboat::Values& in) const override {
+       return {x[1], paperboat::get_or(in, "force") - k * x[0]};
+     }
+     paperboat::Values read() const override { return {{"x", x()[0]}, {"v", x()[1]}}; }
+     std::vector<paperboat::Entity> entities(const std::string& id, double z) const override {
+       return {paperboat::scene::rect(id + "/mass", x()[0], 0, 0.4, 0.4, "#2f5d62", 0, z)};
+     }
+     double k;
+   };
+
+Scene builders
+~~~~~~~~~~~~~~
+
+Each returns an :cpp:struct:`Entity`. Points are ``scene::Vec`` (``std::array<double, 3>``),
+y up; the 2D helpers lie in the x–y plane at depth ``z``, which the 2D view shows.
+
+.. cpp:function:: Entity scene::box(std::string id, Vec pos, Vec size, std::string color = "#888888", Vec rot = {})
+
+   Centred at ``pos``, turned by ``rot`` (radians, about x, then y, then z).
+
+.. cpp:function:: Entity scene::sphere(std::string id, Vec pos, double radius, std::string color = "#888888")
+
+.. cpp:function:: Entity scene::line(std::string id, Vec from, Vec to, std::string color = "#888888")
+
+.. cpp:function:: Entity scene::image(std::string id, Vec pos, double width, double height, std::string src)
+
+.. cpp:function:: Entity scene::rect(std::string id, double x, double y, double width, double height, std::string color = "#888888", double angle = 0, double z = 0)
+
+.. cpp:function:: Entity scene::circle(std::string id, double x, double y, double radius, std::string color = "#888888", double z = 0)
+
+.. cpp:function:: Entity scene::rod(std::string id, Vec a, Vec b, double thickness, std::string color = "#888888")
+
+   A bar from ``a`` to ``b``: a link, a pole, a strut.
+
+.. cpp:function:: std::vector<Entity> scene::spring(const std::string &id, Vec a, Vec b, int coils = 8, double width = 0.2, const std::string &color = "#888888")
+
+   A zigzag of lines (ids ``id/0``, ``id/1``…), the same number at any length, so a patch
+   moves them all.
 
 Registering
 -----------
