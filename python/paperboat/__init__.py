@@ -35,11 +35,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, NamedTuple
 
-from ._engine import Context, Handle, make, options
+from ._engine import Context, Entity, Handle, make, options, scene, solve
 
 __all__ = [
-    "Backend", "Block", "Context", "DomainState", "Generator", "Handle", "Linked", "Monitor", "Param", "Port",
-    "StationObject", "Step", "Timed", "serve",
+    "Backend", "Block", "Context", "DomainState", "Entity", "Generator", "Handle", "Linked", "Model", "Monitor", "Param",
+    "Port", "StationObject", "Step", "Timed", "scene", "serve", "solve",
 ]
 
 
@@ -201,13 +201,46 @@ class StationObject:
     def step(self, ctx: Context, inputs: dict) -> None:
         """Advance one clock step under the linked block's inputs."""
 
-    def entities(self, id: str, z: float) -> list[dict]:
-        """Its shapes, ids prefixed with `id` + "/", at depth `z`."""
+    def entities(self, id: str, z: float) -> list:
+        """Its shapes (paperboat.scene.rect(…), or dicts), ids prefixed with `id` + "/", at depth `z`."""
         return []
 
     def link(self, slot: str, other: "StationObject | None") -> None:
         """Another station object fills one of its `links` slots (once, before a run).
         `other` is None for a toolkit (C++) object."""
+
+
+class Model(StationObject):
+    """A station object that is a system of differential equations: give its initial state
+    and derivatives(); a solver (the class's `solver`, or a `solver` prop) advances it each
+    clock step, and `self.x` is the state now, for read() and entities().
+
+        class Mass(paperboat.Model):
+            type, label = "mass", "Mass on a spring"
+            props = {"k": 4.0, "x0": 1.0}
+            block = paperboat.Linked(inputs=["force"], outputs=["x", "v"])
+
+            def initial(self):
+                return [self.props["x0"], 0.0]          # position, velocity
+
+            def derivatives(self, t, x, inputs):
+                return [x[1], inputs.get("force", 0.0) - self.props["k"] * x[0]]
+
+            def read(self):
+                return {"x": self.x[0], "v": self.x[1]}
+    """
+
+    _paperboat = "model"
+    solver: str = "rk4"                  # rk4 | rk45 | rk2 | euler | discrete (paperboat.solve.names())
+    x: list[float] = []                  # the state now, set by the engine
+
+    def initial(self) -> list[float]:
+        """The state when a run starts."""
+        return []
+
+    def derivatives(self, t: float, x: list[float], inputs: dict) -> list[float]:
+        """dx/dt at time t in state x, under the linked block's inputs (for "discrete": the next x)."""
+        return [0.0] * len(x)
 
 
 class DomainState:

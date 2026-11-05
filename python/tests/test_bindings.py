@@ -196,3 +196,72 @@ def test_a_python_block_without_feedthrough_closes_a_loop(tmp_path: Path) -> Non
     assert msgs[-1]["status"] == "done"
     counts = [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "count"]
     assert counts == [float(k) for k in range(11)]  # one more each clock step, 0 to 10
+
+
+MODEL_BACKEND = '''
+import math
+import paperboat
+from paperboat import Linked, Param, scene
+
+class Mass(paperboat.Model):
+    """x'' = (force - k x) / m, stepped by the engine's solver."""
+    type, label = "mass", "Mass on a spring"
+    props = {"k": 4.0, "x0": 1.0, "solver": Param("rk4", "enum", paperboat.solve.names())}
+    block = Linked(inputs=["force"], outputs=["x"])
+
+    def initial(self):
+        return [self.props["x0"], 0.0]
+
+    def derivatives(self, t, x, inputs):
+        return [x[1], inputs.get("force", 0.0) - self.props["k"] * x[0]]
+
+    def read(self):
+        return {"x": self.x[0]}
+
+    def entities(self, id, z):
+        return [scene.rect(f"{id}/mass", self.x[0], 0, 0.4, 0.4, "#2f5d62", z=z),
+                scene.spring(f"{id}/spring", (-2, 0), (self.x[0] - 0.2, 0), coils=6)]
+
+paperboat.serve(paperboat.Backend(engine="model", descriptor="descriptor.toml", objects=[Mass],
+                                  dt=0.01, duration=1.0, emit_every=100))
+'''
+
+MODEL_DESCRIPTOR = '''
+domain = "model"
+import = ["dashboard"]
+
+[station]
+objects = [{ id = "m", type = "mass", props = { solver = "SOLVER" } }]
+
+[graph]
+nodes = [{ id = "m", type = "mass" }, { id = "x", type = "display" }]
+edges = [{ from = ["m", "x"], to = ["x", "in"] }]
+'''
+
+
+def test_a_python_model_is_stepped_by_the_engines_solver(tmp_path: Path) -> None:
+    import math
+    for solver, tolerance in (("rk4", 1e-7), ("rk45", 1e-5), ("euler", 0.1)):
+        msgs = run_backend(tmp_path, MODEL_BACKEND, MODEL_DESCRIPTOR.replace("SOLVER", solver))
+        assert msgs[-1]["status"] == "done", msgs
+        x = [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "x"][-1]
+        # The display shows x before the last step: t = 0.99 at the run's last pass (ω = 2).
+        assert abs(x - math.cos(2 * 1.0)) < tolerance or abs(x - math.cos(2 * 0.99)) < tolerance, (solver, x)
+        scene = [m for m in msgs if m["type"] == "scene"][0]["entities"]
+        ids = {e["id"] for e in scene}
+        assert "m/mass" in ids and "m/spring/0" in ids  # scene builders, a spring's lines flattened in
+
+
+def test_scene_and_solve_are_bound() -> None:
+    sys.path.insert(0, str(ROOT / "python"))
+    import paperboat
+    rod = paperboat.scene.rod("r", (0, 0), (0, 2), 0.1)
+    assert rod.pos == [0.0, 1.0, 0.0] and abs(rod.size[0] - 2) < 1e-12
+    x = paperboat.solve.step("rk4", lambda t, x: [x[1], -x[0]], [1.0, 0.0], 0.0, 0.1)
+    assert abs(x[0] - 0.9950041666666667) < 1e-15
+    try:
+        paperboat.solve.Solver("ode23")
+    except ValueError as err:
+        assert "rk4, rk45" in str(err)
+    else:
+        raise AssertionError("an unknown solver must be refused")

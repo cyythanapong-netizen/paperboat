@@ -6,6 +6,10 @@ add_library(paperboat_toolkit
   src/descriptions.cpp
   src/descriptor.cpp
   src/variables.cpp
+  # for domain code: solvers, Model (a station object of ODEs), scene builders
+  src/solve.cpp
+  src/model.cpp
+  src/scene.cpp
   # base: what every domain needs (values: number, text, boolean; key)
   src/base/values.cpp
   src/base/key.cpp

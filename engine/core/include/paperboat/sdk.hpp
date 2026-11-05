@@ -30,7 +30,10 @@
 #include "paperboat/toolkit/block.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
 #include "paperboat/toolkit/expression.hpp"
+#include "paperboat/toolkit/model.hpp"
 #include "paperboat/toolkit/registry.hpp"
+#include "paperboat/toolkit/scene.hpp"
+#include "paperboat/toolkit/solve.hpp"
 #include "paperboat/toolkit/station.hpp"
 
 namespace paperboat {
@@ -49,6 +52,13 @@ using toolkit::DomainState;
 using toolkit::Entity;
 using toolkit::StationObject;
 using toolkit::Step;
+
+// Domain code's tools: solvers (paperboat::solve::make("rk4")), a station object that is a
+// system of ODEs (Model: give derivatives(), it steps itself), and scene builders
+// (paperboat::scene::rect, circle, rod, spring…).
+namespace solve = toolkit::solve;
+namespace scene = toolkit::scene;
+using toolkit::Model;
 
 // Kinds of block to derive from (bases.hpp): a signal f(t), a step over `seconds`.
 using toolkit::Generator;
