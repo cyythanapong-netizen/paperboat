@@ -1,0 +1,7 @@
+[theme]
+inherit = "basic"
+stylesheets = ["basic.css"]
+pygments_style = { default = "default" }
+sidebars = ["brand.html", "globaltoc.html", "searchbox.html", "themeswitch.html"]
+
+[options]
