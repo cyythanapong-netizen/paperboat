@@ -14,8 +14,9 @@ import {
   type NodeChange,
   type NodeProps,
 } from "@xyflow/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import type { ObjectDef, Station, StationObject } from "./protocol";
+import { arrangeStationObjects } from "./stationLayout";
 import { PageIcon } from "./Shell";
 
 type ObjectData = { object: StationObject; def?: ObjectDef };
@@ -91,9 +92,20 @@ export function withoutObject(station: Station, id: string): Station {
   };
 }
 
-type Props = { objects: ObjectDef[]; station: Station; onChange: (station: Station) => void; locked: boolean };
+export type StationControls = {
+  arrange: () => boolean;
+  can: { arrange: boolean };
+};
 
-function Graph({ objects, station, onChange, locked }: Props) {
+type Props = {
+  objects: ObjectDef[];
+  station: Station;
+  onChange: (station: Station) => void;
+  locked: boolean;
+  controls?: MutableRefObject<StationControls | null>;
+};
+
+function Graph({ objects, station, onChange, locked, controls }: Props) {
   const [nodes, setNodes, onNodesChange] = useNodesState<ObjectNode>([]);
   const [edges, setEdges] = useEdgesState<LinkEdge>([]);
   const { fitView } = useReactFlow();
@@ -117,8 +129,11 @@ function Graph({ objects, station, onChange, locked }: Props) {
   useEffect(() => {
     const byType = new Map(objects.map((o) => [o.type, o]));
     setNodes((old) => {
-      const selected = new Set(old.filter((n) => n.selected).map((n) => n.id));
-      return toNodes(station, byType, locked).map((n) => ({ ...n, selected: selected.has(n.id) }));
+      const previous = new Map(old.map((n) => [n.id, n]));
+      return toNodes(station, byType, locked).map((n) => {
+        const was = previous.get(n.id);
+        return { ...n, selected: was?.selected ?? false, ...(was?.measured ? { measured: was.measured } : {}) };
+      });
     });
     setEdges(toEdges(station));
   }, [station, objects, locked, setNodes, setEdges]);
@@ -161,6 +176,23 @@ function Graph({ objects, station, onChange, locked }: Props) {
   // A moved object keeps its place: written to the station when the drag ends.
   const onNodeDragStop = (_: unknown, node: ObjectNode) =>
     update(node.id, (o) => ({ ...o, pos: [Math.round(node.position.x), Math.round(node.position.y)] }));
+
+  const arrange = (): boolean => {
+    if (locked) return false;
+    const next = arrangeStationObjects(
+      station,
+      nodes.map((n) => ({ id: n.id, width: n.measured?.width ?? n.width ?? 220, height: n.measured?.height ?? n.height ?? 130 })),
+      edges,
+    );
+    if (next === station) return false;
+    onChange(next); // one Station edit: one undo step wherever Station edits are in history
+    window.setTimeout(() => fitView({ padding: 0.2, duration: 200, maxZoom: 1.2 }), 30);
+    return true;
+  };
+  if (controls) controls.current = { arrange, can: { arrange: !locked && station.objects.length > 0 } };
+  useEffect(() => () => {
+    if (controls) controls.current = null;
+  }, [controls]);
 
   return (
     <div className="station-graph" ref={box}>

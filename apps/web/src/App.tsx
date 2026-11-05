@@ -15,7 +15,7 @@ import { Dashboard } from "./Dashboard";
 import { inlineInText, loadSaved, mapTexts, renameInText, save as saveLayout, textUsing } from "./dashboardLayout";
 import { MODES, PAGES, Panel, Rail, Switch, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
 const SceneView = lazy(() => import("./SceneView").then((m) => ({ default: m.SceneView })));
-import { StationGraph } from "./StationGraph";
+import { StationGraph, type StationControls } from "./StationGraph";
 import { StationPanel, withObject } from "./StationPanel";
 import { BackendWindow, Dock } from "./Dock";
 import { CommandSearch, MenuBar } from "./Menus";
@@ -115,7 +115,8 @@ export function App() {
   const [url, setUrl] = useState(DEFAULT_URL);
   const [searchOpen, setSearchOpen] = useState(false); // the command search (Ctrl+K)
   const [backendOpen, setBackendOpen] = useState(false); // File > Backend…
-  const flow = useRef<FlowControls | null>(null); // the canvas's actions, for the Edit menu
+  const flow = useRef<FlowControls | null>(null); // the canvas's actions, for the menus
+  const stationCanvas = useRef<StationControls | null>(null);
   const { state, send, subscribe } = useEngine(url);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Wire>([]);
@@ -412,6 +413,20 @@ export function App() {
       + Add
     </button>
   );
+  const arrangeCanvas = (which: "flow" | "station"): boolean => {
+    if (running) return false;
+    return (which === "flow" ? flow.current : stationCanvas.current)?.arrange() ?? false;
+  };
+  const arrangeKey = (which: "flow" | "station") => {
+    if (which === "station" && view !== "graph") return null;
+    const available = !!(which === "flow" ? flow.current : stationCanvas.current)?.can.arrange;
+    const title = running ? "Stop the run to arrange blocks" : available ? "Arrange left to right, following the wires" : "There are no blocks to arrange";
+    return (
+      <button className="key small" disabled={running || !available} title={title} onClick={() => arrangeCanvas(which)}>
+        Arrange
+      </button>
+    );
+  };
   const monitors = useMemo(
     () => Object.fromEntries(nodes.filter(isBlock).filter((n) => n.data.def.kind === "monitor").map((n) => [n.id, { kind: n.data.def.instrument ?? "graph", ...absolute(n, nodes) }])),
     [nodes],
@@ -632,6 +647,11 @@ export function App() {
   // Only what the app already does; backends' commands come with their issue (#85).
   const canRun = state.connection === "open" && !running;
   const flowInView = mode === "commander" || (mode === "lookout" ? flowDrawer.open : page === "flow");
+  const stationInView = view === "graph" && (mode === "commander" || (mode === "lookout" ? stationDrawer.open : page === "station"));
+  const arrangeVisible = () => {
+    if (flowInView) arrangeCanvas("flow");
+    if (stationInView) arrangeCanvas("station");
+  };
   /** An Edit action on the canvas: on while the Flow is in view and the canvas allows it. */
   const onCanvas = (can: (c: FlowControls["can"]) => boolean) => () => flowInView && !!flow.current && can(flow.current.can);
   const canvasWhy = (why: string) => (flowInView ? why : "Open the Flow page first");
@@ -695,6 +715,15 @@ export function App() {
       run: () => setGridChoice(gridOn ? "off" : "on"),
     },
     {
+      id: "view.arrangeBlocks",
+      label: "Arrange Blocks",
+      menu: "view",
+      group: "canvas",
+      enabled: () => !running && ((flowInView && !!flow.current?.can.arrange) || (stationInView && !!stationCanvas.current?.can.arrange)),
+      why: running ? "Stop the run to arrange blocks" : flowInView || stationInView ? "There are no blocks to arrange" : "Open the Flow or Station graph first",
+      run: arrangeVisible,
+    },
+    {
       id: "view.arrange",
       label: "Arrange Board",
       menu: "view",
@@ -742,7 +771,7 @@ export function App() {
       <VarsContext.Provider value={varsApi}>
       <main className="pages">
         <div className="page-stack">
-        <Panel {...panel("station")} actions={<>{gridKey}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
+        <Panel {...panel("station")} actions={<>{gridKey}{arrangeKey("station")}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
           <div
             className={`station view-${view}`}
             onDragOver={(e) => {
@@ -768,7 +797,7 @@ export function App() {
                 onStation={editStation}
               />
             ) : view === "graph" ? (
-              <StationGraph objects={state.objects} station={station ?? { objects: [] }} onChange={editStation} locked={running} />
+              <StationGraph objects={state.objects} station={station ?? { objects: [] }} onChange={editStation} locked={running} controls={stationCanvas} />
             ) : (
               <Suspense fallback={null}>
                 <SceneView key={`${theme}:${JSON.stringify(state.view)}`} view={state.view} grid={gridOn} entities={state.entities} />
@@ -785,7 +814,7 @@ export function App() {
             )}
           </div>
         </Panel>
-        <Panel {...panel("flow")} actions={addKey("flow")} info={count(nodes.filter(isBlock).length, "block")}>
+        <Panel {...panel("flow")} actions={<>{arrangeKey("flow")}{addKey("flow")}</>} info={count(nodes.filter(isBlock).length, "block")}>
           <RunStates.Provider value={runStates}>
             <FlowEditor
               blocks={state.blocks}
@@ -799,6 +828,7 @@ export function App() {
               controls={flow}
               level={flowLevel}
               setLevel={setFlowLevel}
+              locked={running}
             />
           </RunStates.Provider>
         </Panel>

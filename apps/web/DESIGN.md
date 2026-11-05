@@ -102,6 +102,12 @@ something is available can't drift between them.
   themselves: elements marked `data-own-keys` are not forwarded to the backend. A
   command's `chord` is handled by the registry (Alt+1–3, Alt+M, Alt+V, Ctrl+K); undo and
   copy/cut/paste stay with the canvas, which the Edit menu reaches through `FlowControls`.
+- **Arrange Blocks** (#103): View > Arrange Blocks lays out the visible node canvases left to
+  right, following their wires; the Flow and Station-graph heads have an **Arrange** key for
+  their own canvas. The deterministic layout (`graphLayout.ts`) ignores back-edges in loops,
+  orders each layer by its neighbours, and uses measured block sizes. Flow arrangement works
+  inside the open level and every group below it, refits visual frames, and is one undo step;
+  Station arrangement is one Station edit. Both are disabled during a run.
 
 ## Tokens
 
