@@ -127,6 +127,7 @@ Run it
 
 .. code-block:: sh
 
+   paperboat run counter-cpp # one command to build and start
    ./counter                 # or: python3 server.py   → ws://localhost:8780
    ./counter --run           # the starter once, headless: protocol messages as JSON lines
 

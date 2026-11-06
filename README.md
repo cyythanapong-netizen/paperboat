@@ -67,6 +67,17 @@ npm run backend:double-pendulum # ws://localhost:8773
 npm run dev                   # http://localhost:3047
 ```
 
+Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
+
+```sh
+./bin/paperboat run cart-pole       # builds and runs cart-pole backend
+./bin/paperboat list                # lists all active backends
+./bin/paperboat app start           # starts web app on port 3047
+./bin/paperboat examples start      # launches all example backends (ports 8765-8773)
+./bin/paperboat examples status     # checks status of example backends
+./bin/paperboat toolkit list        # lists available and installed toolkits
+```
+
 The UI opens on the mass-spring backend. To switch, type another backend's URL in the
 header and press **Connect**: the palette, canvas and scene change to that domain, and
 **Run** runs its starter graph.

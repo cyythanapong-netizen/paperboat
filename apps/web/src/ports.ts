@@ -132,22 +132,51 @@ export function signOf(def: BlockDef, params: Record<string, ParamValue>, i: num
   return parseSigns(params[def.ports_from])[i] < 0 ? "\u2212" : "+";
 }
 
-/** A block's definition as its params make it: a magic block in the form its `form` param picks, a block with `ports_from` (signs, template placeholders, or multi-input count). */
+const BUILTINS = new Set([
+  "pi", "e", "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+  "sinh", "cosh", "tanh", "exp", "log", "log10", "sqrt", "abs",
+  "floor", "ceil", "round", "sign", "frac", "min", "max", "clamp", "mod", "pow",
+]);
+
+/**
+ * The free variable names in an expression param (`inputs_from`), in order of first
+ * appearance: identifiers other than `pi`, `e` and built-in functions, skipping numbers
+ * (1.5e-3 included) and function calls (`name(`). Mirrors the engine's `Expression::free_names`.
+ */
+export function parseInputs(text: ParamValue | undefined): string[] {
+  if (typeof text !== "string") return [];
+  const out: string[] = [];
+  const token = /(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?|([A-Za-z_]\w*)(\s*\()?/g;
+  for (const m of text.matchAll(token)) {
+    const name = m[1];
+    const call = m[2];
+    if (name && !call && !BUILTINS.has(name) && !out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
+/** A block's definition as its params make it: a magic block in the form its `form` param picks, a block with `ports_from` (signs, template placeholders, or multi-input count), or a block with `inputs_from` with one input per free name in its expression. */
 export function inForm(def: BlockDef, params: Record<string, ParamValue>): BlockDef {
   const form = def.forms?.find((f) => f.name === params.form);
-  const base = form ? { ...def, inputs: form.inputs, outputs: form.outputs } : def;
-  if (!def.ports_from) return base;
-  if (def.ports_from === "template") {
-    const tmpl = params.template ?? def.params.find((p) => p.id === "template")?.default ?? "Hello {name}";
-    const names = parsePlaceholders(tmpl);
-    return { ...base, inputs: names.map((name) => ({ id: name, type: "any" })) };
+  let out = form ? { ...def, inputs: form.inputs, outputs: form.outputs } : def;
+  if (def.ports_from) {
+    if (def.ports_from === "template") {
+      const tmpl = params.template ?? def.params.find((p) => p.id === "template")?.default ?? "Hello {name}";
+      const names = parsePlaceholders(tmpl);
+      out = { ...out, inputs: names.map((name) => ({ id: name, type: "any" })) };
+    } else if (def.ports_from === "inputs" || typeof params[def.ports_from] === "number") {
+      const countVal = typeof params[def.ports_from] === "number" ? Number(params[def.ports_from]) : 2;
+      const count = Math.max(2, Math.min(26, Math.floor(countVal)));
+      const proto = def.inputs[0] ?? { id: "a" };
+      out = { ...out, inputs: Array.from({ length: count }, (_, i) => ({ ...proto, id: String.fromCharCode(97 + i) })) };
+    } else {
+      const proto = def.inputs[0] ?? { id: "a" };
+      out = { ...out, inputs: parseSigns(params[def.ports_from]).map((_, i) => ({ ...proto, id: String.fromCharCode(97 + i) })) };
+    }
   }
-  if (def.ports_from === "inputs" || typeof params[def.ports_from] === "number") {
-    const countVal = typeof params[def.ports_from] === "number" ? Number(params[def.ports_from]) : 2;
-    const count = Math.max(2, Math.min(26, Math.floor(countVal)));
-    const proto = def.inputs[0] ?? { id: "a" };
-    return { ...base, inputs: Array.from({ length: count }, (_, i) => ({ ...proto, id: String.fromCharCode(97 + i) })) };
+  if (def.inputs_from) {
+    const proto = def.inputs[0] ?? { id: "t", type: "signal" };
+    out = { ...out, inputs: parseInputs(params[def.inputs_from]).map((id) => ({ ...proto, id })) };
   }
-  const proto = def.inputs[0] ?? { id: "a" };
-  return { ...base, inputs: parseSigns(params[def.ports_from]).map((_, i) => ({ ...proto, id: String.fromCharCode(97 + i) })) };
+  return out;
 }

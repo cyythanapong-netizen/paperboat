@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import { test } from "node:test";
-import { inForm, parsePlaceholders, parseSigns, portHint, portLabel, wireMismatch } from "../src/ports.ts";
+import { fileURLToPath } from "node:url";
+import { inForm, parseInputs, parsePlaceholders, parseSigns, portHint, portLabel, wireMismatch } from "../src/ports.ts";
 import type { BlockDef, PortDef } from "../src/protocol.ts";
 
 const state: PortDef = {
@@ -83,4 +86,12 @@ test("inForm dynamicDef resolves template, inputs count, and signs", () => {
   };
   const and4 = inForm(andDef, { inputs: 4 });
   assert.deepEqual(and4.inputs.map((p) => p.id), ["a", "b", "c", "d"]);
+});
+
+test("parseInputs matches the engine's shared inputs_from test vector", () => {
+  const file = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../engine/tests/data/inputs_from.json");
+  const cases = JSON.parse(fs.readFileSync(file, "utf8")) as { f: string; inputs: string[] }[];
+  for (const c of cases) {
+    assert.deepEqual(parseInputs(c.f), c.inputs, `for formula: ${c.f}`);
+  }
 });

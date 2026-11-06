@@ -511,6 +511,7 @@ tk::BlockDef block_def(nb::handle cls) {
   def.description = text_attr(cls, "description", "");
   def.view = view_from_py(cls, at);
   def.ports_from = text_attr(cls, "ports_from", "");
+  def.inputs_from = text_attr(cls, "inputs_from", "");
   return def;
 }
 

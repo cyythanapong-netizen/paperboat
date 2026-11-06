@@ -123,6 +123,9 @@ struct BlockDef {
   // The id of a text param that decides the inputs: one per sign character in it ("+-+": a, b,
   // c), see parse_signs. Empty: the inputs are the definition's. Sum's `signs`.
   std::string ports_from = {};
+  // The id of a text param whose expression's free names are the inputs, in order of first
+  // appearance (see Expression::free_names). Empty: the inputs are the definition's. f(t)'s `f`.
+  std::string inputs_from = {};
   // False for a block whose outputs this step don't depend on its inputs this step (an
   // integrator, a delay): its Block gives outputs() during the pass and reads its inputs
   // after it, so a feedback loop through it is allowed (no algebraic loop).
@@ -149,6 +152,11 @@ std::vector<std::string> parse_placeholders(std::string_view text);
 // The definition with the inputs its `ports_from` param (`text`) gives: ids a, b, c… of the
 // first input's type. `def` itself if it has no `ports_from`.
 BlockDef with_signs(const BlockDef& def, std::string_view text);
+
+// The definition with the inputs its `inputs_from` expression param (`text`) gives: one per
+// free name in `text`, in order of first appearance, of the first input's type. `def` itself
+// if it has no `inputs_from`.
+BlockDef with_inputs(const BlockDef& def, std::string_view text);
 
 // True for a block on a Step flow's path: one with a step port.
 bool has_step_ports(const BlockDef& def);

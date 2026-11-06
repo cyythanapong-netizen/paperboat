@@ -76,6 +76,11 @@ Blocks
       The name of a text param that decides the block's inputs: one per sign character in its
       value (``"+-+"``: ids ``a``, ``b``, ``c``; at most 26); ``inputs`` is only the default.
 
+   .. py:attribute:: inputs_from
+      :type: str
+
+      The name of a text param whose expression's free names are the block's inputs ("f").
+
    .. py:attribute:: feedthrough
       :type: bool
 

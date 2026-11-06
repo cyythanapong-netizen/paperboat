@@ -74,6 +74,11 @@ Default address: `ws://localhost:8765`.
   // ("+-+": a, b, c; + adds, - or − subtracts; at most 26, none reads as "++"), of the first
   // input's type. Sum's "signs". The UI and the engine both take the ports from the param.
   "ports_from": "signs",
+  // optional: the id of a text param whose expression's free names (identifiers other than
+  // pi, e, and built-in functions, in order of first appearance) become the block's inputs of
+  // the first input's type. f(t)'s "f". Deleting a name removes its port and drops any wire to
+  // it; renaming a name (x → dx) drops the wire to the old name rather than moving it.
+  "inputs_from": "f",
   "forms": [
     { "name": "signal", "inputs": [{ "id": "cond" }, { "id": "a" }, { "id": "b" }], "outputs": [{ "id": "y" }] },
     { "name": "step", "inputs": [{ "id": "in", "type": "step" }, { "id": "cond" }],

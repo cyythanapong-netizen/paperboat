@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CLI="$REPO_ROOT/engine/build/tools/paperboat"
+
+if [ ! -x "$CLI" ]; then
+  if command -v paperboat >/dev/null 2>&1; then
+    CLI="paperboat"
+  else
+    cmake --build "$REPO_ROOT/engine/build" --target paperboat >/dev/null
+  fi
+fi
+
+exec "$CLI" "$@"

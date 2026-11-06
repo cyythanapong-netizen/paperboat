@@ -176,6 +176,14 @@ CatalogEntry from_template(const json& e, const std::string& at, const Registry&
     if (!t->config.contains(key) && !t->extendable) throw DescriptorError(at + ": " + name + " has no config \"" + key + "\"");
     entry.config[key] = value.get<std::string>();
   }
+  if (t->name == "signal/generator") {
+    if (auto f = std::ranges::find(entry.def.params, std::string("f"), &ParamDef::id); f != entry.def.params.end() && f->type == "text")
+      entry.def.inputs_from = "f";
+  }
+  if (!entry.def.inputs_from.empty()) {
+    if (auto p = std::ranges::find(entry.def.params, entry.def.inputs_from, &ParamDef::id); p != entry.def.params.end())
+      entry.def = with_inputs(entry.def, p->default_text);
+  }
   apply_units(e, entry.def.params, &entry.def, at, name);
   if (t->check) {
     try {
@@ -751,6 +759,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.def.description.empty()) block["description"] = e.def.description;
     if (!e.def.feedthrough) block["feedthrough"] = false;
     if (!e.def.ports_from.empty()) block["ports_from"] = e.def.ports_from;
+    if (!e.def.inputs_from.empty()) block["inputs_from"] = e.def.inputs_from;
     if (!e.def.view.empty()) {
       json view = json::object();
       if (e.def.view.compact) view["compact"] = *e.def.view.compact;

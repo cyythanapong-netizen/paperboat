@@ -9,6 +9,7 @@ add_executable(paperboat_tests
   variables_test.cpp
   connection_test.cpp
   toolkit_phase1_test.cpp
+  cli_test.cpp
 )
 target_link_libraries(paperboat_tests
   PRIVATE paperboat::toolkit paperboat::core nlohmann_json::nlohmann_json Catch2::Catch2WithMain paperboat_warnings)

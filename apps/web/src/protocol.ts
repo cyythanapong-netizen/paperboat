@@ -69,6 +69,8 @@ export type BlockDef = {
   forms?: Form[];
   /** The id of a text param that decides the inputs: one per sign character in it (+ adds, - or − subtracts; at most 26; none reads as ++), ids a, b, c… of the first input's type. Sum's signs. */
   ports_from?: string;
+  /** The id of a text param whose expression's free names are the inputs: one per identifier in it (other than pi, e and built-in functions, in order of first appearance), of the first input's type. f(t)'s f. */
+  inputs_from?: string;
   /** false: its outputs this step don't depend on its inputs this step (an integrator, a delay), so a feedback loop may pass through it. Absent: true. */
   feedthrough?: boolean;
   /** One line in plain words: what it does. Shown on its card in the block browser. Optional. */

@@ -4,7 +4,9 @@
 #include "paperboat/toolkit/expression.hpp"
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <fstream>
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <numbers>
 #include <string>
 
@@ -191,10 +193,16 @@ TEST_CASE("signal blocks are TOML definitions on a C++ parent; its f is an expre
   CHECK_THAT(get_or(s->step(Context{1.0, 0.01}, {{"t", 3.0}}), "y"), WithinAbs(-1.0, 1e-12));  // its input
   const auto* fn = reg.find("signal/function");
   REQUIRE(fn != nullptr);
-  CHECK(fn->def.params.at(0).type == "text");  // f(t): typed on the block
-  auto f = fn->make({{"a", 2}, {"b", 1}, {"c", 0}}, {{"f", "a * t^2 + c"}});
-  CHECK(get_or(f->step(Context{3.0, 0.01}, {}), "y") == 18.0);
-  CHECK_THROWS_WITH(fn->make({{"a", 1}}, {{"f", "a * sin(tt)"}}), Catch::Matchers::ContainsSubstring("unknown name \"tt\""));
+  REQUIRE(fn->def.params.size() == 1);
+  CHECK(fn->def.params.at(0).id == "f");
+  CHECK(fn->def.params.at(0).type == "text");  // f(t): typed on the block, no a/b/c params
+  CHECK(fn->def.inputs_from == "f");
+  auto f = fn->make({}, {{"f", "a * t^2 + c"}});
+  CHECK(get_or(f->step(Context{3.0, 0.01}, {{"a", 2}, {"c", 1}}), "y") == 19.0);
+  CHECK(get_or(f->step(Context{3.0, 0.01}, {{"t", 2}, {"a", 2}, {"c", 1}}), "y") == 9.0);  // t wired
+  CHECK(get_or(f->step(Context{3.0, 0.01}, {}), "y") == 0.0);  // unwired inputs read as 0
+  CHECK_THROWS_WITH(fn->make({}, {{"f", "sin + 1"}}), Catch::Matchers::ContainsSubstring("unknown name \"sin\""));
+  CHECK_THROWS_WITH(fn->make({}, {{"f", "t(1)"}}), Catch::Matchers::ContainsSubstring("unknown function \"t\""));
 }
 
 TEST_CASE("expressions: precedence, functions, errors") {
@@ -235,4 +243,21 @@ TEST_CASE("sum signs (#73): one input per sign, each adding or subtracting") {
   CHECK(def.inputs[2].id == "c");
   CHECK(with_signs(t->def, "++").inputs.size() == 2);  // the default keeps a and b
   CHECK(with_signs(builtins().find("math/gain")->def, "+-+").inputs.size() == 1);  // no ports_from: unchanged
+}
+
+TEST_CASE("function inputs_from (#105): free names become inputs, matching shared test vector") {
+  const Template* fn = builtins().find("signal/function");
+  REQUIRE(fn != nullptr);
+  std::ifstream in(std::string(PAPERBOAT_TEST_DATA) + "/inputs_from.json");
+  REQUIRE(in.good());
+  const auto cases = nlohmann::json::parse(in);
+  for (const auto& c : cases) {
+    const auto formula = c.at("f").get<std::string>();
+    const auto expected = c.at("inputs").get<std::vector<std::string>>();
+    CHECK(Expression::free_names(formula) == expected);
+    const auto def = with_inputs(fn->def, formula);
+    std::vector<std::string> ids;
+    for (const auto& p : def.inputs) ids.push_back(p.id);
+    CHECK(ids == expected);
+  }
 }

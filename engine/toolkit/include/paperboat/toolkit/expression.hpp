@@ -30,6 +30,9 @@ class Expression {
   double operator()(std::span<const double> values) const;
   // True for a name an expression gives its own meaning: pi, e, a function (sin, clamp…).
   static bool is_builtin(std::string_view name);
+  // The free variable names `text` uses (identifiers other than pi, e and functions), in
+  // order of first appearance.
+  static std::vector<std::string> free_names(std::string_view text);
   const std::vector<std::string>& variables() const { return variables_; }
   const std::string& text() const { return text_; }
 

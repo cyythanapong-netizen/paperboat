@@ -78,4 +78,8 @@ ToolkitResult uninstall_toolkit(std::string_view name,
                                 const HostBuild& host = {},
                                 const ToolkitLog& log = {});
 
+// Remote release versions/tags for an optional toolkit.
+std::vector<std::string> list_toolkit_versions(std::string_view name,
+                                               const std::filesystem::path& repo_root = {});
+
 }  // namespace paperboat::toolkit

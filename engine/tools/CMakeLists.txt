@@ -7,3 +7,6 @@ endif()
 
 add_executable(paperboat-toolkit paperboat_toolkit.cpp)
 target_link_libraries(paperboat-toolkit PRIVATE paperboat::toolkit paperboat_warnings)
+
+add_executable(paperboat paperboat_cli.cpp)
+target_link_libraries(paperboat PRIVATE paperboat::core paperboat::toolkit nlohmann_json::nlohmann_json tomlplusplus::tomlplusplus paperboat_warnings)

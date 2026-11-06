@@ -15,13 +15,15 @@ add_library(paperboat_core
   src/session.cpp
   src/serve.cpp
   src/main.cpp
+  src/process.cpp
+  src/backend_manager.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/station_js.cpp
 )
 add_library(paperboat::core ALIAS paperboat_core)
 
 target_include_directories(paperboat_core PUBLIC include)
 target_link_libraries(paperboat_core
-  PUBLIC paperboat::toolkit nlohmann_json::nlohmann_json
+  PUBLIC paperboat::toolkit nlohmann_json::nlohmann_json tomlplusplus::tomlplusplus
   PRIVATE ixwebsocket paperboat_warnings)
 
 target_compile_definitions(paperboat_core PRIVATE

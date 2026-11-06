@@ -105,6 +105,9 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     node.def = toolkit::in_form(node.entry->def, text.contains("form") ? text.at("form") : "");
     // A block whose param decides its inputs (Sum's signs, Format's template, multi-input And/Or).
     node.def = toolkit::with_dynamic_ports(node.def, params, text);
+    // A block whose expression param decides its inputs (f(t)'s f) has one per free name in it.
+    const auto& inputs_from = node.entry->def.inputs_from;
+    node.def = toolkit::with_inputs(node.def, inputs_from.empty() || !text.contains(inputs_from) ? "" : text.at(inputs_from));
     const auto& def = node.def;
 
     // Making a block can fail (a param it can't use, an expression that doesn't compile):
