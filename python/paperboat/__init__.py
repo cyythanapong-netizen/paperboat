@@ -319,7 +319,7 @@ def serve(backend: Backend) -> None:
     exit (0 when the run is done)."""
     remember_args([sys.executable, *sys.argv])
     try:
-        port, run, variables = options(sys.argv, backend.port)
+        port, run, variables, duration = options(sys.argv, backend.port)
     except ValueError as err:
         print(err, file=sys.stderr)
         sys.exit(2)
@@ -327,7 +327,7 @@ def serve(backend: Backend) -> None:
                   backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view, backend.speed)
     if run:
         try:
-            status = hosted.run_starter(variables)
+            status = hosted.run_starter(variables, duration)
         except ValueError as err:  # a --var the backend doesn't have
             print(err, file=sys.stderr)
             sys.exit(2)

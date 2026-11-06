@@ -42,6 +42,7 @@ struct Options {
   int port = 0;
   bool run = false;
   std::vector<std::pair<std::string, std::string>> vars = {};
+  std::optional<double> duration = std::nullopt;
 };
 Options parse_options(int argc, char** argv, int default_port);  // throws std::invalid_argument
 
@@ -50,7 +51,8 @@ Options parse_options(int argc, char** argv, int default_port);  // throws std::
 // "failed"). Throws std::invalid_argument for a --var the backend doesn't have, or a value
 // that isn't of its type.
 std::string run_starter(const Backend& backend, std::ostream& out,
-                        const std::vector<std::pair<std::string, std::string>>& vars = {});
+                        const std::vector<std::pair<std::string, std::string>>& vars = {},
+                        std::optional<double> duration = std::nullopt);
 
 // The descriptor's default variables with `vars` (name, text) set over them, each value
 // read as its variable's type. Throws std::invalid_argument.

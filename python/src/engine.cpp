@@ -567,9 +567,10 @@ struct Hosted {
     if (!error.empty()) throw std::runtime_error("cannot listen on port " + std::to_string(port) + ": " + error);
   }
 
-  std::string run_starter(const std::vector<std::pair<std::string, std::string>>& vars) {
+  std::string run_starter(const std::vector<std::pair<std::string, std::string>>& vars,
+                          std::optional<double> duration = std::nullopt) {
     nb::gil_scoped_release free;  // the run takes the GIL for each call into Python
-    return core::run_starter(backend, std::cout, vars);
+    return core::run_starter(backend, std::cout, vars, duration);
   }
 
   void stop() {
@@ -693,6 +694,7 @@ NB_MODULE(_engine, m) {
   nb::class_<Hosted>(m, "Hosted", "A backend: the domain's package, its catalog and (once listening) a server.")
       .def("listen", &Hosted::listen, nb::arg("port"), "Serve the protocol (and a web station) on the port.")
       .def("run_starter", &Hosted::run_starter, nb::arg("vars") = std::vector<std::pair<std::string, std::string>>{},
+           nb::arg("duration") = std::nullopt,
            "Run the starter graph on the starter station once, headless; print each message as a JSON line.")
       .def("stop", &Hosted::stop);
 
@@ -780,9 +782,9 @@ NB_MODULE(_engine, m) {
         std::vector<char*> args;
         for (const auto& a : argv) args.push_back(const_cast<char*>(a.c_str()));
         const auto o = core::parse_options(static_cast<int>(args.size()), args.data(), default_port);
-        return std::make_tuple(o.port, o.run, o.vars);
+        return std::make_tuple(o.port, o.run, o.vars, o.duration);
       },
-      nb::arg("argv"), nb::arg("default_port"), "(port, run, vars) from a command line: --port N, --run, --var name=value.");
+      nb::arg("argv"), nb::arg("default_port"), "(port, run, vars, duration) from a command line: --port N, --run, --duration S, --var name=value.");
   m.def("remember_args", nb::overload_cast<std::vector<std::string>>(&core::remember_args), nb::arg("args"),
         "Remember the process command line for backend.restart.");
 }

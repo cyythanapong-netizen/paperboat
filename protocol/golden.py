@@ -44,11 +44,15 @@ def run(example: Path, expected: dict) -> list[str]:
         return ["no run target specified in expected.json or backend.toml"]
     if target.endswith(".py"):
         cmd = [sys.executable, target, "--run"]
+        if "duration" in expected:
+            cmd += ["--duration", str(expected["duration"])]
         env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
     else:
         if not (example / target).exists():
             return [f"not built: {target}"]
         cmd, env = [str(example / target), "--run"], os.environ
+        if "duration" in expected:
+            cmd += ["--duration", str(expected["duration"])]
     proc = subprocess.run(cmd, cwd=example, env=env, capture_output=True, text=True, timeout=300)
     msgs, problems = [], []
     for line in proc.stdout.splitlines():

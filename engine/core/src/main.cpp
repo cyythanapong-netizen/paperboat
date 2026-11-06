@@ -88,8 +88,10 @@ Options parse_options(int argc, char** argv, int default_port) {
       const auto eq = setting.find('=');
       if (eq == std::string::npos || eq == 0) throw std::invalid_argument("--var takes name=value, not " + setting);
       options.vars.emplace_back(setting.substr(0, eq), setting.substr(eq + 1));
+    } else if (arg == "--duration" && i + 1 < argc) {
+      options.duration = std::stod(argv[++i]);
     } else {
-      throw std::invalid_argument("unknown option " + arg + " (use --port N, --run, --var name=value)");
+      throw std::invalid_argument("unknown option " + arg + " (use --port N, --run, --duration S, --var name=value)");
     }
   }
   return options;
@@ -126,9 +128,11 @@ json with_vars(const toolkit::Catalog& catalog, const std::vector<std::pair<std:
   return list;
 }
 
-std::string run_starter(const Backend& backend, std::ostream& out, const std::vector<std::pair<std::string, std::string>>& vars) {
+std::string run_starter(const Backend& backend, std::ostream& out, const std::vector<std::pair<std::string, std::string>>& vars,
+                        std::optional<double> duration) {
   Backend headless = backend;
   headless.run.real_time = false;
+  if (duration) headless.run.duration = *duration;
   const auto& catalog = *backend.catalog;
   if (!catalog.missing_imports.empty()) {
     std::string missing;
@@ -157,7 +161,7 @@ int main(const Backend& backend, int argc, char** argv, int default_port) {
   }
   if (options.run) {
     try {
-      return run_starter(backend, std::cout, options.vars) == "done" ? 0 : 1;
+      return run_starter(backend, std::cout, options.vars, options.duration) == "done" ? 0 : 1;
     } catch (const std::invalid_argument& err) {
       std::cerr << err.what() << '\n';
       return 2;
