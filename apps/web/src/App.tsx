@@ -117,7 +117,7 @@ export function App() {
   const [backendOpen, setBackendOpen] = useState(false); // File > Backend…
   const flow = useRef<FlowControls | null>(null); // the canvas's actions, for the menus
   const stationCanvas = useRef<StationControls | null>(null);
-  const { state, send, subscribe } = useEngine(url);
+  const { state, send, subscribe, log } = useEngine(url);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Wire>([]);
   const { fitView, screenToFlowPosition } = useReactFlow();
@@ -543,7 +543,11 @@ export function App() {
       saveRecent(next);
       return next;
     });
-  const fail = (title: string, e: unknown) => setNotice({ title, text: [e instanceof Error ? e.message : String(e)], actions: [{ label: "OK", primary: true }] });
+  const fail = (title: string, e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    log("error", `${title}: ${msg}`);
+    setNotice({ title, text: [msg], actions: [{ label: "OK", primary: true }] });
+  };
 
   /** Open a project, after a word if it comes from another backend or replaces unsaved changes; one Undo brings back what was open. */
   const openProject = (p: Project, name: string) => {
@@ -570,8 +574,10 @@ export function App() {
   };
   const openText = (text: string, file: string) => {
     const r = parseProject(text);
-    if ("error" in r) setNotice({ title: "Can't open this file", text: [`${file}: ${r.error}`, "Nothing was changed."], actions: [{ label: "OK", primary: true }] });
-    else openProject(r.project, projectName(file));
+    if ("error" in r) {
+      log("error", `${file}: ${r.error}`);
+      setNotice({ title: "Can't open this file", text: [`${file}: ${r.error}`, "Nothing was changed."], actions: [{ label: "OK", primary: true }] });
+    } else openProject(r.project, projectName(file));
   };
   const openFile = async () => {
     try {
@@ -747,11 +753,14 @@ export function App() {
         <MenuBar commands={commands} />
         <ProjectLabel name={projectTitle} dirty={dirty} />
         <span className="spacer" />
-        {errors > 0 && (
-          <button className="key small err" title="Open the Console" onClick={() => setConsoleShown(true)}>
-            {count(errors, "error")}
-          </button>
-        )}
+        <button
+          className={`key small${errors > 0 ? " err" : ""}${consoleShown ? " on" : ""}`}
+          aria-pressed={consoleShown}
+          title="Open the Console"
+          onClick={() => setConsoleShown(!consoleShown)}
+        >
+          {errors > 0 ? count(errors, "error") : "Console"}
+        </button>
         <Switch
           label="View"
           value={mode}
