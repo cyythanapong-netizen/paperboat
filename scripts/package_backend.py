@@ -222,25 +222,55 @@ def cmd_unpack(pkg_path: Path, dest_dir: Path, verify: bool) -> dict:
     }
 
 
+def read_manifest_info(backend_dir: Path) -> tuple[str, str]:
+    manifest_file = backend_dir / "backend.toml"
+    name = backend_dir.name
+    version = "0.1.0"
+    if manifest_file.is_file():
+        try:
+            try:
+                import tomllib
+            except ImportError:
+                import tomli as tomllib
+            manifest = tomllib.loads(manifest_file.read_text(encoding="utf-8"))
+            backend_info = manifest.get("backend", {})
+            name = backend_info.get("name", name)
+            version = backend_info.get("version", version)
+        except Exception:
+            pass
+    return name, version
+
+
 def main():
     parser = argparse.ArgumentParser(description="Paperboat backend packager")
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
 
     pack_p = subparsers.add_parser("pack")
-    pack_p.add_argument("--dir", type=Path, required=True, help="Backend directory to pack")
-    pack_p.add_argument("--out", type=Path, required=True, help="Output package path (.paperboat-pkg)")
+    pack_p.add_argument("pos_dir", nargs="?", type=Path, default=None, help="Backend directory")
+    pack_p.add_argument("--dir", type=Path, default=None, help="Backend directory to pack")
+    pack_p.add_argument("--out", type=Path, default=None, help="Output package path (.paperboat-pkg)")
 
     unpack_p = subparsers.add_parser("unpack")
-    unpack_p.add_argument("--pkg", type=Path, required=True, help="Input package path (.paperboat-pkg)")
+    unpack_p.add_argument("pos_pkg", nargs="?", type=Path, default=None, help="Input package path (.paperboat-pkg)")
+    unpack_p.add_argument("--pkg", type=Path, default=None, help="Input package path (.paperboat-pkg)")
     unpack_p.add_argument("--dir", type=Path, required=True, help="Target extraction directory")
     unpack_p.add_argument("--verify", action="store_true", default=True, help="Verify file checksums")
 
     args = parser.parse_args()
 
     if args.subcommand == "pack":
-        res = cmd_pack(args.dir.resolve(), args.out.resolve())
+        src_dir = (args.dir or args.pos_dir or Path(".")).resolve()
+        out_pkg = args.out
+        if out_pkg is None:
+            name, version = read_manifest_info(src_dir)
+            out_pkg = Path(f"{name}-{version}.paperboat-pkg")
+        res = cmd_pack(src_dir, out_pkg.resolve())
     elif args.subcommand == "unpack":
-        res = cmd_unpack(args.pkg.resolve(), args.dir.resolve(), args.verify)
+        pkg_file = (args.pkg or args.pos_pkg)
+        if not pkg_file:
+            print(json.dumps({"ok": False, "error": "missing package file"}))
+            sys.exit(1)
+        res = cmd_unpack(pkg_file.resolve(), args.dir.resolve(), args.verify)
     else:
         res = {"ok": False, "error": "unknown subcommand"}
 
