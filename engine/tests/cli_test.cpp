@@ -4,6 +4,8 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <map>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "paperboat/core/backend_manager.hpp"
@@ -34,6 +36,34 @@ TEST_CASE("ProcessRunner sync timeout kills hanging command") {
 
   CHECK(res.timed_out);
   CHECK(elapsed.count() < 2000);
+}
+
+TEST_CASE("ProcessRunner stream and detached runs pass cwd, env and output through") {
+  const fs::path dir = fs::temp_directory_path() / "pb_process_test";
+  fs::create_directories(dir);
+  const std::vector<std::pair<std::string, std::string>> env{{"PB_PROBE", "on"}};
+
+  // Lines per stream: CRLF trimmed, a tail with no newline still delivered.
+  std::map<std::string, std::vector<std::string>> lines;
+  core::ProcessRunner::run_stream(
+      {"sh", "-c", "printf 'a\\r\\nb\\n'; printf 'e1\\n' >&2; printf \"$PB_PROBE $(pwd)\""}, dir, env,
+      [&](std::string_view stream, std::string_view line) { lines[std::string(stream)].emplace_back(line); });
+  CHECK(lines["stdout"] == std::vector<std::string>{"a", "b", "on " + fs::canonical(dir).string()});
+  CHECK(lines["stderr"] == std::vector<std::string>{"e1"});
+
+  const fs::path log = dir / "detached.log";
+  fs::remove(log);
+  const int pid = core::ProcessRunner::run_detached({"sh", "-c", "echo \"$PB_PROBE $(pwd)\"; echo err >&2"}, dir, env, log);
+  REQUIRE(pid > 0);
+  int status = 0;
+  waitpid(pid, &status, 0);
+  std::ifstream in(log);
+  std::string a, b;
+  std::getline(in, a);
+  std::getline(in, b);
+  CHECK(a == "on " + fs::canonical(dir).string());
+  CHECK(b == "err");
+  fs::remove_all(dir);
 }
 
 TEST_CASE("ProcessRunner is_alive correctly identifies active and dead pids") {

@@ -1,4 +1,5 @@
 import type { DashboardLayout, ParamValue } from "./protocol";
+import { readStored, writeStored } from "./storage.ts";
 
 export type Size = "compact" | "normal" | "large" | "xlarge";
 
@@ -386,21 +387,8 @@ export function mapTexts(layout: DashboardLayout, f: (text: string) => string): 
 }
 
 /** A saved layout, if the browser has one for this backend. */
-export function loadSaved(key: string): DashboardLayout | undefined {
-  try {
-    const v = JSON.parse(localStorage.getItem(`paperboat.dashboard:${key}`) ?? "null");
-    return v && Array.isArray(v.instruments) ? (v as DashboardLayout) : undefined;
-  } catch {
-    return undefined;
-  }
-}
+export const loadSaved = (key: string): DashboardLayout | undefined =>
+  readStored(`paperboat.dashboard:${key}`, (v): v is DashboardLayout => !!v && Array.isArray((v as DashboardLayout).instruments));
 
 /** Keep the user's layout for this backend in the browser, as the working copy: a project file (#82) saves and restores it. `undefined` forgets it. */
-export function save(key: string, layout: DashboardLayout | undefined) {
-  try {
-    if (layout) localStorage.setItem(`paperboat.dashboard:${key}`, JSON.stringify(layout));
-    else localStorage.removeItem(`paperboat.dashboard:${key}`);
-  } catch {
-    /* storage blocked: the layout lasts for the session only */
-  }
-}
+export const save = (key: string, layout: DashboardLayout | undefined) => writeStored(`paperboat.dashboard:${key}`, layout);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { DEFAULT_TOOLKITS, missingRequiredToolkits } from "./engine";
 import type { ToolkitStatus } from "./protocol";
+import { useFocusReturn } from "./ProjectUI";
 import { Spinner } from "./Spinner";
 
 export { DEFAULT_TOOLKITS, missingRequiredToolkits };
@@ -23,13 +24,7 @@ export function MissingToolkitsDialog({
     return init;
   });
 
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    root.current?.querySelector<HTMLElement>("button.run, button")?.focus();
-    return () => {
-      if (before?.isConnected) before.focus?.();
-    };
-  }, []);
+  useFocusReturn(root);
 
   return (
     <section

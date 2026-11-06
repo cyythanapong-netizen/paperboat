@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { BlockDef, ObjectDef, ParamDef, PortDef } from "./protocol";
 import { GlideBrackets } from "./Shell";
+import { readStored, writeStored } from "./storage.ts";
 
 /**
  * The block and object browser (#50, DESIGN.md): every block or station object is a card
@@ -128,21 +129,12 @@ function Card({ item, count, onAdd, place }: { item: Item; count: number; onAdd:
 
 /** A remembered spot for a floating window, kept in this browser when it can be. */
 function usePlace(key: string, fallback: { x: number; y: number }) {
-  const [at, setAt] = useState(() => {
-    try {
-      const v = JSON.parse(localStorage.getItem(key) ?? "null");
-      return v && typeof v.x === "number" ? (v as { x: number; y: number }) : fallback;
-    } catch {
-      return fallback;
-    }
-  });
+  const [at, setAt] = useState(
+    () => readStored(key, (v): v is { x: number; y: number } => !!v && typeof (v as { x: unknown }).x === "number") ?? fallback,
+  );
   const keep = (v: { x: number; y: number }) => {
     setAt(v);
-    try {
-      localStorage.setItem(key, JSON.stringify(v));
-    } catch {
-      /* not kept */
-    }
+    writeStored(key, v);
   };
   return [at, keep] as const;
 }

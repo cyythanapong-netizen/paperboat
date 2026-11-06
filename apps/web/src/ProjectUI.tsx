@@ -1,4 +1,18 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
+
+/**
+ * Focus for a window floating over the page: on open, its first button (the primary
+ * `button.run` before the rest) when `root` is given; on close, back to where focus was.
+ */
+export function useFocusReturn(root?: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    root?.current?.querySelector<HTMLElement>("button.run, button")?.focus();
+    return () => {
+      if (before?.isConnected) before.focus?.();
+    };
+  }, []);
+}
 
 /** A question or a message for the user, and what they can do about it. */
 export type NoticeSpec = {
@@ -20,13 +34,7 @@ export function Notice({ spec, onClose }: { spec: NoticeSpec; onClose: () => voi
     onClose();
     a.run?.();
   };
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    root.current?.querySelector<HTMLElement>("button.run, button")?.focus();
-    return () => {
-      if (before?.isConnected) before.focus?.();
-    };
-  }, []);
+  useFocusReturn(root);
   return (
     <section
       className="console-window notice"

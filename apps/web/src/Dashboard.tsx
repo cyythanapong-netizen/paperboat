@@ -24,7 +24,7 @@ import {
   tabIsEmpty,
 } from "./dashboardLayout";
 import type { Monitor, PlacedDeco } from "./dashboardLayout";
-import type { DashboardLayout, ParamValue } from "./protocol";
+import type { ClientMsg, DashboardLayout, ParamValue, ServerMsg } from "./protocol";
 import { Console } from "./Console";
 import { WebStation } from "./WebStation";
 import { SceneView } from "./SceneView";
@@ -71,7 +71,7 @@ function Plot({ name, series, idle }: { name: string; series: Series; idle: bool
  * run is going or the Dashboard can't send. Toggle mode has a click pill; momentary mode
  * a hold button, so the two never share a press.
  */
-function SwitchInstrument({ name, state, send, params }: { name: string; state: EngineState; send?: (m: any) => void; params?: Record<string, ParamValue> }) {
+function SwitchInstrument({ name, state, send, params }: { name: string; state: EngineState; send?: (m: ClientMsg) => void; params?: Record<string, ParamValue> }) {
   const latest = state.latest[name];
   const momentary = params?.mode === "momentary";
   const initialOn = params?.initial === undefined ? true : !!params.initial;
@@ -144,7 +144,7 @@ function SwitchInstrument({ name, state, send, params }: { name: string; state: 
  * Before a run sends it anything it is a greyed placeholder of the same frame (#58), so it
  * can be placed and sized before the first run.
  */
-function Instrument({ name, kind, state, send, params }: { name: string; kind: string; state: EngineState; send?: (m: any) => void; params?: Record<string, ParamValue> }) {
+function Instrument({ name, kind, state, send, params }: { name: string; kind: string; state: EngineState; send?: (m: ClientMsg) => void; params?: Record<string, ParamValue> }) {
   const latest = state.latest[name];
   const idle = latest === undefined;
   const vector = Array.isArray(latest)
@@ -309,8 +309,8 @@ export function Dashboard({
   onSave: (next: DashboardLayout | undefined) => void;
   /** Backend WebSocket URL, for the read-only Station view (web station pages). */
   url?: string;
-  subscribe?: (listen: (m: any) => void) => () => void;
-  send?: (m: any) => void;
+  subscribe?: (listen: (m: ServerMsg) => void) => () => void;
+  send?: (m: ClientMsg) => void;
   gridOn?: boolean;
 }) {
   const vars = useContext(VarsContext);

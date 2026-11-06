@@ -2,6 +2,7 @@
 // manage the web application, orchestrate examples, and install/browse toolkits.
 
 #include <iomanip>
+#include <utility>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -321,9 +322,7 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
 
   tk::HostBuild host{.source_dir = {}, .build_dir = {}, .skip_rebuild = !rebuild};
   tk::ToolkitResult res;
-  if (sub == "install" || sub == "add") {
-    res = tk::install_toolkit(name, version, {}, host, log);
-  } else if (sub == "update") {
+  if (sub == "install" || sub == "add" || sub == "update") {
     res = tk::install_toolkit(name, version, {}, host, log);
   } else if (sub == "uninstall" || sub == "remove") {
     res = tk::uninstall_toolkit(name, {}, host, log);
@@ -484,6 +483,21 @@ int cmd_unpack(const std::vector<std::string_view>& args) {
   return 0;
 }
 
+using Command = int (*)(const std::vector<std::string_view>&);
+
+// The subcommands the command line and the interactive prompt share, with their aliases.
+Command find_command(std::string_view name) {
+  static constexpr std::pair<std::string_view, Command> commands[] = {
+      {"run", cmd_run},         {"start", cmd_run},   {"list", cmd_list},     {"ps", cmd_list},
+      {"restart", cmd_restart}, {"stop", cmd_stop},   {"app", cmd_app},       {"examples", cmd_examples},
+      {"toolkit", cmd_toolkit}, {"check", cmd_check}, {"pack", cmd_pack},     {"unpack", cmd_unpack},
+  };
+  for (const auto& [n, command] : commands) {
+    if (n == name) return command;
+  }
+  return nullptr;
+}
+
 void print_interactive_help() {
   std::cout << R"(Interactive Commands:
   run, start <target>      Build and start backend (or .ppk package)
@@ -547,16 +561,7 @@ int run_interactive_prompt() {
     for (const auto& t : tokens) sv_tokens.emplace_back(t);
 
     std::vector<std::string_view> rest(sv_tokens.begin() + 1, sv_tokens.end());
-    if (cmd == "run" || cmd == "start") cmd_run(rest);
-    else if (cmd == "list" || cmd == "ps") cmd_list(rest);
-    else if (cmd == "restart") cmd_restart(rest);
-    else if (cmd == "stop") cmd_stop(rest);
-    else if (cmd == "app") cmd_app(rest);
-    else if (cmd == "examples") cmd_examples(rest);
-    else if (cmd == "toolkit") cmd_toolkit(rest);
-    else if (cmd == "check") cmd_check(rest);
-    else if (cmd == "pack") cmd_pack(rest);
-    else if (cmd == "unpack") cmd_unpack(rest);
+    if (const Command command = find_command(cmd)) command(rest);
     else if (cmd == "status") {
       std::cout << "--- Running Backends ---\n";
       cmd_list({});
@@ -592,16 +597,7 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  if (cmd == "run" || cmd == "start") return cmd_run(rest);
-  if (cmd == "list" || cmd == "ps") return cmd_list(rest);
-  if (cmd == "restart") return cmd_restart(rest);
-  if (cmd == "stop") return cmd_stop(rest);
-  if (cmd == "app") return cmd_app(rest);
-  if (cmd == "examples") return cmd_examples(rest);
-  if (cmd == "toolkit") return cmd_toolkit(rest);
-  if (cmd == "check") return cmd_check(rest);
-  if (cmd == "pack") return cmd_pack(rest);
-  if (cmd == "unpack") return cmd_unpack(rest);
+  if (const Command command = find_command(cmd)) return command(rest);
 
   std::cerr << "paperboat: unknown command \"" << cmd << "\"\n";
   std::cerr << "Run 'paperboat --help' for usage.\n";

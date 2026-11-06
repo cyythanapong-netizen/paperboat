@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { byMenu, describe, GROUP_TITLES, isEnabled, MENUS, rank, SEARCH_CHORD, type Command, type MenuId } from "./commands";
+import { useFocusReturn } from "./ProjectUI";
 
 /**
  * The menu bar (#78): one menu per `MenuId` that has commands. An ARIA menubar: Tab enters it once,
@@ -161,12 +162,7 @@ export function CommandSearch({ commands, onClose }: { commands: Command[]; onCl
   const results = useMemo(() => rank(query, commands.filter((c) => !c.quiet)), [query, commands]);
   const at = Math.min(index, Math.max(0, results.length - 1));
 
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    return () => {
-      if (before?.isConnected) before.focus?.();
-    };
-  }, []);
+  useFocusReturn();
   useEffect(() => {
     const down = (e: PointerEvent) => !root.current?.contains(e.target as Node) && onClose();
     window.addEventListener("pointerdown", down);
