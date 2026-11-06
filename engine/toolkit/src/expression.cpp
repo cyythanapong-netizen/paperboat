@@ -282,4 +282,39 @@ bool Expression::is_builtin(std::string_view name) {
   return name == "pi" || name == "e" || name == "clamp" || kOne.contains(name) || kTwo.contains(name);
 }
 
+std::vector<std::string> Expression::free_names(std::string_view text) {
+  std::vector<std::string> out;
+  auto ident_start = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) || c == '_'; };
+  auto ident_char = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; };
+  for (std::size_t i = 0; i < text.size();) {
+    if (ident_start(text[i])) {
+      std::size_t j = i;
+      while (j < text.size() && ident_char(text[j])) ++j;
+      std::string name(text.substr(i, j - i));
+      std::size_t k = j;
+      while (k < text.size() && std::isspace(static_cast<unsigned char>(text[k]))) ++k;
+      const bool is_call = k < text.size() && text[k] == '(';
+      if (!is_call && !is_builtin(name) && std::ranges::find(out, name) == out.end()) {
+        out.push_back(std::move(name));
+      }
+      i = j;
+    } else if (std::isdigit(static_cast<unsigned char>(text[i])) || text[i] == '.') {
+      std::size_t j = i;
+      while (j < text.size() && (std::isdigit(static_cast<unsigned char>(text[j])) || text[j] == '.')) ++j;
+      if (j < text.size() && (text[j] == 'e' || text[j] == 'E')) {
+        std::size_t k = j + 1;
+        if (k < text.size() && (text[k] == '+' || text[k] == '-')) ++k;
+        if (k < text.size() && std::isdigit(static_cast<unsigned char>(text[k]))) {
+          j = k;
+          while (j < text.size() && std::isdigit(static_cast<unsigned char>(text[j]))) ++j;
+        }
+      }
+      i = j;
+    } else {
+      ++i;
+    }
+  }
+  return out;
+}
+
 }  // namespace paperboat::toolkit

@@ -50,10 +50,10 @@ config = { f = """
   : shape == 2 ? 1 - (1 - clamp(t, 0, 1))^2
   : clamp(t, 0, 1)""" }
 
-# f(t): type the function on the block (a text param), over t and a, b, c.
+# f(t): type the function on the block (a text param); its free names are its inputs.
 [[blocks]]
 use = "signal/generator"
 type = "function"
 description = "Any f(t) you type."
 label = "f(t)"
-params = { f = "a * sin(b * t) + c", a = 1, b = 1, c = 0 }
+params = { f = "sin(t)" }

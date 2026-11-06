@@ -117,6 +117,8 @@ class Block:
     # A variable number of inputs: the name of a text param ("signs"); the block has one input
     # per sign character in its value ("+-+": a, b, c; 1 to 26), and `inputs` is only the default.
     ports_from: str = ""
+    # The name of a text param whose expression's free names are the block's inputs ("f").
+    inputs_from: str = ""
 
     def __init__(self, params: dict) -> None:
         self.params = params

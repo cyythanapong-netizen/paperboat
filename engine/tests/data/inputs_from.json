@@ -1,0 +1,10 @@
+[
+  { "f": "sin(2 * pi * 3 * t) + 0.5 * exp(-x)", "inputs": ["t", "x"] },
+  { "f": "x * y + offset", "inputs": ["x", "y", "offset"] },
+  { "f": "a * sin(b * t) + c + a * t", "inputs": ["a", "b", "t", "c"] },
+  { "f": "1.5e-3 * u_1 + 2E+4 * _v2 + .5e2 * w", "inputs": ["u_1", "_v2", "w"] },
+  { "f": "clamp(u, lo, hi) + atan2(dy, dx) + pow(r, 2) + mod(k, 3)", "inputs": ["u", "lo", "hi", "dy", "dx", "r", "k"] },
+  { "f": "cos ( theta ) + log10(gain)", "inputs": ["theta", "gain"] },
+  { "f": "2 * pi + e + 42", "inputs": [] },
+  { "f": "", "inputs": [] }
+]
