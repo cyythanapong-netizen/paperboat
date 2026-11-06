@@ -54,4 +54,4 @@ Where things are
    protocol/            the WebSocket protocol: README, JSON Schema, smoke and golden tests
    apps/web/            the UI (React): domain-free, built from what a backend sends
    examples/backends/   example backends, each a project of its own
-   GUIDELINES.md        rules and layout; TODO.md: open work
+   GUIDELINES.md        rules and layout; open work is GitHub issues

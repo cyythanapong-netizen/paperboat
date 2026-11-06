@@ -98,7 +98,7 @@ Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit
 std::string Run::go(const json& graph_given, const json& station_given, const json& variables) {
   run_start_time_ = std::chrono::steady_clock::now();
   run_started_time_set_ = true;
-  last_lag_warn_ = run_start_time_;
+  last_lag_warn_ = run_start_time_ - std::chrono::seconds(2);  // the first lag warns at once
   emit_({{"type", "run.started"}, {"run", id_}});
   json graph_json, station_json;
   try {  // variables first (#36): blocks and objects get the values they stand for
@@ -337,7 +337,7 @@ void Run::frame(const json& samples, std::optional<double> progress) {
       std::this_thread::sleep_for(target_time - now);
     } else {
       const auto lag = std::chrono::duration<double>(now - target_time).count();
-      if (lag > 0.25 && (now - last_lag_warn_ > std::chrono::seconds(2))) {
+      if (lag > 0.2 && (now - last_lag_warn_ > std::chrono::seconds(2))) {
         last_lag_warn_ = now;
         char buf[96];
         std::snprintf(buf, sizeof buf, "computation delay: behind real-time by %.2f s", lag);
