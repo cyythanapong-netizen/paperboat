@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { layoutGraph, type LayoutEdge, type LayoutNode } from "../src/graphLayout.ts";
+import { countCrossings, layoutGraph, type LayoutEdge, type LayoutNode } from "../src/graphLayout.ts";
 
 const entries = (nodes: readonly LayoutNode[], edges: readonly LayoutEdge[], options?: Parameters<typeof layoutGraph>[2]) =>
   [...layoutGraph(nodes, edges, options).entries()];
@@ -46,7 +46,7 @@ test("fan-in sources are stable and their sink is in the next column", () => {
   assert.deepEqual(entries(nodes, edges), [
     ["a", { x: 0, y: 0 }],
     ["b", { x: 0, y: 170 }],
-    ["sink", { x: 300, y: 0 }],
+    ["sink", { x: 300, y: 85 }], // centered vertically between fan-in sources a (0) and b (170) to eliminate bend
   ]);
 });
 
@@ -239,3 +239,53 @@ test("shuffling nodes and edges never changes positions or Map iteration order",
   };
   for (let run = 0; run < 30; run++) assert.deepEqual(entries(shuffle(nodes), shuffle(edges), options), expected);
 });
+
+test("port-order awareness avoids crossings between diverging ports", () => {
+  // A has two outputs: o1 (top, offset 30) and o2 (bottom, offset 100)
+  // o1 connects to B; o2 connects to C
+  // Crossing minimization should place B above C so the wires do not cross
+  const nodes = [{ id: "A" }, { id: "B" }, { id: "C" }];
+  const edges: LayoutEdge[] = [
+    { source: "A", target: "B", sourceOffset: 30, targetOffset: 65 },
+    { source: "A", target: "C", sourceOffset: 100, targetOffset: 65 },
+  ];
+  const laidOut = layoutGraph(nodes, edges);
+  const posB = laidOut.get("B")!;
+  const posC = laidOut.get("C")!;
+  assert.ok(posB.y < posC.y, "B (fed by top port) must be placed above C (fed by bottom port)");
+});
+
+test("a 4-block chain aligns horizontally without unnecessary bends", () => {
+  const nodes = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+  const edges = [
+    { source: "a", target: "b" },
+    { source: "b", target: "c" },
+    { source: "c", target: "d" },
+  ];
+  const laidOut = layoutGraph(nodes, edges);
+  assert.equal(laidOut.get("a")!.y, laidOut.get("b")!.y);
+  assert.equal(laidOut.get("b")!.y, laidOut.get("c")!.y);
+  assert.equal(laidOut.get("c")!.y, laidOut.get("d")!.y);
+});
+
+test("countCrossings accurately detects inverted edge pairs across layers", () => {
+  const columns = [["a", "b"], ["c", "d"]];
+  const uncrossed: LayoutEdge[] = [
+    { source: "a", target: "c" },
+    { source: "b", target: "d" },
+  ];
+  const crossed: LayoutEdge[] = [
+    { source: "a", target: "d" },
+    { source: "b", target: "c" },
+  ];
+  const yMap = new Map([["a", 0], ["b", 100], ["c", 0], ["d", 100]]);
+  const sizes = new Map([
+    ["a", { width: 100, height: 50 }],
+    ["b", { width: 100, height: 50 }],
+    ["c", { width: 100, height: 50 }],
+    ["d", { width: 100, height: 50 }],
+  ]);
+  assert.equal(countCrossings(columns, uncrossed, yMap, sizes), 0);
+  assert.equal(countCrossings(columns, crossed, yMap, sizes), 1);
+});
+

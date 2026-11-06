@@ -13,7 +13,6 @@ import {
   Position,
   ReactFlow,
   SelectionMode,
-  useInternalNode,
   useReactFlow,
   useStoreApi,
   type Connection,
@@ -39,6 +38,7 @@ import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
 import { connectionOf, nearestAccepting, SNAP, WireDragContext, type Anchor } from "./wireSnap";
 import { arrangeFlowNodes, canArrangeFlow } from "./flowLayout";
+import { routeWires, type Obstacle, type RouteInput, type WireRoute } from "./wireRouting.ts";
 import {
   absolute,
   Boundary,
@@ -285,74 +285,45 @@ function Field({
   );
 }
 
-/** The bottom edge of a node on the canvas (inside a group or not). */
-function useBottom(id: string): number | undefined {
-  const node = useInternalNode(id);
-  if (!node) return undefined;
-  return node.internals.positionAbsolute.y + (node.measured.height ?? 0);
-}
-
-/**
- * A wire that runs back (its target left of its source, as in a loop: Rotate → Repeat)
- * goes around the blocks instead of under them: out to the right, down below both blocks,
- * back left, and into the target from the left, with rounded corners.
- */
-function loopPath(sx: number, sy: number, tx: number, ty: number, below: number): [string, number, number] {
-  const out = 24;  // how far it leaves a port before turning
-  const r = 10;    // corner radius
-  const pts: [number, number][] = [
-    [sx, sy],
-    [sx + out, sy],
-    [sx + out, below],
-    [tx - out, below],
-    [tx - out, ty],
-    [tx, ty],
-  ];
-  let d = `M ${pts[0][0]},${pts[0][1]}`;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const [px, py] = pts[i - 1];
-    const [cx, cy] = pts[i];
-    const [nx, ny] = pts[i + 1];
-    const ra = Math.min(r, Math.hypot(cx - px, cy - py) / 2, Math.hypot(nx - cx, ny - cy) / 2);
-    const a = [cx - Math.sign(cx - px) * ra, cy - Math.sign(cy - py) * ra];
-    const b = [cx + Math.sign(nx - cx) * ra, cy + Math.sign(ny - cy) * ra];
-    d += ` L ${a[0]},${a[1]} Q ${cx},${cy} ${b[0]},${b[1]}`;
-  }
-  d += ` L ${tx},${ty}`;
-  return [d, (sx + tx) / 2, below];
-}
-
-/** A wire: a curve for signals, a right-angled arrow for steps, around the blocks when it runs back, and × when selected. */
 /** The wire a dragged card would be inserted into, if any (drawn thicker). */
 const HotWire = createContext<string | null>(null);
 /** The wires to follow (#55): those of the hovered wire, port or block. null: nothing is hovered. */
 const Lit = createContext<ReadonlySet<string> | null>(null);
+/** Whole-canvas routed wire geometries computed in one pass. */
+const WireRoutes = createContext<Map<string, WireRoute> | null>(null);
 
-function WireEdge({ id, source, target, data, selected, markerEnd, ...geometry }: EdgeProps<Wire>) {
-  const { deleteElements, getEdges } = useReactFlow();
+function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire>) {
+  const { deleteElements } = useReactFlow();
   const hot = useContext(HotWire) === id;
   const lit = useContext(Lit);
   const follow = lit ? (lit.has(id) ? " lit" : " dim") : "";
-  // Wires that leave one output start together: each bends a little differently, so they part at once.
-  const siblings = getEdges().filter((w) => w.source === source && w.sourceHandle === geometry.sourceHandleId).map((w) => w.id).sort();
-  const curvature = 0.25 + 0.14 * Math.max(0, siblings.indexOf(id));
-  const step = data?.type === "step";
-  const sourceBottom = useBottom(source);
-  const targetBottom = useBottom(target);
-  // Only a wire leaving to the right for a port facing left runs back round the blocks;
-  // ports moved to other sides take an ordinary curve that leaves the way they face.
-  const back = geometry.sourcePosition === Position.Right && geometry.targetPosition === Position.Left && geometry.targetX < geometry.sourceX + 8;
-  const [path, x, y] = back
-    ? loopPath(
-        geometry.sourceX,
-        geometry.sourceY,
-        geometry.targetX,
-        geometry.targetY,
-        Math.max(sourceBottom ?? geometry.sourceY, targetBottom ?? geometry.targetY, geometry.sourceY, geometry.targetY) + 28,
-      )
-    : step
-      ? getSmoothStepPath(geometry)
-      : getBezierPath({ ...geometry, curvature });
+  const routes = useContext(WireRoutes);
+  const route = routes?.get(id);
+
+  let path: string;
+  let x: number;
+  let y: number;
+
+  if (route) {
+    path = route.path;
+    x = route.labelX;
+    y = route.labelY;
+  } else {
+    const step = data?.type === "step";
+    const back =
+      geometry.sourcePosition === Position.Right &&
+      geometry.targetPosition === Position.Left &&
+      geometry.targetX < geometry.sourceX + 8;
+    if (back) {
+      path = `M ${geometry.sourceX},${geometry.sourceY} L ${geometry.targetX},${geometry.targetY}`;
+      x = (geometry.sourceX + geometry.targetX) / 2;
+      y = Math.max(geometry.sourceY, geometry.targetY) + 28;
+    } else if (step) {
+      [path, x, y] = getSmoothStepPath(geometry);
+    } else {
+      [path, x, y] = getBezierPath(geometry);
+    }
+  }
   return (
     <>
       {/* Casing: a wider stroke in the canvas colour, so where wires cross, one is seen to pass over the other. */}
@@ -816,7 +787,13 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   const arrange = (): boolean => {
     if (locked) return false;
     const current = latest.current;
-    const next = arrangeFlowNodes(current.nodes, current.edges, current.level);
+    const next = arrangeFlowNodes(current.nodes, current.edges, current.level, (nodeId, handleId, dir) => {
+      const n = store.getState().nodeLookup.get(nodeId);
+      const bounds = n?.internals.handleBounds;
+      const list = dir === "source" ? bounds?.source : bounds?.target;
+      const h = list?.find((x) => (x.id ?? null) === (handleId ?? null));
+      return h ? h.y + h.height / 2 : undefined;
+    });
     if (next === current.nodes) return false;
     latest.current = { ...current, nodes: next };
     setNodes(next);
@@ -1072,6 +1049,62 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       setEdges((ws) => connect(ws, c, t));
     }
   };
+  const nodeLookup = useStore((st) => st.nodeLookup);
+  const wireRoutes = useMemo(() => {
+    const obstacles: Obstacle[] = [];
+    for (const n of nodeLookup.values()) {
+      obstacles.push({
+        id: n.id,
+        x: n.internals.positionAbsolute.x !== undefined ? n.internals.positionAbsolute.x : n.position.x,
+        y: n.internals.positionAbsolute.y !== undefined ? n.internals.positionAbsolute.y : n.position.y,
+        width: n.measured?.width ?? n.width ?? 190,
+        height: n.measured?.height ?? n.height ?? 130,
+      });
+    }
+
+    const routeInputs: RouteInput[] = [];
+    for (const w of shown.edges) {
+      const sn = nodeLookup.get(w.source);
+      const tn = nodeLookup.get(w.target);
+      if (!sn || !tn) continue;
+
+      const sHandles = sn.internals.handleBounds?.source ?? [];
+      const sh = sHandles.find((h) => (h.id ?? null) === (w.sourceHandle ?? null)) ?? sHandles[0];
+
+      const tHandles = tn.internals.handleBounds?.target ?? [];
+      const th = tHandles.find((h) => (h.id ?? null) === (w.targetHandle ?? null)) ?? tHandles[0];
+
+      const sx = sh ? sn.internals.positionAbsolute.x + sh.x + sh.width / 2 : sn.internals.positionAbsolute.x + (sn.measured?.width ?? 190);
+      const sy = sh ? sn.internals.positionAbsolute.y + sh.y + sh.height / 2 : sn.internals.positionAbsolute.y + (sn.measured?.height ?? 130) / 2;
+
+      const tx = th ? tn.internals.positionAbsolute.x + th.x + th.width / 2 : tn.internals.positionAbsolute.x;
+      const ty = th ? tn.internals.positionAbsolute.y + th.y + th.height / 2 : tn.internals.positionAbsolute.y + (tn.measured?.height ?? 130) / 2;
+
+      const toSide = (pos?: Position | string): "left" | "right" | "top" | "bottom" => {
+        if (pos === Position.Left || pos === "left") return "left";
+        if (pos === Position.Top || pos === "top") return "top";
+        if (pos === Position.Bottom || pos === "bottom") return "bottom";
+        return "right";
+      };
+
+      routeInputs.push({
+        id: w.id,
+        source: w.source,
+        sourceHandle: w.sourceHandle,
+        target: w.target,
+        targetHandle: w.targetHandle,
+        sx,
+        sy,
+        tx,
+        ty,
+        sourcePosition: toSide(sh?.position),
+        targetPosition: toSide(th?.position ?? Position.Left),
+        step: w.data?.type === "step",
+      });
+    }
+    return routeWires(routeInputs, obstacles);
+  }, [shown.edges, nodeLookup]);
+
   const box = wrap.current?.getBoundingClientRect();
   const rel = (x: number, y: number) => ({ x: x - (box?.left ?? 0), y: y - (box?.top ?? 0) });
 
@@ -1079,6 +1112,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     <GroupActions.Provider value={{ ...actions, enter: go, stateOf }}>
     <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
     <Lit.Provider value={lit}>
+    <WireRoutes.Provider value={wireRoutes}>
     <div className="flow">
       <div
         className="flow-canvas"
@@ -1269,6 +1303,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
         />
       )}
     </div>
+    </WireRoutes.Provider>
     </Lit.Provider>
     </HotWire.Provider>
     </GroupActions.Provider>
