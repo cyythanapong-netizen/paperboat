@@ -80,8 +80,10 @@ C++: ``clock``, and ``generator``, the abstract parent: f is an expression (conf
 
 ``sine``, ``step`` (``at``, ``value``), ``ramp`` (``start``, ``slope``), ``square`` (``amplitude``,
 ``frequency``), ``ease`` (shapes a 0–1 progress; ``shape``: in-out, in, out or linear) and
-``function`` (f(t): its ``f`` is a text param, typed on the block, over ``t``, ``a``, ``b``,
-``c``). A descriptor defines more the same way. Expressions: numbers, names, ``+ - * / % ^``,
+``function`` (f(t): its ``f`` is a text param, typed on the block; its free names become its
+input ports, with ``t`` as the clock when unwired and other unwired inputs reading as 0;
+renaming a name in ``f`` drops the wire to the old port). A descriptor defines more the same way.
+Expressions: numbers, names, ``+ - * / % ^``,
 comparisons (1 or 0), ``&& || !``, ``c ? a : b``, ``pi``, ``e`` and ``sin cos tan asin acos atan
 atan2 sinh cosh tanh exp log log10 sqrt abs floor ceil round sign frac min max clamp mod
 pow``.

@@ -156,6 +156,13 @@ initializers may leave any out.
       Empty: the inputs are the definition's. Sum's ``signs``. A wire to an input that no
       longer exists is dropped.
 
+   .. cpp:member:: std::string inputs_from
+
+      The id of a text param whose expression's free names are the inputs: one per identifier in
+      it (other than ``pi``, ``e`` and built-in functions, in order of first appearance; see
+      :cpp:func:`with_inputs`), of the first input's type. Empty: the inputs are the definition's.
+      f(t)'s ``f``. A wire to an input that is removed or renamed is dropped.
+
 .. cpp:struct:: Form
 
    One form of a magic block: the ports it has in that form, such as ``"signal"`` (values in
@@ -176,6 +183,12 @@ initializers may leave any out.
 
    The definition with the inputs its ``ports_from`` param (``text``) gives: ids ``a``, ``b``,
    ``c``… of the first input's type. ``def`` itself if it has no ``ports_from``.
+
+.. cpp:function:: BlockDef with_inputs(const BlockDef &def, std::string_view text)
+
+   The definition with the inputs its ``inputs_from`` expression param (``text``) gives: one per
+   free name in ``text``, in order of first appearance, of the first input's type. ``def`` itself
+   if it has no ``inputs_from``. A wire to a removed or renamed input is dropped.
 
 .. cpp:function:: BlockDef in_form(const BlockDef &def, std::string_view form)
 

@@ -21,21 +21,29 @@ class Clock final : public Generator {
   double value(double t) const override { return t; }
 };
 
-// f(t) from an expression over t and the block's number params.
-class Expression final : public Generator {
+// f(t) from an expression over t, the block's number params (Sine, Step…), and its
+// wired inputs (f(t)).
+class Expression final : public Block {
  public:
   Expression(const BlockDef& def, const Values& params, const Config& config)
-      : f_(text_of(config), names(def)) {
-    values_.assign(f_.variables().size(), 0.0);
-    for (std::size_t i = 1; i < values_.size(); ++i) values_[i] = get_or(params, f_.variables()[i]);
-  }
-  double value(double t) const override {
-    values_[0] = t;
-    return f_(values_);
+      : f_(text_of(config), names(def, text_of(config))),
+        params_(params),
+        values_(f_.variables().size(), 0.0) {}
+
+  Values step(const Context& ctx, const Values& in) override {
+    const auto& vars = f_.variables();
+    for (std::size_t i = 0; i < vars.size(); ++i) {
+      if (vars[i] == "t") values_[i] = in.contains("t") ? get_or(in, "t") : ctx.t;
+      else if (params_.contains(vars[i])) values_[i] = get_or(params_, vars[i]);
+      else values_[i] = get_or(in, vars[i]);
+    }
+    return {{"y", f_(values_)}};
   }
 
-  // t, then every number param: the names f may use.
-  static std::vector<std::string> names(const BlockDef& def) {
+  // For a block with `inputs_from` (f(t)), any free name in `text` is an input; for a
+  // fixed-formula generator (Sine, Step…), only `t` and the block's number/enum params.
+  static std::vector<std::string> names(const BlockDef& def, std::string_view text) {
+    if (!def.inputs_from.empty()) return toolkit::Expression::free_names(text);
     std::vector<std::string> out{"t"};
     for (const auto& p : def.params)
       if (p.is_number() || p.type == "enum") out.push_back(p.id);  // an enum by its index
@@ -48,7 +56,8 @@ class Expression final : public Generator {
 
  private:
   toolkit::Expression f_;
-  mutable std::vector<double> values_;
+  Values params_;
+  std::vector<double> values_;
 };
 
 }  // namespace
@@ -68,16 +77,17 @@ void add_waves(Registry& registry) {
   generator.abstract = true;
   generator.check = [](const BlockDef& def, const Config& config) {
     try {
-      const toolkit::Expression f(Expression::text_of(config), Expression::names(def));
+      const auto text = Expression::text_of(config);
+      const toolkit::Expression f(text, Expression::names(def, text));
     } catch (const ExpressionError& err) {
       throw ExpressionError("f: " + std::string(err.what()));
     }
   };
-  // Each definition on it makes its own Template (a copy), so `def` is read at make time
-  // from the catalog entry's params: names come from the params given.
+  // Each definition on it makes its own Template (a copy); fixed-formula generators check
+  // their names at load time, while `inputs_from` blocks take any free names in `f`.
   generator.make = [](const Values& params, const Config& config) -> std::unique_ptr<Block> {
     BlockDef def;
-    for (const auto& [id, value] : params) def.params.push_back({.id = id});
+    def.inputs_from = "f";
     try {
       return std::make_unique<Expression>(def, params, config);
     } catch (const ExpressionError& err) {

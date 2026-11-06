@@ -112,3 +112,26 @@ export function signOf(def: BlockDef, params: Record<string, ParamValue>, i: num
   if (!def.ports_from) return "";
   return parseSigns(params[def.ports_from])[i] < 0 ? "\u2212" : "+";
 }
+
+const BUILTINS = new Set([
+  "pi", "e", "sin", "cos", "tan", "asin", "acos", "atan", "atan2",
+  "sinh", "cosh", "tanh", "exp", "log", "log10", "sqrt", "abs",
+  "floor", "ceil", "round", "sign", "frac", "min", "max", "clamp", "mod", "pow",
+]);
+
+/**
+ * The free variable names in an expression param (`inputs_from`), in order of first
+ * appearance: identifiers other than `pi`, `e` and built-in functions, skipping numbers
+ * (1.5e-3 included) and function calls (`name(`). Mirrors the engine's `Expression::free_names`.
+ */
+export function parseInputs(text: ParamValue | undefined): string[] {
+  if (typeof text !== "string") return [];
+  const out: string[] = [];
+  const token = /(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?|([A-Za-z_]\w*)(\s*\()?/g;
+  for (const m of text.matchAll(token)) {
+    const name = m[1];
+    const call = m[2];
+    if (name && !call && !BUILTINS.has(name) && !out.includes(name)) out.push(name);
+  }
+  return out;
+}

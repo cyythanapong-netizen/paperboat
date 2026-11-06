@@ -1,5 +1,6 @@
 #include "paperboat/toolkit/block.hpp"
 
+#include "paperboat/toolkit/expression.hpp"
 #include "paperboat/toolkit/station.hpp"
 
 #include <algorithm>
@@ -52,6 +53,19 @@ BlockDef with_signs(const BlockDef& def, std::string_view text) {
   for (std::size_t i = 0; i < parse_signs(text).size(); ++i) {
     PortDef p = proto;
     p.id = std::string(1, static_cast<char>('a' + i));
+    out.inputs.push_back(std::move(p));
+  }
+  return out;
+}
+
+BlockDef with_inputs(const BlockDef& def, std::string_view text) {
+  if (def.inputs_from.empty()) return def;
+  BlockDef out = def;
+  const PortDef proto = def.inputs.empty() ? PortDef{} : def.inputs.front();
+  out.inputs.clear();
+  for (const auto& name : Expression::free_names(text)) {
+    PortDef p = proto;
+    p.id = name;
     out.inputs.push_back(std::move(p));
   }
   return out;

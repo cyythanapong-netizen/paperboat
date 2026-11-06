@@ -479,13 +479,33 @@ TEST_CASE("a run names the block at fault: an unknown type, or one that throws")
   CHECK(failed_node(lost) == "w-1");
   CHECK_THAT(logs(lost).back(), ContainsSubstring("unknown type \"wordcount\""));
 
-  static const tk::Catalog signals = tk::load_descriptor("domain = \"f\"\nimport = [\"signal\", \"dashboard\"]\n");
+  static const tk::Catalog signals = tk::load_descriptor("domain = \"f\"\nimport = [\"signal\", \"base\", \"dashboard\"]\n");
   const core::Backend fb{.engine = "test", .catalog = &signals, .run = {.mode = core::RunSettings::Mode::Once, .real_time = false}};
   Collected bad_f;
   const json typo = {{"nodes", {{{"id", "f-1"}, {"type", "function"}, {"params", {{"f", "sinn(t)"}}}}}}, {"edges", json::array()}};
   CHECK(core::run("r", typo, nullptr, fb, bad_f.emit(), nullptr, {}) == "failed");
   CHECK(failed_node(bad_f) == "f-1");
   CHECK_THAT(logs(bad_f).back(), ContainsSubstring("unknown function \"sinn\""));
+
+  Collected bad_reserved;
+  const json reserved = {{"nodes", {{{"id", "f-1"}, {"type", "function"}, {"params", {{"f", "sin + 1"}}}}}}, {"edges", json::array()}};
+  CHECK(core::run("r", reserved, nullptr, fb, bad_reserved.emit(), nullptr, {}) == "failed");
+  CHECK(failed_node(bad_reserved) == "f-1");
+  CHECK_THAT(logs(bad_reserved).back(), ContainsSubstring("unknown name \"sin\""));
+
+  Collected wired_fn;
+  const json wired_graph = {
+      {"nodes",
+       {{{"id", "c1"}, {"type", "constant"}, {"params", {{"value", 3.0}}}},
+        {{"id", "c2"}, {"type", "constant"}, {"params", {{"value", 4.0}}}},
+        {{"id", "fn"}, {"type", "function"}, {"params", {{"f", "2 * x + y"}}}},
+        {{"id", "show"}, {"type", "display"}}}},
+      {"edges",
+       {{{"from", {"c1", "y"}}, {"to", {"fn", "x"}}},
+        {{"from", {"c2", "y"}}, {"to", {"fn", "y"}}},
+        {{"from", {"fn", "y"}}, {"to", {"show", "in"}}}}}};
+  CHECK(core::run("r", wired_graph, nullptr, fb, wired_fn.emit(), nullptr, {}) == "done");
+  CHECK(wired_fn.last_signal("show") == 10.0);
 
   Collected boom;
   const json graph = {{"nodes", {{{"id", "l"}, {"type", "lengths"}}, {{"id", "b-1"}, {"type", "boom"}}}}, {"edges", json::array()}};
