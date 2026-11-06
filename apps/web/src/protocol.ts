@@ -288,7 +288,7 @@ export type Form = {
 export type RunSettings = {
   /** clock: every step for duration (and every Step flow); once: a Signal flow evaluated a single time. */
   mode?: "clock" | "once";
-  /** Run length, s (a Step flow: its limit). */
+  /** Run length, s (0: run indefinitely until cancelled or stopped; a Step flow: its limit). */
   duration?: number;
   /** Clock step, s. */
   dt?: number;
