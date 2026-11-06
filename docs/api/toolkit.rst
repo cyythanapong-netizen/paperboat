@@ -32,7 +32,20 @@ base
 
 Values of each datatype: ``constant`` (Number: a float, param ``value``), ``text`` (Text: a
 string) and ``boolean`` (Boolean: a checkbox, 1 or 0 on the wire); all output ``y``. And
-``key`` (out ``pressed``: 1 while its ``key`` param's key is held in the UI).
+``key`` (out ``pressed``: 1 while its ``key`` param's key is held in the UI) and ``key_hold``
+(out ``held``: 1 while down; ``duration``: seconds held down so far).
+
+Type conversions and inspection:
+- ``to_number``: ``in`` (any), ``fallback`` (signal) → ``y`` (signal). Parses numbers from text/booleans; invalid parses use ``fallback``.
+- ``to_text``: ``in`` (any) → ``y`` (text). Formats numbers, booleans, vectors, and handles as clean text.
+- ``to_boolean``: ``in`` (any) → ``y`` (signal). Truthiness coercion (numbers != 0, non-empty text, non-empty vectors).
+- ``type_of``: ``in`` (any) → ``y`` (text). Returns ``"number"``, ``"text"``, ``"vector"``, ``"table"``, ``"handle"``, or ``"empty"``.
+
+Time blocks:
+- ``now``: → ``y`` (signal: current run clock in milliseconds).
+- ``interval``: ``start``, ``stop`` → ``y`` (signal: periodic 1.0 pulses every ``interval`` ms).
+- ``timeout``: ``reset`` → ``y`` (signal: becomes 1.0 after ``delay`` ms).
+- ``delay``: ``in`` (any) → ``y`` (any): delays input by ``delay`` ms (feedthrough is false).
 
 Logic, as **magic blocks**: each has two forms, picked by its ``form`` param, and takes the
 ports of the one picked. In the **signal** form it computes; in the **step** form it sits on
@@ -49,7 +62,10 @@ A value holds when it is positive (a key held, a threshold over its level).
      - ``cond``, ``a``, ``b`` → ``y``: ``a`` while ``cond`` holds, else ``b`` (any value)
      - ``in``, ``cond`` → ``yes``, ``no``
    * - ``and``, ``or``
-     - ``a``, ``b`` → ``y``: 1 or 0
+     - ``a``, ``b``… → ``y``: 1 or 0 (multi-input via ``inputs`` param)
+     - ``in``, ``a``, ``b``… → ``yes``, ``no``
+   * - ``xor``
+     - ``a``, ``b`` → ``y``: holds when exactly one input holds
      - ``in``, ``a``, ``b`` → ``yes``, ``no``
    * - ``not``
      - ``u`` → ``y``
@@ -57,6 +73,9 @@ A value holds when it is positive (a key held, a threshold over its level).
    * - ``compare``
      - ``a``, ``b`` → ``y``; ``op``: > >= < <= == !=
      - ``in``, ``a``, ``b`` → ``yes``, ``no``
+   * - ``in_range``
+     - ``u``, ``min``, ``max`` → ``y``: holds when ``min <= u <= max``
+     - ``in``, ``u``, ``min``, ``max`` → ``yes``, ``no``
 
 signal
 ------
@@ -89,9 +108,34 @@ pow``.
 math
 ----
 
-Pointwise arithmetic on signals: ``gain`` (``u`` → ``y``; ``k``), ``sum`` (``a``, ``b``… → ``y``; its ``signs`` param, ``"++"`` by default, gives one input per sign and whether it adds or subtracts: ``"+-+"`` is ``a − b + c``),
-``threshold`` (``u`` → ``y``: 1 above ``level``, else 0), ``saturation`` (``u`` → ``y``; ``min``,
-``max``).
+Pointwise arithmetic and math operations on signals:
+- ``gain`` (``u`` → ``y``; ``k``)
+- ``sum`` (``a``, ``b``… → ``y``; signs param)
+- ``arithmetic`` (``a``, ``b`` → ``y``; ``op``: ``+``, ``-``, ``*``, ``/``, ``%``, ``^``, division-by-zero safe)
+- ``absolute`` (``u`` → ``y``: absolute value)
+- ``round`` (``u`` → ``y``; ``mode``: ``round``, ``floor``, ``ceil``, ``truncate``)
+- ``min_max`` (``a``, ``b``… → ``y``; ``mode``: ``min``, ``max``; multi-input via ``inputs`` param)
+- ``clamp`` (``u``, ``min``, ``max`` → ``y``)
+- ``threshold`` (``u`` → ``y``: 1 above ``level``, else 0)
+- ``saturation`` (``u`` → ``y``; ``min``, ``max``)
+- ``map_range`` (``u``, ``in_min``, ``in_max``, ``out_min``, ``out_max`` → ``y``; optional ``clamp``)
+- ``lerp`` (``a``, ``b``, ``t`` → ``y``: linear interpolation)
+- ``random_number`` (``min``, ``max`` → ``y``; params: ``min``, ``max``, ``integer``, ``seed``)
+- ``random_boolean`` (``p`` → ``y``; params: ``p``, ``seed``)
+
+string
+------
+
+Text processing and manipulation blocks:
+- ``concat``: ``a``, ``b``… (any) → ``y`` (text); joins inputs formatted as text separated by ``separator``. Multi-input via ``inputs`` param.
+- ``format``: → ``y`` (text); dynamic socket generation from template placeholders (e.g. ``"{first} {last}"``).
+- ``split``: ``text``, ``delimiter`` → ``y`` (text), ``vector`` (vector of parsed numbers), ``count`` (number of tokens).
+- ``replace``: ``text``, ``find``, ``replace`` → ``y`` (text); replaces occurrences (all or first).
+- ``substring``: ``text``, ``start``, ``length`` → ``y`` (text); safe slicing with negative indexing.
+- ``trim``: ``text`` → ``y`` (text); trims whitespace (``mode``: ``both``, ``start``, ``end``).
+- ``length``: ``text`` → ``y`` (signal); string character count.
+- ``change_case``: ``text`` → ``y`` (text); converts case (``mode``: ``upper``, ``lower``, ``title``).
+- ``text_test``: ``text``, ``test`` → ``y`` (signal or step branches ``yes``/``no``; ``mode``: ``contains``, ``starts_with``, ``ends_with``).
 
 dashboard
 ---------

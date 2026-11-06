@@ -3,6 +3,10 @@
 #include "paperboat/toolkit/station.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdio>
+#include <set>
 #include <stdexcept>
 #include <string_view>
 
@@ -44,17 +48,145 @@ std::vector<int> parse_signs(std::string_view text) {
   return out.empty() ? std::vector<int>{1, 1} : out;
 }
 
-BlockDef with_signs(const BlockDef& def, std::string_view text) {
+std::vector<std::string> parse_placeholders(std::string_view text) {
+  std::vector<std::string> out;
+  std::set<std::string> seen;
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    if (text[i] == '{') {
+      if (i + 1 < text.size() && text[i + 1] == '{') {
+        ++i;  // escaped {{
+        continue;
+      }
+      auto end = text.find('}', i + 1);
+      if (end == std::string_view::npos) break;
+      auto inner = text.find('{', i + 1);
+      if (inner != std::string_view::npos && inner < end) {
+        i = inner - 1;
+        continue;
+      }
+      std::string_view token = text.substr(i + 1, end - (i + 1));
+      while (!token.empty() && std::isspace(static_cast<unsigned char>(token.front()))) token.remove_prefix(1);
+      while (!token.empty() && std::isspace(static_cast<unsigned char>(token.back()))) token.remove_suffix(1);
+      if (!token.empty()) {
+        std::string name(token);
+        if (seen.insert(name).second) {
+          out.push_back(std::move(name));
+        }
+      }
+      i = end;
+    } else if (text[i] == '}') {
+      if (i + 1 < text.size() && text[i + 1] == '}') {
+        ++i;  // escaped }}
+      }
+    }
+  }
+  return out;
+}
+
+BlockDef with_dynamic_ports(const BlockDef& def, const Values& params, const Config& text) {
   if (def.ports_from.empty()) return def;
   BlockDef out = def;
-  const PortDef proto = def.inputs.empty() ? PortDef{} : def.inputs.front();
+
+  if (def.ports_from == "template") {
+    std::string_view tmpl_text = "Hello {name}";
+    if (auto it = text.find("template"); it != text.end()) {
+      tmpl_text = it->second;
+    } else {
+      for (const auto& p : def.params) {
+        if (p.id == "template" && !p.default_text.empty()) {
+          tmpl_text = p.default_text;
+          break;
+        }
+      }
+    }
+    const auto names = parse_placeholders(tmpl_text);
+    out.inputs.clear();
+    for (const auto& name : names) {
+      out.inputs.push_back({.id = name, .type = "any"});
+    }
+    return out;
+  }
+
+  if (def.ports_from == "inputs" || params.contains(def.ports_from)) {
+    int count = 2;
+    if (auto it = params.find(def.ports_from); it != params.end()) {
+      if (const double* d = std::get_if<double>(&it->second)) {
+        count = static_cast<int>(*d);
+      }
+    } else {
+      for (const auto& p : def.params) {
+        if (p.id == def.ports_from && p.is_number()) {
+          count = static_cast<int>(p.default_value);
+          break;
+        }
+      }
+    }
+    count = std::clamp(count, 2, 26);
+    const PortDef proto = def.inputs.empty() ? PortDef{.id = "a", .type = "signal"} : def.inputs.front();
+    out.inputs.clear();
+    for (int i = 0; i < count; ++i) {
+      PortDef p = proto;
+      p.id = std::string(1, static_cast<char>('a' + i));
+      out.inputs.push_back(std::move(p));
+    }
+    return out;
+  }
+
+  std::string_view signs_text = "";
+  if (auto it = text.find(def.ports_from); it != text.end()) {
+    signs_text = it->second;
+  }
+  const PortDef proto = def.inputs.empty() ? PortDef{.id = "a", .type = "signal"} : def.inputs.front();
   out.inputs.clear();
-  for (std::size_t i = 0; i < parse_signs(text).size(); ++i) {
+  for (std::size_t i = 0; i < parse_signs(signs_text).size(); ++i) {
     PortDef p = proto;
     p.id = std::string(1, static_cast<char>('a' + i));
     out.inputs.push_back(std::move(p));
   }
   return out;
+}
+
+BlockDef with_signs(const BlockDef& def, std::string_view text) {
+  if (def.ports_from.empty()) return def;
+  Config cfg;
+  cfg[def.ports_from] = std::string(text);
+  return with_dynamic_ports(def, {}, cfg);
+}
+
+std::string value_to_text(const Value& value) {
+  struct Visitor {
+    std::string operator()(double d) const {
+      if (std::isnan(d)) return "nan";
+      if (std::isinf(d)) return d > 0 ? "inf" : "-inf";
+      if (d == 0.0) return "0";
+      char buf[64];
+      std::snprintf(buf, sizeof(buf), "%.12g", d);
+      return buf;
+    }
+    std::string operator()(const std::string& s) const { return s; }
+    std::string operator()(const Vector& vec) const {
+      std::string s = "[";
+      for (std::size_t i = 0; i < vec.size(); ++i) {
+        if (i > 0) s += ", ";
+        s += operator()(vec[i]);
+      }
+      s += "]";
+      return s;
+    }
+    std::string operator()(const Table& tbl) const {
+      std::string s = "[";
+      for (std::size_t i = 0; i < tbl.size(); ++i) {
+        if (i > 0) s += ", ";
+        s += operator()(tbl[i]);
+      }
+      s += "]";
+      return s;
+    }
+    std::string operator()(const Handle& h) const {
+      return "<handle:" + (h.kind.empty() ? "generic" : h.kind) + ">";
+    }
+  };
+  return std::visit(Visitor{}, value);
 }
 
 bool has_step_ports(const BlockDef& def) {

@@ -31,7 +31,7 @@ import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { ownKeys } from "./commands";
 import { CompactBlock } from "./Compact";
 import { copySelection, pasteClip, type Clip } from "./clipboard";
-import { parseSigns, signOf, wireMismatch, type PortSides } from "./ports";
+import { inForm, signOf, wireMismatch, type PortSides } from "./ports";
 import { usePortLayout } from "./portLayout";
 import { Bindable, NumberOrFormula } from "./Variables";
 import { isRef } from "./bindings";
@@ -87,14 +87,7 @@ export const RunStates = createContext<{
   progress: {},
 });
 
-/** A block's definition as its params make it: a magic block in the form its `form` param picks, a block with `ports_from` with one input per sign (ids a, b, c…). */
-export function inForm(def: BlockDef, params: Record<string, ParamValue>): BlockDef {
-  const form = def.forms?.find((f) => f.name === params.form);
-  const base = form ? { ...def, inputs: form.inputs, outputs: form.outputs } : def;
-  if (!def.ports_from) return base;
-  const proto = def.inputs[0] ?? { id: "a" };
-  return { ...base, inputs: parseSigns(params[def.ports_from]).map((_, i) => ({ ...proto, id: String.fromCharCode(97 + i) })) };
-}
+export { inForm };
 
 
 /** A block's ports as they are now (a magic block's: its form's). */

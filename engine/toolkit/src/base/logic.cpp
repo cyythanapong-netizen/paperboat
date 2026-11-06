@@ -4,6 +4,7 @@
 //   step    branches, on a Step flow's path: in → yes when the same test holds, else no.
 // A value holds when it is positive (a Key held, a Threshold over its level).
 
+#include <algorithm>
 #include <functional>
 #include <string>
 #include <vector>
@@ -64,12 +65,13 @@ std::vector<Form> forms(std::initializer_list<const char*> inputs) {
 
 void add_test(Registry& registry, const std::string& type, const std::string& label,
               std::initializer_list<const char*> inputs, std::vector<ParamDef> params, Test test,
-              std::string description, View view = {}) {
+              std::string description, View view = {}, std::string ports_from = {}) {
   Template t;
   t.name = "base/" + type;
   t.def = magic_def(type, label, forms(inputs), std::move(params));
   t.def.description = std::move(description);
   t.def.view = std::move(view);
+  t.def.ports_from = std::move(ports_from);
   t.make = [test](const Values& p, const Config&) { return std::make_unique<LogicValue>(test, p); };
   t.make_step = [test](const Values& p, const Config&) { return std::make_unique<Branch>(test, p); };
   registry.add(std::move(t));
@@ -91,14 +93,37 @@ void add_logic(Registry& registry) {
   };
   registry.add(std::move(t));
 
-  add_test(registry, "and", "And", {"a", "b"}, {},
-           [](const Values& in, const Values&) { return holds(in, "a") && holds(in, "b"); },
-           "Holds when a and b both hold.", {.compact = true, .glyph = "&"});
-  add_test(registry, "or", "Or", {"a", "b"}, {},
-           [](const Values& in, const Values&) { return holds(in, "a") || holds(in, "b"); },
-           "Holds when a or b holds.", {.compact = true, .glyph = "≥1"});
+  add_test(
+      registry, "and", "And", {"a", "b"},
+      {{.id = "inputs", .default_value = 2.0, .type = "number"}},
+      [](const Values& in, const Values& p) {
+        int n = std::clamp(static_cast<int>(get_or(p, "inputs", 2.0)), 2, 26);
+        for (int i = 0; i < n; ++i) {
+          if (!holds(in, std::string(1, static_cast<char>('a' + i)))) return false;
+        }
+        return true;
+      },
+      "Holds when all of its inputs hold.", {.compact = true, .glyph = "&"}, "inputs");
+
+  add_test(
+      registry, "or", "Or", {"a", "b"},
+      {{.id = "inputs", .default_value = 2.0, .type = "number"}},
+      [](const Values& in, const Values& p) {
+        int n = std::clamp(static_cast<int>(get_or(p, "inputs", 2.0)), 2, 26);
+        for (int i = 0; i < n; ++i) {
+          if (holds(in, std::string(1, static_cast<char>('a' + i)))) return true;
+        }
+        return false;
+      },
+      "Holds when any of its inputs holds.", {.compact = true, .glyph = "≥1"}, "inputs");
+
+  add_test(registry, "xor", "Xor", {"a", "b"}, {},
+           [](const Values& in, const Values&) { return holds(in, "a") ^ holds(in, "b"); },
+           "Holds when exactly one of a or b holds.", {.compact = true, .glyph = "=1"});
+
   add_test(registry, "not", "Not", {"u"}, {}, [](const Values& in, const Values&) { return !holds(in, "u"); },
            "Holds when its input doesn't.", {.compact = true, .glyph = "¬"});
+
   add_test(registry, "compare", "Compare", {"a", "b"},
            {{.id = "op", .type = "enum", .default_text = ">", .options = {">", ">=", "<", "<=", "==", "!="}}},
            [](const Values& in, const Values& p) {
@@ -108,10 +133,28 @@ void add_logic(Registry& registry) {
                case 1: return a >= b;
                case 2: return a < b;
                case 3: return a <= b;
-                case 4: return a == b;
-                default: return a != b;
-              }
-            }, "Compares a with b: greater, less, equal…", {.compact = true, .glyph = "cmp", .value = "{op}"});
+               case 4: return a == b;
+               default: return a != b;
+             }
+           }, "Compares a with b: greater, less, equal…", {.compact = true, .glyph = "cmp", .value = "{op}"});
+
+  add_test(
+      registry, "in_range", "In Range", {"u", "min", "max"},
+      {{.id = "min", .default_value = 0.0, .type = "number"},
+       {.id = "max", .default_value = 1.0, .type = "number"},
+       {.id = "inclusive_min", .default_value = 1.0, .type = "boolean"},
+       {.id = "inclusive_max", .default_value = 1.0, .type = "boolean"}},
+      [](const Values& in, const Values& p) {
+        const double u = get_or(in, "u");
+        const double lo = in.contains("min") ? get_or(in, "min") : get_or(p, "min", 0.0);
+        const double hi = in.contains("max") ? get_or(in, "max") : get_or(p, "max", 1.0);
+        const bool inc_min = get_or(p, "inclusive_min", 1.0) != 0.0;
+        const bool inc_max = get_or(p, "inclusive_max", 1.0) != 0.0;
+        const bool above = inc_min ? (u >= lo) : (u > lo);
+        const bool below = inc_max ? (u <= hi) : (u < hi);
+        return above && below;
+      },
+      "Holds when u is between min and max.", {.compact = true, .glyph = "window", .value = "{min}…{max}"});
 }
 
 }  // namespace paperboat::toolkit::base
