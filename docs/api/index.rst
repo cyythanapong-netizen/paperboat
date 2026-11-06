@@ -1,23 +1,31 @@
-Paperboat API
-=============
+Paperboat Documentation
+=======================
 
-Paperboat is a framework. Connect it to a **backend** (any program: a simulation, an image
-pipeline, a game, a test bench) and it becomes an app for that backend's domain, with four
-pages: the **Station** (the things the domain is about), the **Flow** (what is done to
-them, as a graph of blocks), the **Dashboard** (results, as instruments) and the
-**Console** (what happened).
+Paperboat is an interactive framework for engineering systems, simulations, and data
+pipelines. Connect it to a **backend** (in C++ or Python) and it becomes an application for
+that backend's domain across four pages: the **Station** (physical scene & equipment), the
+**Flow** (computation & signal graph), the **Board** (live instruments & telemetry), and the
+**Console** (event logs & diagnostics).
 
 The engine is C++. A backend is a small program on the engine's SDK, in C++ or in Python
-through the bindings; it adds only what its domain has and the toolkit doesn't. This
-reference is for developers writing backends.
+through the bindings; it adds only what its domain has and the toolkit doesn't.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Guide
+   :caption: Core Manuals & Tutorials
+
+   user_manual
+   technical_manual
+   tutorials
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Topic Guides
 
    concepts
    quickstart
    descriptor
+   backend_layout
    flow
    station
    dashboard
@@ -26,7 +34,7 @@ reference is for developers writing backends.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Reference
+   :caption: API Reference
 
    cpp
    python

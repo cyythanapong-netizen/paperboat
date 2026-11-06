@@ -399,7 +399,12 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
 
   if (!fs::exists(build_dir / "CMakeCache.txt")) {
     if (verbose) std::cout << "[build] configuring with cmake…\n";
-    auto config_res = ProcessRunner::run_sync({"cmake", "-S", backend_dir.string(), "-B", build_dir.string()});
+    const fs::path root = toolkit::find_repo_root(backend_dir);
+    std::vector<std::string> config_cmd = {"cmake", "-S", backend_dir.string(), "-B", build_dir.string()};
+    if (!root.empty() && fs::is_directory(root / "engine")) {
+      config_cmd.push_back("-DPAPERBOAT_ENGINE_DIR=" + (root / "engine").string());
+    }
+    auto config_res = ProcessRunner::run_sync(config_cmd);
     if (!config_res.ok()) {
       if (error_msg) *error_msg = "cmake configure failed: " + config_res.stderr_text;
       return false;
@@ -450,6 +455,9 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
     }
     env.env.emplace_back("PYTHONPATH", pythonpath);
   }
+
+  env.env.emplace_back("no_proxy", "localhost,127.0.0.1");
+  env.env.emplace_back("NO_PROXY", "localhost,127.0.0.1");
 
   // 3. Ensure C++ Python bindings (_engine*.so) are built
   if (!root.empty() && fs::is_directory(root / "python")) {
@@ -506,7 +514,10 @@ BackendKind BackendManager::detect_backend_kind(const fs::path& path) {
     if (fs::is_regular_file(btoml)) {
       try {
         auto tbl = toml::parse_file(btoml.string());
-        std::string eng = tbl["engine"].value_or(std::string{});
+        std::string lang = tbl["backend"]["language"].value_or(tbl["language"].value_or(""));
+        if (lang == "python") return BackendKind::Python;
+        if (lang == "cpp") return BackendKind::Cpp;
+        std::string eng = tbl["backend"]["engine"].value_or(tbl["engine"].value_or(""));
         if (eng.find("python") != std::string::npos) return BackendKind::Python;
         if (eng.find("cpp") != std::string::npos) return BackendKind::Cpp;
       } catch (...) {}
@@ -569,14 +580,18 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
 
   // Determine port
   int port = opts.port;
+  BackendManifest manifest = load_manifest(dir);
   if (port <= 0) {
-    // Check if descriptor or backend.toml specifies port
-    const auto desc = dir / "descriptor.toml";
-    if (fs::is_regular_file(desc)) {
-      try {
-        auto tbl = toml::parse_file(desc.string());
-        if (auto p = tbl["port"].value<int>()) port = *p;
-      } catch (...) {}
+    if (manifest.has_manifest && manifest.port > 0) {
+      port = manifest.port;
+    } else {
+      const auto desc = dir / "descriptor.toml";
+      if (fs::is_regular_file(desc)) {
+        try {
+          auto tbl = toml::parse_file(desc.string());
+          if (auto p = tbl["port"].value<int>()) port = *p;
+        } catch (...) {}
+      }
     }
     if (port <= 0) port = 8765;
   }
@@ -611,13 +626,17 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
 
     // Locate binary in build/
     fs::path bin;
-    std::error_code ec;
-    for (const auto& entry : fs::directory_iterator(dir / "build", ec)) {
-      if (entry.is_regular_file()) {
-        auto fn = entry.path().filename().string();
-        if (fn.starts_with("paperboat-") && !fn.ends_with(".o") && !fn.ends_with(".a")) {
-          bin = entry.path();
-          break;
+    if (manifest.has_manifest && !manifest.run.empty() && fs::is_regular_file(dir / manifest.run)) {
+      bin = dir / manifest.run;
+    } else {
+      std::error_code ec;
+      for (const auto& entry : fs::directory_iterator(dir / "build", ec)) {
+        if (entry.is_regular_file()) {
+          auto fn = entry.path().filename().string();
+          if (fn.starts_with("paperboat-") && !fn.ends_with(".o") && !fn.ends_with(".a")) {
+            bin = entry.path();
+            break;
+          }
         }
       }
     }
@@ -640,12 +659,16 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     auto py_env = prepare_python_env(repo_root, dir);
 
     fs::path server_script = dir / "server.py";
-    if (!fs::is_regular_file(server_script)) {
+    std::string script_run_arg = "server.py";
+    if (manifest.has_manifest && !manifest.run.empty() && fs::is_regular_file(dir / manifest.run)) {
+      server_script = dir / manifest.run;
+      script_run_arg = manifest.run;
+    } else if (!fs::is_regular_file(server_script)) {
       std::cerr << "error: server.py not found in " << dir << '\n';
       return 1;
     }
 
-    std::vector<std::string> args = {py_env.python_bin.string(), "server.py", "--port", std::to_string(port)};
+    std::vector<std::string> args = {py_env.python_bin.string(), script_run_arg, "--port", std::to_string(port)};
     for (const auto& [k, v] : opts.vars) {
       args.push_back("--var");
       args.push_back(k + "=" + v);
@@ -952,7 +975,108 @@ bool BackendManager::build_app() {
   return true;
 }
 
-CheckResult BackendManager::check_backend(const fs::path& path, bool /*fast*/) {
+BackendManifest BackendManager::load_manifest(const fs::path& backend_dir, std::string* error_msg) {
+  BackendManifest m;
+  const fs::path manifest_path = backend_dir / "backend.toml";
+  if (!fs::is_regular_file(manifest_path)) {
+    if (error_msg) *error_msg = "backend.toml missing in " + backend_dir.string();
+    return m;
+  }
+
+  try {
+    auto doc = toml::parse_file(manifest_path.string());
+
+    auto backend_tbl = doc["backend"].as_table();
+    if (!backend_tbl) {
+      if (error_msg) *error_msg = "missing [backend] table in " + manifest_path.string();
+      return m;
+    }
+
+    if (!doc["backend"]["format"].is_integer()) {
+      if (error_msg) *error_msg = "missing or invalid [backend].format in " + manifest_path.string();
+      return m;
+    }
+    m.format = static_cast<int>(doc["backend"]["format"].value_or(-1));
+    if (m.format != 0) {
+      if (error_msg) *error_msg = "unsupported backend.toml format version " + std::to_string(m.format) + " (expected 0)";
+      return m;
+    }
+
+    m.name = doc["backend"]["name"].value_or(std::string{});
+    m.version = doc["backend"]["version"].value_or("0.1.0");
+    m.engine = doc["backend"]["engine"].value_or(">=0.1");
+    m.language = doc["backend"]["language"].value_or(std::string{});
+    m.run = doc["backend"]["run"].value_or(std::string{});
+    m.port = static_cast<int>(doc["backend"]["port"].value_or(8765));
+    m.descriptor = doc["backend"]["descriptor"].value_or("descriptor.toml");
+
+    if (auto tks = doc["backend"]["toolkits"].as_array()) {
+      for (const auto& el : *tks) {
+        if (auto s = el.value<std::string>()) {
+          m.toolkits.push_back(*s);
+        }
+      }
+    }
+
+    if (doc["test"].is_table()) {
+      m.golden = doc["test"]["golden"].value_or(std::string{});
+    }
+
+    if (m.name.empty()) {
+      if (error_msg) *error_msg = "backend.toml: missing required field 'name'";
+      return m;
+    }
+    if (m.language != "cpp" && m.language != "python") {
+      if (error_msg) *error_msg = "backend.toml: invalid or missing 'language' (must be 'cpp' or 'python')";
+      return m;
+    }
+    if (m.run.empty()) {
+      if (error_msg) *error_msg = "backend.toml: missing required field 'run'";
+      return m;
+    }
+    if (m.descriptor.empty()) {
+      if (error_msg) *error_msg = "backend.toml: 'descriptor' cannot be empty";
+      return m;
+    }
+
+    m.has_manifest = true;
+  } catch (const toml::parse_error& err) {
+    if (error_msg) {
+      *error_msg = "backend.toml parse error at line " + std::to_string(err.source().begin.line) +
+                   ":" + std::to_string(err.source().begin.column) + ": " + std::string(err.description());
+    }
+    return m;
+  } catch (const std::exception& err) {
+    if (error_msg) *error_msg = err.what();
+    return m;
+  }
+
+  return m;
+}
+
+int BackendManager::find_free_port(int start_port, int end_port) {
+  for (int p = start_port; p <= end_port; ++p) {
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) continue;
+    int opt = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(static_cast<uint16_t>(p));
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (bind(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) {
+      close(sock);
+      if (!is_port_listening(p)) {
+        return p;
+      }
+    } else {
+      close(sock);
+    }
+  }
+  return 0;
+}
+
+CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   CheckResult res;
   const fs::path dir = resolve_backend_dir(path);
   if (!fs::is_directory(dir)) {
@@ -960,48 +1084,495 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool /*fast*/) {
     return res;
   }
 
-  const fs::path desc_file = dir / "descriptor.toml";
-  if (!fs::is_regular_file(desc_file)) {
-    res.errors.push_back("descriptor.toml missing in " + dir.string());
+  const fs::path repo_root = toolkit::find_repo_root(dir);
+
+  // -------------------------------------------------------------
+  // Stage 1: Manifest & Folder Layout
+  // -------------------------------------------------------------
+  CheckStep step_manifest{"manifest", false, false, "", 0.0};
+  auto t_start = std::chrono::steady_clock::now();
+
+  std::string manifest_err;
+  BackendManifest manifest = load_manifest(dir, &manifest_err);
+  if (!manifest_err.empty() || !manifest.has_manifest) {
+    step_manifest.message = manifest_err.empty() ? "failed to load backend.toml" : manifest_err;
+    step_manifest.ok = false;
+    res.errors.push_back(step_manifest.message);
+    res.steps.push_back(step_manifest);
     return res;
   }
 
-  try {
-    auto doc = toml::parse_file(desc_file.string());
-    res.domain = doc["domain"].value_or(dir.filename().string());
-  } catch (...) {}
+  res.name = manifest.name;
+  res.version = manifest.version;
+  res.language = manifest.language;
+  res.engine = manifest.engine;
 
-  // Check required optional toolkits
-  const auto known = toolkit::list_toolkits(toolkit::find_repo_root(dir));
-  const auto reqs = toolkit::load_toolkit_requirements(dir, known);
-  for (const auto& r : reqs) {
-    const fs::path tk_dir = toolkit::find_repo_root(dir) / "engine" / "toolkit" / r;
-    if (!fs::is_regular_file(tk_dir / "toolkit.toml")) {
-      res.missing_toolkits.push_back(r);
-      res.warnings.push_back("missing required toolkit: " + r);
+  // Check descriptor file exists
+  const fs::path desc_file = dir / manifest.descriptor;
+  if (!fs::is_regular_file(desc_file)) {
+    step_manifest.message = "descriptor file missing: " + manifest.descriptor;
+    step_manifest.ok = false;
+    res.errors.push_back(step_manifest.message);
+    res.steps.push_back(step_manifest);
+    return res;
+  }
+
+  // Check build / entry point files
+  if (manifest.language == "cpp") {
+    if (!fs::is_regular_file(dir / "CMakeLists.txt")) {
+      step_manifest.message = "CMakeLists.txt missing in C++ backend: " + dir.string();
+      step_manifest.ok = false;
+      res.errors.push_back(step_manifest.message);
+      res.steps.push_back(step_manifest);
+      return res;
+    }
+  } else if (manifest.language == "python") {
+    if (!fs::is_regular_file(dir / manifest.run) && !fs::is_regular_file(dir / "server.py")) {
+      step_manifest.message = "Python entrypoint missing (" + manifest.run + " or server.py) in " + dir.string();
+      step_manifest.ok = false;
+      res.errors.push_back(step_manifest.message);
+      res.steps.push_back(step_manifest);
+      return res;
     }
   }
 
+  // Check golden file if declared
+  if (!manifest.golden.empty() && !fs::is_regular_file(dir / manifest.golden)) {
+    step_manifest.message = "declared golden file missing: " + (dir / manifest.golden).string();
+    step_manifest.ok = false;
+    res.errors.push_back(step_manifest.message);
+    res.steps.push_back(step_manifest);
+    return res;
+  }
+
+  // Check required toolkits
+  std::vector<std::string> all_toolkits = manifest.toolkits;
+  const auto known = toolkit::list_toolkits(repo_root);
+  const auto reqs = toolkit::load_toolkit_requirements(dir, known);
+  for (const auto& r : reqs) {
+    if (std::find(all_toolkits.begin(), all_toolkits.end(), r) == all_toolkits.end()) {
+      all_toolkits.push_back(r);
+    }
+  }
+  for (const auto& tk : all_toolkits) {
+    const fs::path tk_dir = repo_root / "engine" / "toolkit" / tk;
+    if (!fs::is_regular_file(tk_dir / "toolkit.toml")) {
+      res.missing_toolkits.push_back(tk);
+      res.warnings.push_back("missing required toolkit: " + tk);
+    }
+  }
+  if (!res.missing_toolkits.empty()) {
+    step_manifest.message = "missing required toolkit: " + res.missing_toolkits.front();
+    step_manifest.ok = false;
+    res.errors.push_back(step_manifest.message);
+    res.steps.push_back(step_manifest);
+    return res;
+  }
+
+  // Parse descriptor syntax
   try {
-    const auto catalog = toolkit::load_descriptor_file(desc_file);
-    res.domain = catalog.domain;
+    auto doc = toml::parse_file(desc_file.string());
+    res.domain = doc["domain"].value_or(manifest.name);
+  } catch (const toml::parse_error& err) {
+    step_manifest.message = "descriptor syntax error: " + desc_file.string() + ":" +
+                            std::to_string(err.source().begin.line) + ":" +
+                            std::to_string(err.source().begin.column) + ": " + std::string(err.description());
+    step_manifest.ok = false;
+    res.errors.push_back(step_manifest.message);
+    res.steps.push_back(step_manifest);
+    return res;
+  }
+
+  auto t_end = std::chrono::steady_clock::now();
+  step_manifest.duration_seconds = std::chrono::duration<double>(t_end - t_start).count();
+  step_manifest.ok = true;
+  step_manifest.message = "format 0, " + manifest.descriptor + ", " + manifest.language;
+  res.steps.push_back(step_manifest);
+  res.manifest_ok = true;
+
+  // -------------------------------------------------------------
+  // Stage 2: Catalog & Block Completeness
+  // -------------------------------------------------------------
+  CheckStep step_catalog{"catalog", false, false, "", 0.0};
+  t_start = std::chrono::steady_clock::now();
+
+  bool catalog_success = false;
+  try {
+    toolkit::DescriptorOptions desc_opts;
+    desc_opts.optional_imports = all_toolkits;
+    const auto catalog = toolkit::load_descriptor_file(desc_file, toolkit::builtins(), desc_opts);
+    res.domain = catalog.domain.empty() ? res.domain : catalog.domain;
     res.block_count = static_cast<int>(catalog.entries.size());
     res.object_count = static_cast<int>(catalog.objects.size());
     res.has_starter_graph = !catalog.graph.empty();
     res.has_starter_station = !catalog.station.empty();
-    res.ok = res.errors.empty() && res.missing_toolkits.empty();
+    catalog_success = true;
   } catch (const toolkit::DescriptorError& err) {
     std::string msg = err.what();
-    if (msg.find("no block type") != std::string::npos || msg.find("no station template") != std::string::npos) {
-      res.warnings.push_back("domain block/station template provided by backend executable runtime: " + msg);
-      res.ok = res.errors.empty() && res.missing_toolkits.empty();
+    if (msg.find("the catalog is empty") != std::string::npos && fs::is_directory(dir / "domain")) {
+      res.warnings.push_back("domain defines its blocks in code: " + msg);
+      catalog_success = true;
+    } else if (msg.find("no block type") != std::string::npos || msg.find("no station template") != std::string::npos) {
+      // Check if the missing type is a domain block provided by backend code
+      std::string type_name;
+      auto q1 = msg.find('"');
+      if (q1 != std::string::npos) {
+        auto q2 = msg.find('"', q1 + 1);
+        if (q2 != std::string::npos) {
+          type_name = msg.substr(q1 + 1, q2 - q1 - 1);
+        }
+      }
+
+      bool is_domain_block = false;
+      if (!type_name.empty()) {
+        if (type_name == res.domain || type_name.starts_with(res.domain + "-") || type_name.starts_with(res.domain + "_")) {
+          is_domain_block = true;
+        } else {
+          // Scan domain source files for type_name
+          std::error_code ec;
+          for (const auto& entry : fs::recursive_directory_iterator(dir, ec)) {
+            if (entry.is_regular_file()) {
+              auto ext = entry.path().extension().string();
+              if (ext == ".cpp" || ext == ".hpp" || ext == ".h" || ext == ".py") {
+                std::ifstream ifs(entry.path());
+                std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+                if (content.find("\"" + type_name + "\"") != std::string::npos ||
+                    content.find("'" + type_name + "'") != std::string::npos) {
+                  is_domain_block = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (is_domain_block) {
+        res.warnings.push_back("domain block/station template provided by runtime: " + msg);
+        catalog_success = true;
+      } else {
+        step_catalog.message = msg;
+        res.errors.push_back(msg);
+      }
     } else {
+      step_catalog.message = msg;
       res.errors.push_back(msg);
-      res.ok = false;
     }
   } catch (const std::exception& err) {
+    step_catalog.message = err.what();
     res.errors.push_back(err.what());
-    res.ok = false;
+  }
+
+  t_end = std::chrono::steady_clock::now();
+  step_catalog.duration_seconds = std::chrono::duration<double>(t_end - t_start).count();
+
+  if (!catalog_success) {
+    step_catalog.ok = false;
+    res.steps.push_back(step_catalog);
+    return res;
+  }
+
+  step_catalog.ok = true;
+  step_catalog.message = std::to_string(res.block_count) + " blocks, " +
+                         std::to_string(res.object_count) + " station objects";
+  res.steps.push_back(step_catalog);
+  res.catalog_ok = true;
+
+  // -------------------------------------------------------------
+  // If fast mode, skip stages 3 & 4
+  // -------------------------------------------------------------
+  if (fast) {
+    CheckStep step_smoke{"smoke", false, true, "skipped (--fast)", 0.0};
+    res.steps.push_back(step_smoke);
+    CheckStep step_golden{"golden", false, true, "skipped (--fast)", 0.0};
+    res.steps.push_back(step_golden);
+    res.ok = res.errors.empty();
+    return res;
+  }
+
+  // -------------------------------------------------------------
+  // Stage 3: Live Protocol Smoke Test
+  // -------------------------------------------------------------
+  CheckStep step_smoke{"smoke", false, false, "", 0.0};
+  t_start = std::chrono::steady_clock::now();
+
+  auto py_env = prepare_python_env(repo_root, dir);
+  if (manifest.language == "cpp") {
+    std::string build_err;
+    if (!ensure_built(dir, false, false, &build_err)) {
+      step_smoke.message = "build failed: " + build_err;
+      step_smoke.ok = false;
+      res.errors.push_back(step_smoke.message);
+      res.steps.push_back(step_smoke);
+      return res;
+    }
+  }
+
+  int smoke_port = find_free_port(18765, 18999);
+  if (smoke_port <= 0) {
+    step_smoke.message = "no ephemeral port available for smoke test";
+    step_smoke.ok = false;
+    res.errors.push_back(step_smoke.message);
+    res.steps.push_back(step_smoke);
+    return res;
+  }
+
+  // Construct launch command
+  std::vector<std::string> launch_cmd;
+  if (manifest.language == "cpp") {
+    fs::path bin = dir / manifest.run;
+    if (!fs::is_regular_file(bin)) {
+      step_smoke.message = "executable not found: " + bin.string();
+      step_smoke.ok = false;
+      res.errors.push_back(step_smoke.message);
+      res.steps.push_back(step_smoke);
+      return res;
+    }
+    launch_cmd = {bin.string(), "--port", std::to_string(smoke_port)};
+  } else {
+    fs::path script = dir / manifest.run;
+    launch_cmd = {py_env.python_bin.string(), script.string(), "--port", std::to_string(smoke_port)};
+  }
+
+  fs::path log_path = runtime_dir() / ("smoke-" + std::to_string(smoke_port) + ".log");
+  fs::create_directories(runtime_dir());
+
+  int backend_pid = ProcessRunner::run_detached(launch_cmd, dir, py_env.env, log_path);
+  if (backend_pid <= 0) {
+    step_smoke.message = "failed to start backend process";
+    step_smoke.ok = false;
+    res.errors.push_back(step_smoke.message);
+    res.steps.push_back(step_smoke);
+    return res;
+  }
+
+  struct BackendCleaner {
+    int pid;
+    int port;
+    ~BackendCleaner() {
+      if (pid > 0) {
+        kill(-pid, SIGTERM);
+        kill(pid, SIGTERM);
+        BackendManager::free_port(port, 1000);
+        BackendManager::unregister_running_backend(port);
+      }
+    }
+  } cleaner{backend_pid, smoke_port};
+
+  RunningBackend rb;
+  rb.port = smoke_port;
+  rb.pid = backend_pid;
+  rb.domain = res.domain;
+  rb.backend_dir = dir;
+  rb.started_at = current_timestamp();
+  register_running_backend(rb);
+
+  bool listening = false;
+  for (int i = 0; i < 50; ++i) {
+    if (is_port_listening(smoke_port)) {
+      listening = true;
+      break;
+    }
+    if (!ProcessRunner::is_alive(backend_pid)) {
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+
+  if (!listening) {
+    std::string err_output;
+    std::ifstream log_file(log_path);
+    if (log_file) {
+      std::stringstream buf;
+      buf << log_file.rdbuf();
+      err_output = buf.str();
+    }
+    step_smoke.message = "backend failed to start on port " + std::to_string(smoke_port) +
+                         (err_output.empty() ? "" : ": " + err_output);
+    step_smoke.ok = false;
+    res.errors.push_back(step_smoke.message);
+    res.steps.push_back(step_smoke);
+    return res;
+  }
+
+  fs::path smoke_script = repo_root / "protocol" / "smoke_test.py";
+  auto smoke_res = ProcessRunner::run_sync(
+      {py_env.python_bin.string(), smoke_script.string(), "--port", std::to_string(smoke_port)},
+      repo_root, py_env.env, std::chrono::milliseconds(20000));
+
+  t_end = std::chrono::steady_clock::now();
+  step_smoke.duration_seconds = std::chrono::duration<double>(t_end - t_start).count();
+
+  if (!smoke_res.ok()) {
+    std::string failure_msg = !smoke_res.stdout_text.empty() ? smoke_res.stdout_text : smoke_res.stderr_text;
+    if (failure_msg.empty()) failure_msg = "smoke test failed (exit code " + std::to_string(smoke_res.exit_code) + ")";
+    step_smoke.message = failure_msg;
+    step_smoke.ok = false;
+    res.errors.push_back(failure_msg);
+    res.steps.push_back(step_smoke);
+    return res;
+  }
+
+  step_smoke.ok = true;
+  step_smoke.message = "protocol smoke test passed on port " + std::to_string(smoke_port);
+  res.steps.push_back(step_smoke);
+  res.smoke_ok = true;
+
+  // -------------------------------------------------------------
+  // Stage 4: Golden Headless Comparison
+  // -------------------------------------------------------------
+  CheckStep step_golden{"golden", false, false, "", 0.0};
+  t_start = std::chrono::steady_clock::now();
+
+  if (manifest.golden.empty()) {
+    step_golden.skipped = true;
+    step_golden.ok = true;
+    step_golden.message = "no golden test declared";
+    res.steps.push_back(step_golden);
+    res.golden_ok = true;
+  } else {
+    fs::path golden_script = repo_root / "protocol" / "golden.py";
+    auto golden_res = ProcessRunner::run_sync(
+        {py_env.python_bin.string(), golden_script.string(), dir.string()},
+        repo_root, py_env.env, std::chrono::milliseconds(30000));
+
+    t_end = std::chrono::steady_clock::now();
+    step_golden.duration_seconds = std::chrono::duration<double>(t_end - t_start).count();
+
+    if (!golden_res.ok()) {
+      std::string failure_msg = !golden_res.stdout_text.empty() ? golden_res.stdout_text : golden_res.stderr_text;
+      if (failure_msg.empty()) failure_msg = "golden test failed (exit code " + std::to_string(golden_res.exit_code) + ")";
+      step_golden.message = failure_msg;
+      step_golden.ok = false;
+      res.errors.push_back(failure_msg);
+      res.steps.push_back(step_golden);
+      return res;
+    }
+
+    step_golden.ok = true;
+    step_golden.message = manifest.golden + " matched";
+    res.steps.push_back(step_golden);
+    res.golden_ok = true;
+  }
+
+  res.ok = res.errors.empty();
+  return res;
+}
+
+PackResult BackendManager::pack_backend(const fs::path& path, const fs::path& out_path, bool /*fast*/) {
+  PackResult res;
+  const fs::path dir = resolve_backend_dir(path);
+  if (!fs::is_directory(dir)) {
+    res.errors.push_back("directory not found: " + path.string());
+    return res;
+  }
+
+  // Run fast check first
+  auto check_res = check_backend(dir, /*fast=*/true);
+  if (!check_res.ok) {
+    res.errors.push_back("cannot pack: backend verification failed");
+    for (const auto& err : check_res.errors) res.errors.push_back("  " + err);
+    return res;
+  }
+
+  BackendManifest manifest = load_manifest(dir);
+  res.name = manifest.name.empty() ? dir.filename().string() : manifest.name;
+  res.version = manifest.version.empty() ? "0.1.0" : manifest.version;
+
+  fs::path package_out = out_path;
+  if (package_out.empty()) {
+    package_out = fs::current_path() / (res.name + "-" + res.version + ".paperboat-pkg");
+  }
+
+  const fs::path repo_root = toolkit::find_repo_root(dir);
+  auto py_env = prepare_python_env(repo_root, dir);
+  fs::path script = repo_root / "scripts" / "package_backend.py";
+
+  auto pack_proc = ProcessRunner::run_sync(
+      {py_env.python_bin.string(), script.string(), "pack", "--dir", dir.string(), "--out", package_out.string()},
+      repo_root, py_env.env, std::chrono::milliseconds(30000));
+
+  if (!pack_proc.ok()) {
+    res.errors.push_back("packing script failed: " +
+                         (!pack_proc.stdout_text.empty() ? pack_proc.stdout_text : pack_proc.stderr_text));
+    return res;
+  }
+
+  try {
+    auto j = json::parse(pack_proc.stdout_text);
+    if (!j.value("ok", false)) {
+      res.errors.push_back(j.value("error", "unknown packing error"));
+      return res;
+    }
+    res.ok = true;
+    res.package_path = package_out;
+    res.name = j.value("name", res.name);
+    res.version = j.value("version", res.version);
+    res.file_count = j.value("file_count", 0);
+    res.total_bytes = j.value("total_bytes", static_cast<uint64_t>(0));
+    res.sha256 = j.value("sha256", std::string{});
+  } catch (const std::exception& e) {
+    res.errors.push_back("failed to parse pack output: " + std::string(e.what()));
+    return res;
+  }
+
+  return res;
+}
+
+UnpackResult BackendManager::unpack_backend(const fs::path& archive_path, const fs::path& dest_dir, bool verify) {
+  UnpackResult res;
+  if (!fs::is_regular_file(archive_path)) {
+    res.errors.push_back("package archive not found: " + archive_path.string());
+    return res;
+  }
+
+  const fs::path repo_root = toolkit::find_repo_root();
+  auto py_env = prepare_python_env(repo_root);
+  fs::path script = repo_root / "scripts" / "package_backend.py";
+
+  fs::path target_dir = dest_dir;
+  if (target_dir.empty()) {
+    std::string stem = archive_path.stem().string();
+    target_dir = fs::current_path() / stem;
+  }
+
+  std::vector<std::string> args = {
+      py_env.python_bin.string(), script.string(), "unpack",
+      "--pkg", archive_path.string(), "--dir", target_dir.string()
+  };
+  if (verify) args.push_back("--verify");
+
+  auto unpack_proc = ProcessRunner::run_sync(args, repo_root, py_env.env, std::chrono::milliseconds(30000));
+  if (!unpack_proc.ok()) {
+    res.errors.push_back("unpack failed: " +
+                         (!unpack_proc.stdout_text.empty() ? unpack_proc.stdout_text : unpack_proc.stderr_text));
+    return res;
+  }
+
+  try {
+    auto j = json::parse(unpack_proc.stdout_text);
+    if (!j.value("ok", false)) {
+      res.errors.push_back(j.value("error", "unknown unpack error"));
+      return res;
+    }
+    res.ok = true;
+    res.destination_dir = target_dir;
+    res.name = j.value("name", "");
+    res.version = j.value("version", "");
+    res.file_count = j.value("file_count", 0);
+  } catch (const std::exception& e) {
+    res.errors.push_back("failed to parse unpack output: " + std::string(e.what()));
+    return res;
+  }
+
+  if (verify) {
+    auto check_res = check_backend(target_dir, /*fast=*/true);
+    if (!check_res.ok) {
+      res.errors.push_back("post-unpack verification failed:");
+      for (const auto& err : check_res.errors) res.errors.push_back("  " + err);
+      res.ok = false;
+      return res;
+    }
   }
 
   return res;

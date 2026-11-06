@@ -63,9 +63,11 @@ Toolkits:
   toolkit uninstall <name>   Remove an optional toolkit
   toolkit versions <name>    Query remote versions/tags for a toolkit
 
-Verification:
+Verification & Packaging:
   check [path] [--fast] [--json]
-                             Validate descriptor, starters, and requirements
+                             4-stage verification (manifest, catalog, smoke, golden)
+  pack [path] [--out <pkg>]  Package backend into .paperboat-pkg archive
+  unpack <pkg> [--dir <dir>] Unpack and verify .paperboat-pkg archive
 
 General:
   version, --version         Show CLI version
@@ -349,13 +351,28 @@ int cmd_check(const std::vector<std::string_view>& args) {
 
   auto res = core::BackendManager::check_backend(path, fast);
   if (json_out) {
+    json steps_json = json::array();
+    for (const auto& s : res.steps) {
+      steps_json.push_back({
+          {"name", s.name},
+          {"ok", s.ok},
+          {"skipped", s.skipped},
+          {"message", s.message},
+          {"duration", s.duration_seconds},
+      });
+    }
     json doc = {
         {"ok", res.ok},
+        {"name", res.name},
+        {"version", res.version},
+        {"language", res.language},
         {"domain", res.domain},
+        {"engine", res.engine},
         {"blocks", res.block_count},
         {"objects", res.object_count},
         {"has_starter_graph", res.has_starter_graph},
         {"has_starter_station", res.has_starter_station},
+        {"steps", steps_json},
         {"errors", res.errors},
         {"warnings", res.warnings},
         {"missing_toolkits", res.missing_toolkits},
@@ -364,24 +381,106 @@ int cmd_check(const std::vector<std::string_view>& args) {
     return res.ok ? 0 : 1;
   }
 
-  if (res.ok) {
-    std::cout << "[ok] backend domain \"" << res.domain << "\": "
-              << res.block_count << " blocks, "
-              << res.object_count << " station objects.\n";
-    for (const auto& w : res.warnings) {
-      std::cout << "  warning: " << w << '\n';
+  std::cout << "backend \"" << (res.name.empty() ? res.domain : res.name)
+            << "\" (" << (res.version.empty() ? "0.1.0" : res.version)
+            << ", " << (res.language.empty() ? "unknown" : res.language) << "):\n";
+
+  for (const auto& step : res.steps) {
+    if (step.skipped) {
+      std::cout << "  [--] " << step.name << ": " << step.message << '\n';
+    } else if (step.ok) {
+      std::cout << "  [ok] " << step.name << ": " << step.message;
+      if (step.duration_seconds > 0.001) {
+        std::cout << " (" << std::fixed << std::setprecision(2) << step.duration_seconds << "s)";
+      }
+      std::cout << '\n';
+    } else {
+      std::cout << "  [FAIL] " << step.name << ": " << step.message << '\n';
     }
+  }
+
+  for (const auto& w : res.warnings) {
+    std::cout << "  warning: " << w << '\n';
+  }
+
+  if (res.ok) {
+    std::cout << "[ok] backend verification passed ("
+              << (fast ? "fast check" : "all steps") << ")\n";
     return 0;
   } else {
-    std::cerr << "[failed] backend validation errors:\n";
+    std::cerr << "[failed] backend verification failed:\n";
     for (const auto& e : res.errors) {
       std::cerr << "  error: " << e << '\n';
     }
-    for (const auto& w : res.warnings) {
-      std::cerr << "  warning: " << w << '\n';
+    return 1;
+  }
+}
+
+int cmd_pack(const std::vector<std::string_view>& args) {
+  std::string path;
+  std::string out_path;
+
+  for (std::size_t i = 0; i < args.size(); ++i) {
+    auto a = args[i];
+    if (a == "--out" && i + 1 < args.size()) {
+      out_path = std::string(args[++i]);
+    } else if (!a.starts_with("-") && path.empty()) {
+      path = std::string(a);
+    }
+  }
+
+  std::cout << "==> Packing backend " << (path.empty() ? "." : path) << "…\n";
+  auto res = core::BackendManager::pack_backend(path, out_path, /*fast=*/true);
+  if (!res.ok) {
+    std::cerr << "[failed] packing error:\n";
+    for (const auto& e : res.errors) {
+      std::cerr << "  " << e << '\n';
     }
     return 1;
   }
+
+  double kb = static_cast<double>(res.total_bytes) / 1024.0;
+  std::cout << "[ok] package created: " << res.package_path.filename().string()
+            << " (" << res.file_count << " files, "
+            << std::fixed << std::setprecision(1) << kb << " KB)\n";
+  if (!res.sha256.empty()) {
+    std::cout << "     sha256: " << res.sha256 << '\n';
+  }
+  return 0;
+}
+
+int cmd_unpack(const std::vector<std::string_view>& args) {
+  std::string archive;
+  std::string dest_dir;
+
+  for (std::size_t i = 0; i < args.size(); ++i) {
+    auto a = args[i];
+    if (a == "--dir" && i + 1 < args.size()) {
+      dest_dir = std::string(args[++i]);
+    } else if (!a.starts_with("-") && archive.empty()) {
+      archive = std::string(a);
+    }
+  }
+
+  if (archive.empty()) {
+    std::cerr << "error: package archive path required (e.g. `paperboat unpack my-backend-0.1.0.paperboat-pkg`)\n";
+    return 2;
+  }
+
+  std::cout << "==> Unpacking package " << archive << "…\n";
+  auto res = core::BackendManager::unpack_backend(archive, dest_dir, /*verify=*/true);
+  if (!res.ok) {
+    std::cerr << "[failed] unpack error:\n";
+    for (const auto& e : res.errors) {
+      std::cerr << "  " << e << '\n';
+    }
+    return 1;
+  }
+
+  std::cout << "[ok] package extracted to " << res.destination_dir.string()
+            << " (" << res.file_count << " files verified)\n";
+  std::cout << "[ok] backend " << res.name << " v" << res.version << " is ready to run\n";
+  return 0;
 }
 
 void print_interactive_help() {
@@ -395,7 +494,11 @@ void print_interactive_help() {
                            Manage example backends (ports 8765-8773)
   toolkit <list|install|update|versions>
                            Manage optional toolkits (e.g. `toolkit install opencv`)
-  check <backend>          Validate descriptor and toolkits for a backend
+  check [backend] [--fast] 4-stage backend verification (manifest, catalog, smoke, golden)
+  pack [folder] [--out <pkg>]
+                           Package backend into .paperboat-pkg archive
+  unpack <pkg> [--dir <dir>]
+                           Unpack and verify .paperboat-pkg archive
   status                   Show overall status of backends and examples
   clear                    Clear screen and redraw banner
   help                     Show this help message
@@ -451,6 +554,8 @@ int run_interactive_prompt() {
     else if (cmd == "examples") cmd_examples(rest);
     else if (cmd == "toolkit") cmd_toolkit(rest);
     else if (cmd == "check") cmd_check(rest);
+    else if (cmd == "pack") cmd_pack(rest);
+    else if (cmd == "unpack") cmd_unpack(rest);
     else if (cmd == "status") {
       std::cout << "--- Running Backends ---\n";
       cmd_list({});
@@ -494,6 +599,8 @@ int main(int argc, char** argv) {
   if (cmd == "examples") return cmd_examples(rest);
   if (cmd == "toolkit") return cmd_toolkit(rest);
   if (cmd == "check") return cmd_check(rest);
+  if (cmd == "pack") return cmd_pack(rest);
+  if (cmd == "unpack") return cmd_unpack(rest);
 
   std::cerr << "paperboat: unknown command \"" << cmd << "\"\n";
   std::cerr << "Run 'paperboat --help' for usage.\n";

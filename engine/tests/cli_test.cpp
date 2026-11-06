@@ -77,10 +77,163 @@ TEST_CASE("BackendManager check_backend validates missing vs valid descriptors")
   // Check example backends if available
   auto ex_dir = core::BackendManager::find_examples_dir();
   if (!ex_dir.empty() && fs::is_directory(ex_dir / "cart-pole-cpp")) {
-    auto res = core::BackendManager::check_backend(ex_dir / "cart-pole-cpp");
+    auto res = core::BackendManager::check_backend(ex_dir / "cart-pole-cpp", /*fast=*/true);
     CHECK(res.ok);
     CHECK(res.domain == "cart-pole");
+    CHECK(res.manifest_ok);
+    CHECK(res.catalog_ok);
   }
+}
+
+TEST_CASE("BackendManifest load_manifest validates schema and required fields") {
+  const fs::path tmp_dir = fs::temp_directory_path() / "pb_test_manifest_val";
+  std::error_code ec;
+  fs::remove_all(tmp_dir, ec);
+  fs::create_directories(tmp_dir, ec);
+
+  // 1. Missing backend.toml
+  std::string err;
+  auto m_missing = core::BackendManager::load_manifest(tmp_dir, &err);
+  CHECK_FALSE(m_missing.has_manifest);
+  CHECK_THAT(err, ContainsSubstring("backend.toml missing"));
+
+  // 2. Unsupported format version (e.g. format = 99)
+  {
+    std::ofstream out(tmp_dir / "backend.toml");
+    out << "[backend]\nformat = 99\nname = \"test\"\nlanguage = \"python\"\nrun = \"server.py\"\n";
+  }
+  err.clear();
+  auto m_bad_ver = core::BackendManager::load_manifest(tmp_dir, &err);
+  CHECK_FALSE(m_bad_ver.has_manifest);
+  CHECK_THAT(err, ContainsSubstring("unsupported backend.toml format version 99"));
+
+  // 3. Missing name
+  {
+    std::ofstream out(tmp_dir / "backend.toml");
+    out << "[backend]\nformat = 0\nlanguage = \"python\"\nrun = \"server.py\"\n";
+  }
+  err.clear();
+  auto m_no_name = core::BackendManager::load_manifest(tmp_dir, &err);
+  CHECK_FALSE(m_no_name.has_manifest);
+  CHECK_THAT(err, ContainsSubstring("missing required field 'name'"));
+
+  // 4. Valid manifest
+  {
+    std::ofstream out(tmp_dir / "backend.toml");
+    out << "[backend]\nformat = 0\nname = \"my-service\"\nversion = \"1.2.3\"\nlanguage = \"cpp\"\nrun = \"build/my-bin\"\nport = 9000\n"
+        << "toolkits = [\"opencv\"]\n[test]\ngolden = \"expected.json\"\n";
+  }
+  err.clear();
+  auto m_valid = core::BackendManager::load_manifest(tmp_dir, &err);
+  CHECK(m_valid.has_manifest);
+  CHECK(err.empty());
+  CHECK(m_valid.format == 0);
+  CHECK(m_valid.name == "my-service");
+  CHECK(m_valid.version == "1.2.3");
+  CHECK(m_valid.language == "cpp");
+  CHECK(m_valid.run == "build/my-bin");
+  CHECK(m_valid.port == 9000);
+  CHECK(m_valid.descriptor == "descriptor.toml");
+  CHECK(m_valid.toolkits == std::vector<std::string>{"opencv"});
+  CHECK(m_valid.golden == "expected.json");
+
+  fs::remove_all(tmp_dir, ec);
+}
+
+TEST_CASE("BackendManager check_backend handles broken descriptor with line accuracy") {
+  const fs::path tmp_dir = fs::temp_directory_path() / "pb_test_broken_desc";
+  std::error_code ec;
+  fs::remove_all(tmp_dir, ec);
+  fs::create_directories(tmp_dir, ec);
+
+  {
+    std::ofstream btoml(tmp_dir / "backend.toml");
+    btoml << "[backend]\nformat = 0\nname = \"broken\"\nlanguage = \"python\"\nrun = \"server.py\"\n";
+  }
+  {
+    std::ofstream srv(tmp_dir / "server.py");
+    srv << "# dummy\n";
+  }
+  {
+    std::ofstream desc(tmp_dir / "descriptor.toml");
+    desc << "domain = \"broken\"\nthis is invalid syntax !!!\n";
+  }
+
+  auto res = core::BackendManager::check_backend(tmp_dir, /*fast=*/true);
+  CHECK_FALSE(res.ok);
+  CHECK_FALSE(res.manifest_ok);
+  REQUIRE_FALSE(res.errors.empty());
+  CHECK_THAT(res.errors.front(), ContainsSubstring("descriptor syntax error"));
+  CHECK_THAT(res.errors.front(), ContainsSubstring(":2:"));
+
+  fs::remove_all(tmp_dir, ec);
+}
+
+TEST_CASE("BackendManager check_backend detects missing block in descriptor") {
+  const fs::path tmp_dir = fs::temp_directory_path() / "pb_test_missing_block";
+  std::error_code ec;
+  fs::remove_all(tmp_dir, ec);
+  fs::create_directories(tmp_dir, ec);
+
+  {
+    std::ofstream btoml(tmp_dir / "backend.toml");
+    btoml << "[backend]\nformat = 0\nname = \"missing-block\"\nlanguage = \"python\"\nrun = \"server.py\"\n";
+  }
+  {
+    std::ofstream srv(tmp_dir / "server.py");
+    srv << "# dummy\n";
+  }
+  {
+    std::ofstream desc(tmp_dir / "descriptor.toml");
+    desc << "domain = \"missing-block\"\nimport = [\"math\"]\n[[blocks]]\nuse = \"math/totally_nonexistent_xyz\"\n";
+  }
+
+  auto res = core::BackendManager::check_backend(tmp_dir, /*fast=*/true);
+  CHECK_FALSE(res.ok);
+  CHECK(res.manifest_ok);
+  CHECK_FALSE(res.catalog_ok);
+  REQUIRE_FALSE(res.errors.empty());
+  CHECK_THAT(res.errors.front(), ContainsSubstring("no template \"math/totally_nonexistent_xyz\""));
+
+  fs::remove_all(tmp_dir, ec);
+}
+
+TEST_CASE("BackendManager pack_backend and unpack_backend roundtrip excludes build junk") {
+  auto ex_dir = core::BackendManager::find_examples_dir();
+  if (ex_dir.empty() || !fs::is_directory(ex_dir / "cart-pole-cpp")) {
+    return;
+  }
+
+  const fs::path src_dir = ex_dir / "cart-pole-cpp";
+  const fs::path pkg_path = fs::temp_directory_path() / "test_cart_pole_roundtrip.paperboat-pkg";
+  const fs::path unpack_dir = fs::temp_directory_path() / "test_cart_pole_unpacked";
+
+  std::error_code ec;
+  fs::remove(pkg_path, ec);
+  fs::remove_all(unpack_dir, ec);
+
+  // Pack backend
+  auto pack_res = core::BackendManager::pack_backend(src_dir, pkg_path, /*fast=*/true);
+  REQUIRE(pack_res.ok);
+  CHECK(pack_res.file_count >= 6);
+  CHECK(fs::is_regular_file(pkg_path));
+
+  // Unpack backend and verify checksums
+  auto unpack_res = core::BackendManager::unpack_backend(pkg_path, unpack_dir, /*verify=*/true);
+  REQUIRE(unpack_res.ok);
+  CHECK(unpack_res.file_count == pack_res.file_count);
+  CHECK(fs::is_regular_file(unpack_dir / "backend.toml"));
+  CHECK(fs::is_regular_file(unpack_dir / "descriptor.toml"));
+  CHECK_FALSE(fs::exists(unpack_dir / "build"));
+
+  // Check the unpacked directory passes verification
+  auto check_unpacked = core::BackendManager::check_backend(unpack_dir, /*fast=*/true);
+  CHECK(check_unpacked.ok);
+  CHECK(check_unpacked.name == "cart-pole");
+
+  // Clean up
+  fs::remove(pkg_path, ec);
+  fs::remove_all(unpack_dir, ec);
 }
 
 TEST_CASE("WaveSpinner starts and stops cleanly") {
