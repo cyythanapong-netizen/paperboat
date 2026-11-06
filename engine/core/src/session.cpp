@@ -62,20 +62,15 @@ struct Session::State {
   void emit_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}, bool fetch_versions = false) {
     emit({{"type", "toolkits.status"}, {"toolkits", current_toolkits(busy_name, busy_state, fetch_versions)}});
   }
-  // The station as it shows: its objects made with their references resolved.
+  // The station as it shows: its objects made with their references resolved. Throws
+  // VariableError, GraphError or json::exception.
   // `report`: also send what the variables come to (variables.values), for the UI.
   void show(const json& with_station, const json& with_variables, bool report = false) {
-    try {
-      const toolkit::Variables vars(with_variables);
-      if (report) emit({{"type", "variables.values"}, {"values", vars.values()}});
-      const auto objects = make_station(toolkit::resolve_station(with_station, *backend.catalog, vars), *backend.catalog);
-      const auto state = backend.state ? backend.state() : nullptr;
-      emit(scene_message(objects, state.get(), backend.view));
-    } catch (const std::exception& err) {
-      if (backend.catalog->missing_imports.empty()) {
-        log("error", std::string("cannot show station: ") + err.what());
-      }
-    }
+    const toolkit::Variables vars(with_variables);
+    if (report) emit({{"type", "variables.values"}, {"values", vars.values()}});
+    const auto objects = make_station(toolkit::resolve_station(with_station, *backend.catalog, vars), *backend.catalog);
+    const auto state = backend.state ? backend.state() : nullptr;
+    emit(scene_message(objects, state.get(), backend.view));
   }
 };
 
@@ -94,7 +89,13 @@ Session::Session(const Backend& backend, Send send)
   if (!toolkits.empty()) hello["toolkits"] = toolkits;
   s.emit(hello);
   s.emit(json::parse(toolkit::catalog_message(catalog)));
-  s.show(s.station, s.variables, !s.variables.empty());  // checked at load: the starters resolve against the defaults
+  try {
+    s.show(s.station, s.variables, !s.variables.empty());  // checked at load: the starters resolve against the defaults
+  } catch (const std::exception& err) {
+    if (catalog.missing_imports.empty()) {
+      s.log("error", std::string("cannot show station: ") + err.what());
+    }
+  }
   if (!s.variables.empty()) s.emit({{"type", "variables.load"}, {"variables", s.variables}});
   s.emit({{"type", "graph.load"}, {"graph", json::parse(catalog.graph)}});
   if (!s.station.is_null()) s.emit({{"type", "station.load"}, {"station", s.station}});
