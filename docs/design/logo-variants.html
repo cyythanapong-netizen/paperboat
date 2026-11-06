@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paperboat · mark variants (small size + water ripple)</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --ground:#111111; --panel:#1a1a1a; --raised:#222222; --well:#111111;
+    --text:#e9e9e4; --muted:#a3a39d; --line:#2e2e2e; --strong:#4a4a4a;
+    --ink:#e9e9e4; --signal:#ff6a30; --danger:#ff5c4d;
+    --sans:"Geist Sans","Arial",sans-serif; --mono:"Geist Mono","SFMono-Regular",monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{color:var(--text);background:var(--ground);font:13px/1.45 var(--sans);-webkit-font-smoothing:antialiased;}
+  button,input,select{color:inherit;font:inherit;}
+  button{background:var(--raised);border:1px solid var(--strong);border-radius:5px;padding:6px 10px;cursor:pointer;}
+  button:hover{border-color:var(--ink);}
+  :focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+  .shell{max-width:1480px;margin:auto;padding:22px 24px 80px;}
+  header{display:flex;align-items:end;justify-content:space-between;gap:20px;padding:10px 0 18px;border-bottom:1px solid var(--strong);}
+  h1{margin:0;font-size:22px;font-weight:600;letter-spacing:-.025em;}
+  .lede{margin:5px 0 0;color:var(--muted);max-width:780px;}
+  .count{font:12px var(--mono);color:var(--muted);white-space:nowrap;}
+  .toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px -4px 18px;padding:10px 4px;background:var(--ground);}
+  .toolbar input{width:min(320px,100%);height:34px;padding:0 10px;background:var(--well);border:0;border-radius:5px;box-shadow:inset 0 1px 2px #00000055;}
+  .switch{display:flex;align-items:center;gap:3px;font:12px var(--mono);color:var(--muted);}
+  .switch button{border:0;background:transparent;padding:5px 7px;color:var(--muted);}
+  .switch button.on{color:var(--text);font-weight:600;}
+  .switch button.on::before{content:"[ ";}
+  .switch button.on::after{content:" ]";}
+  .hint{margin-left:auto;color:var(--muted);font-size:12px;}
+  section{margin:28px 0 34px;}
+  section > h2{margin:0 0 4px;font-size:14px;font-weight:600;}
+  section > p{margin:0 0 12px;color:var(--muted);max-width:920px;}
+  .size-row{display:grid;grid-template-columns:120px repeat(6,1fr);gap:6px;align-items:end;}
+  .size-row .label{font:10px var(--mono);color:var(--muted);text-align:center;}
+  .size-row .cell{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px 6px;border:1px solid var(--line);background:var(--panel);min-height:70px;}
+  .size-row .cell .size{font:9px var(--mono);color:var(--muted);}
+  .opt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;}
+  .opt{padding:14px;border:1px solid var(--line);background:var(--panel);}
+  .opt h3{margin:0 0 2px;font-size:12px;font-weight:600;}
+  .opt .sub{color:var(--muted);font:11px var(--mono);margin-bottom:10px;}
+  .opt .thumbs{display:flex;flex-wrap:wrap;gap:10px;align-items:end;}
+  .thumb{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 12px;background:var(--raised);border:1px solid var(--line);}
+  .thumb .size{font:9px var(--mono);color:var(--muted);}
+  .thumb-row{display:flex;gap:8px;align-items:end;flex-wrap:wrap;}
+  .zoom{display:flex;gap:12px;align-items:end;flex-wrap:wrap;}
+  .zoom .cell{padding:10px 12px;background:var(--raised);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:4px;}
+  .zoom .cell .size{font:9px var(--mono);color:var(--muted);}
+  .mark{display:block;}
+  .mark .logo-light{fill:var(--text);}
+  .mark .logo-shade{fill:var(--muted);}
+  .mark .logo-hull{fill:var(--text);}
+  .mark .logo-water{fill:var(--signal);}
+  /* Section: animation */
+  .anim-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px;}
+  .anim{padding:14px;border:1px solid var(--line);background:var(--panel);}
+  .anim h3{margin:0 0 2px;font-size:12px;font-weight:600;}
+  .anim .sub{color:var(--muted);font:11px var(--mono);margin-bottom:10px;}
+  .anim-stage{display:flex;align-items:center;justify-content:center;min-height:120px;background:var(--raised);border:1px solid var(--line);position:relative;overflow:hidden;}
+  .anim-stage .mark{transform-origin:50% 50%;}
+  .anim-stage .boat{transform-origin:50% 50%;}
+  .anim-controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  /* wave ripple (dots) */
+  .ripple .w{animation:ripple 1.4s var(--ease, cubic-bezier(.65,0,.25,1)) 1;}
+  .ripple .w1{animation-delay:0s;}.ripple .w2{animation-delay:.12s;}.ripple .w3{animation-delay:.24s;}.ripple .w4{animation-delay:.36s;}.ripple .w5{animation-delay:.48s;}
+  @keyframes ripple{0%{transform:translateY(0);}30%{transform:translateY(-3px);}60%{transform:translateY(1px);}100%{transform:translateY(0);}}
+  /* boat bob */
+  .bob .boat{animation:bob 1.4s var(--ease,cubic-bezier(.65,0,.25,1)) 1;}
+  @keyframes bob{0%{transform:translateY(0);}30%{transform:translateY(-1.5px);}60%{transform:translateY(0.5px);}100%{transform:translateY(0);}}
+  /* tilt */
+  .tilt .boat{animation:tilt 1.4s var(--ease,cubic-bezier(.65,0,.25,1)) 1;}
+  @keyframes tilt{0%{transform:rotate(0deg);}30%{transform:rotate(-2deg);}60%{transform:rotate(1deg);}100%{transform:rotate(0deg);}}
+  /* line wave (d animation) */
+  .linewave .water{animation:linewave 1.4s var(--ease,cubic-bezier(.65,0,.25,1)) 1;}
+  @keyframes linewave{0%{d:path("M0 18 C5 18 10 18 15 18 C20 18 25 18 30 18");}30%{d:path("M0 18 C5 14 10 22 15 18 C20 14 25 22 30 18");}60%{d:path("M0 18 C5 20 10 16 15 18 C20 20 25 16 30 18");}100%{d:path("M0 18 C5 18 10 18 15 18 C20 18 25 18 30 18");}}
+  /* idle: a long cycle, ripple for ~8% then rest */
+  .idle .w{animation:idle 18s ease-in-out infinite;}
+  .idle .w1{animation-delay:0s;}.idle .w2{animation-delay:.2s;}.idle .w3{animation-delay:.4s;}.idle .w4{animation-delay:.6s;}.idle .w5{animation-delay:.8s;}
+  @keyframes idle{0%,7%,100%{transform:translateY(0);}3.5%{transform:translateY(-2px);}}
+  .replay{display:inline-flex;gap:6px;}
+  .replay button{font:500 11px var(--mono);}
+  .bar{background:#0d0d0d;border:1px solid var(--strong);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap;}
+  .bar .wordmark{font:600 15px var(--sans);letter-spacing:-.01em;color:var(--text);}
+  .bar .menu{font:500 12px var(--sans);color:var(--muted);padding:2px 6px;}
+  .bar .conn{font:11px var(--mono);color:var(--muted);}
+  .bar .conn-closed{color:var(--danger);}
+  .context-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .context-grid .panel{padding:14px;border:1px solid var(--line);background:var(--panel);}
+  .context-grid .panel h3{margin:0 0 2px;font-size:12px;font-weight:600;}
+  .context-grid .panel .sub{color:var(--muted);font:11px var(--mono);margin-bottom:10px;}
+  .context-grid .panel .bar{margin:0;}
+  .notes{background:var(--panel);border:1px solid var(--line);padding:14px 16px;}
+  .notes ul{margin:0;padding-left:18px;}
+  .notes li{margin:4px 0;color:var(--muted);}
+  .notes li b{color:var(--text);}
+  .notes code{font:11px var(--mono);color:var(--text);}
+  .note{color:var(--muted);font-size:11px;margin-top:6px;}
+  html[data-theme="light"]{color-scheme:light;--ground:#dcdcd8;--panel:#eaeae6;--raised:#f2f2ef;--well:#e1e1dd;--text:#161616;--muted:#55554f;--line:#cfcfca;--strong:#9d9d97;--ink:#161616;--signal:#ff5a1f;--danger:#d92d20;}
+  @media (max-width:720px){.shell{padding:14px;}header{flex-direction:column;align-items:start;}.size-row{grid-template-columns:1fr;}.size-row .label{text-align:left;}}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none !important;transition:none !important;}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header>
+  <div>
+    <h1>Paperboat mark · small size and a water ripple</h1>
+    <p class="lede">Two decisions: when the mark is too small for its 2-unit pixels, switch to a smooth geometric variant; and let the signal-coloured water ripple now and then. These are mockups for comparison — the production renderer is unchanged.</p>
+  </div>
+  <div class="count" id="count">pixel mark · 62 × 42 units</div>
+</header>
+
+<nav class="toolbar" aria-label="Mark variants filters">
+  <button id="theme" type="button">dark / light</button>
+  <span class="hint">Pixel mark below 16px becomes mush · geometric variant reads at 10px · water ripple is 1–2px, 1.4s, signal colour</span>
+</nav>
+
+<section>
+  <h2>1 · Size ladder</h2>
+  <p>Pixel mark on the left, proposed geometric variant (S1) on the right, at the same height. The crossover where the pixels stop reading is around 16px; the geometric variant stays legible down to 10px.</p>
+  <div class="size-row">
+    <div class="label"></div>
+    <div class="label">32px</div><div class="label">24px</div><div class="label">20px</div><div class="label">16px</div><div class="label">14px</div><div class="label">12px</div>
+  </div>
+  <div class="size-row" style="margin-top:6px">
+    <div class="label">pixel</div>
+    <div class="cell" id="p32"></div><div class="cell" id="p24"></div><div class="cell" id="p20"></div><div class="cell" id="p16"></div><div class="cell" id="p14"></div><div class="cell" id="p12"></div>
+  </div>
+  <div class="size-row" style="margin-top:6px">
+    <div class="label">geometric</div>
+    <div class="cell" id="g32"></div><div class="cell" id="g24"></div><div class="cell" id="g20"></div><div class="cell" id="g16"></div><div class="cell" id="g14"></div><div class="cell" id="g12"></div>
+  </div>
+  <p class="note">The geometric variant is the small-size form (used below the crossover). At 24px and above, keep the pixel mark — it is the brand.</p>
+</section>
+
+<section>
+  <h2>2 · Small-variant options (at 16px and 12px, plus a 4× zoom)</h2>
+  <p>Four candidates for the form below the crossover. All keep the sail + hull silhouette so the mark is still the mark; only the execution changes.</p>
+  <div class="opt-grid">
+    <div class="opt">
+      <h3>S1 · Triangle</h3>
+      <div class="sub">single-tone sail triangle + trapezoid hull + one water line. Calm, the fewest pixels.</div>
+      <div class="thumbs">
+        <div class="thumb"><div class="size">16px</div><div class="slot" data-opt="s1" data-size="16"></div></div>
+        <div class="thumb"><div class="size">12px</div><div class="slot" data-opt="s1" data-size="12"></div></div>
+      </div>
+      <div class="zoom"><div class="cell"><div class="size">4× zoom</div><div class="slot" data-opt="s1" data-size="48"></div></div></div>
+    </div>
+    <div class="opt">
+      <h3>S2 · Two-tone triangle</h3>
+      <div class="sub">sail split light / shade like the pixel mark, trapezoid hull, one water line. Closest to the brand.</div>
+      <div class="thumbs">
+        <div class="thumb"><div class="size">16px</div><div class="slot" data-opt="s2" data-size="16"></div></div>
+        <div class="thumb"><div class="size">12px</div><div class="slot" data-opt="s2" data-size="12"></div></div>
+      </div>
+      <div class="zoom"><div class="cell"><div class="size">4× zoom</div><div class="slot" data-opt="s2" data-size="48"></div></div></div>
+    </div>
+    <div class="opt">
+      <h3>S3 · Monoline boat</h3>
+      <div class="sub">outline only: sail as a triangle outline, hull as an open chevron, water as a wavy line. Reads at 10px.</div>
+      <div class="thumbs">
+        <div class="thumb"><div class="size">16px</div><div class="slot" data-opt="s3" data-size="16"></div></div>
+        <div class="thumb"><div class="size">12px</div><div class="slot" data-opt="s3" data-size="12"></div></div>
+      </div>
+      <div class="zoom"><div class="cell"><div class="size">4× zoom</div><div class="slot" data-opt="s3" data-size="48"></div></div></div>
+    </div>
+    <div class="opt">
+      <h3>S4 · Reduced pixel</h3>
+      <div class="sub">keep the hard-edged pixels, but halve the grid: 4-step sail, 3-step hull, 3 water dots.</div>
+      <div class="thumbs">
+        <div class="thumb"><div class="size">16px</div><div class="slot" data-opt="s4" data-size="16"></div></div>
+        <div class="thumb"><div class="size">12px</div><div class="slot" data-opt="s4" data-size="12"></div></div>
+      </div>
+      <div class="zoom"><div class="cell"><div class="size">4× zoom</div><div class="slot" data-opt="s4" data-size="48"></div></div></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>3 · Water ripple (animation)</h2>
+  <p>The mark’s water is the only coloured part, and it means “live”. A small ripple passes through it now and then: 1–2px of travel, 1.4s, on the existing ease. Four candidate behaviours. Press “replay” to see one pass.</p>
+  <div class="anim-grid">
+    <div class="anim">
+      <h3>W1 · Dot ripple</h3>
+      <div class="sub">each water dot lifts in sequence; the boat stays still. Pure, no layout shift.</div>
+      <div class="anim-stage" id="stage-w1"><div class="mark" id="mark-w1"></div></div>
+      <div class="anim-controls"><div class="replay"><button data-replay="w1">replay</button></div><span class="note">idle every ~18s · on hover · while a run is live</span></div>
+    </div>
+    <div class="anim">
+      <h3>W2 · Ripple + boat bob</h3>
+      <div class="sub">the ripple lifts the boat ~1.5px as the crest passes under it.</div>
+      <div class="anim-stage" id="stage-w2"><div class="mark boat" id="mark-w2"></div></div>
+      <div class="anim-controls"><div class="replay"><button data-replay="w2">replay</button></div><span class="note">the boat is a child, so it bobs as a unit</span></div>
+    </div>
+    <div class="anim">
+      <h3>W3 · Boat tilt</h3>
+      <div class="sub">the boat rocks ~2° as the wave passes under it.</div>
+      <div class="anim-stage" id="stage-w3"><div class="mark boat" id="mark-w3"></div></div>
+      <div class="anim-controls"><div class="replay"><button data-replay="w3">replay</button></div><span class="note">rotation around the hull’s centre</span></div>
+    </div>
+    <div class="anim">
+      <h3>W4 · Travelling wave on a line</h3>
+      <div class="sub">the water line itself undulates; a crest travels left → right. Small variant only.</div>
+      <div class="anim-stage" id="stage-w4"><div class="mark" id="mark-w4"></div></div>
+      <div class="anim-controls"><div class="replay"><button data-replay="w4">replay</button></div><span class="note">animates the SVG <code>d</code> attribute; needs a JS fallback in Firefox</span></div>
+    </div>
+  </div>
+  <div class="anim-grid" style="margin-top:12px">
+    <div class="anim">
+      <h3>Idle · always on (long cycle)</h3>
+      <div class="sub">a ripple every ~18s, ripples for ~7% of the cycle, then rests. No JS, no per-frame work.</div>
+      <div class="anim-stage idle" id="stage-idle"><div class="mark" id="mark-idle"></div></div>
+      <div class="anim-controls"><span class="note">this is the “once in a while” behaviour the request asks for</span></div>
+    </div>
+    <div class="anim">
+      <h3>Reduced motion</h3>
+      <div class="sub">under <code>prefers-reduced-motion</code>, all of the above collapse to 0ms (the tokens already do this). The mark never moves on its own in that case.</div>
+      <div class="anim-stage" id="stage-rm"><div class="mark" id="mark-rm"></div></div>
+      <div class="anim-controls"><span class="note">shown here as a still frame</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>4 · In the app bar</h2>
+  <p>The mark at 24px (pixel, the brand) in the bar, in both themes, with and without a live run. The water is the signal colour; while a run is live it ripples (W1 or W2).</p>
+  <div class="context-grid">
+    <div class="panel">
+      <h3>Dark · idle</h3><div class="sub">water still</div>
+      <div class="bar"><div id="bar-dark-idle"></div><span class="wordmark">paperboat</span><span class="menu">File</span><span class="menu">Edit</span><span class="menu">View</span><span class="menu">Run</span><span class="spacer"></span><span class="conn">● engine</span></div>
+    </div>
+    <div class="panel">
+      <h3>Dark · run live</h3><div class="sub">water ripples (W2)</div>
+      <div class="bar ripple bob" id="bar-dark-live"><div id="bar-dark-live-mark"></div><span class="wordmark">paperboat</span><span class="menu">File</span><span class="menu">Edit</span><span class="menu">View</span><span class="menu">Run</span><span class="spacer"></span><span class="conn">running 3.2 / 10 s</span></div>
+    </div>
+    <div class="panel">
+      <h3>Light · idle</h3><div class="sub">water still</div>
+      <div class="bar" style="background:#eaeae6;border-color:#cfcfca"><div id="bar-light-idle"></div><span class="wordmark" style="color:#161616">paperboat</span><span class="menu" style="color:#55554f">File</span><span class="menu" style="color:#55554f">Edit</span><span class="menu" style="color:#55554f">View</span><span class="menu" style="color:#55554f">Run</span><span class="spacer"></span><span class="conn" style="color:#55554f">● engine</span></div>
+    </div>
+    <div class="panel">
+      <h3>Light · run live</h3><div class="sub">water ripples (W2)</div>
+      <div class="bar ripple bob" id="bar-light-live" style="background:#eaeae6;border-color:#cfcfca"><div id="bar-light-live-mark"></div><span class="wordmark" style="color:#161616">paperboat</span><span class="menu" style="color:#55554f">File</span><span class="menu" style="color:#55554f">Edit</span><span class="menu" style="color:#55554f">View</span><span class="menu" style="color:#55554f">Run</span><span class="spacer"></span><span class="conn" style="color:#55554f">running 3.2 / 10 s</span></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>5 · Implementation notes</h2>
+  <div class="notes">
+    <ul>
+      <li><b>Threshold.</b> Pixel mark at <code>height &gt;= 18</code> (or 20); geometric below it. DESIGN.md currently says “below 16px use the favicon” — propose changing to “below 18px use the geometric variant” so the favicon (brand palette) stays reserved for the browser tab / app icon.</li>
+      <li><b>Logo.tsx.</b> Add a <code>Small</code> component (or a <code>variant="geometric"</code> prop) whose SVG uses smooth vector paths with <code>shapeRendering="geometricPrecision"</code>. Keep the same 62×42 viewBox so the bar layout is unchanged; the hull trapezoid and sail triangle land in the same place.</li>
+      <li><b>Favicon.</b> Stays pixel art in the brand palette (it is an app icon at 64px, never small enough to need the geometric form).</li>
+      <li><b>Ripple.</b> Implement as a CSS keyframe on the water group, not JS: <code>animation: ripple 18s var(--ease) infinite</code> with a 7% active window, gated by <code>@media (prefers-reduced-motion: reduce) { animation: none; }</code>. Run-linked variant: toggle a class on the wordmark when <code>run.started</code> arrives and remove it on <code>run.finished</code>.</li>
+      <li><b>Idle vs. live.</b> Idle ripple every ~18s is the “once in a while” behaviour requested. While a run is live, switch to the faster ripple (W2, 1.4s) so the mark says “live” in the signal colour — which is already what the water is.</li>
+      <li><b>Motion budget.</b> The ripple moves 1–2px, well under the “no layout shift” rule; transform only, no width/height animation.</li>
+    </ul>
+  </div>
+</section>
+</main>
+
+<script>
+  // ---- pixel mark path data (mirrors apps/web/src/Logo.tsx) ----
+  const run = (x,y,w,h)=>`M${x} ${y}h${w}v${h}h-${w}z`;
+  function pixelPaths(){
+    let light="",shade="",hull="",water="";
+    for(let r=0;r<8;r++){light+=run((15-r)*2,r*2,(r+1)*2,2); if(r>0) shade+=run(32,r*2,r*2,2);}
+    [31,27,25,23,21,19,17].forEach((cols,i)=>{hull+=run(31-cols,(9+i)*2,cols*2,2);});
+    for(let k=0;k<5;k++) water+=run(k*14,36,6,6);
+    return {light,shade,hull,water};
+  }
+  const PP = pixelPaths();
+  function pixelSvg(height){
+    const w = (height*62)/42;
+    return `<svg class="mark" width="${w}" height="${height}" viewBox="0 0 62 42" shape-rendering="crispEdges" aria-hidden="true">
+      <path class="logo-light" d="${PP.light}"/>
+      <path class="logo-shade" d="${PP.shade}"/>
+      <path class="logo-light" d="${PP.hull}"/>
+      <path class="logo-water" d="${PP.water}"/>
+    </svg>`;
+  }
+
+  // ---- geometric small variants (viewBox 0 0 30 20) ----
+  const GEO = {
+    s1: `<svg class="mark" viewBox="0 0 30 20" shape-rendering="geometricPrecision" aria-hidden="true">
+      <path class="logo-light" d="M15 1 L23 10 L7 10 Z"/>
+      <path class="logo-hull" d="M1 11.5 H29 L23 16.5 H7 Z"/>
+      <line class="logo-water" x1="4" y1="18.5" x2="26" y2="18.5" stroke-width="2.2" stroke-linecap="butt"/>
+    </svg>`,
+    s2: `<svg class="mark" viewBox="0 0 30 20" shape-rendering="geometricPrecision" aria-hidden="true">
+      <path class="logo-light" d="M15 1 L15 10 L7 10 Z"/>
+      <path class="logo-shade" d="M15 1 L23 10 L15 10 Z"/>
+      <path class="logo-hull" d="M1 11.5 H29 L23 16.5 H7 Z"/>
+      <line class="logo-water" x1="4" y1="18.5" x2="26" y2="18.5" stroke-width="2.2" stroke-linecap="butt"/>
+    </svg>`,
+    s3: `<svg class="mark" viewBox="0 0 30 20" shape-rendering="geometricPrecision" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path class="logo-light" d="M15 1 L7 10 M15 1 L23 10" style="stroke:var(--text)"/>
+      <path class="logo-hull" d="M2 12 L8 17 H22 L28 12" style="stroke:var(--text);fill:none"/>
+      <path class="logo-water" d="M2 19 Q8 17 15 19 T28 19" style="stroke:var(--signal);fill:none" stroke-width="1.6"/>
+    </svg>`,
+    s4: `<svg class="mark" viewBox="0 0 30 20" shape-rendering="crispEdges" aria-hidden="true">
+      <path class="logo-light" d="M14 0h2v2h-2zM12 2h4v2h-4zM10 4h6v2h-6zM8 6h8v2h-8z"/>
+      <path class="logo-shade" d="M16 2h2v2h-2zM16 4h4v2h-4zM16 6h6v2h-6z"/>
+      <path class="logo-light" d="M0 10h30v2h-30zM4 12h22v2h-22zM8 14h14v2h-14z"/>
+      <path class="logo-water" d="M2 17h4v3h-4zM13 17h4v3h-4zM24 17h4v3h-4z"/>
+    </svg>`
+  };
+
+  // ---- render size ladder ----
+  const sizes = [32,24,20,16,14,12];
+  sizes.forEach(s=>{
+    document.getElementById('p'+s).innerHTML = pixelSvg(s);
+    const g = document.getElementById('g'+s);
+    g.innerHTML = GEO.s1.replace('viewBox="0 0 30 20"','viewBox="0 0 30 20"').replace('<svg ','<svg style="width:'+(s*1.5)+'px;height:'+s+'px" ');
+  });
+
+  // ---- render option thumbs ----
+  document.querySelectorAll('.slot').forEach(el=>{
+    const opt = el.dataset.opt, size = +el.dataset.size;
+    const svg = GEO[opt];
+    const scaled = svg.replace('<svg ','<svg style="width:'+(size*1.5)+'px;height:'+size+'px" ');
+    el.innerHTML = scaled;
+  });
+
+  // ---- animation stages ----
+  function markSvgFor(stage){
+    // large pixel mark for animation stages, 48px tall
+    return pixelSvg(48).replace('shape-rendering="crispEdges"','shape-rendering="crispEdges" class="boat"').replace('<svg ','<svg style="width:70px;height:48px" ');
+  }
+  // stages that use pixel mark
+  ['w1','w2','w3','idle','rm'].forEach(id=>{
+    const el = document.getElementById('mark-'+id);
+    if(el) el.innerHTML = pixelSvg(48).replace('<svg ','<svg style="width:70px;height:48px" ');
+  });
+  // w4 uses geometric line variant
+  document.getElementById('mark-w4').innerHTML = GEO.s3.replace('<svg ','<svg style="width:70px;height:48px" ');
+
+  // wrap water group for ripple: add class hooks by wrapping the water path in a <g class="w...">
+  // We instead use CSS on .logo-water inside each stage; but ripple needs per-dot stagger.
+  // Rebuild w1/w2/w3 stages with water split into 5 groups.
+  function rippleMark(height, boatClass){
+    const w = (height*62)/42;
+    // water pixels positions: k*14, 36, 6x6
+    let water = '';
+    for(let k=0;k<5;k++) water += `<g class="w w${k+1}"><rect x="${k*14}" y="36" width="6" height="6"/></g>`;
+    return `<svg class="mark ${boatClass||''}" width="${w}" height="${height}" viewBox="0 0 62 42" shape-rendering="crispEdges" aria-hidden="true">
+      <path class="logo-light" d="${PP.light}"/>
+      <path class="logo-shade" d="${PP.shade}"/>
+      <path class="logo-light" d="${PP.hull}"/>
+      <g class="logo-water">${water}</g>
+    </svg>`;
+  }
+  ['w1','w2','w3','idle'].forEach(id=>{
+    const boatCls = (id==='w2'||id==='w3') ? 'boat' : '';
+    document.getElementById('mark-'+id).innerHTML = rippleMark(48, boatCls);
+  });
+  // w4 stays geometric; wrap its water path in a group
+  document.getElementById('mark-w4').innerHTML = GEO.s3.replace('<svg ','<svg style="width:70px;height:48px" ').replace('class="logo-water"','class="logo-water water"');
+
+  // bar marks
+  ['bar-dark-idle','bar-dark-live-mark','bar-light-idle','bar-light-live-mark'].forEach(id=>{
+    document.getElementById(id).innerHTML = rippleMark(24,'');
+  });
+
+  // replay wiring
+  document.querySelectorAll('[data-replay]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.dataset.replay;
+      const stage = document.getElementById('stage-'+id);
+      // restart animation by removing & re-adding class
+      const classes = stage.className;
+      stage.className = classes.replace(/\b(ripple|bob|tilt|linewave)\b/g,'').trim();
+      // force reflow
+      void stage.offsetWidth;
+      let add = '';
+      if(id==='w1') add='ripple';
+      if(id==='w2') add='ripple bob';
+      if(id==='w3') add='ripple tilt';
+      if(id==='w4') add='linewave';
+      stage.className = classes + ' ' + add;
+    });
+  });
+  // initial: w1..w4 stages get their animation class once on load? keep still until replay; but idle runs
+  ['w1'].forEach(id=>document.getElementById('stage-'+id).classList.add('ripple'));
+  ['w2'].forEach(id=>{const s=document.getElementById('stage-'+id); s.classList.add('ripple'); s.classList.add('bob');});
+  ['w3'].forEach(id=>{const s=document.getElementById('stage-'+id); s.classList.add('ripple'); s.classList.add('tilt');});
+  document.getElementById('stage-w4').classList.add('linewave');
+
+  // theme toggle
+  document.getElementById('theme').addEventListener('click',()=>{
+    const d = document.documentElement;
+    d.dataset.theme = (d.dataset.theme==='light') ? 'dark' : 'light';
+  });
+
+  // count
+  document.getElementById('count').textContent = 'pixel mark · 62 × 42 units · geometric below ~18px';
+</script>
+</body>
+</html>

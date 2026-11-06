@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paperboat · final mark (S2 + W2, fixed)</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --ground:#111111; --panel:#1a1a1a; --raised:#222222; --well:#111111;
+    --text:#e9e9e4; --muted:#a3a39d; --line:#2e2e2e; --strong:#4a4a4a;
+    --ink:#e9e9e4; --signal:#ff6a30; --danger:#ff5c4d;
+    --sans:"Geist Sans","Arial",sans-serif; --mono:"Geist Mono","SFMono-Regular",monospace;
+    --ease:cubic-bezier(.65,0,.25,1);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;}
+  body{color:var(--text);background:var(--ground);font:13px/1.45 var(--sans);-webkit-font-smoothing:antialiased;}
+  button{background:var(--raised);border:1px solid var(--strong);border-radius:5px;padding:6px 10px;cursor:pointer;color:var(--text);}
+  button:hover{border-color:var(--ink);}
+  :focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+  .shell{max-width:1320px;margin:auto;padding:22px 24px 80px;}
+  header{display:flex;align-items:end;justify-content:space-between;gap:20px;padding:10px 0 18px;border-bottom:1px solid var(--strong);}
+  h1{margin:0;font-size:22px;font-weight:600;letter-spacing:-.025em;}
+  .lede{margin:5px 0 0;color:var(--muted);max-width:860px;}
+  .count{font:12px var(--mono);color:var(--muted);white-space:nowrap;}
+  .toolbar{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px -4px 18px;padding:10px 4px;background:var(--ground);}
+  button.tog{border:0;background:transparent;padding:5px 7px;color:var(--muted);font:12px var(--mono);}
+  button.tog.on{color:var(--text);font-weight:600;}
+  button.tog.on::before{content:"[ ";}
+  button.tog.on::after{content:" ]";}
+  .hint{margin-left:auto;color:var(--muted);font-size:12px;}
+  section{margin:30px 0 38px;}
+  section > h2{margin:0 0 4px;font-size:14px;font-weight:600;}
+  section > p{margin:0 0 14px;color:var(--muted);max-width:920px;}
+  .tier{width:100%;border-collapse:collapse;font:12px var(--sans);}
+  .tier th,.tier td{padding:8px 10px;border:1px solid var(--line);text-align:left;vertical-align:middle;}
+  .tier th{background:var(--panel);color:var(--muted);font:600 11px var(--mono);}
+  .tier td code{font:11px var(--mono);color:var(--text);}
+  .ladder{display:grid;grid-template-columns:80px repeat(7,1fr);gap:6px;align-items:end;}
+  .ladder .label{font:10px var(--mono);color:var(--muted);text-align:center;}
+  .ladder .cell{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 4px 6px;border:1px solid var(--line);background:var(--panel);min-height:78px;}
+  .ladder .cell .size{font:9px var(--mono);color:var(--muted);}
+  .ladder .cell .tag{font:9px var(--mono);color:var(--signal);}
+  .mark{display:block;}
+  .mark .logo-light{fill:var(--text);}
+  .mark .logo-shade{fill:var(--muted);}
+  .mark .logo-hull{fill:var(--text);}
+  .mark .logo-water{fill:var(--signal);}
+  .mark .logo-water rect{shape-rendering:crispEdges;}
+  .compare{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+  .compare .opt{padding:14px;border:1px solid var(--line);background:var(--panel);}
+  .compare .opt h3{margin:0 0 2px;font-size:12px;font-weight:600;}
+  .compare .opt .sub{color:var(--muted);font:11px var(--mono);margin-bottom:10px;}
+  .compare .opt .thumbs{display:flex;gap:10px;align-items:end;flex-wrap:wrap;}
+  .compare .opt .thumb{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 12px;background:var(--raised);border:1px solid var(--line);}
+  .compare .opt .thumb .size{font:9px var(--mono);color:var(--muted);}
+  .anim-stage{display:flex;align-items:center;justify-content:center;min-height:130px;background:var(--raised);border:1px solid var(--line);position:relative;overflow:hidden;}
+  .anim-stage .mark{transform-origin:50% 50%;}
+  .anim-stage .boat{transform-origin:50% 50%;}
+  .anim-controls{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;align-items:center;}
+  .anim-controls .note{color:var(--muted);font:11px var(--mono);}
+  /* W2: wave 25% higher (-3.75 at 48px stage), boat bobs a bit less (-1.0 at 48px stage).
+     Scaled per instance via --r / --b so the bar mark stays subtle. */
+  .ripple .w{animation:ripple 1.4s var(--ease) 1;}
+  .ripple .w1{animation-delay:0s;}.ripple .w2{animation-delay:.12s;}.ripple .w3{animation-delay:.24s;}.ripple .w4{animation-delay:.36s;}.ripple .w5{animation-delay:.48s;}
+  @keyframes ripple{0%{transform:translateY(0);}30%{transform:translateY(calc(var(--r)*-1));}60%{transform:translateY(calc(var(--r)*0.33));}100%{transform:translateY(0);}}
+  .bob .boat{animation:bob 1.4s var(--ease) 1;}
+  @keyframes bob{0%{transform:translateY(0);}30%{transform:translateY(calc(var(--b)*-1));}60%{transform:translateY(calc(var(--b)*0.33));}100%{transform:translateY(0);}}
+  .idle .w{animation:idle 18s ease-in-out infinite;}
+  .idle .w1{animation-delay:0s;}.idle .w2{animation-delay:.2s;}.idle .w3{animation-delay:.4s;}.idle .w4{animation-delay:.6s;}.idle .w5{animation-delay:.8s;}
+  @keyframes idle{0%,7%,100%{transform:translateY(0);}3.5%{transform:translateY(calc(var(--r)*-0.67));}}
+  .bar{background:#0d0d0d;border:1px solid var(--strong);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;margin:0 0 10px;flex-wrap:wrap;}
+  .bar .wordmark{font:600 15px var(--sans);letter-spacing:-.01em;color:var(--text);}
+  .bar .menu{font:500 12px var(--sans);color:var(--muted);padding:2px 6px;}
+  .bar .conn{font:11px var(--mono);color:var(--muted);}
+  .context-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .context-grid .panel{padding:14px;border:1px solid var(--line);background:var(--panel);}
+  .context-grid .panel h3{margin:0 0 2px;font-size:12px;font-weight:600;}
+  .context-grid .panel .sub{color:var(--muted);font:11px var(--mono);margin-bottom:10px;}
+  .context-grid .panel .bar{margin:0;}
+  .notes{background:var(--panel);border:1px solid var(--line);padding:14px 16px;}
+  .notes ul{margin:0;padding-left:18px;}
+  .notes li{margin:4px 0;color:var(--muted);}
+  .notes li b{color:var(--text);}
+  .notes code{font:11px var(--mono);color:var(--text);}
+  html[data-theme="light"]{color-scheme:light;--ground:#dcdcd8;--panel:#eaeae6;--raised:#f2f2ef;--well:#e1e1dd;--text:#161616;--muted:#55554f;--line:#cfcfca;--strong:#9d9d97;--ink:#161616;--signal:#ff5a1f;--danger:#d92d20;}
+  @media (max-width:720px){.shell{padding:14px;}header{flex-direction:column;align-items:start;}.ladder{grid-template-columns:1fr;}.compare{grid-template-columns:1fr;}}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none !important;transition:none !important;}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header>
+  <div>
+    <h1>Paperboat mark · final (S2 + W2, fixed)</h1>
+    <p class="lede">S2 two-tone geometric boat with the original pixel water (5 dots, no overlap), and the W2 ripple (wave 25% higher, boat bobs a bit less). Tiers: pixel mark at 32px+, S2 with a sail/hull gap from 20px, S2 merged below 20px. S2 now uses the original 62×42 viewBox so proportions match the pixel mark (no squish).</p>
+  </div>
+  <div class="count" id="count">pixel mark · 62 × 42 units</div>
+</header>
+
+<nav class="toolbar" aria-label="Mark controls">
+  <button class="tog" id="theme">dark / light</button>
+  <button class="tog" id="replay">replay ripple</button>
+  <span class="hint">S2 = two-tone sail + trapezoid hull + 5 pixel water dots · gap removed below 20px · water stays pixel at every size · no overlap</span>
+</nav>
+
+<section>
+  <h2>1 · Size ladder</h2>
+  <p>32px keeps the brand pixel mark. From 24px down, S2 (geometric sail and hull, pixel water). Below 20px, the sail and hull merge (no gap). The bar logo (24px) becomes S2.</p>
+  <div class="ladder">
+    <div class="label"></div>
+    <div class="label">32</div><div class="label">24</div><div class="label">20</div><div class="label">18</div><div class="label">16</div><div class="label">14</div><div class="label">12</div>
+  </div>
+  <div class="ladder" style="margin-top:6px">
+    <div class="label">mark</div>
+    <div class="cell" id="c32"></div><div class="cell" id="c24"></div><div class="cell" id="c20"></div>
+    <div class="cell" id="c18"></div><div class="cell" id="c16"></div><div class="cell" id="c14"></div><div class="cell" id="c12"></div>
+  </div>
+  <div class="ladder" style="margin-top:6px">
+    <div class="label">tier</div>
+    <div class="cell"><span class="tag">pixel</span></div>
+    <div class="cell"><span class="tag">S2 · gap</span></div>
+    <div class="cell"><span class="tag">S2 · gap</span></div>
+    <div class="cell"><span class="tag">S2 · merged</span></div>
+    <div class="cell"><span class="tag">S2 · merged</span></div>
+    <div class="cell"><span class="tag">S2 · merged</span></div>
+    <div class="cell"><span class="tag">S2 · merged</span></div>
+  </div>
+</section>
+
+<section>
+  <h2>2 · Tiers</h2>
+  <table class="tier">
+    <thead><tr><th>Size</th><th>Boat</th><th>Sail / hull</th><th>Water</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td><code>≥ 32px</code></td><td>pixel mark (brand)</td><td>2-unit pixels, two-tone</td><td>5 pixel dots</td><td>favicon, docs, large uses</td></tr>
+      <tr><td><code>20–31px</code></td><td>S2 geometric</td><td>two-tone triangle + trapezoid, <b>gap</b> between (sail base y=16, hull top y=18)</td><td>5 pixel dots (y=36, no overlap)</td><td>app bar (24px), small inline</td></tr>
+      <tr><td><code>&lt; 20px</code></td><td>S2 geometric</td><td>two-tone triangle + trapezoid, <b>merged</b> (sail base and hull top share y=16)</td><td>5 pixel dots (y=36, no overlap)</td><td>tiny inline, cramped spots</td></tr>
+    </tbody>
+  </table>
+  <p class="note">The favicon (64px, brand palette) stays pixel art — it is an app icon, never small enough to need the geometric form.</p>
+</section>
+
+<section>
+  <h2>3 · S2 in detail</h2>
+  <p>Two-tone sail (light left, shade right), trapezoid hull, and the original 5 pixel water dots. The only difference between the two is the gap between the sail’s base and the hull’s top.</p>
+  <div class="compare">
+    <div class="opt">
+      <h3>S2 · with gap (20px+)</h3>
+      <div class="sub">sail base y=16 · hull top y=18 · water y=36 (4-unit gap, no overlap)</div>
+      <div class="thumbs">
+        <div class="thumb"><div class="size">24px</div><div class="slot" data-v="sep" data-size="24"></div></div>
+        <div class="thumb"><div class="size">20px</div><div class="slot" data-v="sep" data-size="20"></div></div>
+      </div>
+      <div class="thumbs" style="margin-top:8px">
+        <div class="thumb"><div class="size">4× zoom · 24px</div><div class="slot" data-v="sep" data-size="96"></div></div>
+      </div>
+    </div>
+    <div class="opt">
+      <h3>S2 · merged (&lt;20px)</h3>
+      <div class="sub">sail base and hull top share y=16 · water y=36 (no overlap)</div>
+      <div class="thumbs">
+        <div class="thumb"><div class="size">18px</div><div class="slot" data-v="merged" data-size="18"></div></div>
+        <div class="thumb"><div class="size">12px</div><div class="slot" data-v="merged" data-size="12"></div></div>
+      </div>
+      <div class="thumbs" style="margin-top:8px">
+        <div class="thumb"><div class="size">4× zoom · 18px</div><div class="slot" data-v="merged" data-size="72"></div></div>
+      </div>
+    </div>
+    <div class="opt">
+      <h3>Brand pixel (32px+)</h3>
+      <div class="sub">unchanged · 2-unit pixels · crispEdges</div>
+      <div class="thumbs">
+        <div class="thumb"><div class="size">32px</div><div class="slot" data-v="pixel" data-size="32"></div></div>
+        <div class="thumb"><div class="size">48px</div><div class="slot" data-v="pixel" data-size="48"></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>4 · W2 ripple (wave 25% higher, boat bobs a little less)</h2>
+  <p>The water dots lift in sequence (a crest travels left → right), and the boat bobs as the crest passes under it. Wave travel 3.75px (was 3.0); boat bob 1.0px (was 1.5). Idle cycle every ~18s. Values scale with the mark so the bar stays subtle.</p>
+  <div class="anim-stage boat ripple" id="stage" style="--r:3.75px;--b:1.0px;">
+    <div class="mark" id="mark"></div>
+  </div>
+  <div class="anim-controls">
+    <button id="replay2">replay</button>
+    <span class="note">transform only · no layout shift · collapses to 0ms under prefers-reduced-motion</span>
+  </div>
+  <div class="anim-stage idle" id="stage-idle" style="--r:3.75px;--b:1.0px;margin-top:10px;">
+    <div class="mark" id="mark-idle"></div>
+  </div>
+  <p class="note">Idle: ripple every ~18s, ripples for ~7% of the cycle, then rests (the “once in a while” behaviour).</p>
+</section>
+
+<section>
+  <h2>5 · In the app bar</h2>
+  <p>24px becomes S2. Dark and light, idle and run-live (ripple active while a run is live). Ripple scaled down for the bar.</p>
+  <div class="context-grid">
+    <div class="panel"><h3>Dark · idle</h3><div class="sub">water still</div>
+      <div class="bar"><div id="bd-i"></div><span class="wordmark">paperboat</span><span class="menu">File</span><span class="menu">Edit</span><span class="menu">View</span><span class="menu">Run</span><span style="flex:1"></span><span class="conn">● engine</span></div></div>
+    <div class="panel"><h3>Dark · run live</h3><div class="sub">ripple active</div>
+      <div class="bar ripple bob" id="bd-l" style="--r:1.9px;--b:0.5px;"><div id="bd-lm"></div><span class="wordmark">paperboat</span><span class="menu">File</span><span class="menu">Edit</span><span class="menu">View</span><span class="menu">Run</span><span style="flex:1"></span><span class="conn">running 3.2 / 10 s</span></div></div>
+    <div class="panel"><h3>Light · idle</h3><div class="sub">water still</div>
+      <div class="bar" style="background:#eaeae6;border-color:#cfcfca"><div id="bl-i"></div><span class="wordmark" style="color:#161616">paperboat</span><span class="menu" style="color:#55554f">File</span><span class="menu" style="color:#55554f">Edit</span><span class="menu" style="color:#55554f">View</span><span class="menu" style="color:#55554f">Run</span><span style="flex:1"></span><span class="conn" style="color:#55554f">● engine</span></div></div>
+    <div class="panel"><h3>Light · run live</h3><div class="sub">ripple active</div>
+      <div class="bar ripple bob" id="bl-l" style="background:#eaeae6;border-color:#cfcfca;--r:1.9px;--b:0.5px;"><div id="bl-lm"></div><span class="wordmark" style="color:#161616">paperboat</span><span class="menu" style="color:#55554f">File</span><span class="menu" style="color:#55554f">Edit</span><span class="menu" style="color:#55554f">View</span><span class="menu" style="color:#55554f">Run</span><span style="flex:1"></span><span class="conn" style="color:#55554f">running 3.2 / 10 s</span></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>6 · Implementation notes</h2>
+  <div class="notes">
+    <ul>
+      <li><b>Logo.tsx.</b> Add an S2 component using the original 62×42 viewBox: two-tone sail triangles (M31 0 L31 16 L16 16 Z and M31 0 L46 16 L31 16 Z), trapezoid hull (M0 18 L62 18 L48 32 L14 32 Z), and the 5 pixel water dots (rects at x 0/14/28/42/56, y=36, 6×6, crispEdges). Merged variant: hull top/bottom shift up 2 (M0 16 L62 16 L48 30 L14 30 Z). Prop <code>variant="s2"</code> or auto by height.</li>
+      <li><b>Thresholds.</b> <code>height &gt;= 32</code> → pixel mark. <code>20 &lt;= height &lt; 32</code> → S2 with gap. <code>height &lt; 20</code> → S2 merged.</li>
+      <li><b>Bar.</b> <code>&lt;Logo height={24} /&gt;</code> becomes S2 (gap variant). Water no longer overlaps the hull.</li>
+      <li><b>Favicon.</b> Stays pixel art in the brand palette (64px app icon).</li>
+      <li><b>Ripple (W2).</b> CSS keyframe on the water group: <code>animation: ripple 1.4s var(--ease) 1</code> with translateY(calc(var(--r)*-1)) at 30% and calc(var(--r)*0.33) at 60%. Boat bob on the whole mark: translateY(calc(var(--b)*-1)) at 30%. Idle: 18s cycle, ripple for ~7% then rest. Run-linked: toggle a class on the wordmark on <code>run.started</code> / <code>run.finished</code>. Scale --r/--b per instance (stage 3.75/1.0, bar 1.9/0.5).</li>
+      <li><b>Reduced motion.</b> <code>@media (prefers-reduced-motion: reduce) { animation: none; }</code> — mark never moves.</li>
+      <li><b>Motion budget.</b> Transform only, no layout shift.</li>
+    </ul>
+  </div>
+</section>
+</main>
+
+<script>
+  const run=(x,y,w,h)=>`M${x} ${y}h${w}v${h}h-${w}z`;
+  function pixelPaths(){let light="",shade="",hull="",water="";for(let r=0;r<8;r++){light+=run((15-r)*2,r*2,(r+1)*2,2);if(r>0)shade+=run(32,r*2,r*2,2);} [31,27,25,23,21,19,17].forEach((c,i)=>{hull+=run(31-c,(9+i)*2,c*2,2);}); for(let k=0;k<5;k++)water+=run(k*14,36,6,6); return {light,shade,hull,water};}
+  const PP=pixelPaths();
+  function pixelSvg(h){const w=(h*62)/42;return `<svg class="mark" width="${w}" height="${h}" viewBox="0 0 62 42" shape-rendering="crispEdges" aria-hidden="true"><path class="logo-light" d="${PP.light}"/><path class="logo-shade" d="${PP.shade}"/><path class="logo-light" d="${PP.hull}"/><path class="logo-water" d="${PP.water}"/></svg>`;}
+
+  // S2 in the original 62x42 viewBox: two-tone sail + trapezoid hull + 5 pixel water dots
+  const WATER_DOTS = `<g class="logo-water"><rect x="0" y="36" width="6" height="6"/><rect x="14" y="36" width="6" height="6"/><rect x="28" y="36" width="6" height="6"/><rect x="42" y="36" width="6" height="6"/><rect x="56" y="36" width="6" height="6"/></g>`;
+  function s2Svg(h, merged){
+    const w=(h*62)/42;
+    const hull = merged
+      ? `M0 16 L62 16 L48 30 L14 30 Z`
+      : `M0 18 L62 18 L48 32 L14 32 Z`;
+    return `<svg class="mark" width="${w}" height="${h}" viewBox="0 0 62 42" shape-rendering="geometricPrecision" aria-hidden="true">
+      <path class="logo-light" d="M31 0 L31 16 L16 16 Z"/>
+      <path class="logo-shade" d="M31 0 L46 16 L31 16 Z"/>
+      <path class="logo-hull" d="${hull}"/>
+      ${WATER_DOTS}
+    </svg>`;
+  }
+
+  // size ladder
+  const sizes=[32,24,20,18,16,14,12];
+  sizes.forEach(s=>{
+    const el=document.getElementById('c'+s);
+    if(s>=32) el.innerHTML=pixelSvg(s);
+    else if(s>=20) el.innerHTML=s2Svg(s,false);
+    else el.innerHTML=s2Svg(s,true);
+  });
+
+  // option thumbs
+  document.querySelectorAll('.slot').forEach(el=>{
+    const v=el.dataset.v, size=+el.dataset.size;
+    let svg;
+    if(v==='pixel') svg=pixelSvg(size);
+    else if(v==='sep') svg=s2Svg(size,false);
+    else svg=s2Svg(size,true);
+    const w=(size*62)/42;
+    el.innerHTML = svg.replace('<svg ','<svg style="width:'+w+'px;height:'+size+'px" ');
+  });
+
+  // ripple mark (5 water dots, boat class for bob) — 62x42, water at y=36
+  function rippleMark(h, boatCls){
+    const w=(h*62)/42;
+    const hull=`M0 18 L62 18 L48 32 L14 32 Z`;
+    let water='';
+    const xs=[0,14,28,42,56];
+    for(let k=0;k<5;k++) water+=`<g class="w w${k+1}"><rect x="${xs[k]}" y="36" width="6" height="6"/></g>`;
+    return `<svg class="mark ${boatCls||''}" width="${w}" height="${h}" viewBox="0 0 62 42" shape-rendering="geometricPrecision" aria-hidden="true">
+      <path class="logo-light" d="M31 0 L31 16 L16 16 Z"/>
+      <path class="logo-shade" d="M31 0 L46 16 L31 16 Z"/>
+      <path class="logo-hull" d="${hull}"/>
+      <g class="logo-water">${water}</g>
+    </svg>`;
+  }
+  const stage=document.getElementById('stage');
+  document.getElementById('mark').innerHTML = rippleMark(48,'boat');
+  stage.style.setProperty('--r','3.75px');
+  stage.style.setProperty('--b','1.0px');
+  document.getElementById('mark-idle').innerHTML = rippleMark(48,'');
+  document.getElementById('stage-idle').style.setProperty('--r','3.75px');
+  document.getElementById('stage-idle').style.setProperty('--b','1.0px');
+
+  // bar marks
+  ['bd-i','bd-lm','bl-i','bl-lm'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.innerHTML = rippleMark(24,'');
+    el.parentElement.style.setProperty('--r','1.9px');
+    el.parentElement.style.setProperty('--b','0.5px');
+  });
+  // ensure bar containers carry --r/--b
+  document.getElementById('bd-l').style.setProperty('--r','1.9px');
+  document.getElementById('bd-l').style.setProperty('--b','0.5px');
+  document.getElementById('bl-l').style.setProperty('--r','1.9px');
+  document.getElementById('bl-l').style.setProperty('--b','0.5px');
+
+  function replay(){
+    stage.classList.remove('ripple','bob');
+    void stage.offsetWidth;
+    stage.classList.add('ripple','bob');
+  }
+  document.getElementById('replay').addEventListener('click', replay);
+  document.getElementById('replay2').addEventListener('click', replay);
+  stage.classList.add('ripple','bob');
+
+  document.getElementById('theme').addEventListener('click',()=>{
+    const d=document.documentElement;
+    d.dataset.theme = d.dataset.theme==='light' ? 'dark' : 'light';
+  });
+
+  document.getElementById('count').textContent='S2 · 62×42 viewBox · 5 pixel water dots · no overlap · ripple --r 3.75 / bob --b 1.0';
+</script>
+</body>
+</html>

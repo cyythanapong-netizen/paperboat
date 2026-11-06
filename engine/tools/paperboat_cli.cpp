@@ -13,12 +13,14 @@
 #include "paperboat/core/process.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
 #include "paperboat/toolkit/installer.hpp"
+#include "paperboat_tui.hpp"
 
 namespace {
 
 using nlohmann::json;
 namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
+namespace tui = paperboat::tui;
 
 void print_help() {
   std::cout << R"(paperboat - Unified Paperboat command-line tool
@@ -377,10 +379,92 @@ int cmd_check(const std::vector<std::string_view>& args) {
   }
 }
 
+void print_interactive_help() {
+  std::cout << R"(Interactive Commands:
+  run <backend>            Build and start backend (e.g. `run cart-pole`, `run parts`)
+  list (or ps)             List running Paperboat backends
+  restart <target>         Restart backend on port or name
+  stop <target|--all>      Stop running backend
+  app <start|stop|build>   Manage the web application dev server
+  examples <start|stop|status>
+                           Manage example backends (ports 8765-8773)
+  toolkit <list|install|update|versions>
+                           Manage optional toolkits (e.g. `toolkit install opencv`)
+  check <backend>          Validate descriptor and toolkits for a backend
+  status                   Show overall status of backends and examples
+  clear                    Clear screen and redraw banner
+  help                     Show this help message
+  exit (or quit)           Exit interactive prompt
+)";
+}
+
+int run_interactive_prompt() {
+  tui::render_banner(true);
+  std::cout << "Interactive prompt. Type 'help' for commands, or 'exit' to quit.\n\n";
+
+  std::string line;
+  while (true) {
+    if (isatty(STDIN_FILENO)) {
+      std::cout << "\033[1;38;2;74;144;226mpaperboat\033[0m> " << std::flush;
+    }
+    if (!std::getline(std::cin, line)) {
+      std::cout << '\n';
+      break;
+    }
+
+    auto tokens = tui::parse_command_line(line);
+    if (tokens.empty()) continue;
+
+    const std::string& cmd = tokens[0];
+    if (cmd == "exit" || cmd == "quit" || cmd == "q") {
+      break;
+    }
+    if (cmd == "clear" || cmd == "cls") {
+      if (isatty(STDOUT_FILENO)) std::cout << "\033[2J\033[H";
+      tui::render_banner(false);
+      continue;
+    }
+    if (cmd == "help" || cmd == "--help" || cmd == "-h") {
+      if (tokens.size() == 1) {
+        print_interactive_help();
+      } else {
+        print_help();
+      }
+      continue;
+    }
+
+    std::vector<std::string_view> sv_tokens;
+    sv_tokens.reserve(tokens.size());
+    for (const auto& t : tokens) sv_tokens.emplace_back(t);
+
+    std::vector<std::string_view> rest(sv_tokens.begin() + 1, sv_tokens.end());
+    if (cmd == "run") cmd_run(rest);
+    else if (cmd == "list" || cmd == "ps") cmd_list(rest);
+    else if (cmd == "restart") cmd_restart(rest);
+    else if (cmd == "stop") cmd_stop(rest);
+    else if (cmd == "app") cmd_app(rest);
+    else if (cmd == "examples") cmd_examples(rest);
+    else if (cmd == "toolkit") cmd_toolkit(rest);
+    else if (cmd == "check") cmd_check(rest);
+    else if (cmd == "status") {
+      std::cout << "--- Running Backends ---\n";
+      cmd_list({});
+      std::cout << "\n--- Example Backends ---\n";
+      cmd_examples({"status"});
+    } else {
+      std::cerr << "unknown command: " << cmd << ". Type 'help' for available commands.\n";
+    }
+  }
+  return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
   if (argc < 2) {
+    if (isatty(STDIN_FILENO)) {
+      return run_interactive_prompt();
+    }
     print_help();
     return 0;
   }
@@ -389,6 +473,9 @@ int main(int argc, char** argv) {
   std::string_view cmd = args[0];
   std::vector<std::string_view> rest(args.begin() + 1, args.end());
 
+  if (cmd == "interactive" || cmd == "repl") {
+    return run_interactive_prompt();
+  }
   if (cmd == "--help" || cmd == "-h" || cmd == "help") {
     print_help();
     return 0;
