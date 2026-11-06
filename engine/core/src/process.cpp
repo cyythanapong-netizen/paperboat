@@ -1,15 +1,13 @@
 #include "paperboat/core/process.hpp"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <csignal>
-#include <cstring>
 #include <fcntl.h>
 #include <fstream>
-#include <iostream>
 #include <poll.h>
-#include <sstream>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -32,8 +30,11 @@ void signal_handler(int sig) {
   }
 }
 
-// Build environment vector for execvpe / execve
-std::vector<std::string> prepare_env(const std::vector<std::pair<std::string, std::string>>& custom_env) {
+using Env = std::vector<std::pair<std::string, std::string>>;
+
+// Build environment vector for execvpe / execve: `custom_env` first, then every inherited
+// variable it doesn't override.
+std::vector<std::string> prepare_env(const Env& custom_env) {
   std::vector<std::string> env_strings;
   std::vector<std::string> overridden;
   for (const auto& [k, v] : custom_env) {
@@ -45,18 +46,8 @@ std::vector<std::string> prepare_env(const std::vector<std::pair<std::string, st
     for (char** env = environ; *env != nullptr; ++env) {
       std::string entry = *env;
       auto eq = entry.find('=');
-      if (eq != std::string::npos) {
-        std::string key = entry.substr(0, eq);
-        bool found = false;
-        for (const auto& ok : overridden) {
-          if (ok == key) {
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          env_strings.push_back(entry);
-        }
+      if (eq != std::string::npos && std::ranges::find(overridden, entry.substr(0, eq)) == overridden.end()) {
+        env_strings.push_back(entry);
       }
     }
   }
@@ -80,158 +71,46 @@ void process_buffer_lines(std::string& buffer, std::string_view stream_name, con
   }
 }
 
-}  // namespace
-
-ProcessResult ProcessRunner::run_sync(
-    const std::vector<std::string>& args,
-    const fs::path& cwd,
-    const std::vector<std::pair<std::string, std::string>>& env,
-    std::chrono::milliseconds timeout) {
-  ProcessResult result;
-  if (args.empty()) return result;
-
-  int pipe_out[2];
-  int pipe_err[2];
-  if (pipe(pipe_out) != 0 || pipe(pipe_err) != 0) {
-    result.exit_code = -1;
-    return result;
+// In a forked child: move to `cwd`, then replace the process with `args`. Never returns.
+[[noreturn]] void exec_child(const std::vector<std::string>& args, const fs::path& cwd, const Env& env) {
+  if (!cwd.empty()) {
+    std::error_code ec;
+    fs::current_path(cwd, ec);
   }
 
-  pid_t pid = fork();
-  if (pid < 0) {
-    close(pipe_out[0]);
-    close(pipe_out[1]);
-    close(pipe_err[0]);
-    close(pipe_err[1]);
-    result.exit_code = -1;
-    return result;
-  }
+  std::vector<std::string> env_strings = prepare_env(env);
+  std::vector<char*> envp;
+  envp.reserve(env_strings.size() + 1);
+  for (auto& s : env_strings) envp.push_back(s.data());
+  envp.push_back(nullptr);
 
-  if (pid == 0) {
-    // Child
-    setpgid(0, 0);
-    close(pipe_out[0]);
-    close(pipe_err[0]);
-    dup2(pipe_out[1], STDOUT_FILENO);
-    dup2(pipe_err[1], STDERR_FILENO);
-    close(pipe_out[1]);
-    close(pipe_err[1]);
+  std::vector<char*> argv;
+  argv.reserve(args.size() + 1);
+  for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
+  argv.push_back(nullptr);
 
-    if (!cwd.empty()) {
-      std::error_code ec;
-      fs::current_path(cwd, ec);
-    }
-
-    std::vector<std::string> env_strings = prepare_env(env);
-    std::vector<char*> envp;
-    envp.reserve(env_strings.size() + 1);
-    for (auto& s : env_strings) envp.push_back(s.data());
-    envp.push_back(nullptr);
-
-    std::vector<char*> argv;
-    argv.reserve(args.size() + 1);
-    for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
-    argv.push_back(nullptr);
-
-    execvpe(argv[0], argv.data(), envp.data());
-    _exit(127);
-  }
-
-  // Parent
-  close(pipe_out[1]);
-  close(pipe_err[1]);
-
-  fcntl(pipe_out[0], F_SETFL, O_NONBLOCK);
-  fcntl(pipe_err[0], F_SETFL, O_NONBLOCK);
-
-  std::array<pollfd, 2> fds{};
-  fds[0].fd = pipe_out[0];
-  fds[0].events = POLLIN;
-  fds[1].fd = pipe_err[0];
-  fds[1].events = POLLIN;
-
-  auto start_time = std::chrono::steady_clock::now();
-  bool out_closed = false;
-  bool err_closed = false;
-
-  std::array<char, 4096> buf{};
-  while (!out_closed || !err_closed) {
-    if (timeout.count() > 0) {
-      auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-          std::chrono::steady_clock::now() - start_time);
-      if (elapsed >= timeout) {
-        result.timed_out = true;
-        kill_pgid(pid, SIGKILL, 500);
-        break;
-      }
-    }
-
-    int ret = poll(fds.data(), 2, 100);
-    if (ret < 0 && errno == EINTR) continue;
-
-    if (ret > 0) {
-      if (!out_closed && (fds[0].revents & POLLIN)) {
-        ssize_t n = read(pipe_out[0], buf.data(), buf.size());
-        if (n > 0) result.stdout_text.append(buf.data(), static_cast<std::size_t>(n));
-      }
-      if (!out_closed && (fds[0].revents & (POLLHUP | POLLERR))) {
-        ssize_t n = 0;
-        while ((n = read(pipe_out[0], buf.data(), buf.size())) > 0) {
-          result.stdout_text.append(buf.data(), static_cast<std::size_t>(n));
-        }
-        close(pipe_out[0]);
-        out_closed = true;
-        fds[0].fd = -1;
-      }
-
-      if (!err_closed && (fds[1].revents & POLLIN)) {
-        ssize_t n = read(pipe_err[0], buf.data(), buf.size());
-        if (n > 0) result.stderr_text.append(buf.data(), static_cast<std::size_t>(n));
-      }
-      if (!err_closed && (fds[1].revents & (POLLHUP | POLLERR))) {
-        ssize_t n = 0;
-        while ((n = read(pipe_err[0], buf.data(), buf.size())) > 0) {
-          result.stderr_text.append(buf.data(), static_cast<std::size_t>(n));
-        }
-        close(pipe_err[0]);
-        err_closed = true;
-        fds[1].fd = -1;
-      }
-    }
-
-    int status = 0;
-    pid_t w = waitpid(pid, &status, WNOHANG);
-    if (w == pid) {
-      if (WIFEXITED(status)) result.exit_code = WEXITSTATUS(status);
-      else if (WIFSIGNALED(status)) result.exit_code = 128 + WTERMSIG(status);
-    }
-  }
-
-  if (!out_closed) close(pipe_out[0]);
-  if (!err_closed) close(pipe_err[0]);
-
-  int status = 0;
-  if (waitpid(pid, &status, 0) == pid) {
-    if (WIFEXITED(status)) result.exit_code = WEXITSTATUS(status);
-    else if (WIFSIGNALED(status)) result.exit_code = 128 + WTERMSIG(status);
-  }
-
-  return result;
+  execvpe(argv[0], argv.data(), envp.data());
+  _exit(127);
 }
 
-int ProcessRunner::run_stream(
-    const std::vector<std::string>& args,
-    const fs::path& cwd,
-    const std::vector<std::pair<std::string, std::string>>& env,
-    ProcessOutputCallback on_output,
-    std::stop_token stop) {
-  if (args.empty()) return -1;
+// The code a waitpid status reports: the exit status, or 128 + the signal; else `fallback`.
+int exit_code_of(int status, int fallback) {
+  if (WIFEXITED(status)) return WEXITSTATUS(status);
+  if (WIFSIGNALED(status)) return 128 + WTERMSIG(status);
+  return fallback;
+}
 
+struct Pipes {
+  int out = -1;
+  int err = -1;
+};
+
+// Fork `args` in its own process group with stdout and stderr on pipes. Returns the child
+// pid and the read ends (non-blocking), or -1.
+pid_t spawn_piped(const std::vector<std::string>& args, const fs::path& cwd, const Env& env, Pipes& pipes) {
   int pipe_out[2];
   int pipe_err[2];
-  if (pipe(pipe_out) != 0 || pipe(pipe_err) != 0) {
-    return -1;
-  }
+  if (pipe(pipe_out) != 0 || pipe(pipe_err) != 0) return -1;
 
   pid_t pid = fork();
   if (pid < 0) {
@@ -251,32 +130,137 @@ int ProcessRunner::run_stream(
     dup2(pipe_err[1], STDERR_FILENO);
     close(pipe_out[1]);
     close(pipe_err[1]);
-
-    if (!cwd.empty()) {
-      std::error_code ec;
-      fs::current_path(cwd, ec);
-    }
-
-    std::vector<std::string> env_strings = prepare_env(env);
-    std::vector<char*> envp;
-    envp.reserve(env_strings.size() + 1);
-    for (auto& s : env_strings) envp.push_back(s.data());
-    envp.push_back(nullptr);
-
-    std::vector<char*> argv;
-    argv.reserve(args.size() + 1);
-    for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
-    argv.push_back(nullptr);
-
-    execvpe(argv[0], argv.data(), envp.data());
-    _exit(127);
+    exec_child(args, cwd, env);
   }
 
   close(pipe_out[1]);
   close(pipe_err[1]);
-
   fcntl(pipe_out[0], F_SETFL, O_NONBLOCK);
   fcntl(pipe_err[0], F_SETFL, O_NONBLOCK);
+  pipes = {.out = pipe_out[0], .err = pipe_err[0]};
+  return pid;
+}
+
+// Read both pipes until both close. Each round: `before()` (false stops), a poll of up to
+// 100 ms, each chunk read to `on_data` (stream 0 stdout, 1 stderr), then `after()` (false
+// stops). Closes the pipes.
+void pump(Pipes pipes,
+          const std::function<bool()>& before,
+          const std::function<void(int, std::string_view)>& on_data,
+          const std::function<bool()>& after) {
+  std::array<pollfd, 2> fds{};
+  fds[0].fd = pipes.out;
+  fds[0].events = POLLIN;
+  fds[1].fd = pipes.err;
+  fds[1].events = POLLIN;
+  const std::array<int, 2> owned{pipes.out, pipes.err};
+  std::array<bool, 2> closed{false, false};
+
+  std::array<char, 4096> buf{};
+  while (!closed[0] || !closed[1]) {
+    if (!before()) break;
+
+    int ret = poll(fds.data(), 2, 100);
+    if (ret < 0 && errno == EINTR) continue;
+
+    if (ret > 0) {
+      for (int i = 0; i < 2; ++i) {
+        const auto at = static_cast<std::size_t>(i);
+        if (!closed[at] && (fds[at].revents & POLLIN)) {
+          ssize_t n = read(owned[at], buf.data(), buf.size());
+          if (n > 0) on_data(i, {buf.data(), static_cast<std::size_t>(n)});
+        }
+        if (!closed[at] && (fds[at].revents & (POLLHUP | POLLERR))) {
+          ssize_t n = 0;
+          while ((n = read(owned[at], buf.data(), buf.size())) > 0) {
+            on_data(i, {buf.data(), static_cast<std::size_t>(n)});
+          }
+          close(owned[at]);
+          closed[at] = true;
+          fds[at].fd = -1;
+        }
+      }
+    }
+
+    if (!after()) break;
+  }
+
+  for (std::size_t i = 0; i < 2; ++i) {
+    if (!closed[i]) close(owned[i]);
+  }
+}
+
+// Wait up to `timeout_ms` for `alive()` to turn false; past it, `signal(SIGKILL)`.
+bool wait_or_kill(const std::function<bool()>& alive, const std::function<void(int)>& signal, int timeout_ms) {
+  auto start = std::chrono::steady_clock::now();
+  while (alive()) {
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - start);
+    if (elapsed.count() >= timeout_ms) {
+      signal(SIGKILL);
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      return !alive();
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  }
+  return true;
+}
+
+}  // namespace
+
+ProcessResult ProcessRunner::run_sync(
+    const std::vector<std::string>& args,
+    const fs::path& cwd,
+    const Env& env,
+    std::chrono::milliseconds timeout) {
+  ProcessResult result;
+  if (args.empty()) return result;
+
+  Pipes pipes;
+  pid_t pid = spawn_piped(args, cwd, env, pipes);
+  if (pid < 0) {
+    result.exit_code = -1;
+    return result;
+  }
+
+  auto start_time = std::chrono::steady_clock::now();
+  pump(
+      pipes,
+      [&] {
+        if (timeout.count() > 0) {
+          auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+              std::chrono::steady_clock::now() - start_time);
+          if (elapsed >= timeout) {
+            result.timed_out = true;
+            kill_pgid(pid, SIGKILL, 500);
+            return false;
+          }
+        }
+        return true;
+      },
+      [&](int stream, std::string_view chunk) { (stream == 0 ? result.stdout_text : result.stderr_text).append(chunk); },
+      [&] {
+        int status = 0;
+        if (waitpid(pid, &status, WNOHANG) == pid) result.exit_code = exit_code_of(status, result.exit_code);
+        return true;
+      });
+
+  int status = 0;
+  if (waitpid(pid, &status, 0) == pid) result.exit_code = exit_code_of(status, result.exit_code);
+  return result;
+}
+
+int ProcessRunner::run_stream(
+    const std::vector<std::string>& args,
+    const fs::path& cwd,
+    const Env& env,
+    ProcessOutputCallback on_output,
+    std::stop_token stop) {
+  if (args.empty()) return -1;
+
+  Pipes pipes;
+  pid_t pid = spawn_piped(args, cwd, env, pipes);
+  if (pid < 0) return -1;
 
   g_active_child_pgid.store(pid);
   struct sigaction sa_int{}, sa_term{}, old_int{}, old_term{};
@@ -287,87 +271,38 @@ int ProcessRunner::run_stream(
   sigaction(SIGINT, &sa_int, &old_int);
   sigaction(SIGTERM, &sa_term, &old_term);
 
-  std::array<pollfd, 2> fds{};
-  fds[0].fd = pipe_out[0];
-  fds[0].events = POLLIN;
-  fds[1].fd = pipe_err[0];
-  fds[1].events = POLLIN;
-
-  std::string stdout_buf;
-  std::string stderr_buf;
-  std::array<char, 4096> buf{};
-  bool out_closed = false;
-  bool err_closed = false;
-
-  while (!out_closed || !err_closed) {
-    if (stop.stop_requested()) {
-      kill_pgid(pid, SIGTERM, 1000);
-      break;
-    }
-
-    int ret = poll(fds.data(), 2, 100);
-    if (ret < 0 && errno == EINTR) continue;
-
-    if (ret > 0) {
-      if (!out_closed && (fds[0].revents & POLLIN)) {
-        ssize_t n = read(pipe_out[0], buf.data(), buf.size());
-        if (n > 0) {
-          stdout_buf.append(buf.data(), static_cast<std::size_t>(n));
-          process_buffer_lines(stdout_buf, "stdout", on_output);
+  std::array<std::string, 2> line_bufs;  // stdout, stderr: the part after the last newline
+  constexpr std::array<std::string_view, 2> names{"stdout", "stderr"};
+  pump(
+      pipes,
+      [&] {
+        if (stop.stop_requested()) {
+          kill_pgid(pid, SIGTERM, 1000);
+          return false;
         }
-      }
-      if (!out_closed && (fds[0].revents & (POLLHUP | POLLERR))) {
-        ssize_t n = 0;
-        while ((n = read(pipe_out[0], buf.data(), buf.size())) > 0) {
-          stdout_buf.append(buf.data(), static_cast<std::size_t>(n));
-          process_buffer_lines(stdout_buf, "stdout", on_output);
-        }
-        close(pipe_out[0]);
-        out_closed = true;
-        fds[0].fd = -1;
-      }
-
-      if (!err_closed && (fds[1].revents & POLLIN)) {
-        ssize_t n = read(pipe_err[0], buf.data(), buf.size());
-        if (n > 0) {
-          stderr_buf.append(buf.data(), static_cast<std::size_t>(n));
-          process_buffer_lines(stderr_buf, "stderr", on_output);
-        }
-      }
-      if (!err_closed && (fds[1].revents & (POLLHUP | POLLERR))) {
-        ssize_t n = 0;
-        while ((n = read(pipe_err[0], buf.data(), buf.size())) > 0) {
-          stderr_buf.append(buf.data(), static_cast<std::size_t>(n));
-          process_buffer_lines(stderr_buf, "stderr", on_output);
-        }
-        close(pipe_err[0]);
-        err_closed = true;
-        fds[1].fd = -1;
-      }
-    }
-
-    int status = 0;
-    if (waitpid(pid, &status, WNOHANG) == pid) {
-      break;
-    }
-  }
+        return true;
+      },
+      [&](int stream, std::string_view chunk) {
+        const auto at = static_cast<std::size_t>(stream);
+        line_bufs[at].append(chunk);
+        process_buffer_lines(line_bufs[at], names[at], on_output);
+      },
+      [&] {
+        int status = 0;
+        return waitpid(pid, &status, WNOHANG) != pid;
+      });
 
   // Drain remaining buffers
-  if (!stdout_buf.empty() && on_output) on_output("stdout", trim_trailing_newlines(stdout_buf));
-  if (!stderr_buf.empty() && on_output) on_output("stderr", trim_trailing_newlines(stderr_buf));
-
-  if (!out_closed) close(pipe_out[0]);
-  if (!err_closed) close(pipe_err[0]);
+  for (std::size_t i = 0; i < 2; ++i) {
+    if (!line_bufs[i].empty() && on_output) on_output(names[i], trim_trailing_newlines(line_bufs[i]));
+  }
 
   // Clean termination of process group
   kill_pgid(pid, SIGTERM, 1000);
 
   int exit_code = -1;
   int status = 0;
-  if (waitpid(pid, &status, 0) == pid) {
-    if (WIFEXITED(status)) exit_code = WEXITSTATUS(status);
-    else if (WIFSIGNALED(status)) exit_code = 128 + WTERMSIG(status);
-  }
+  if (waitpid(pid, &status, 0) == pid) exit_code = exit_code_of(status, exit_code);
 
   g_active_child_pgid.store(0);
   sigaction(SIGINT, &old_int, nullptr);
@@ -379,7 +314,7 @@ int ProcessRunner::run_stream(
 int ProcessRunner::run_detached(
     const std::vector<std::string>& args,
     const fs::path& cwd,
-    const std::vector<std::pair<std::string, std::string>>& env,
+    const Env& env,
     const fs::path& log_file) {
   if (args.empty()) return -1;
 
@@ -390,7 +325,7 @@ int ProcessRunner::run_detached(
     return pid;
   }
 
-  // Grandchild creates detached session
+  // Child: a session of its own, detached from the terminal
   setsid();
 
   int devnull = open("/dev/null", O_RDONLY);
@@ -415,24 +350,7 @@ int ProcessRunner::run_detached(
     close(out_fd);
   }
 
-  if (!cwd.empty()) {
-    std::error_code ec;
-    fs::current_path(cwd, ec);
-  }
-
-  std::vector<std::string> env_strings = prepare_env(env);
-  std::vector<char*> envp;
-  envp.reserve(env_strings.size() + 1);
-  for (auto& s : env_strings) envp.push_back(s.data());
-  envp.push_back(nullptr);
-
-  std::vector<char*> argv;
-  argv.reserve(args.size() + 1);
-  for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
-  argv.push_back(nullptr);
-
-  execvpe(argv[0], argv.data(), envp.data());
-  _exit(127);
+  exec_child(args, cwd, env);
 }
 
 bool ProcessRunner::is_alive(int pid) {
@@ -443,37 +361,13 @@ bool ProcessRunner::is_alive(int pid) {
 bool ProcessRunner::kill_pid(int pid, int sig, int timeout_ms) {
   if (!is_alive(pid)) return true;
   kill(pid, sig);
-
-  auto start = std::chrono::steady_clock::now();
-  while (is_alive(pid)) {
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start);
-    if (elapsed.count() >= timeout_ms) {
-      kill(pid, SIGKILL);
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
-      return !is_alive(pid);
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-  }
-  return true;
+  return wait_or_kill([pid] { return is_alive(pid); }, [pid](int s) { kill(pid, s); }, timeout_ms);
 }
 
 bool ProcessRunner::kill_pgid(int pgid, int sig, int timeout_ms) {
   if (pgid <= 1) return true;
   kill(-pgid, sig);
-
-  auto start = std::chrono::steady_clock::now();
-  while (kill(-pgid, 0) == 0) {
-    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - start);
-    if (elapsed.count() >= timeout_ms) {
-      kill(-pgid, SIGKILL);
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
-      return kill(-pgid, 0) != 0;
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-  }
-  return true;
+  return wait_or_kill([pgid] { return kill(-pgid, 0) == 0; }, [pgid](int s) { kill(-pgid, s); }, timeout_ms);
 }
 
 std::string ProcessRunner::read_cmdline(int pid) {
