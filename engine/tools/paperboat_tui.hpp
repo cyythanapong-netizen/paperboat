@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -71,25 +72,21 @@ inline void render_banner(bool animated = true) {
   std::string git_info = get_git_info();
   std::string cwd_info = get_compact_cwd();
 
-  // The 31x21 brand pixel boat (rows 0 to 7)
+  // The 8-line compact brand boat (23 columns wide)
   const std::vector<std::string> logo_lines = {
-      "              " + W + "▄█" + S + "▄" + RST + "              ",
-      "            " + W + "▄███" + S + "██▄" + RST + "            ",
-      "          " + W + "▄█████" + S + "████▄" + RST + "          ",
-      "        " + W + "▄███████" + S + "██████▄" + RST + "        ",
-      W + "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄" + RST,
-      "  " + W + "▀█████████████████████████▀" + RST + "  ",
-      "    " + W + "▀█████████████████████▀" + RST + "    ",
-      "      " + W + "▀█████████████████▀" + RST + "      ",
+      "          " + W + "▄█" + S + "▄" + RST + "          ",
+      "        " + W + "▄███" + S + "██▄" + RST + "        ",
+      "      " + W + "▄█████" + S + "████▄" + RST + "      ",
+      W + "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄" + RST,
+      " " + W + "▀███████████████████▀" + RST + " ",
+      "   " + W + "▀███████████████▀" + RST + "   ",
   };
 
   const std::vector<std::string> text_lines = {
-      "",
       BLUE + "Paperboat CLI 0.1.0" + RST,
       GRAY + git_info + RST,
       GRAY + "C++20 core · protocol paperboat/0" + RST,
       GRAY + cwd_info + RST,
-      "",
       "",
       "",
   };
@@ -98,49 +95,106 @@ inline void render_banner(bool animated = true) {
     std::cout << "  " << logo_lines[i] << "   " << text_lines[i] << '\n';
   }
 
-  // Water lines: 3 rows (line 8: gap / wave peak; line 9: dot mid; line 10: dot bottom)
+  // Water lines (Line 6: water gap / wave crest; Line 7: water dots)
   auto render_water_lines = [&](int active_dot) {
-    std::string l8 = "  ";
-    std::string l9 = "  ";
-    std::string l10 = "  ";
-    for (int dot = 0; dot < 5; ++dot) {
-      if (dot > 0) {
-        l8 += "    ";
-        l9 += "    ";
-        l10 += "    ";
+    const int cols[5] = {1, 6, 11, 16, 21};
+    std::string out6 = "  ";
+    std::string out7 = "  ";
+
+    for (int col = 0; col < 23; ++col) {
+      int dot_idx = -1;
+      for (int d = 0; d < 5; ++d) {
+        if (cols[d] == col) { dot_idx = d; break; }
       }
-      if (dot == active_dot) {
-        // Dot lifts up by 1 half-block into line 8 with bright wave crest
-        l8 += BRIGHT_ORANGE + "▄▄▄" + RST;
-        l9 += BRIGHT_ORANGE + "███" + RST;
-        l10 += "   ";
+
+      if (dot_idx == -1) {
+        out6 += ' ';
+        out7 += ' ';
+      } else if (dot_idx == active_dot) {
+        out6 += BRIGHT_ORANGE + "▄" + RST;
+        out7 += BRIGHT_ORANGE + "▀" + RST;
       } else {
-        l8 += "   ";
-        l9 += ORANGE + "███" + RST;
-        l10 += ORANGE + "▀▀▀" + RST;
+        out6 += ' ';
+        out7 += ORANGE + "█" + RST;
       }
     }
-    l8 += "   \n";
-    l9 += "   \n";
-    l10 += "   \n";
-    return std::tuple{l8, l9, l10};
+    out6 += "   \n";
+    out7 += "   \n";
+    return std::pair{out6, out7};
   };
 
-  auto [w8, w9, w10] = render_water_lines(-1);
+  auto [w6, w7] = render_water_lines(-1);
 
   if (is_tty && animated) {
-    std::cout << w8 << w9 << w10 << std::flush;
+    std::cout << w6 << w7 << std::flush;
     for (int step = 0; step < 5; ++step) {
-      auto [u8, u9, u10] = render_water_lines(step);
-      std::cout << "\033[3A\r" << u8 << u9 << u10 << std::flush;
-      std::this_thread::sleep_for(std::chrono::milliseconds(90));
+      auto [u6, u7] = render_water_lines(step);
+      std::cout << "\033[2A\r" << u6 << u7 << std::flush;
+      std::this_thread::sleep_for(std::chrono::milliseconds(80));
     }
     // Return to rest
-    std::cout << "\033[3A\r" << w8 << w9 << w10 << "\n" << std::flush;
+    std::cout << "\033[2A\r" << w6 << w7 << "\n" << std::flush;
   } else {
-    std::cout << w8 << w9 << w10 << "\n" << std::flush;
+    std::cout << w6 << w7 << "\n" << std::flush;
   }
 }
+
+/**
+ * Reusable terminal spinner utilizing the Paperboat 5-dot water ripple.
+ * Animates the wave crest across the dots in signal orange while a task runs.
+ */
+class WaveSpinner {
+ public:
+  explicit WaveSpinner(std::string message = "") : message_(std::move(message)) {}
+  ~WaveSpinner() { stop(); }
+
+  void start(std::string msg = "") {
+    if (!msg.empty()) message_ = std::move(msg);
+    if (running_ || !isatty(STDOUT_FILENO)) return;
+    running_ = true;
+    thread_ = std::thread([this]() {
+      int step = 0;
+      const std::string ORANGE = "\033[38;2;255;106;48m";
+      const std::string BRIGHT = "\033[1;38;2;255;160;100m";
+      const std::string RST = "\033[0m";
+
+      while (running_) {
+        std::string frame = "  ";
+        for (int d = 0; d < 5; ++d) {
+          if (d > 0) frame += " ";
+          if (d == step) {
+            frame += BRIGHT + "▀" + RST;
+          } else {
+            frame += ORANGE + "▄" + RST;
+          }
+        }
+        std::cout << "\r" << frame << "  " << message_ << "   " << std::flush;
+        step = (step + 1) % 5;
+        std::this_thread::sleep_for(std::chrono::milliseconds(90));
+      }
+    });
+  }
+
+  void stop(bool ok = true, std::string_view final_msg = "") {
+    if (!running_) return;
+    running_ = false;
+    if (thread_.joinable()) thread_.join();
+    if (isatty(STDOUT_FILENO)) {
+      std::cout << "\r\033[2K";
+      if (!final_msg.empty()) {
+        std::cout << (ok ? "  \033[32m✓\033[0m " : "  \033[31m✗\033[0m ") << final_msg << '\n';
+      }
+      std::cout << std::flush;
+    }
+  }
+
+  void set_message(std::string msg) { message_ = std::move(msg); }
+
+ private:
+  std::string message_;
+  std::atomic<bool> running_{false};
+  std::thread thread_;
+};
 
 inline std::vector<std::string> parse_command_line(std::string_view line) {
   std::vector<std::string> tokens;

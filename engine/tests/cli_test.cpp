@@ -8,6 +8,7 @@
 
 #include "paperboat/core/backend_manager.hpp"
 #include "paperboat/core/process.hpp"
+#include "../tools/paperboat_tui.hpp"
 
 using Catch::Matchers::ContainsSubstring;
 namespace core = paperboat::core;
@@ -80,4 +81,18 @@ TEST_CASE("BackendManager check_backend validates missing vs valid descriptors")
     CHECK(res.ok);
     CHECK(res.domain == "cart-pole");
   }
+}
+
+TEST_CASE("WaveSpinner starts and stops cleanly") {
+  paperboat::tui::WaveSpinner spinner("Building something...");
+  spinner.start();
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  spinner.set_message("Still building...");
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  spinner.stop(true, "Build succeeded");
+  CHECK(true);
+}
+
+TEST_CASE("render_banner non-interactive executes cleanly without exception") {
+  CHECK_NOTHROW(paperboat::tui::render_banner(false));
 }

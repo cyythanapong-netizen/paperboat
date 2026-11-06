@@ -67,10 +67,14 @@ export function Logo({ height = 24, running = false }: { height?: number; runnin
     );
   }
 
-  const merged = variant === "s2-merged";
-  const hull = merged
-    ? "M0 16 L62 16 L48 30 L14 30 Z"
-    : "M0 18 L62 18 L48 32 L14 32 Z";
+  const micro = variant === "s2-merged";
+  const leftSail = micro ? "M31 0 L31 15.5 L14 15.5 Z" : "M31 0 L31 16 L15 16 Z";
+  const rightSail = micro ? "M31 0 L48 15.5 L31 15.5 Z" : "M31 0 L47 16 L31 16 Z";
+  const hull = micro
+    ? "M0 19 L62 19 L48 31.5 L14 31.5 Z"
+    : "M0 18.2 L62 18.2 L48 32 L14 32 Z";
+  const waterY = micro ? 35.6 : 36;
+  const waterSize = micro ? 6.4 : 6;
 
   return (
     <svg
@@ -82,13 +86,13 @@ export function Logo({ height = 24, running = false }: { height?: number; runnin
       aria-hidden="true"
       style={{ ["--lr" as any]: lr, ["--lb" as any]: lb }}
     >
-      <path className="logo-light" d="M31 0 L31 16 L16 16 Z" />
-      <path className="logo-shade" d="M31 0 L46 16 L31 16 Z" />
+      <path className="logo-light" d={leftSail} />
+      <path className="logo-shade" d={rightSail} />
       <path className="logo-hull" d={hull} />
-      <g className="logo-water" shapeRendering="crispEdges">
+      <g className="logo-water" shapeRendering={micro ? "geometricPrecision" : "crispEdges"}>
         {WATER_XS.map((x, i) => (
           <g key={i} className={`w w${i + 1}`}>
-            <rect x={x} y={36} width={6} height={6} />
+            <rect x={x} y={waterY} width={waterSize} height={waterSize} />
           </g>
         ))}
       </g>
