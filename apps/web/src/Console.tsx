@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { EngineState } from "./engine";
 
 type Log = EngineState["logs"][number];
@@ -29,25 +29,32 @@ function CopyKey({ text, label = "copy", title, className = "log-copy" }: { text
 }
 
 /**
- * The Console: what the backend logged, newest last. A line that names a block (the one
- * that wrote it, or failed) has a button that shows the block on the Flow page; every
- * line has a copy key (on hover) that copies it as plain text.
+ * The Console: what the backend and app logged, newest last. Active from startup before the
+ * first run so non-run actions and errors are visible immediately. A line that names a block
+ * has a button that shows the block on the Flow page; every line has a copy key on hover.
  */
 export function Console({ logs, onBlock }: { logs: EngineState["logs"]; onBlock: (id: string) => void }) {
-  if (logs.length === 0) return <p className="empty">Nothing yet. Runs, errors and what blocks log appear here.</p>;
+  const list = useRef<HTMLOListElement | null>(null);
+  useEffect(() => {
+    if (list.current) list.current.scrollTop = list.current.scrollHeight;
+  }, [logs.length]);
   return (
-    <ol className="logs screen">
-      {logs.map((l, i) => (
-        <li key={i} className={`log-${l.level}`}>
-          {l.node && (
-            <button className="log-node" title="Show this block on the Flow page" onClick={() => onBlock(l.node!)}>
-              {l.node}
-            </button>
-          )}
-          {l.node && l.text.startsWith(`${l.node}: `) ? l.text.slice(l.node.length + 2) : l.text}
-          <CopyKey text={() => logText(l)} title="Copy this line" />
-        </li>
-      ))}
+    <ol ref={list} className="logs screen">
+      {logs.length === 0 ? (
+        <li className="log-info">Console ready.</li>
+      ) : (
+        logs.map((l, i) => (
+          <li key={i} className={`log-${l.level}`}>
+            {l.node && (
+              <button className="log-node" title="Show this block on the Flow page" onClick={() => onBlock(l.node!)}>
+                {l.node}
+              </button>
+            )}
+            {l.node && l.text.startsWith(`${l.node}: `) ? l.text.slice(l.node.length + 2) : l.text}
+            <CopyKey text={() => logText(l)} title="Copy this line" />
+          </li>
+        ))
+      )}
     </ol>
   );
 }

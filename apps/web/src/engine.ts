@@ -41,7 +41,7 @@ export type EngineState = {
   logs: { level: string; text: string; node?: string }[];
 };
 
-const initial: EngineState = {
+export const initial: EngineState = {
   connection: "connecting",
   engine: "",
   stationView: { view: "scene" },
@@ -65,10 +65,17 @@ const initial: EngineState = {
   logs: [],
 };
 
-type Action = ServerMsg | { type: "reset" } | { type: "connection"; value: EngineState["connection"] };
+export type Action = ServerMsg | { type: "reset" } | { type: "connection"; value: EngineState["connection"] };
 
 /** Samples kept per plotted signal: past this, the history is thinned, not cut. */
 export const MAX_POINTS = 20000;
+
+/** Max Console lines kept in memory. */
+export const MAX_LOGS = 200;
+
+function pushLog(logs: EngineState["logs"], entry: EngineState["logs"][number]): EngineState["logs"] {
+  return [...logs.slice(-(MAX_LOGS - 1)), entry];
+}
 
 /**
  * A series with one more sample. A long run keeps its whole history: once a series has
@@ -82,20 +89,29 @@ export function append(prev: Series | undefined, t: number, v: number): Series {
   return { t: series.t.filter(keep), v: series.v.filter(keep) };
 }
 
-function reduce(s: EngineState, m: Action): EngineState {
+export function reduce(s: EngineState, m: Action): EngineState {
   switch (m.type) {
     case "reset":
-      // A new URL may be a different backend: drop everything the old one sent.
-      return initial;
+      // A new URL may be a different backend: drop everything the old one sent, keeping Console logs.
+      return { ...initial, logs: s.logs };
     case "connection": {
-      if (m.value !== "closed" || s.connection !== "open") return { ...s, connection: m.value };
-      // Lost an open connection: a run in flight won't report back.
-      const run = s.run?.status === "running" ? { ...s.run, status: "failed" as const } : s.run;
-      const logs = [...s.logs, { level: "warn", text: "connection lost, reconnecting…" }];
-      return { ...s, connection: "closed", run, logs };
+      if (m.value !== "closed") return { ...s, connection: m.value };
+      if (s.connection === "open") {
+        // Lost an open connection: a run in flight won't report back.
+        const run = s.run?.status === "running" ? { ...s.run, status: "failed" as const } : s.run;
+        const logs = pushLog(s.logs, { level: "warn", text: "connection lost, reconnecting…" });
+        return { ...s, connection: "closed", run, logs };
+      }
+      if (s.connection === "connecting" && s.logs.at(-1)?.text !== "waiting for backend, reconnecting…") {
+        return { ...s, connection: "closed", logs: pushLog(s.logs, { level: "warn", text: "waiting for backend, reconnecting…" }) };
+      }
+      return { ...s, connection: "closed" };
     }
-    case "hello":
-      return { ...s, engine: m.engine, stationView: m.station ?? { view: "scene" }, runDefaults: m.run ?? {} };
+    case "hello": {
+      const text = `connected to ${m.engine}`;
+      const logs = s.logs.at(-1)?.text === text ? s.logs : pushLog(s.logs, { level: "info", text });
+      return { ...s, engine: m.engine, stationView: m.station ?? { view: "scene" }, runDefaults: m.run ?? {}, logs };
+    }
     case "catalog":
       return { ...s, blocks: m.blocks, objects: m.objects ?? [], dashboard: m.dashboard };
     case "scene":
@@ -133,7 +149,7 @@ function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, latest, vectorComponents, signals: { ...s.signals, [m.node]: append(s.signals[m.node], m.t, m.v) } };
     }
     case "log":
-      return { ...s, logs: [...s.logs.slice(-199), { level: m.level, text: m.text, node: m.node }] };
+      return { ...s, logs: pushLog(s.logs, { level: m.level, text: m.text, node: m.node }) };
   }
 }
 
@@ -189,5 +205,10 @@ export function useEngine(url: string) {
     return () => void listeners.current.delete(listen);
   }, []);
 
-  return { state, send, subscribe };
+  /** Append a line to the Console from UI-side actions (even before the first run). */
+  const log = useCallback((level: "info" | "warn" | "error", text: string, node?: string) => {
+    dispatch({ type: "log", level, text, ...(node ? { node } : {}) });
+  }, []);
+
+  return { state, send, subscribe, log };
 }
