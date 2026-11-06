@@ -124,8 +124,13 @@ void Session::on_message(const std::string& text) {
     const bool install = type == "toolkit.install";
     s.log("info", (install ? "installing" : "uninstalling") + std::string(" toolkit ") + name + "…");
     std::thread([&, name, install] {
-      std::filesystem::path root = std::filesystem::current_path();
+      std::filesystem::path root;
+#ifdef PAPERBOAT_SOURCE_DIR
+      root = PAPERBOAT_SOURCE_DIR;
+#else
+      root = std::filesystem::current_path();
       for (int i = 0; i < 8 && !(std::filesystem::exists(root / "scripts" / "install_toolkit.py")); ++i) root = root.parent_path();
+#endif
       if (install) {
         std::string cmd = "python3 " + (root / "scripts" / "install_toolkit.py").string() + " " + name;
         if (std::system(cmd.c_str()) != 0) { s.log("error", "toolkit " + name + " install failed"); return; }
@@ -136,8 +141,8 @@ void Session::on_message(const std::string& text) {
       }
       std::string cfg = "cmake -S " + (root / "engine").string() + " -B " + (root / "engine" / "build").string() + " -G Ninja -DCMAKE_BUILD_TYPE=Debug";
       if (std::system(cfg.c_str()) != 0) { s.log("error", "toolkit cmake configure failed"); return; }
-      std::string build = "cmake --build " + (root / "engine" / "build").string();
-      if (std::system(build.c_str()) != 0) { s.log("error", "toolkit cmake build failed"); return; }
+      std::string build = "cmake --build " + (root / "engine" / "build").string() + " > /tmp/opencode/toolkit-build.log 2>&1";
+      if (std::system(build.c_str()) != 0) { s.log("error", "toolkit cmake build failed; see /tmp/opencode/toolkit-build.log"); return; }
       s.log("info", "toolkit " + name + (install ? " installed" : " uninstalled") + "; restart the backend to apply it");
     }).detach();
   } else if (type == "input") {  // read by Key blocks

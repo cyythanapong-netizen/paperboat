@@ -20,6 +20,7 @@ add_library(paperboat_core
 add_library(paperboat::core ALIAS paperboat_core)
 
 target_include_directories(paperboat_core PUBLIC include)
+target_compile_definitions(paperboat_core PUBLIC PAPERBOAT_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../..")
 target_link_libraries(paperboat_core
   PUBLIC paperboat::toolkit nlohmann_json::nlohmann_json
   PRIVATE ixwebsocket paperboat_warnings)
