@@ -410,4 +410,37 @@ ToolkitResult uninstall_toolkit(std::string_view name,
   return {true, msg};
 }
 
+std::vector<std::string> list_toolkit_versions(std::string_view name,
+                                               const fs::path& repo_root) {
+  const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
+  if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) return {};
+  const auto entries = load_toolkits_manifest(root / "toolkits.toml");
+  const ToolkitEntry* entry = find_entry(entries, name);
+  if (!entry) return {};
+
+  const std::string repo_url = resolve_repo_url(*entry);
+  if (repo_url.empty()) return {};
+
+  std::vector<std::string> versions;
+  std::string cmd = "git ls-remote --tags " + shell_quote(repo_url) + " 2>/dev/null";
+  FILE* pipe = popen(cmd.c_str(), "r");
+  if (!pipe) return {};
+
+  std::array<char, 512> buf{};
+  while (fgets(buf.data(), static_cast<int>(buf.size()), pipe)) {
+    std::string line = trim_line(buf.data());
+    const std::string marker = "refs/tags/";
+    auto pos = line.find(marker);
+    if (pos == std::string::npos) continue;
+    std::string tag = line.substr(pos + marker.size());
+    if (tag.ends_with("^{}")) tag.resize(tag.size() - 3);
+    if (!tag.empty() && std::ranges::find(versions, tag) == versions.end()) {
+      versions.push_back(std::move(tag));
+    }
+  }
+  pclose(pipe);
+  std::ranges::sort(versions);
+  return versions;
+}
+
 }  // namespace paperboat::toolkit
