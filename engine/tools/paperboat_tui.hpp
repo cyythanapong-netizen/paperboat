@@ -73,21 +73,17 @@ inline void render_banner(bool animated = true) {
   std::string cwd_info = get_compact_cwd();
 
   const std::vector<std::string> logo_lines = {
-      "        " + INK + "▄█" + RST + "        ",
-      "       " + INK + "██" + SHADE + "█▌" + RST + "       ",
+      "        " + INK + "█" + SHADE + "█" + RST + "        ",
       "      " + INK + "███" + SHADE + "███" + RST + "      ",
-      "     " + INK + "████ " + SHADE + "███" + RST + "     ",
-      "    " + INK + "█████  " + SHADE + "███" + RST + "    ",
-      "  " + INK + "▄█████████████▄" + RST + " ",
-      "   " + INK + "▀███████████▀" + RST + "  ",
+      "    " + INK + "█████" + SHADE + "█████" + RST + "    ",
+      "  " + INK + "▄██████████████▄" + RST,
+      "   " + INK + "▀████████████▀" + RST + " ",
   };
 
   const std::vector<std::string> text_lines = {
-      "",
       BLUE + "Paperboat CLI 0.1.0" + RST,
       GRAY + git_info + RST,
-      GRAY + "Engine: C++20 core · protocol paperboat/0" + RST,
-      GRAY + "Web: http://localhost:3047 · Examples: :8765-8773" + RST,
+      GRAY + "C++20 core · protocol paperboat/0" + RST,
       GRAY + cwd_info + RST,
       "",
   };
@@ -109,15 +105,17 @@ inline void render_banner(bool animated = true) {
         w += DIM_ORANGE + "█" + RST;
       }
     }
-    return w + "  ";
+    w += "  ";
+    return w;
   };
 
   if (is_tty && animated) {
+    std::cout << "  " << make_water(-1) << "\n" << std::flush;
     for (int step = 0; step < 5; ++step) {
-      std::cout << "\r\033[2K  " << make_water(step) << std::flush;
-      std::this_thread::sleep_for(std::chrono::milliseconds(55));
+      std::cout << "\033[1A\r  " << make_water(step) << "\n" << std::flush;
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-    std::cout << "\r\033[2K  " << make_water(-1) << "\n\n" << std::flush;
+    std::cout << "\033[1A\r  " << make_water(-1) << "\n\n" << std::flush;
   } else {
     std::cout << "  " << make_water(-1) << "\n\n" << std::flush;
   }
