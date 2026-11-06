@@ -16,6 +16,7 @@
 #include <ixwebsocket/IXNetSystem.h>
 
 #include "paperboat/core/backend.hpp"
+#include "paperboat/core/backend_manager.hpp"
 
 namespace paperboat::core {
 
@@ -128,7 +129,22 @@ std::string Server::start() {
   }
   if (!res.first) return res.second;
   state_->server.start();
+
+  const auto* cat = state_->backend.catalog;
+  RunningBackend rb;
+  rb.port = state_->port;
+  rb.pid = getpid();
+  rb.engine = state_->backend.engine;
+  rb.domain = cat ? cat->domain : "";
+  rb.cwd = std::filesystem::current_path();
+  rb.backend_dir = cat ? cat->dir : std::filesystem::path{};
+  rb.executable = "";
+  rb.ws_url = "ws://localhost:" + std::to_string(state_->port);
+  rb.started_at = 0;
+  BackendManager::register_running_backend(rb);
+
   set_restart_handler([this] {
+    BackendManager::unregister_running_backend(state_->port);
     state_->server.stop();
     exec_remembered_args();
   });
@@ -136,6 +152,7 @@ std::string Server::start() {
 }
 
 void Server::stop() {
+  BackendManager::unregister_running_backend(state_->port);
   set_restart_handler(nullptr);
   state_->server.stop();
   std::lock_guard lock(state_->mutex);

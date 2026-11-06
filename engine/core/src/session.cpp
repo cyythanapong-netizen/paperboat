@@ -4,6 +4,7 @@
 #include <thread>
 
 #include "paperboat/core/backend.hpp"
+#include "paperboat/core/backend_manager.hpp"
 
 #include <paperboat/toolkit/installer.hpp>
 #include <paperboat/toolkit/variables.hpp>
@@ -138,8 +139,13 @@ void Session::on_message(const std::string& text) {
     else s.keys.erase(key);
   } else if (type == "backend.restart") {
     s.log("info", "restarting backend…");
-    std::thread([] {
+    const auto dir = s.backend.catalog ? s.backend.catalog->dir : std::filesystem::path{};
+    std::thread([dir] {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      if (!dir.empty() && std::filesystem::is_regular_file(dir / "CMakeLists.txt")) {
+        std::string err;
+        BackendManager::ensure_built(dir, false, false, &err);
+      }
       restart_process();
     }).detach();
   } else if (type == "toolkit.install" || type == "toolkit.update" || type == "toolkit.uninstall") {
