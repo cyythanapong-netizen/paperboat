@@ -8,7 +8,7 @@ Each publish is a pull request into `dev`, on a branch of its own
 (same message, author and date; its tree is that repo's part of `main`), so a feature's
 commits stay apart in the PR while `dev` never gets `main`'s own history. Merge it on
 GitHub once CI passes. A publish while an earlier one is still open stacks on it (its PR
-targets the earlier branch, and GitHub retargets it to `dev` when that one merges). Files git ignores (TODO.md, GUIDELINES.md, notes for assistants) are never in
+targets the earlier branch, and GitHub retargets it to `dev` when that one merges). Files git ignores (GUIDELINES.md, notes for assistants) are never in
 `main`'s tree; as a second guard, a commit holding any of them is refused.
 
     python3 scripts/publish.py "Route loop wires around blocks"   # a PR on both
