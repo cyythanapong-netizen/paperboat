@@ -539,6 +539,21 @@
           "type": "boolean",
           "description": "Whether the current backend requires this toolkit."
         },
+        "version": {
+          "type": "string",
+          "description": "Currently installed release tag or 'dev'/'unknown'."
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Available release versions from the remote repository, newest first."
+        },
+        "default": {
+          "type": "string",
+          "description": "Suggested default release version to install."
+        },
         "busy": {
           "enum": [
             "installing",
@@ -1004,6 +1019,27 @@
         },
         "name": {
           "type": "string"
+        },
+        "version": {
+          "type": "string",
+          "description": "Release tag (e.g. 0.1.0) or 'dev' for main branch. Absent: latest release or dev."
+        }
+      },
+      "required": [
+        "type",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "toolkit.versions": {
+      "type": "object",
+      "description": "Fetch available release versions for an optional toolkit.",
+      "properties": {
+        "type": {
+          "const": "toolkit.versions"
+        },
+        "name": {
+          "type": "string"
         }
       },
       "required": [
@@ -1286,6 +1322,7 @@
             "input",
             "backend.restart",
             "toolkit.install",
+            "toolkit.versions",
             "toolkit.update",
             "toolkit.uninstall"
           ]
@@ -1374,6 +1411,18 @@
           },
           "then": {
             "$ref": "#/$defs/toolkit.install"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "toolkit.versions"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/toolkit.versions"
           }
         },
         {

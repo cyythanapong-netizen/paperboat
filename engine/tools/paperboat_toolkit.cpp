@@ -40,22 +40,27 @@ int main(int argc, char** argv) {
       return 0;
     }
 
-    if (pos.size() != 2) {
-      std::cerr << "usage: paperboat-toolkit <list|install|update|uninstall> [<name>] [--no-build] [--json]\n";
+    if (pos.size() < 2) {
+      std::cerr << "usage: paperboat-toolkit <list|install|uninstall> [<name>] [--version <ver>] [--no-build] [--json]\n";
       return 2;
     }
     const std::string_view name = pos[1];
+    std::string version;
+    for (std::size_t i = 0; i < args.size(); ++i) {
+      if (args[i] == "--version" && i + 1 < args.size()) {
+        version = std::string(args[i + 1]);
+      }
+    }
     auto log = [](std::string_view level, std::string_view text) {
       (level == "error" ? std::cerr : std::cout) << "[" << level << "] " << text << '\n';
     };
 
     tk::ToolkitResult res;
-    if (cmd == "install" || cmd == "add") {
-      res = tk::install_toolkit(name, {}, log, rebuild);
-    } else if (cmd == "update") {
-      res = tk::update_toolkit(name, {}, log, rebuild);
+    tk::HostBuild host = rebuild ? tk::HostBuild{} : tk::HostBuild{"", ""};
+    if (cmd == "install" || cmd == "add" || cmd == "update") {
+      res = tk::install_toolkit(name, version, {}, host, log);
     } else if (cmd == "uninstall" || cmd == "remove") {
-      res = tk::uninstall_toolkit(name, {}, log, rebuild);
+      res = tk::uninstall_toolkit(name, {}, host, log);
     } else {
       std::cerr << "paperboat-toolkit: unknown command \"" << cmd << "\"\n";
       return 2;

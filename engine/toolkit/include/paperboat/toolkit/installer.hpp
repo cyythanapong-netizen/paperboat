@@ -20,6 +20,15 @@ struct ToolkitEntry {
   std::string engine;
   bool installed = false;
   bool required = false;
+  std::string version;
+  std::vector<std::string> versions;
+  std::string default_version;
+};
+
+struct HostBuild {
+  std::filesystem::path source_dir;
+  std::filesystem::path build_dir;
+  bool skip_rebuild = false;
 };
 
 struct ToolkitResult {
@@ -28,6 +37,12 @@ struct ToolkitResult {
 };
 
 using ToolkitLog = std::function<void(std::string_view level, std::string_view text)>;
+
+// Parse git tags output (e.g. from git ls-remote --tags --refs) into semantic version numbers, newest first.
+std::vector<std::string> parse_release_tags(std::string_view ls_remote_output);
+
+// Fetch release tags from remote repository.
+std::vector<std::string> list_releases(const ToolkitEntry& entry, const ToolkitLog& log = {});
 
 // Locate the Paperboat repository root (containing toolkits.toml and engine/toolkit).
 std::filesystem::path find_repo_root(const std::filesystem::path& hint = {});
@@ -43,29 +58,25 @@ std::vector<std::string> load_toolkit_requirements(const std::filesystem::path& 
 
 // All toolkits from toolkits.toml with `installed` and `required` populated.
 std::vector<ToolkitEntry> list_toolkits(const std::filesystem::path& repo_root = {},
-                                        const std::filesystem::path& backend_dir = {});
+                                        const std::filesystem::path& backend_dir = {},
+                                        bool fetch_versions = false);
 
 // Protocol JSON array for hello.toolkits / toolkits.status.
 std::string toolkits_json(const std::vector<ToolkitEntry>& list,
                           std::string_view busy_name = {},
                           std::string_view busy_state = {});
 
-// Install, update, or uninstall an optional toolkit in engine/toolkit/<name>.
-// When `rebuild` is true, also reconfigures and builds engine/build via CMake.
+// Install or switch version of an optional toolkit in engine/toolkit/<name>.
 ToolkitResult install_toolkit(std::string_view name,
+                              std::string_view version = {},
                               const std::filesystem::path& repo_root = {},
-                              const ToolkitLog& log = {},
-                              bool rebuild = true);
-
-ToolkitResult update_toolkit(std::string_view name,
-                             const std::filesystem::path& repo_root = {},
-                             const ToolkitLog& log = {},
-                             bool rebuild = true);
+                              const HostBuild& host = {},
+                              const ToolkitLog& log = {});
 
 ToolkitResult uninstall_toolkit(std::string_view name,
                                 const std::filesystem::path& repo_root = {},
-                                const ToolkitLog& log = {},
-                                bool rebuild = true);
+                                const HostBuild& host = {},
+                                const ToolkitLog& log = {});
 
 // Remote release versions/tags for an optional toolkit.
 std::vector<std::string> list_toolkit_versions(std::string_view name,

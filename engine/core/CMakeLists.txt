@@ -25,3 +25,8 @@ target_include_directories(paperboat_core PUBLIC include)
 target_link_libraries(paperboat_core
   PUBLIC paperboat::toolkit nlohmann_json::nlohmann_json tomlplusplus::tomlplusplus
   PRIVATE ixwebsocket paperboat_warnings)
+
+target_compile_definitions(paperboat_core PRIVATE
+  PAPERBOAT_HOST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+  PAPERBOAT_HOST_BUILD_DIR="${CMAKE_BINARY_DIR}"
+  PAPERBOAT_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/../..")

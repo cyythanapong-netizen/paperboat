@@ -67,17 +67,22 @@ struct Catalog {
   // `station_page`, relative to `dir`, served by the engine).
   std::string station_view = "scene";
   std::string station_page;
+  std::vector<std::string> missing_imports;
 
   const CatalogEntry* find(std::string_view type) const;
   const ObjectEntry* find_object(std::string_view type) const;
+};
+
+struct DescriptorOptions {
+  std::vector<std::string> optional_imports;
 };
 
 struct DescriptorError : std::runtime_error {
   using std::runtime_error::runtime_error;
 };
 
-Catalog load_descriptor(std::string_view toml_text, const Registry& registry = builtins());
-Catalog load_descriptor_file(const std::filesystem::path& path, const Registry& registry = builtins());
+Catalog load_descriptor(std::string_view toml_text, const Registry& registry = builtins(), const DescriptorOptions& options = {});
+Catalog load_descriptor_file(const std::filesystem::path& path, const Registry& registry = builtins(), const DescriptorOptions& options = {});
 
 // Blocks defined in TOML on parents in `registry` (C++ templates or earlier definitions),
 // added to it as "<package>/<type>": `[[blocks]]` entries with `use` (the parent), `type`,

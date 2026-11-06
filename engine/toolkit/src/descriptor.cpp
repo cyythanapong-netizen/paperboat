@@ -372,7 +372,7 @@ void load_variables(const json& doc, Catalog& catalog) {
 void load_starters(const json& doc, Catalog& catalog) {
   json graph = doc.value("graph", json::object());
   only_fields(graph, {"nodes", "edges", "groups"}, "graph");
-  const json groups = graph.value("groups", json::array());
+  const json groups = doc.value("graph", json::object()).value("groups", json::array());
   graph = {{"nodes", graph.value("nodes", json::array())}, {"edges", graph.value("edges", json::array())}};
   std::set<std::string> ids;
   for (std::size_t i = 0; i < graph["nodes"].size(); ++i) {
@@ -382,7 +382,11 @@ void load_starters(const json& doc, Catalog& catalog) {
     if (n.contains("ports")) only_fields(n["ports"], {"left", "right", "top", "bottom"}, at + ".ports");
     if (!n.contains("id") || !n.contains("type")) throw DescriptorError(at + ": needs an id and a type");
     const auto type = n["type"].get<std::string>();
-    if (!catalog.find(type)) throw DescriptorError(at + ": no block type \"" + type + "\" in this catalog");
+    if (!catalog.find(type)) {
+      if (catalog.missing_imports.empty()) {
+        throw DescriptorError(at + ": no block type \"" + type + "\" in this catalog");
+      }
+    }
     if (!ids.insert(n["id"].get<std::string>()).second) throw DescriptorError(at + ": duplicate id");
     if (!n.contains("params")) n["params"] = json::object();
   }
@@ -454,14 +458,18 @@ void load_starters(const json& doc, Catalog& catalog) {
     const auto at = "station.objects[" + std::to_string(i) + "]";
     only_fields(o, {"id", "type", "props", "links", "pos"}, at);
     if (!o.contains("id") || !o.contains("type")) throw DescriptorError(at + ": needs an id and a type");
-    if (!catalog.find_object(o["type"].get<std::string>()))
-      throw DescriptorError(at + ": no station object type \"" + o["type"].get<std::string>() + "\"");
+    if (!catalog.find_object(o["type"].get<std::string>())) {
+      if (catalog.missing_imports.empty()) {
+        throw DescriptorError(at + ": no station object type \"" + o["type"].get<std::string>() + "\"");
+      }
+    }
     if (!o.contains("props")) o["props"] = json::object();
   }
   std::set<std::string> object_ids;
   for (const auto& o : station["objects"]) object_ids.insert(o["id"].get<std::string>());
   for (const auto& o : station["objects"]) {
     const ObjectEntry* entry = catalog.find_object(o["type"].get<std::string>());
+    if (!entry) continue;
     const auto& slots = entry->def.links;
     const json links = o.value("links", json::object());  // a copy: keep it alive while iterating
     for (const auto& [slot, target] : links.items()) {
@@ -549,7 +557,7 @@ const CatalogEntry* Catalog::find(std::string_view type) const {
   return it == entries.end() ? nullptr : &*it;
 }
 
-Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
+Catalog load_descriptor(std::string_view toml_text, const Registry& registry, const DescriptorOptions& options) {
   json doc;
   try {
     doc = to_json(toml::parse(toml_text));
@@ -616,6 +624,10 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
     const auto templates = registry.package(package);
     const auto station = registry.objects(package);
     if (templates.empty() && station.empty()) {
+      if (std::ranges::find(options.optional_imports, package) != options.optional_imports.end()) {
+        catalog.missing_imports.push_back(package);
+        continue;
+      }
       std::string known;
       for (const auto& k : registry.packages()) known += (known.empty() ? "" : ", ") + k;
       throw DescriptorError("import: no package \"" + package + "\" (known: " + known + ")");
@@ -689,12 +701,12 @@ std::string descriptor_domain(std::string_view toml_text) {
   }
 }
 
-Catalog load_descriptor_file(const std::filesystem::path& path, const Registry& registry) {
+Catalog load_descriptor_file(const std::filesystem::path& path, const Registry& registry, const DescriptorOptions& options) {
   std::ifstream in(path);
   if (!in) throw DescriptorError("cannot open " + path.string());
   std::stringstream text;
   text << in.rdbuf();
-  Catalog catalog = load_descriptor(text.str(), registry);
+  Catalog catalog = load_descriptor(text.str(), registry, options);
   catalog.dir = std::filesystem::absolute(path).parent_path();
   if (!catalog.station_page.empty() && !std::filesystem::is_regular_file(catalog.dir / catalog.station_page))
     throw DescriptorError("station.page: no file " + (catalog.dir / catalog.station_page).string());
@@ -764,6 +776,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     blocks.push_back(std::move(block));
   }
   json msg = {{"type", "catalog"}, {"blocks", blocks}};
+  if (!catalog.missing_imports.empty()) msg["missing_imports"] = catalog.missing_imports;
   if (!catalog.dashboard.empty()) msg["dashboard"] = json::parse(catalog.dashboard);
   if (!catalog.objects.empty()) {
     json objects = json::array();
