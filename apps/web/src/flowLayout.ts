@@ -1,5 +1,5 @@
 import type { GroupNode } from "./groups";
-import type { FlowNode, Wire } from "./FlowEditor";
+import type { BlockNode, FlowNode, Wire } from "./FlowEditor";
 import { layoutGraph, type LayoutEdge, type LayoutNode, type LayoutPoint } from "./graphLayout.ts";
 
 const BLOCK_W = 190;
@@ -8,6 +8,7 @@ const FRAME_PAD = 24;
 const FRAME_HEAD = 34;
 
 const isFrame = (n: FlowNode | undefined): n is GroupNode => n?.type === "frame";
+const isBlock = (n: FlowNode | undefined): n is BlockNode => n?.type === "block";
 const positive = (value: number | undefined, fallback: number) => (value !== undefined && Number.isFinite(value) && value > 0 ? value : fallback);
 const samePoint = (a: LayoutPoint, b: LayoutPoint) => a.x === b.x && a.y === b.y;
 
@@ -25,13 +26,24 @@ export function canArrangeFlow(nodes: FlowNode[], level: string | null): boolean
   return nodes.some((n) => (n.parentId ?? null) === level);
 }
 
+export type PortOffsetResolver = (
+  nodeId: string,
+  handleId: string | null | undefined,
+  dir: "source" | "target",
+) => number | undefined;
+
 /**
  * Arrange `level` and every group below it, innermost first. Open visual frames are units in
  * their parent and layouts of their own inside; subsystems and stories are cards outside and
  * levels inside. Generated In/Out nodes take part in a level's layout but are never written
  * back. Only node positions and visual-frame sizes change; the input is left untouched.
  */
-export function arrangeFlowNodes(nodes: FlowNode[], edges: Wire[], level: string | null = null): FlowNode[] {
+export function arrangeFlowNodes(
+  nodes: FlowNode[],
+  edges: Wire[],
+  level: string | null = null,
+  portOffset?: PortOffsetResolver,
+): FlowNode[] {
   const originalById = new Map(nodes.map((n) => [n.id, n]));
   const root = level ? originalById.get(level) : undefined;
   if (level && (!isFrame(root) || root.data.kind === "visual")) return nodes;
@@ -85,9 +97,29 @@ export function arrangeFlowNodes(nodes: FlowNode[], edges: Wire[], level: string
       const key = `${dir}:${label}`;
       const bid = `arrange:${container.id ?? "top"}:${key}`;
       if (!layoutNodes.has(bid)) {
-        layoutNodes.set(bid, { id: bid, width: Math.round(48 + 7 * label.length), height: 28 });
+        layoutNodes.set(bid, {
+          id: bid,
+          width: Math.round(48 + 7 * label.length),
+          height: 28,
+          pin: dir === "in" ? "first" : "last",
+        });
       }
       return bid;
+    };
+
+    const resolveOffset = (nodeId: string, handleId: string | null | undefined, dir: "source" | "target"): number | undefined => {
+      if (portOffset) {
+        const off = portOffset(nodeId, handleId, dir);
+        if (off !== undefined) return off;
+      }
+      const n = byId.get(nodeId);
+      if (isBlock(n)) {
+        const def = n.data.def;
+        const list = dir === "source" ? def.outputs : def.inputs;
+        const idx = list.findIndex((p) => p.id === handleId);
+        if (idx >= 0) return 34 + (idx + 0.5) * 24;
+      }
+      return undefined;
     };
 
     for (const e of edges) {
@@ -96,11 +128,30 @@ export function arrangeFlowNodes(nodes: FlowNode[], edges: Wire[], level: string
       const source = project(e.source);
       const target = project(e.target);
       if (source && target) {
-        if (source !== target) layoutEdges.push({ source, target });
+        if (source !== target) {
+          layoutEdges.push({
+            source,
+            target,
+            sourceOffset: resolveOffset(e.source, e.sourceHandle, "source"),
+            targetOffset: resolveOffset(e.target, e.targetHandle, "target"),
+          });
+        }
       } else if (target) {
-        layoutEdges.push({ source: boundary("in", e.source, e.sourceHandle), target });
+        const bid = boundary("in", e.source, e.sourceHandle);
+        layoutEdges.push({
+          source: bid,
+          target,
+          sourceOffset: 14,
+          targetOffset: resolveOffset(e.target, e.targetHandle, "target"),
+        });
       } else if (source) {
-        layoutEdges.push({ source, target: boundary("out", e.target, e.targetHandle) });
+        const bid = boundary("out", e.target, e.targetHandle);
+        layoutEdges.push({
+          source,
+          target: bid,
+          sourceOffset: resolveOffset(e.source, e.sourceHandle, "source"),
+          targetOffset: 14,
+        });
       }
     }
 
