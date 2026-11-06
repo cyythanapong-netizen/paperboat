@@ -96,26 +96,23 @@ inline void render_banner(bool animated = true) {
   }
 
   // Water lines (Line 6: water gap / wave crest; Line 7: water dots)
+  // 5 substantial dots (3 chars wide each) with 2-char gaps across 23 columns
+  // to match the authentic brand pixel boat without appearing like thin sticks in monospace fonts.
   auto render_water_lines = [&](int active_dot) {
-    const int cols[5] = {1, 6, 11, 16, 21};
     std::string out6 = "  ";
     std::string out7 = "  ";
 
-    for (int col = 0; col < 23; ++col) {
-      int dot_idx = -1;
-      for (int d = 0; d < 5; ++d) {
-        if (cols[d] == col) { dot_idx = d; break; }
+    for (int d = 0; d < 5; ++d) {
+      if (d > 0) {
+        out6 += "  ";
+        out7 += "  ";
       }
-
-      if (dot_idx == -1) {
-        out6 += ' ';
-        out7 += ' ';
-      } else if (dot_idx == active_dot) {
-        out6 += BRIGHT_ORANGE + "▄" + RST;
-        out7 += BRIGHT_ORANGE + "▀" + RST;
+      if (d == active_dot) {
+        out6 += BRIGHT_ORANGE + "▄▄▄" + RST;
+        out7 += BRIGHT_ORANGE + "▀▀▀" + RST;
       } else {
-        out6 += ' ';
-        out7 += ORANGE + "█" + RST;
+        out6 += "   ";
+        out7 += ORANGE + "███" + RST;
       }
     }
     out6 += "   \n";
@@ -163,9 +160,9 @@ class WaveSpinner {
         for (int d = 0; d < 5; ++d) {
           if (d > 0) frame += " ";
           if (d == step) {
-            frame += BRIGHT + "▀" + RST;
+            frame += BRIGHT + "▀▀" + RST;
           } else {
-            frame += ORANGE + "▄" + RST;
+            frame += ORANGE + "▄▄" + RST;
           }
         }
         std::cout << "\r" << frame << "  " << message_ << "   " << std::flush;
