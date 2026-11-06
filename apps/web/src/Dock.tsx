@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import type { RunSettings } from "./protocol";
 import { RunOptions } from "./RunOptions";
 
@@ -23,7 +24,7 @@ export function Dock({
   whyNot?: string;
   running: boolean;
   status?: string;
-  statusText?: string;
+  statusText?: ReactNode;
   defaults: RunSettings;
   settings: RunSettings;
   onSettings: (v: RunSettings) => void;

@@ -498,14 +498,14 @@ export function App() {
   const wallElapsed = state.run?.startedAt ? (Date.now() - state.run.startedAt) / 1000 : 0;
   const expectedWall = speed > 0 ? simTime / speed : 0;
   const delaySeconds = speed > 0 && wallElapsed > 1.2 && simTime > 0 ? wallElapsed - expectedWall : 0;
-  const isDelayed = delaySeconds > 0.35;
+  const isDelayed = delaySeconds > 0.2;
 
   const elapsed = state.run
     ? isInfinite
       ? `${simTime.toFixed(1)} s`
       : `${(state.run.progress * durationVal).toFixed(1)} / ${durationVal} s`
     : "";
-  const delayNotice = isDelayed ? ` • ⚠ delay +${delaySeconds.toFixed(1)}s` : "";
+  const delayNotice = isDelayed ? <span className="run-delay" title="Real-time pacing is falling behind the wall clock"> ⚠ delay +{delaySeconds.toFixed(1)}s</span> : null;
 
   // ---- Projects (#82): the whole session as one file ----
   // A project is the Flow, the Station, the variables, the Dashboard layout and the run settings. `projectKey` is
@@ -1019,7 +1019,7 @@ export function App() {
           whyNot={whyNotRun}
           running={running}
           status={state.run ? status : undefined}
-          statusText={status === "running" ? `running ${elapsed}${delayNotice}` : status}
+          statusText={status === "running" ? <>running {elapsed}{delayNotice}</> : status}
           defaults={state.runDefaults}
           settings={runSettings}
           onSettings={setRunSettings}

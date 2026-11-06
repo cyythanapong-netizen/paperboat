@@ -294,6 +294,25 @@ edges = [
   }
 }
 
+TEST_CASE("real-time pacing warns when computation falls behind the wall clock") {
+  const auto& catalog = catalog_of(R"(
+domain = "lag"
+import = ["step", "base", "signal"]
+[graph]
+nodes = [{ id = "start", type = "start" }, { id = "key", type = "key" }, { id = "when", type = "when" }]
+edges = [{ from = ["key", "pressed"], to = ["when", "cond"] }]
+)");
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 1, .real_time = true, .speed = 1000}};
+  const json graph = json::parse(catalog.graph);
+  Collected out;
+  core::KeysNow slow = [] { std::this_thread::sleep_for(std::chrono::milliseconds(4)); return tk::KeySet{}; };  // ~0.4 s of work for 1 ms of wall budget
+  core::run("r", graph, nullptr, backend, out.emit(), slow, {});
+  bool warned = false;
+  for (const auto& m : out.messages)
+    if (m["type"] == "log" && m["level"] == "warn" && m["text"].get<std::string>().find("computation delay") != std::string::npos) warned = true;
+  CHECK(warned);
+}
+
 TEST_CASE("a Step flow joins paths, says what it sees, loops while and restarts on a key") {
   const auto& catalog = catalog_of(R"(
 domain = "steps2"

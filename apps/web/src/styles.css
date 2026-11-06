@@ -116,6 +116,7 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .conn-closed { color: var(--danger); }
 .run-status { font: 500 var(--size-2xs) var(--font-sans); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .status-running { color: var(--signal); }
+.run-delay { color: var(--signal); font-weight: 600; }
 .status-failed { color: var(--danger); }
 .run-options { display: inline-flex; align-items: center; gap: var(--space-2); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .run-options input, .run-options select { height: 30px; background: var(--surface-well); box-shadow: var(--well-shadow); color: var(--text); border: 0; border-radius: var(--radius-md); padding: 0 var(--space-2); }
