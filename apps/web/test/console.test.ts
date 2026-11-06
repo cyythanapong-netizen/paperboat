@@ -48,9 +48,22 @@ test("toolkits status updates from hello and toolkits.status and detects missing
 
   const s2 = reduce(s1, {
     type: "toolkits.status",
-    toolkits: [{ name: "opencv", repo: "https://example.com/opencv.git", installed: true, required: true }],
+    toolkits: [
+      {
+        name: "opencv",
+        repo: "https://example.com/opencv.git",
+        installed: true,
+        required: true,
+        version: "0.1.0",
+        versions: ["0.1.0", "0.0.9"],
+        default: "0.1.0",
+      },
+    ],
   });
   assert.equal(s2.toolkits[0].installed, true);
+  assert.equal(s2.toolkits[0].version, "0.1.0");
+  assert.deepEqual(s2.toolkits[0].versions, ["0.1.0", "0.0.9"]);
+  assert.equal(s2.toolkits[0].default, "0.1.0");
   assert.deepEqual(missingRequiredToolkits(s2.toolkits), []);
 
   // Also detects missing toolkits from missing block types in an opened project/flow.
@@ -58,4 +71,14 @@ test("toolkits status updates from hello and toolkits.status and detects missing
     missingRequiredToolkits([{ name: "opencv", repo: "https://example.com/opencv.git", installed: false }], ["canny"]).map((t) => t.name),
     ["opencv"],
   );
+});
+
+test("reducer ignores unknown message types without crashing or dropping state", () => {
+  const s1 = reduce(initial, { type: "hello", protocol: "paperboat/0", engine: "cartpole" });
+  assert.equal(s1.engine, "cartpole");
+  const s2 = reduce(s1, { type: "toolkits", available: [], installed: [] } as any);
+  assert.ok(s2);
+  assert.equal(s2.engine, "cartpole");
+  assert.equal(s2.logs.at(-1)?.text, 'ignored unknown message type "toolkits"');
+  assert.equal(s2.logs.at(-1)?.level, "warn");
 });

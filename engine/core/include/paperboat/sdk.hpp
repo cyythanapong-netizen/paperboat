@@ -89,6 +89,7 @@ using toolkit::make_handle;
 // Registering and loading.
 using toolkit::Catalog;
 using toolkit::DescriptorError;
+using toolkit::DescriptorOptions;
 using toolkit::Registry;
 using toolkit::StationTemplate;
 using toolkit::Template;

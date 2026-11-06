@@ -4,7 +4,7 @@ import { useEngine } from "./engine";
 import { BrowserWindow, DRAG_TYPE, dragging, type Item } from "./Browser";
 import { FlowEditor, fromGraph, isBlock, portsOf, resolveBlocks, RunStates, syncLinked, toFlow, toGraph, withBlock, type FlowControls, type FlowNode, type Wire } from "./FlowEditor";
 import { absolute, isFrame, levelOf } from "./groups";
-import type { DashboardLayout, ParamValue, Project, RunSettings, Station, Variable, Variables } from "./protocol";
+import type { DashboardLayout, ParamValue, Project, RunSettings, Station, ToolkitStatus, Variable, Variables } from "./protocol";
 import { addRecent, ago, buildProject, clearAutosave, loadAutosave, loadRecent, parseProject, projectFileName, projectName, saveAutosave, saveRecent, stringify, type Stored } from "./project";
 import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from "./projectFiles";
 import { Notice, ProjectLabel, Toast, type NoticeSpec } from "./ProjectUI";
@@ -20,7 +20,7 @@ import { StationPanel, withObject } from "./StationPanel";
 import { BackendWindow, Dock } from "./Dock";
 import { CommandSearch, MenuBar } from "./Menus";
 import { ownKeys, SEARCH_CHORD, useShortcuts, type Command } from "./commands";
-import { missingRequiredToolkits, ToolkitsButton } from "./Toolkits";
+import { missingRequiredToolkits, MissingToolkitsDialog, ToolkitsButton } from "./Toolkits";
 import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
 
@@ -456,7 +456,24 @@ export function App() {
         : mode === "lookout" && p === "flow"
           ? flowDrawer
           : undefined;
+  const hasMissingBlocks = nodes.some((n) => isBlock(n) && n.data.missing);
+  const hasMissingToolkits = state.toolkits.some((t) => t.required && !t.installed);
+  const canRun = state.connection === "open" && !running && !hasMissingBlocks && !hasMissingToolkits;
+  const whyNotRun = running
+    ? "A run is in progress"
+    : state.connection !== "open"
+      ? "Not connected to a backend"
+      : hasMissingToolkits
+        ? "Required toolkits are not installed"
+        : hasMissingBlocks
+          ? "Flow contains blocks with missing types"
+          : "";
   const run = () => {
+    if (hasMissingToolkits) {
+      setMissingDialog(state.toolkits.filter((t) => t.required && !t.installed));
+      return;
+    }
+    if (!canRun) return;
     if (mode === "commander") boardDrawer.setOpen(true); // a run is watched on the Board
     send({
       type: "graph.run",
@@ -653,23 +670,26 @@ export function App() {
   // ---- Missing toolkit prompt and post-install restart prompt (#118) ----
   const promptedToolkits = useRef<string>("");
   const prevBusyToolkits = useRef<Map<string, string>>(new Map());
+  const [missingDialog, setMissingDialog] = useState<ToolkitStatus[] | null>(null);
+  const installQueue = useRef<{ name: string; version: string }[]>([]);
+  const autoRestart = useRef(false);
+
   const restartBackend = useCallback(() => {
     log("info", "restarting backend…");
     send({ type: "backend.restart" });
   }, [log, send]);
   const installToolkit = useCallback(
-    (name: string) => {
-      log("info", `requesting install of toolkit "${name}"…`);
-      send({ type: "toolkit.install", name });
+    (name: string, version?: string) => {
+      log("info", `requesting install of toolkit "${name}"${version ? ` (${version})` : ""}…`);
+      send({ type: "toolkit.install", name, version });
     },
     [log, send],
   );
-  const updateToolkit = useCallback(
+  const toolkitVersions = useCallback(
     (name: string) => {
-      log("info", `requesting update of toolkit "${name}"…`);
-      send({ type: "toolkit.update", name });
+      send({ type: "toolkit.versions", name });
     },
-    [log, send],
+    [send],
   );
   const uninstallToolkit = useCallback(
     (name: string) => {
@@ -682,59 +702,78 @@ export function App() {
     if (state.connection !== "open") return;
     const missingTypes = nodes.filter(isBlock).filter((n) => n.data.missing).map((n) => n.data.def.type);
     const missing = missingRequiredToolkits(state.toolkits, missingTypes);
-    if (missing.length === 0) return;
+    if (missing.length === 0) {
+      if (missingDialog) setMissingDialog(null);
+      return;
+    }
     const key = `${state.engine}:${missing.map((t) => t.name).sort().join(",")}`;
     if (promptedToolkits.current === key) return;
     promptedToolkits.current = key;
-    const names = missing.map((t) => t.name).join(", ");
-    setNotice({
-      title: missing.length === 1 ? `Install missing toolkit “${missing[0].name}”?` : "Install missing toolkits?",
-      text: [
-        `This backend or project requires ${missing.length === 1 ? `the “${names}” toolkit` : `toolkits (${names})`} which ${missing.length === 1 ? "is" : "are"} not installed.`,
-        ...missing.map((t) => `${t.name}${t.description ? ` — ${t.description}` : ""}`),
-      ],
-      actions: [
-        {
-          label: missing.length === 1 ? `Install ${missing[0].name}` : "Install all",
-          primary: true,
-          run: () => {
-            setConsoleShown(true);
-            for (const t of missing) installToolkit(t.name);
-          },
-        },
-        { label: "Not now" },
-      ],
-    });
-  }, [state.connection, state.engine, state.toolkits, nodes, installToolkit]);
+    for (const t of missing) {
+      if (!t.versions || t.versions.length === 0) {
+        toolkitVersions(t.name);
+      }
+    }
+    setMissingDialog(missing);
+  }, [state.connection, state.engine, state.toolkits, nodes, toolkitVersions, missingDialog]);
 
   useEffect(() => {
     const prev = prevBusyToolkits.current;
     const finished: string[] = [];
+    const failed: string[] = [];
     for (const t of state.toolkits) {
       const was = prev.get(t.name);
-      if ((was === "installing" || was === "updating") && !t.busy && t.installed) {
-        finished.push(t.name);
+      if ((was === "installing" || was === "updating") && !t.busy) {
+        if (t.installed) {
+          finished.push(t.name);
+        } else {
+          failed.push(t.name);
+        }
       }
     }
     const next = new Map<string, string>();
     for (const t of state.toolkits) if (t.busy) next.set(t.name, t.busy);
     prevBusyToolkits.current = next;
-    if (finished.length > 0) {
-      const names = finished.join(", ");
+
+    if (failed.length > 0) {
+      installQueue.current = [];
+      autoRestart.current = false;
       setNotice({
-        title: `Toolkit ${names} ready`,
-        text: [`Restart the backend so it loads the updated toolkit (${names}).`],
+        title: "Toolkit installation failed",
+        text: [`Installing ${failed.join(", ")} failed. Check the Console for details.`],
         actions: [
-          { label: "Restart backend", primary: true, run: restartBackend },
-          { label: "Later" },
+          { label: "Open Console", primary: true, run: () => setConsoleShown(true) },
+          { label: "Dismiss" },
         ],
       });
+      return;
     }
-  }, [state.toolkits, restartBackend]);
+
+    if (finished.length > 0) {
+      if (installQueue.current.length > 0) {
+        const nextItem = installQueue.current.shift()!;
+        installToolkit(nextItem.name, nextItem.version);
+        return;
+      }
+      if (autoRestart.current) {
+        autoRestart.current = false;
+        restartBackend();
+      } else {
+        const names = finished.join(", ");
+        setNotice({
+          title: `Toolkit ${names} ready`,
+          text: [`Restart the backend so it loads the updated toolkit (${names}).`],
+          actions: [
+            { label: "Restart backend", primary: true, run: restartBackend },
+            { label: "Later" },
+          ],
+        });
+      }
+    }
+  }, [state.toolkits, restartBackend, installToolkit]);
 
   // ---- The commands (#78): what the menus, the command search and the shortcuts all run ----
   // Only what the app already does; backends' commands come with their issue (#85).
-  const canRun = state.connection === "open" && !running;
   const flowInView = mode === "commander" || (mode === "lookout" ? flowDrawer.open : page === "flow");
   const stationInView = view === "graph" && (mode === "commander" || (mode === "lookout" ? stationDrawer.open : page === "station"));
   const arrangeVisible = () => {
@@ -825,7 +864,7 @@ export function App() {
       },
     },
 
-    { id: "run.run", label: "Run", menu: "run", group: "run", enabled: canRun, why: running ? "A run is in progress" : "Not connected to a backend", run },
+    { id: "run.run", label: "Run", menu: "run", group: "run", enabled: canRun, why: whyNotRun || undefined, run },
     { id: "run.cancel", label: "Cancel", menu: "run", group: "run", enabled: running, why: "No run in progress", run: () => send({ type: "run.cancel" }) },
   ];
   useShortcuts(commands);
@@ -841,9 +880,9 @@ export function App() {
           toolkits={state.toolkits}
           connected={state.connection === "open"}
           onInstall={installToolkit}
-          onUpdate={updateToolkit}
           onUninstall={uninstallToolkit}
           onRestart={restartBackend}
+          onVersions={toolkitVersions}
         />
         <button
           className={`key small${errors > 0 ? " err" : ""}${consoleShown ? " on" : ""}`}
@@ -957,7 +996,7 @@ export function App() {
         />
         <Dock
           canRun={canRun}
-          whyNot={running ? "A run is in progress" : "Not connected to a backend"}
+          whyNot={whyNotRun}
           running={running}
           status={state.run ? status : undefined}
           statusText={status === "running" ? `running ${elapsed}` : status}
@@ -969,6 +1008,22 @@ export function App() {
         />
       </main>
       </VarsContext.Provider>
+      {missingDialog && (
+        <MissingToolkitsDialog
+          missing={missingDialog.map((m) => state.toolkits.find((t) => t.name === m.name) ?? m)}
+          onInstall={(selections) => {
+            setMissingDialog(null);
+            setConsoleShown(true);
+            autoRestart.current = true;
+            if (selections.length > 0) {
+              const [first, ...rest] = selections;
+              installQueue.current = rest;
+              installToolkit(first.name, first.version);
+            }
+          }}
+          onCancel={() => setMissingDialog(null)}
+        />
+      )}
       {notice && <Notice key={notice.title + notice.text.join()} spec={notice} onClose={() => setNotice(null)} />}
       {toast && <Toast text={toast.text} undo="Undo" onUndo={toast.undo} onClose={() => setToast(null)} />}
       {searchOpen && <CommandSearch commands={commands} onClose={() => setSearchOpen(false)} />}

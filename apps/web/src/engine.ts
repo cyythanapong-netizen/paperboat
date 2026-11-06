@@ -210,6 +210,10 @@ export function reduce(s: EngineState, m: Action): EngineState {
     }
     case "log":
       return { ...s, logs: pushLog(s.logs, { level: m.level, text: m.text, node: m.node }) };
+    default: {
+      const type = (m as { type?: unknown }).type;
+      return { ...s, logs: pushLog(s.logs, { level: "warn", text: `ignored unknown message type "${String(type)}"` }) };
+    }
   }
 }
 
@@ -236,9 +240,13 @@ export function useEngine(url: string) {
       ws.onopen = () => !stopped && dispatch({ type: "connection", value: "open" });
       ws.onmessage = (e) => {
         if (stopped) return;
-        const msg = JSON.parse(e.data) as ServerMsg;
-        dispatch(msg);
-        for (const listen of listeners.current) listen(msg);
+        try {
+          const msg = JSON.parse(e.data) as ServerMsg;
+          dispatch(msg);
+          for (const listen of listeners.current) listen(msg);
+        } catch (err) {
+          dispatch({ type: "log", level: "error", text: `bad message from backend: ${err instanceof Error ? err.message : String(err)}` });
+        }
       };
       ws.onclose = () => {
         if (stopped) return;

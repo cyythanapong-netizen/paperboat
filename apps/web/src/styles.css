@@ -868,7 +868,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 
 /* ---- Optional toolkits (#118): bar key, popover, and inline spinner ---------------- */
 .toolkits-wrap { position: relative; display: inline-flex; }
-.toolkits-pop { width: min(360px, calc(100vw - 32px)); padding: var(--space-2) 0; }
+.toolkits-pop { width: min(440px, calc(100vw - 32px)); padding: var(--space-2) 0; }
 .toolkit-item { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); }
 .toolkit-item:first-of-type { border-top: 0; }
 .toolkit-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
@@ -876,7 +876,8 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .toolkit-status.on { color: var(--text); font-weight: 500; }
 .toolkit-status.req { color: var(--signal); font-weight: 500; }
 .toolkit-desc { margin: 0; font-size: var(--size-2xs); color: var(--text-muted); line-height: 1.4; }
-.toolkit-actions { display: flex; align-items: center; gap: var(--space-1); margin-top: var(--space-1); }
+.toolkit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); margin-top: var(--space-1); }
+.toolkit-version-select { height: 24px; padding: 0 6px; font: 400 var(--size-2xs) var(--font-mono); color: var(--text); background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
 .toolkit-repo { font: var(--size-2xs) var(--font-sans); color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
 .toolkit-repo:hover { color: var(--text); }
 .toolkits-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding-top: var(--space-2); }
