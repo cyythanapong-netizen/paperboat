@@ -399,7 +399,12 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
 
   if (!fs::exists(build_dir / "CMakeCache.txt")) {
     if (verbose) std::cout << "[build] configuring with cmake…\n";
-    auto config_res = ProcessRunner::run_sync({"cmake", "-S", backend_dir.string(), "-B", build_dir.string()});
+    const fs::path root = toolkit::find_repo_root(backend_dir);
+    std::vector<std::string> config_cmd = {"cmake", "-S", backend_dir.string(), "-B", build_dir.string()};
+    if (!root.empty() && fs::is_directory(root / "engine")) {
+      config_cmd.push_back("-DPAPERBOAT_ENGINE_DIR=" + (root / "engine").string());
+    }
+    auto config_res = ProcessRunner::run_sync(config_cmd);
     if (!config_res.ok()) {
       if (error_msg) *error_msg = "cmake configure failed: " + config_res.stderr_text;
       return false;
@@ -980,7 +985,6 @@ BackendManifest BackendManager::load_manifest(const fs::path& backend_dir, std::
 
   try {
     auto doc = toml::parse_file(manifest_path.string());
-    m.has_manifest = true;
 
     auto backend_tbl = doc["backend"].as_table();
     if (!backend_tbl) {
@@ -1034,6 +1038,8 @@ BackendManifest BackendManager::load_manifest(const fs::path& backend_dir, std::
       if (error_msg) *error_msg = "backend.toml: 'descriptor' cannot be empty";
       return m;
     }
+
+    m.has_manifest = true;
   } catch (const toml::parse_error& err) {
     if (error_msg) {
       *error_msg = "backend.toml parse error at line " + std::to_string(err.source().begin.line) +
@@ -1192,7 +1198,9 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
 
   bool catalog_success = false;
   try {
-    const auto catalog = toolkit::load_descriptor_file(desc_file);
+    toolkit::DescriptorOptions desc_opts;
+    desc_opts.optional_imports = all_toolkits;
+    const auto catalog = toolkit::load_descriptor_file(desc_file, toolkit::builtins(), desc_opts);
     res.domain = catalog.domain.empty() ? res.domain : catalog.domain;
     res.block_count = static_cast<int>(catalog.entries.size());
     res.object_count = static_cast<int>(catalog.objects.size());
@@ -1201,7 +1209,10 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
     catalog_success = true;
   } catch (const toolkit::DescriptorError& err) {
     std::string msg = err.what();
-    if (msg.find("no block type") != std::string::npos || msg.find("no station template") != std::string::npos) {
+    if (msg.find("the catalog is empty") != std::string::npos && fs::is_directory(dir / "domain")) {
+      res.warnings.push_back("domain defines its blocks in code: " + msg);
+      catalog_success = true;
+    } else if (msg.find("no block type") != std::string::npos || msg.find("no station template") != std::string::npos) {
       // Check if the missing type is a domain block provided by backend code
       std::string type_name;
       auto q1 = msg.find('"');

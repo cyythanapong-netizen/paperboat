@@ -25,6 +25,7 @@ through the bindings; it adds only what its domain has and the toolkit doesn't.
    concepts
    quickstart
    descriptor
+   backend_layout
    flow
    station
    dashboard
