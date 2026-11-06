@@ -45,8 +45,9 @@ remains a compatible name). A vector may declare its length and component labels
 wire joins compatible ports of one type.
 
 Definitions live in **code**, next to what the block does: C++ ``define_block``, Python
-class attributes. The **toolkit** offers packages of them (``base``, ``signal``, ``math``,
-``dashboard``, ``control``, ``step``, ``opencv``); a domain registers its own in a package
+class attributes. The **toolkit** offers built-in packages of them (``base``, ``signal``, ``math``,
+``dashboard``, ``control``, ``step``) and optional external toolkits such as ``opencv``
+(``paperboat-toolkit-opencv``); a domain registers its own in a package
 named after the domain. A **descriptor** (:doc:`descriptor`) picks which packages and
 templates an app offers, customises them and holds the starters. It never defines a block.
 

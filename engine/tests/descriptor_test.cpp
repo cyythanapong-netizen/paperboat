@@ -410,6 +410,7 @@ TEST_CASE("descriptor mistakes are reported with where they are") {
     INFO(blocks);
     CHECK_THROWS_WITH(tk::load_descriptor(descriptor(blocks)), ContainsSubstring(text));
   };
+  fails_with("import = [\"opencv\"]", R"(import: no package "opencv" (known: )");
   fails_with("[[blocks]]\nuse = \"control/pdi\"", R"(blocks[0] (control/pdi): no template "control/pdi" (known: )");
   fails_with("[[blocks]]\nuse = \"control/pid\"\ndefaults = { kq = 1 }", R"(control/pid has no param "kq")");
   fails_with("[[blocks]]\nuse = \"control/pid\"\nconfig = { key = \"x\" }", R"(control/pid has no config "key")");
