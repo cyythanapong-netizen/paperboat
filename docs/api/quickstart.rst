@@ -130,5 +130,5 @@ Run it
    ./counter                 # or: python3 server.py   → ws://localhost:8780
    ./counter --run           # the starter once, headless: protocol messages as JSON lines
 
-Open the UI on it: ``http://localhost:5173/?backend=ws://localhost:8780``. Press **Run**.
+Open the UI on it: ``http://localhost:3047/?backend=ws://localhost:8780``. Press **Run**.
 Then write ``expected.json`` and pass the tests (:doc:`testing`).

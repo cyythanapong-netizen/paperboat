@@ -61,7 +61,7 @@ npm run backend:animation     # ws://localhost:8769
 npm run backend:parts         # ws://localhost:8770 (needs OpenCV)
 npm run backend:chain         # ws://localhost:8771
 npm run backend:supply        # ws://localhost:8772
-npm run dev                   # http://localhost:5173
+npm run dev                   # http://localhost:3047
 ```
 
 The UI opens on the mass-spring backend. To switch, type another backend's URL in the
