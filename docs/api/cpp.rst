@@ -5,11 +5,102 @@ A C++ backend includes one header, ``<paperboat/sdk.hpp>``, which brings everyth
 into namespace ``paperboat`` (``paperboat::Block``, ``paperboat::define_block``,
 ``paperboat::main``…). Headers it doesn't include may change. Link ``paperboat::core``.
 
-.. contents:: On this page
-   :local:
-   :depth: 1
-
 .. cpp:namespace:: paperboat::toolkit
+
+API Quick Reference
+-------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 28 50
+
+   * - Category
+     - Symbol
+     - Description
+   * - **Definitions**
+     - :cpp:struct:`PortDef`
+     - Input/output port configuration (id, type, vector units).
+   * -
+     - :cpp:struct:`VectorComponent`
+     - Named component channel within an ordered vector port.
+   * -
+     - :cpp:struct:`ParamDef`
+     - Parameter or property definition (number, key, enum, file).
+   * -
+     - :cpp:struct:`BlockDef`
+     - Complete declarative block definition (type, ports, params, kind).
+   * -
+     - :cpp:struct:`ObjectDef`
+     - Station object template definition, properties, and link slots.
+   * - **Values & Context**
+     - :cpp:type:`Values`
+     - Map of string keys to typed values (numbers, vectors, tables, handles).
+   * -
+     - :cpp:func:`get_or`
+     - Safe parameter or signal extraction helper with fallback default.
+   * -
+     - :cpp:struct:`Context`
+     - Execution context providing clock time ``t``, step ``dt``, and ``log()``.
+   * - **Block Subclasses**
+     - :cpp:class:`Block`
+     - Base computational block owning state and implementing ``step()``.
+   * -
+     - :cpp:class:`Generator`
+     - Signal generator computing :math:`f(t)` from time and parameters.
+   * -
+     - :cpp:class:`Step`
+     - Procedural step block implementing ``enter()`` and ``tick()``.
+   * -
+     - :cpp:class:`Timed`
+     - Timed step block executing for a fixed duration.
+   * -
+     - :cpp:class:`Expression`
+     - Fast mathematical expression evaluator over named variables.
+   * - **Station & Geometry**
+     - :cpp:class:`StationObject`
+     - Equipment object providing ``read()``, ``step()``, and ``entities()``.
+   * -
+     - :cpp:struct:`Entity`
+     - Geometry entity rendered in 3D/2D on the Station page.
+   * -
+     - :cpp:func:`scene::box`, :cpp:func:`scene::sphere`, :cpp:func:`scene::line`, :cpp:func:`scene::image`, :cpp:func:`scene::rect`, :cpp:func:`scene::circle`, :cpp:func:`scene::rod`, :cpp:func:`scene::spring`
+     - 3D and 2D visual geometry entity construction helpers.
+   * - **Solvers & Physics**
+     - :cpp:class:`Model`
+     - Continuous ODE physics model with state derivatives.
+   * -
+     - :cpp:class:`solve::Solver`
+     - Abstract numerical differential equation solver interface.
+   * -
+     - :cpp:func:`solve::step`
+     - Advance state vector across one time step using an ODE solver (e.g. RK4).
+   * - **Domain & Server**
+     - :cpp:class:`DomainState`
+     - Domain-wide shared state updated after topological passes.
+   * -
+     - :cpp:class:`Registry`
+     - Repository of block and station object definitions.
+   * -
+     - :cpp:func:`define_block`
+     - Factory helper binding C++ ``Block`` classes to catalog definitions.
+   * -
+     - :cpp:func:`define_object`
+     - Factory helper binding C++ ``StationObject`` classes.
+   * -
+     - :cpp:func:`load_descriptor_file`
+     - Reads and validates ``descriptor.toml`` against the registry.
+   * -
+     - :cpp:func:`main`
+     - Standard CLI entrypoint launching backend server processes.
+   * -
+     - :cpp:func:`serve`
+     - High-performance WebSocket and HTTP server loop.
+   * - **Schedulers**
+     - :cpp:class:`Executor`
+     - Abstract graph execution engine runner.
+   * -
+     - :cpp:class:`Run`
+     - Active run execution lifecycle and telemetry emitter.
 
 Definitions
 -----------

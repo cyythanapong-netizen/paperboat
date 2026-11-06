@@ -13,6 +13,80 @@ listing them.
 Install: ``pip install ./python`` (or ``npm run build:python`` and ``PYTHONPATH=python`` while
 developing). Never implement a framework feature here: add it to the engine and bind it.
 
+API Quick Reference
+-------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 28 50
+
+   * - Category
+     - Symbol
+     - Description
+   * - **Ports & Definitions**
+     - :py:class:`Port`
+     - Input/output port with data type, dimensions, and unit annotations.
+   * -
+     - :py:class:`VectorComponent`
+     - Label and engineering unit for an ordered vector channel.
+   * -
+     - :py:func:`vector_port`
+     - Factory helper constructing typed vector ports with named channels.
+   * -
+     - :py:class:`Param`
+     - Parameter declaration (number, key, enum dropdown, file).
+   * -
+     - :py:class:`Linked`
+     - Association between a station object and its Flow linked block.
+   * - **Blocks**
+     - :py:class:`Block`
+     - Base computational block evaluated each clock step.
+   * -
+     - :py:class:`Generator`
+     - Signal generator computing :math:`f(t)` from time and parameters.
+   * -
+     - :py:class:`Monitor`
+     - Telemetry instrument piping data to Board scopes and readouts.
+   * -
+     - :py:class:`Step`
+     - Step flow node executing sequential procedural actions.
+   * -
+     - :py:class:`Timed`
+     - Step block that runs for a configured duration before moving to next.
+   * - **Station & Geometry**
+     - :py:class:`StationObject`
+     - Physical domain entity with properties, links, and visual shapes.
+   * -
+     - :py:class:`Entity`
+     - 3D/2D visual scene shape rendered on the Station page.
+   * -
+     - :py:func:`scene.box`, :py:func:`scene.sphere`, :py:func:`scene.line`, :py:func:`scene.rect`, :py:func:`scene.circle`, :py:func:`scene.image`, :py:func:`scene.rod`, :py:func:`scene.spring`
+     - 3D and 2D visual geometry entity factory functions.
+   * - **Models & Solvers**
+     - :py:class:`Model`
+     - Continuous plant differential equation ODE model.
+   * -
+     - :py:func:`solve.step`
+     - Step a differential equation solver forward by :math:`\Delta t`.
+   * -
+     - :py:class:`solve.Solver`
+     - Configured numerical ODE integrator (e.g. RK4).
+   * -
+     - :py:class:`Context`
+     - Runtime context providing simulation time ``t``, step ``dt``, and logging.
+   * - **Domain & Server**
+     - :py:class:`DomainState`
+     - Global domain-level state spanning multiple blocks.
+   * -
+     - :py:class:`Handle`
+     - Opaque data handle passed across flow wires.
+   * -
+     - :py:class:`Backend`
+     - Programmatically defined domain backend.
+   * -
+     - :py:func:`serve`
+     - Launch the WebSocket/HTTP server on a designated port.
+
 Definitions
 -----------
 

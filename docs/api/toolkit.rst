@@ -6,6 +6,38 @@ Built-in templates, by package (``engine/toolkit``). Import a package in a descr
 not Simulink: ``base`` holds only what any domain needs; everything else lives in the
 package of what it is about. List them with ``paperboat-catalog --templates``.
 
+Package Quick Reference
+-----------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 32 50
+
+   * - Package
+     - Block Templates
+     - Functional Role
+   * - :ref:`pkg-base`
+     - ``constant``, ``text``, ``boolean``, ``key``, ``key_hold``, ``to_number``, ``to_text``, ``to_boolean``, ``type_of``, ``now``, ``interval``, ``timeout``, ``delay``, ``if``, ``and``, ``or``, ``xor``, ``not``, ``compare``, ``in_range``
+     - Fundamental values, type conversions, runtime clock delays, and dual signal/step logic gates.
+   * - :ref:`pkg-signal`
+     - ``clock``, ``sine``, ``step``, ``ramp``, ``square``, ``ease``, ``function``, ``noise``, ``generator``
+     - Continuous time waveforms :math:`f(t)`, periodic generators, and free mathematical expressions.
+   * - :ref:`pkg-math`
+     - ``sum``, ``product``, ``gain``, ``bias``, ``min``, ``max``, ``abs``, ``clamp``, ``wrap``, ``map``, ``expression``
+     - Arithmetic operators, dynamic multi-sign summing junctions, and range boundary transformations.
+   * - :ref:`pkg-string`
+     - ``string/format``, ``string/concat``, ``string/split``, ``string/replace``, ``string/length``
+     - Text formatting, templating, and string manipulation operations.
+   * - :ref:`pkg-control`
+     - ``pid``, ``rate_limiter``, ``deadband``, ``hysteresis``, ``lowpass``, ``integrator``
+     - Dynamic feedback controllers, signal filters, and rate-of-change limiters.
+   * - :ref:`pkg-dashboard`
+     - ``graph``, ``display``, ``image``
+     - Telemetry instruments piping signals to real-time oscilloscopes, digital readouts, and visual frames.
+   * - :ref:`pkg-step`
+     - ``start``, ``when``, ``wait``, ``if``, ``repeat``, ``while``, ``say``, ``join``, ``stop``
+     - Discrete event control flow nodes, condition branching, loops, and path synchronization.
+
 Package structure
 -----------------
 
@@ -26,6 +58,8 @@ Optional toolkits with external dependencies live in ``engine/toolkit/<package>/
 ``toolkit.toml`` and a package-local ``CMakeLists.txt``. The engine discovers the folder;
 the package's CMake file decides whether its dependency is available. The backend links and
 registers an optional package explicitly.
+
+.. _pkg-base:
 
 base
 ----
@@ -77,6 +111,8 @@ A value holds when it is positive (a key held, a threshold over its level).
      - ``u``, ``min``, ``max`` → ``y``: holds when ``min <= u <= max``
      - ``in``, ``u``, ``min``, ``max`` → ``yes``, ``no``
 
+.. _pkg-signal:
+
 signal
 ------
 
@@ -107,6 +143,8 @@ comparisons (1 or 0), ``&& || !``, ``c ? a : b``, ``pi``, ``e`` and ``sin cos ta
 atan2 sinh cosh tanh exp log log10 sqrt abs floor ceil round sign frac min max clamp mod
 pow``.
 
+.. _pkg-math:
+
 math
 ----
 
@@ -125,6 +163,8 @@ Pointwise arithmetic and math operations on signals:
 - ``random_number`` (``min``, ``max`` → ``y``; params: ``min``, ``max``, ``integer``, ``seed``)
 - ``random_boolean`` (``p`` → ``y``; params: ``p``, ``seed``)
 
+.. _pkg-string:
+
 string
 ------
 
@@ -139,10 +179,14 @@ Text processing and manipulation blocks:
 - ``change_case``: ``text`` → ``y`` (text); converts case (``mode``: ``upper``, ``lower``, ``title``).
 - ``text_test``: ``text``, ``test`` → ``y`` (signal or step branches ``yes``/``no``; ``mode``: ``contains``, ``starts_with``, ``ends_with``).
 
+.. _pkg-dashboard:
+
 dashboard
 ---------
 
 Monitors: ``graph`` (plots ``in`` over time) and ``display`` (its latest number or text).
+
+.. _pkg-control:
 
 control
 -------
@@ -154,6 +198,8 @@ no direct feedthrough (they output their state, then take the input), so a feedb
 may pass through them: integrator → gain → back into the integrator is x' = −k x. A loop
 without one is an algebraic loop and fails. C++ helpers ``rk4_step`` and ``euler_step`` in
 ``paperboat/toolkit/control/simulator.hpp``.
+
+.. _pkg-step:
 
 step
 ----
