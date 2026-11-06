@@ -882,9 +882,15 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .toolkit-repo:hover { color: var(--text); }
 .toolkits-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding-top: var(--space-2); }
 
-.spinner { display: inline-flex; width: 12px; height: 12px; margin-right: 4px; vertical-align: -2px; }
-.spinner svg { width: 100%; height: 100%; fill: none; stroke-width: 2; stroke-linecap: round; animation: paperboat-spin 800ms linear infinite; }
-.spinner-track { stroke: var(--line-strong); opacity: 0.45; }
-.spinner-arc { stroke: currentColor; }
-@keyframes paperboat-spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spinner svg { animation: none; } }
+.spinner { display: inline-flex; align-items: center; justify-content: center; margin-right: 4px; vertical-align: -1px; }
+.spinner-ripple svg { display: block; overflow: visible; }
+.spinner-ripple .logo-water { fill: var(--signal); }
+.spinner-ripple .w { transform-box: fill-box; transform-origin: center; }
+.spinner-ripple.logo-live .logo-water .w { animation: logo-ripple-live 1.2s var(--ease, cubic-bezier(.65,0,.25,1)) infinite; }
+.spinner-ripple.logo-live .logo-water .w1 { animation-delay: 0s; }
+.spinner-ripple.logo-live .logo-water .w2 { animation-delay: 0.12s; }
+.spinner-ripple.logo-live .logo-water .w3 { animation-delay: 0.24s; }
+.spinner-ripple.logo-live .logo-water .w4 { animation-delay: 0.36s; }
+.spinner-ripple.logo-live .logo-water .w5 { animation-delay: 0.48s; }
+.spinner-boat { vertical-align: -2px; }
+@media (prefers-reduced-motion: reduce) { .spinner-ripple.logo-live .logo-water .w { animation: none !important; } }
