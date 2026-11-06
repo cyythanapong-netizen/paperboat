@@ -564,7 +564,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
   } catch (const toml::parse_error& err) {
     throw DescriptorError("not valid TOML: " + at_line(err.source()) + ": " + std::string(err.description()));
   }
-  only_fields(doc, {"domain", "import", "blocks", "objects", "graph", "station", "dashboard", "variables"}, "descriptor");
+  only_fields(doc, {"domain", "import", "toolkit", "toolkits", "blocks", "objects", "graph", "station", "dashboard", "variables"}, "descriptor");
 
   Catalog catalog;
   catalog.domain = doc.value("domain", std::string{});
@@ -617,8 +617,34 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
   std::vector<std::string> imports;
   if (!catalog.domain.empty() && (!registry.package(catalog.domain).empty() || !registry.objects(catalog.domain).empty()))
     imports.push_back(catalog.domain);
-  for (const auto& name : doc.value("import", json::array())) {
-    if (name.get<std::string>() != catalog.domain) imports.push_back(name.get<std::string>());
+
+  auto add_import_name = [&](const std::string& name) {
+    if (name == "__all__") {
+      // Add all packages from registry (all built-in packages) and optional toolkits
+      for (const auto& pkg : registry.packages()) {
+        if (pkg != catalog.domain && std::ranges::find(imports, pkg) == imports.end()) {
+          imports.push_back(pkg);
+        }
+      }
+      for (const auto& opt : options.optional_imports) {
+        if (opt != "__all__" && opt != catalog.domain && std::ranges::find(imports, opt) == imports.end()) {
+          imports.push_back(opt);
+        }
+      }
+    } else if (name != catalog.domain && std::ranges::find(imports, name) == imports.end()) {
+      imports.push_back(name);
+    }
+  };
+
+  for (const char* key : {"import", "toolkit", "toolkits"}) {
+    if (!doc.contains(key)) continue;
+    if (doc[key].is_array()) {
+      for (const auto& item : doc[key]) {
+        if (item.is_string()) add_import_name(item.get<std::string>());
+      }
+    } else if (doc[key].is_string()) {
+      add_import_name(doc[key].get<std::string>());
+    }
   }
   for (const auto& package : imports) {
     const auto templates = registry.package(package);

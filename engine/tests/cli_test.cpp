@@ -198,6 +198,34 @@ TEST_CASE("BackendManager check_backend detects missing block in descriptor") {
   fs::remove_all(tmp_dir, ec);
 }
 
+TEST_CASE("BackendManager check_backend handles toolkit = ['__all__'] importing all built-in blocks") {
+  const fs::path tmp_dir = fs::temp_directory_path() / "pb_test_all_toolkits";
+  std::error_code ec;
+  fs::remove_all(tmp_dir, ec);
+  fs::create_directories(tmp_dir, ec);
+
+  {
+    std::ofstream btoml(tmp_dir / "backend.toml");
+    btoml << "[backend]\nformat = 0\nname = \"all-toolkits\"\nlanguage = \"python\"\nrun = \"server.py\"\ntoolkit = [\"__all__\"]\n";
+  }
+  {
+    std::ofstream srv(tmp_dir / "server.py");
+    srv << "# dummy\n";
+  }
+  {
+    std::ofstream desc(tmp_dir / "descriptor.toml");
+    desc << "domain = \"all-toolkits\"\ntoolkit = [\"__all__\"]\n";
+  }
+
+  auto res = core::BackendManager::check_backend(tmp_dir, /*fast=*/true);
+  CHECK(res.ok);
+  CHECK(res.manifest_ok);
+  CHECK(res.catalog_ok);
+  CHECK(res.block_count > 20); // Imports all built-in packages
+
+  fs::remove_all(tmp_dir, ec);
+}
+
 TEST_CASE("BackendManager pack_backend and unpack_backend roundtrip excludes build junk") {
   auto ex_dir = core::BackendManager::find_examples_dir();
   if (ex_dir.empty() || !fs::is_directory(ex_dir / "cart-pole-cpp")) {
@@ -205,7 +233,7 @@ TEST_CASE("BackendManager pack_backend and unpack_backend roundtrip excludes bui
   }
 
   const fs::path src_dir = ex_dir / "cart-pole-cpp";
-  const fs::path pkg_path = fs::temp_directory_path() / "test_cart_pole_roundtrip.paperboat-pkg";
+  const fs::path pkg_path = fs::temp_directory_path() / "test_cart_pole_roundtrip.ppk";
   const fs::path unpack_dir = fs::temp_directory_path() / "test_cart_pole_unpacked";
 
   std::error_code ec;

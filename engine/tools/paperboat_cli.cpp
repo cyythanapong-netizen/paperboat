@@ -66,8 +66,8 @@ Toolkits:
 Verification & Packaging:
   check [path] [--fast] [--json]
                              4-stage verification (manifest, catalog, smoke, golden)
-  pack [path] [--out <pkg>]  Package backend into .paperboat-pkg archive
-  unpack <pkg> [--dir <dir>] Unpack and verify .paperboat-pkg archive
+  pack [path] [--out <pkg>]  Package backend into .ppk archive
+  unpack <pkg> [--dir <dir>] Unpack and verify .ppk archive
 
 General:
   version, --version         Show CLI version
@@ -463,7 +463,7 @@ int cmd_unpack(const std::vector<std::string_view>& args) {
   }
 
   if (archive.empty()) {
-    std::cerr << "error: package archive path required (e.g. `paperboat unpack my-backend-0.1.0.paperboat-pkg`)\n";
+    std::cerr << "error: package archive path required (e.g. `paperboat unpack my-backend-0.1.0.ppk`)\n";
     return 2;
   }
 
@@ -496,9 +496,9 @@ void print_interactive_help() {
                            Manage optional toolkits (e.g. `toolkit install opencv`)
   check [backend] [--fast] 4-stage backend verification (manifest, catalog, smoke, golden)
   pack [folder] [--out <pkg>]
-                           Package backend into .paperboat-pkg archive
+                           Package backend into .ppk archive
   unpack <pkg> [--dir <dir>]
-                           Unpack and verify .paperboat-pkg archive
+                           Unpack and verify .ppk archive
   status                   Show overall status of backends and examples
   clear                    Clear screen and redraw banner
   help                     Show this help message

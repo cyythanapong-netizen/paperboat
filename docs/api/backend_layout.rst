@@ -3,7 +3,7 @@ Backend Layout & Packaging
 
 A Paperboat backend is a self-contained domain service written in C++ or Python. It supplies domain-specific physics, models, algorithms, and visualization scenes to the Paperboat engine.
 
-Every backend directory follows a standard layout defined by a ``backend.toml`` manifest. Backends can be verified with ``paperboat check`` and packaged into portable archives (``.paperboat-pkg``) with ``paperboat pack``.
+Every backend directory follows a standard layout defined by a ``backend.toml`` manifest. Backends can be verified with ``paperboat check`` and packaged into portable archives (``.ppk``) with ``paperboat pack``.
 
 .. note::
    The backend manifest schema is currently **format = 0** (pre-1.0). The schema formalises existing conventions and may evolve as packaging and extension capabilities expand.
@@ -77,7 +77,7 @@ Field Reference
   *String*. Relative path to the domain descriptor file (default: ``"descriptor.toml"``).
 
 ``[backend].toolkits``
-  *Optional list of strings*. Required optional toolkits that must be installed in the engine (e.g. ``["opencv"]``).
+  *Optional list of strings*. Required optional toolkits that must be installed in the engine (e.g. ``["opencv"]``), or ``["__all__"]`` to import and require all toolkits and built-in packages available in the Paperboat repository.
 
 ``[test].golden``
   *Optional string*. Path to the golden test expectations file (e.g. ``"expected.json"``) for headless verification.
@@ -95,7 +95,7 @@ Stages
 ~~~~~~
 
 1. **Manifest & Layout**: Validates ``backend.toml`` syntax and fields, verifies that descriptor, build files, and golden files exist, checks toolkit prerequisites, and validates descriptor syntax with line-accurate error reporting.
-2. **Catalog & Block Completeness**: Confirms that all templates imported or referenced in ``[[blocks]]`` and ``[graph]`` exist either in built-in toolkits, declared optional toolkits, or domain code.
+2. **Catalog & Block Completeness**: Confirms that all templates imported or referenced in ``[[blocks]]`` and ``[graph]`` exist either in built-in toolkits, declared optional toolkits, or domain code. When ``toolkit = ["__all__"]`` or ``import = ["__all__"]`` is specified, all built-in packages (``base``, ``control``, ``dashboard``, ``math``, ``signal``, ``step``, ``string``) and installed toolkits are loaded into the catalog.
 3. **Live Protocol Smoke Test**: Builds C++ backends incrementally or prepares the Python environment, allocates an isolated ephemeral TCP port, spawns the backend, and runs ``protocol/smoke_test.py`` over WebSockets. Skipped if ``--fast`` is specified.
 4. **Golden Run Comparison**: Executes the starter flow headless (``--run``), validates all emitted events against JSON Schema, and verifies output tolerances and signals against ``expected.json``. Skipped if ``--fast`` is specified or no golden test is declared.
 
@@ -107,15 +107,15 @@ Pack a Backend
 
 .. code-block:: bash
 
-   paperboat pack [path] [--out <archive.paperboat-pkg>]
+   paperboat pack [path] [--out <archive.ppk>]
 
-Runs a fast verification check on the backend, strips build junk (``build/``, ``__pycache__/``, ``.venv/``, ``*.o``, ``*.so``, and patterns in ``.paperboatignore``), calculates SHA-256 integrity digests for all included files, and creates an archive named ``<name>-<version>.paperboat-pkg``.
+Runs a fast verification check on the backend, strips build junk (``build/``, ``__pycache__/``, ``.venv/``, ``*.o``, ``*.so``, and patterns in ``.paperboatignore``), calculates SHA-256 integrity digests for all included files, and creates an archive named ``<name>-<version>.ppk``.
 
 Unpack a Backend
 ~~~~~~~~~~~~~~~~
 
 .. code-block:: bash
 
-   paperboat unpack <archive.paperboat-pkg> [--dir <target_dir>]
+   paperboat unpack <archive.ppk> [--dir <target_dir>]
 
 Extracts the archive into the target directory, validates all extracted files against the embedded ``PACKAGE.json`` SHA-256 digests, and executes a verification check to ensure the backend is immediately ready to run.

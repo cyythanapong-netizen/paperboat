@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Packaging tool for Paperboat backend packages (.paperboat-pkg).
+"""Packaging tool for Paperboat backend packages (.ppk).
 
 Packs a verified backend directory into a reproducible zip archive with PACKAGE.json
 and file integrity hashes, excluding build artifacts and ignore patterns.
@@ -40,6 +40,7 @@ DEFAULT_IGNORES = [
     "*.so",
     "*.dylib",
     "*.dll",
+    "*.ppk",
     "*.paperboat-pkg",
     "*.insyncdl",
     ".~*",
@@ -248,11 +249,11 @@ def main():
     pack_p = subparsers.add_parser("pack")
     pack_p.add_argument("pos_dir", nargs="?", type=Path, default=None, help="Backend directory")
     pack_p.add_argument("--dir", type=Path, default=None, help="Backend directory to pack")
-    pack_p.add_argument("--out", type=Path, default=None, help="Output package path (.paperboat-pkg)")
+    pack_p.add_argument("--out", type=Path, default=None, help="Output package path (.ppk)")
 
     unpack_p = subparsers.add_parser("unpack")
-    unpack_p.add_argument("pos_pkg", nargs="?", type=Path, default=None, help="Input package path (.paperboat-pkg)")
-    unpack_p.add_argument("--pkg", type=Path, default=None, help="Input package path (.paperboat-pkg)")
+    unpack_p.add_argument("pos_pkg", nargs="?", type=Path, default=None, help="Input package path (.ppk)")
+    unpack_p.add_argument("--pkg", type=Path, default=None, help="Input package path (.ppk)")
     unpack_p.add_argument("--dir", type=Path, required=True, help="Target extraction directory")
     unpack_p.add_argument("--verify", action="store_true", default=True, help="Verify file checksums")
 
@@ -263,7 +264,7 @@ def main():
         out_pkg = args.out
         if out_pkg is None:
             name, version = read_manifest_info(src_dir)
-            out_pkg = Path(f"{name}-{version}.paperboat-pkg")
+            out_pkg = Path(f"{name}-{version}.ppk")
         res = cmd_pack(src_dir, out_pkg.resolve())
     elif args.subcommand == "unpack":
         pkg_file = (args.pkg or args.pos_pkg)

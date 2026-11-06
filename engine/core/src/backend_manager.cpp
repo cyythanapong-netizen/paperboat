@@ -1010,13 +1010,24 @@ BackendManifest BackendManager::load_manifest(const fs::path& backend_dir, std::
     m.port = static_cast<int>(doc["backend"]["port"].value_or(8765));
     m.descriptor = doc["backend"]["descriptor"].value_or("descriptor.toml");
 
-    if (auto tks = doc["backend"]["toolkits"].as_array()) {
-      for (const auto& el : *tks) {
-        if (auto s = el.value<std::string>()) {
+    auto parse_toolkit_node = [&](const toml::node* node) {
+      if (!node) return;
+      if (const auto* arr = node->as_array()) {
+        for (const auto& el : *arr) {
+          if (auto s = el.value<std::string>()) {
+            if (std::find(m.toolkits.begin(), m.toolkits.end(), *s) == m.toolkits.end()) {
+              m.toolkits.push_back(*s);
+            }
+          }
+        }
+      } else if (auto s = node->value<std::string>()) {
+        if (std::find(m.toolkits.begin(), m.toolkits.end(), *s) == m.toolkits.end()) {
           m.toolkits.push_back(*s);
         }
       }
-    }
+    };
+    parse_toolkit_node(doc["backend"]["toolkits"].node());
+    parse_toolkit_node(doc["backend"]["toolkit"].node());
 
     if (doc["test"].is_table()) {
       m.golden = doc["test"]["golden"].value_or(std::string{});
@@ -1146,8 +1157,19 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   }
 
   // Check required toolkits
-  std::vector<std::string> all_toolkits = manifest.toolkits;
+  std::vector<std::string> all_toolkits;
   const auto known = toolkit::list_toolkits(repo_root);
+  bool has_all = std::find(manifest.toolkits.begin(), manifest.toolkits.end(), "__all__") != manifest.toolkits.end();
+  if (has_all) {
+    all_toolkits.push_back("__all__");
+    for (const auto& k : known) {
+      if (std::find(all_toolkits.begin(), all_toolkits.end(), k.name) == all_toolkits.end()) {
+        all_toolkits.push_back(k.name);
+      }
+    }
+  } else {
+    all_toolkits = manifest.toolkits;
+  }
   const auto reqs = toolkit::load_toolkit_requirements(dir, known);
   for (const auto& r : reqs) {
     if (std::find(all_toolkits.begin(), all_toolkits.end(), r) == all_toolkits.end()) {
@@ -1155,6 +1177,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
     }
   }
   for (const auto& tk : all_toolkits) {
+    if (tk == "__all__") continue;
     const fs::path tk_dir = repo_root / "engine" / "toolkit" / tk;
     if (!fs::is_regular_file(tk_dir / "toolkit.toml")) {
       res.missing_toolkits.push_back(tk);
@@ -1481,7 +1504,7 @@ PackResult BackendManager::pack_backend(const fs::path& path, const fs::path& ou
 
   fs::path package_out = out_path;
   if (package_out.empty()) {
-    package_out = fs::current_path() / (res.name + "-" + res.version + ".paperboat-pkg");
+    package_out = fs::current_path() / (res.name + "-" + res.version + ".ppk");
   }
 
   const fs::path repo_root = toolkit::find_repo_root(dir);
