@@ -265,11 +265,15 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
   bool json_out = false;
   bool rebuild = true;
   std::string name;
+  std::string version;
 
   for (std::size_t i = 1; i < args.size(); ++i) {
     auto a = args[i];
     if (a == "--json") json_out = true;
     else if (a == "--no-build") rebuild = false;
+    else if ((a == "--version" || a == "-v") && i + 1 < args.size()) {
+      version = std::string(args[++i]);
+    }
     else if (!a.starts_with("-") && name.empty()) name = std::string(a);
   }
 
@@ -312,13 +316,14 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
     (level == "error" ? std::cerr : std::cout) << "[" << level << "] " << text << '\n';
   };
 
+  tk::HostBuild host{.source_dir = {}, .build_dir = {}, .skip_rebuild = !rebuild};
   tk::ToolkitResult res;
   if (sub == "install" || sub == "add") {
-    res = tk::install_toolkit(name, {}, log, rebuild);
+    res = tk::install_toolkit(name, version, {}, host, log);
   } else if (sub == "update") {
-    res = tk::update_toolkit(name, {}, log, rebuild);
+    res = tk::install_toolkit(name, version, {}, host, log);
   } else if (sub == "uninstall" || sub == "remove") {
-    res = tk::uninstall_toolkit(name, {}, log, rebuild);
+    res = tk::uninstall_toolkit(name, {}, host, log);
   } else {
     std::cerr << "error: unknown toolkit subcommand: " << sub << '\n';
     return 2;
@@ -462,11 +467,7 @@ int run_interactive_prompt() {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    if (isatty(STDIN_FILENO)) {
-      return run_interactive_prompt();
-    }
-    print_help();
-    return 0;
+    return run_interactive_prompt();
   }
 
   std::vector<std::string_view> args(argv + 1, argv + argc);
