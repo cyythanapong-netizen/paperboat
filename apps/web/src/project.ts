@@ -3,6 +3,7 @@
 // projects and the autosave). The shape is `Project` in protocol.ts, generated from the schema.
 
 import type { DashboardLayout, Graph, Project, RunSettings, Station, Variables } from "./protocol";
+import { readStored as read, writeStored as write } from "./storage.ts";
 
 /** The format version this app writes and reads. A newer file is refused. */
 export const PROJECT_VERSION = 0;
@@ -151,23 +152,6 @@ export function addRecent(list: Stored[], entry: Stored): Stored[] {
 
 const RECENT_KEY = "paperboat.recent";
 const autosaveKey = (engine: string) => `paperboat.autosave:${engine}`;
-
-function read<T>(key: string, valid: (v: unknown) => v is T): T | undefined {
-  try {
-    const v = JSON.parse(localStorage.getItem(key) ?? "null");
-    return valid(v) ? v : undefined;
-  } catch {
-    return undefined;
-  }
-}
-function write(key: string, value: unknown) {
-  try {
-    if (value === undefined) localStorage.removeItem(key);
-    else localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* storage blocked or full: kept for this session only */
-  }
-}
 
 const isStored = (v: unknown): v is Stored => isObj(v) && isText(v.name) && isNum(v.savedAt) && isObj(v.project) && "flow" in v.project;
 

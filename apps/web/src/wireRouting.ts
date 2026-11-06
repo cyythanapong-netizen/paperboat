@@ -35,6 +35,18 @@ export type WireRouteTarget = { id: string; y: number; handle?: string | null };
 
 const byText = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
+/** Wires grouped by the port they leave (`source`) or reach (`target`), each group in input order. */
+function byPort(wires: readonly RouteInput[], end: "source" | "target"): Map<string, RouteInput[]> {
+  const groups = new Map<string, RouteInput[]>();
+  for (const w of wires) {
+    const key = end === "source" ? `${w.source}:${w.sourceHandle ?? ""}` : `${w.target}:${w.targetHandle ?? ""}`;
+    const list = groups.get(key) ?? [];
+    list.push(w);
+    groups.set(key, list);
+  }
+  return groups;
+}
+
 /** Assign fan-out lanes in the same vertical order as their destinations. */
 export function orderWireRoutes(routes: readonly WireRouteTarget[]): Map<string, number> {
   const ordered = [...routes].sort(
@@ -178,13 +190,7 @@ export function routeWires(
     const loopLaneMap = new Map(sortedLoops.map((w, lane) => [w.id, lane]));
 
     // Exit lanes per source handle
-    const bySource = new Map<string, RouteInput[]>();
-    for (const w of backWires) {
-      const key = `${w.source}:${w.sourceHandle ?? ""}`;
-      const list = bySource.get(key) ?? [];
-      list.push(w);
-      bySource.set(key, list);
-    }
+    const bySource = byPort(backWires, "source");
     const sourceExitLaneMap = new Map<string, number>();
     for (const list of bySource.values()) {
       list.sort((a, b) => a.ty - b.ty || byText(a.id, b.id));
@@ -192,13 +198,7 @@ export function routeWires(
     }
 
     // Exit lanes per target handle
-    const byTarget = new Map<string, RouteInput[]>();
-    for (const w of backWires) {
-      const key = `${w.target}:${w.targetHandle ?? ""}`;
-      const list = byTarget.get(key) ?? [];
-      list.push(w);
-      byTarget.set(key, list);
-    }
+    const byTarget = byPort(backWires, "target");
     const targetExitLaneMap = new Map<string, number>();
     for (const list of byTarget.values()) {
       list.sort((a, b) => a.sy - b.sy || byText(a.id, b.id));
@@ -245,13 +245,7 @@ export function routeWires(
 
   // --- Forward step wires ---
   if (forwardStepWires.length > 0) {
-    const byTarget = new Map<string, RouteInput[]>();
-    for (const w of forwardStepWires) {
-      const key = `${w.target}:${w.targetHandle ?? ""}`;
-      const list = byTarget.get(key) ?? [];
-      list.push(w);
-      byTarget.set(key, list);
-    }
+    const byTarget = byPort(forwardStepWires, "target");
 
     for (const list of byTarget.values()) {
       list.sort((a, b) => a.sy - b.sy || byText(a.id, b.id));
@@ -280,13 +274,7 @@ export function routeWires(
 
   // --- Forward signal wires ---
   if (forwardSignalWires.length > 0) {
-    const bySource = new Map<string, RouteInput[]>();
-    for (const w of forwardSignalWires) {
-      const key = `${w.source}:${w.sourceHandle ?? ""}`;
-      const list = bySource.get(key) ?? [];
-      list.push(w);
-      bySource.set(key, list);
-    }
+    const bySource = byPort(forwardSignalWires, "source");
     const sourceLaneMap = new Map<string, { lane: number; count: number }>();
     for (const list of bySource.values()) {
       list.sort((a, b) => a.ty - b.ty || byText(a.targetHandle ?? "", b.targetHandle ?? "") || byText(a.id, b.id));
@@ -294,13 +282,7 @@ export function routeWires(
       list.forEach((w, lane) => sourceLaneMap.set(w.id, { lane, count }));
     }
 
-    const byTarget = new Map<string, RouteInput[]>();
-    for (const w of forwardSignalWires) {
-      const key = `${w.target}:${w.targetHandle ?? ""}`;
-      const list = byTarget.get(key) ?? [];
-      list.push(w);
-      byTarget.set(key, list);
-    }
+    const byTarget = byPort(forwardSignalWires, "target");
     const targetLaneMap = new Map<string, { lane: number; count: number }>();
     for (const list of byTarget.values()) {
       list.sort((a, b) => a.sy - b.sy || byText(a.sourceHandle ?? "", b.sourceHandle ?? "") || byText(a.id, b.id));

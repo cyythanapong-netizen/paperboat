@@ -3,6 +3,7 @@
 // resolves and checks them (variables.values); nothing here evaluates a formula.
 
 import type { ParamDef, ParamValue, Station, Variable, Variables } from "./protocol";
+import { readStored, writeStored } from "./storage.ts";
 
 export type Ref = { var: string } | { expr: string };
 export const isRef = (v: unknown): v is Ref => typeof v === "object" && v !== null && ("var" in v || "expr" in v);
@@ -133,19 +134,6 @@ export function toToml(list: Variables): string {
 }
 
 /** The user's variables for a backend, kept in this browser as the working copy: a project file (#82) saves and restores them. */
-export function loadMine(engine: string): Variables | undefined {
-  try {
-    const v = JSON.parse(localStorage.getItem(`paperboat.variables:${engine}`) ?? "null");
-    return Array.isArray(v) ? (v as Variables) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-export function saveMine(engine: string, list: Variables | undefined) {
-  try {
-    if (list) localStorage.setItem(`paperboat.variables:${engine}`, JSON.stringify(list));
-    else localStorage.removeItem(`paperboat.variables:${engine}`);
-  } catch {
-    /* storage blocked: they last for the session */
-  }
-}
+export const loadMine = (engine: string): Variables | undefined =>
+  readStored(`paperboat.variables:${engine}`, (v): v is Variables => Array.isArray(v));
+export const saveMine = (engine: string, list: Variables | undefined) => writeStored(`paperboat.variables:${engine}`, list);

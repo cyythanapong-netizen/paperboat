@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ParamInput } from "./FlowEditor";
+import { ParamRow } from "./FlowEditor";
 import { RemoveIcon } from "./RemoveIcon";
 import type { ObjectDef, Station, StationObject } from "./protocol";
 import { withoutObject } from "./StationGraph";
@@ -64,18 +64,13 @@ export function StationPanel({ objects, station, onChange, locked }: Props) {
                   </div>
                 ))}
                 {def?.props.map((p) => (
-                  <label key={p.id} className="param">
-                    <span>
-                      {p.id}
-                      {"unit" in p && p.unit && <span className="unit"> {p.unit}</span>}
-                    </span>
-                    <ParamInput
-                      def={p}
-                      value={o.props?.[p.id] ?? p.default}
-                      disabled={locked}
-                      set={(v) => update(o.id, (x) => ({ ...x, props: { ...x.props, [p.id]: v } }))}
-                    />
-                  </label>
+                  <ParamRow
+                    key={p.id}
+                    def={p}
+                    value={o.props?.[p.id] ?? p.default}
+                    disabled={locked}
+                    set={(v) => update(o.id, (x) => ({ ...x, props: { ...x.props, [p.id]: v } }))}
+                  />
                 ))}
               </div>
             );

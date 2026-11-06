@@ -132,13 +132,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
         progress={progress}
         onExpand={() => setExpanded(true)}
         popover={def.params.map((p) => (
-          <label key={p.id} className="param">
-            <span>
-              {p.id}
-              {"unit" in p && p.unit && <span className="unit"> {p.unit}</span>}
-            </span>
-            <ParamInput def={p} value={params[p.id]} set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })} />
-          </label>
+          <ParamRow key={p.id} def={p} value={params[p.id]} set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })} />
         ))}
       />
     );
@@ -184,18 +178,13 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
       )}
       {ports.rows}
       {def.params.map((p) => (
-        <label key={p.id} className="param">
-          <span>
-            {p.id}
-            {"unit" in p && p.unit && <span className="unit"> {p.unit}</span>}
-          </span>
-          <ParamInput
-            def={p}
-            value={params[p.id]}
-            disabled={missing}
-            set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })}
-          />
-        </label>
+        <ParamRow
+          key={p.id}
+          def={p}
+          value={params[p.id]}
+          disabled={missing}
+          set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })}
+        />
       ))}
       {ports.bottom}
     </div>
@@ -211,6 +200,20 @@ export function ParamInput(props: { def: ParamDef; value: ParamValue; set: (v: P
     <Bindable def={props.def} value={props.value} set={props.set} disabled={props.disabled}>
       {isRef(props.value) ? null : <Field {...props} />}
     </Bindable>
+  );
+}
+
+/** A param (or station property) as a row: its id and unit, then its field. */
+export function ParamRow(props: Parameters<typeof ParamInput>[0]) {
+  const { def } = props;
+  return (
+    <label className="param">
+      <span>
+        {def.id}
+        {"unit" in def && def.unit && <span className="unit"> {def.unit}</span>}
+      </span>
+      <ParamInput {...props} />
+    </label>
   );
 }
 
