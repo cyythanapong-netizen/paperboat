@@ -24,6 +24,9 @@ struct Session::State {
   json station;
   json variables;  // the list (#36): the backend's defaults until the UI sets its own
   int runs = 0;
+  std::mutex toolkit_mutex;
+  std::string busy_toolkit;
+  std::string busy_action;
   std::jthread toolkit_task;
   std::jthread run;  // declared last: destroyed (stopped and joined) before the rest
 
@@ -45,9 +48,16 @@ struct Session::State {
     return {};
 #endif
   }
-  json current_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}, bool fetch_versions = false) const {
+  json current_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}, bool fetch_versions = false) {
+    std::string bname(busy_name);
+    std::string bstate(busy_state);
+    if (bname.empty()) {
+      std::lock_guard lock(toolkit_mutex);
+      bname = busy_toolkit;
+      bstate = busy_action;
+    }
     const auto list = toolkit::list_toolkits(repo_root(), backend.catalog->dir, fetch_versions);
-    return json::parse(toolkit::toolkits_json(list, busy_name, busy_state));
+    return json::parse(toolkit::toolkits_json(list, bname, bstate));
   }
   void emit_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}, bool fetch_versions = false) {
     emit({{"type", "toolkits.status"}, {"toolkits", current_toolkits(busy_name, busy_state, fetch_versions)}});
@@ -164,8 +174,13 @@ void Session::on_message(const std::string& text) {
       return;
     }
     const std::string busy = type == "toolkit.install" ? "installing" : "uninstalling";
+    {
+      std::lock_guard lock(s.toolkit_mutex);
+      s.busy_toolkit = name;
+      s.busy_action = busy;
+    }
     s.toolkit_task = std::jthread([&s, type, name, version, busy]() {
-      s.emit_toolkits(name, busy);
+      s.emit_toolkits();
       auto logger = [&s](std::string_view level, std::string_view line) {
         s.log(std::string(level), std::string(line));
       };
@@ -173,12 +188,17 @@ void Session::on_message(const std::string& text) {
       if (type == "toolkit.install") res = toolkit::install_toolkit(name, version, s.repo_root(), s.host_build(), logger);
       else res = toolkit::uninstall_toolkit(name, s.repo_root(), s.host_build(), logger);
       if (!res.ok) s.log("error", res.message);
+      {
+        std::lock_guard lock(s.toolkit_mutex);
+        s.busy_toolkit.clear();
+        s.busy_action.clear();
+      }
       s.emit_toolkits();
     });
   } else if (type == "toolkit.versions") {
-    s.toolkit_task = std::jthread([&s]() {
+    std::thread([&s]() {
       s.emit_toolkits(/*busy_name=*/{}, /*busy_state=*/{}, /*fetch_versions=*/true);
-    });
+    }).detach();
   } else {
     s.log("warn", "unknown message: " + type);
   }

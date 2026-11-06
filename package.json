@@ -17,6 +17,7 @@
     "backend:parts": "cmake -S examples/backends/parts-cpp -B examples/backends/parts-cpp/build > /dev/null && cmake --build examples/backends/parts-cpp/build && examples/backends/parts-cpp/build/paperboat-parts",
     "backend:chain": "npm run build:python --silent && PYTHONPATH=python python3 examples/backends/chain-python/server.py",
     "backend:supply": "npm run build:python --silent && PYTHONPATH=python python3 examples/backends/supply-python/server.py",
+    "backend:double-pendulum": "cmake -S examples/backends/double-pendulum-cpp -B examples/backends/double-pendulum-cpp/build > /dev/null && cmake --build examples/backends/double-pendulum-cpp/build && examples/backends/double-pendulum-cpp/build/paperboat-double-pendulum --port 8773",
     "build:python": "cmake -S python -B python/build > /dev/null && cmake --build python/build",
     "golden": "npm run build:python --silent && python3 protocol/golden.py",
     "docs": "sphinx-build -W -b html docs/api docs/api/_build",

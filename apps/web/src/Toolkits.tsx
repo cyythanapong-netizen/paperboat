@@ -79,16 +79,9 @@ export function MissingToolkitsDialog({
                     </label>
                     <select
                       id={`ver-${t.name}`}
+                      className="toolkit-version-select"
                       value={cur}
                       onChange={(e) => setSelectedVersions((prev) => ({ ...prev, [t.name]: e.target.value }))}
-                      style={{
-                        padding: "2px 6px",
-                        borderRadius: "var(--radius-sm, 4px)",
-                        background: "var(--surface-screen, #111)",
-                        color: "var(--text, #eee)",
-                        border: "1px solid var(--line, #333)",
-                        font: "var(--size-2xs) var(--font-mono)",
-                      }}
                     >
                       {versions.map((v) => (
                         <option key={v} value={v}>
@@ -221,17 +214,10 @@ export function ToolkitsButton({
                   </a>
                   <span className="spacer" />
                   <select
+                    className="toolkit-version-select"
                     value={curSelection}
                     disabled={!connected || !!busy}
                     onChange={(e) => setSelectedVersions((prev) => ({ ...prev, [t.name]: e.target.value }))}
-                    style={{
-                      padding: "2px 4px",
-                      borderRadius: "var(--radius-sm, 4px)",
-                      background: "var(--surface-screen, #111)",
-                      color: "var(--text, #eee)",
-                      border: "1px solid var(--line, #333)",
-                      font: "var(--size-2xs) var(--font-mono)",
-                    }}
                   >
                     {versions.map((v) => (
                       <option key={v} value={v}>

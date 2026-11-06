@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PORTS=(8765 8766 8767 8768 8769 8770 8771 8772)
+PORTS=(8765 8766 8767 8768 8769 8770 8771 8772 8773)
 
 echo "==> Stopping all example backends..."
 

@@ -38,12 +38,14 @@ examples/backends/        example backends, each a project of its own that uses 
                           dampers), tested from the Flow page as stories (Python)
   supply-python/          no physics: a supply network on the Station as a graph, the
                           ordering policy on the Flow page (Python)
+  double-pendulum-cpp/    simulation: three stories (RLS payload identification, energy
+                          swing-up, and LQR balance) with vector ports on the Flow page (C++)
 docs/                     plan, and the API reference (docs/api, reStructuredText)
 ```
 
 The UI has no domain code. The backend sends a block catalog, a scene and a starter
 graph; the UI builds the palette, node forms, canvas and 3D view from them (see
-`protocol/README.md`). The eight example backends differ in domain, language, run style
+`protocol/README.md`). The example backends differ in domain, language, run style
 (stepped in time, evaluated once, or interactive), flow type (Signal or Step flow) and
 Station view (3D or 2D scene, a graph, the backend's own web page), run on the same UI
 unchanged, and all pass the same domain-neutral smoke test and their golden runs.
@@ -61,6 +63,7 @@ npm run backend:animation     # ws://localhost:8769
 npm run backend:parts         # ws://localhost:8770 (needs OpenCV)
 npm run backend:chain         # ws://localhost:8771
 npm run backend:supply        # ws://localhost:8772
+npm run backend:double-pendulum # ws://localhost:8773
 npm run dev                   # http://localhost:3047
 ```
 

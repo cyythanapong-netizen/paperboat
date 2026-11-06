@@ -82,4 +82,13 @@ launch_proc 8771 "$EXAMPLES_DIR/chain-python" python3 server.py
 # 8. 8772: supply-python
 launch_proc 8772 "$EXAMPLES_DIR/supply-python" python3 server.py
 
-echo "==> All example backends launched (ports 8765-8772)."
+# 9. 8773: double-pendulum-cpp
+echo "==> Building double-pendulum-cpp..."
+if cmake -S "$EXAMPLES_DIR/double-pendulum-cpp" -B "$EXAMPLES_DIR/double-pendulum-cpp/build" >/dev/null && \
+   cmake --build "$EXAMPLES_DIR/double-pendulum-cpp/build"; then
+  launch_proc 8773 "$REPO_ROOT" "$EXAMPLES_DIR/double-pendulum-cpp/build/paperboat-double-pendulum" --port 8773
+else
+  echo "double-pendulum-cpp build failed, skipping"
+fi
+
+echo "==> All example backends launched (ports 8765-8773)."
