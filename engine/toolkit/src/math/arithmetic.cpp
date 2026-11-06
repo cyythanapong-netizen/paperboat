@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <random>
 
 #include "common.hpp"
@@ -265,6 +266,88 @@ void add_arithmetic(Registry& registry) {
        {.id = "seed", .default_value = 0.0, .type = "number"}},
       [](const Values& p, const Config&) { return std::make_unique<RandomBoolean>(p); },
       "Generates random booleans with probability p.", {.compact = true, .glyph = "~B", .value = "{p}"}));
+
+  // math/deg_to_rad
+  registry.add(make_template(
+      "math", "deg_to_rad", "Deg to Rad", {"u"}, {"y"}, {},
+      [](const Values&, const Config&) {
+        return std::make_unique<Stateless>([](const Context&, const Values& in) {
+          return Values{{"y", get_or(in, "u") * (std::numbers::pi / 180.0)}};
+        });
+      },
+      "Converts an angle from degrees to radians.", {.compact = true, .glyph = "°→rad"}));
+
+  // math/rad_to_deg
+  registry.add(make_template(
+      "math", "rad_to_deg", "Rad to Deg", {"u"}, {"y"}, {},
+      [](const Values&, const Config&) {
+        return std::make_unique<Stateless>([](const Context&, const Values& in) {
+          return Values{{"y", get_or(in, "u") * (180.0 / std::numbers::pi)}};
+        });
+      },
+      "Converts an angle from radians to degrees.", {.compact = true, .glyph = "rad→°"}));
+
+  // math/wrap_angle
+  registry.add(make_template(
+      "math", "wrap_angle", "Wrap Angle", {"u"}, {"y"}, {},
+      [](const Values&, const Config&) {
+        return std::make_unique<Stateless>([](const Context&, const Values& in) {
+          double u = get_or(in, "u");
+          return Values{{"y", std::atan2(std::sin(u), std::cos(u))}};
+        });
+      },
+      "Wraps an angle in radians into the range [-pi, pi].", {.compact = true, .glyph = "wrap∠"}));
+
+  // math/angle_diff
+  registry.add(make_template(
+      "math", "angle_diff", "Angle Diff", {"a", "b"}, {"y"}, {},
+      [](const Values&, const Config&) {
+        return std::make_unique<Stateless>([](const Context&, const Values& in) {
+          double a = get_or(in, "a"), b = get_or(in, "b");
+          return Values{{"y", std::atan2(std::sin(a - b), std::cos(a - b))}};
+        });
+      },
+      "Computes the shortest signed difference (a - b) normalized to [-pi, pi].", {.compact = true, .glyph = "Δ∠"}));
+
+  // math/atan2
+  registry.add(make_template(
+      "math", "atan2", "Atan2", {"y", "x"}, {"y"}, {},
+      [](const Values&, const Config&) {
+        return std::make_unique<Stateless>([](const Context&, const Values& in) {
+          double y = get_or(in, "y"), x = get_or(in, "x");
+          return Values{{"y", std::atan2(y, x)}};
+        });
+      },
+      "Computes the 2-argument arctangent atan2(y, x) in radians.", {.compact = true, .glyph = "atan2"}));
+
+  // math/hypot
+  registry.add(make_template(
+      "math", "hypot", "Hypot", {"a", "b"}, {"y"}, {},
+      [](const Values&, const Config&) {
+        return std::make_unique<Stateless>([](const Context&, const Values& in) {
+          double a = in.contains("a") ? get_or(in, "a") : get_or(in, "x", 0.0);
+          double b = in.contains("b") ? get_or(in, "b") : get_or(in, "y", 0.0);
+          return Values{{"y", std::hypot(a, b)}};
+        });
+      },
+      "Computes the Euclidean distance hypot(a, b) = sqrt(a*a + b*b).", {.compact = true, .glyph = "hypot"}));
+
+  // math/deadband
+  registry.add(make_template(
+      "math", "deadband", "Deadband", {"u"}, {"y"},
+      {{.id = "width", .default_value = 0.1, .type = "number"}},
+      [](const Values& p, const Config&) {
+        double width = get_or(p, "width", 0.1);
+        return std::make_unique<Stateless>([width](const Context&, const Values& in) {
+          double u = get_or(in, "u");
+          double y = 0.0;
+          if (std::abs(u) > width) {
+            y = (u > 0.0) ? (u - width) : (u + width);
+          }
+          return Values{{"y", y}};
+        });
+      },
+      "Suppresses signals within [-width, +width].", {.compact = true, .glyph = "deadband", .value = "{width}"}));
 }
 
 }  // namespace paperboat::toolkit::math

@@ -374,6 +374,56 @@ TEST_CASE("Math Toolkit: Additions") {
     auto b2 = bool_t->make({{"seed", 999.0}, {"p", 0.5}}, {});
     CHECK(get_or(b1->step(ctx, {}), "y") == get_or(b2->step(ctx, {}), "y"));
   }
+
+  SECTION("math/deg_to_rad and math/rad_to_deg") {
+    const auto* d2r = reg.find("math/deg_to_rad");
+    const auto* r2d = reg.find("math/rad_to_deg");
+    REQUIRE(d2r != nullptr);
+    REQUIRE(r2d != nullptr);
+    auto b_d2r = d2r->make({}, {});
+    auto b_r2d = r2d->make({}, {});
+    Context ctx;
+    CHECK_THAT(get_or(b_d2r->step(ctx, {{"u", 180.0}}), "y"), WithinAbs(3.1415926535, 1e-6));
+    CHECK_THAT(get_or(b_d2r->step(ctx, {{"u", 90.0}}), "y"), WithinAbs(1.5707963267, 1e-6));
+    CHECK_THAT(get_or(b_r2d->step(ctx, {{"u", 3.1415926535}}), "y"), WithinAbs(180.0, 1e-4));
+  }
+
+  SECTION("math/wrap_angle and math/angle_diff") {
+    const auto* wrap_t = reg.find("math/wrap_angle");
+    const auto* diff_t = reg.find("math/angle_diff");
+    REQUIRE(wrap_t != nullptr);
+    REQUIRE(diff_t != nullptr);
+    auto b_wrap = wrap_t->make({}, {});
+    auto b_diff = diff_t->make({}, {});
+    Context ctx;
+    // 3*pi wraps to -pi or pi
+    CHECK_THAT(std::abs(get_or(b_wrap->step(ctx, {{"u", 3.0 * 3.1415926535}}), "y")), WithinAbs(3.1415926535, 1e-4));
+    // -2.5*pi wraps to -0.5*pi
+    CHECK_THAT(get_or(b_wrap->step(ctx, {{"u", -2.5 * 3.1415926535}}), "y"), WithinAbs(-0.5 * 3.1415926535, 1e-4));
+    // angle difference: 0.1 - 6.2 should be close to +0.183 (shortest path around circle)
+    CHECK_THAT(get_or(b_diff->step(ctx, {{"a", 0.1}, {"b", 6.2}}), "y"), WithinAbs(0.1831853, 1e-4));
+    // angle difference: opposite angles
+    CHECK_THAT(get_or(b_diff->step(ctx, {{"a", 1.0}, {"b", 1.0}}), "y"), WithinAbs(0.0, 1e-6));
+  }
+
+  SECTION("math/atan2, math/hypot and math/deadband") {
+    const auto* atan2_t = reg.find("math/atan2");
+    const auto* hypot_t = reg.find("math/hypot");
+    const auto* deadband_t = reg.find("math/deadband");
+    REQUIRE(atan2_t != nullptr);
+    REQUIRE(hypot_t != nullptr);
+    REQUIRE(deadband_t != nullptr);
+    auto b_atan2 = atan2_t->make({}, {});
+    auto b_hypot = hypot_t->make({}, {});
+    auto b_dead = deadband_t->make({{"width", 0.2}}, {});
+    Context ctx;
+    CHECK_THAT(get_or(b_atan2->step(ctx, {{"y", 1.0}, {"x", 1.0}}), "y"), WithinAbs(0.785398, 1e-4));
+    CHECK_THAT(get_or(b_hypot->step(ctx, {{"a", 3.0}, {"b", 4.0}}), "y"), WithinAbs(5.0, 1e-6));
+    CHECK(get_or(b_dead->step(ctx, {{"u", 0.1}}), "y") == 0.0);
+    CHECK(get_or(b_dead->step(ctx, {{"u", -0.15}}), "y") == 0.0);
+    CHECK_THAT(get_or(b_dead->step(ctx, {{"u", 0.5}}), "y"), WithinAbs(0.3, 1e-6));
+    CHECK_THAT(get_or(b_dead->step(ctx, {{"u", -0.5}}), "y"), WithinAbs(-0.3, 1e-6));
+  }
 }
 
 TEST_CASE("String Toolkit: All Blocks") {
