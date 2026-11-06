@@ -20,6 +20,7 @@ import { StationPanel, withObject } from "./StationPanel";
 import { BackendWindow, Dock } from "./Dock";
 import { CommandSearch, MenuBar } from "./Menus";
 import { ownKeys, SEARCH_CHORD, useShortcuts, type Command } from "./commands";
+import { missingRequiredToolkits, ToolkitsButton } from "./Toolkits";
 import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
 
@@ -649,6 +650,88 @@ export function App() {
     else if (!lastSession) clearAutosave(state.engine);
   }, [projectKey, dirty, restoreChecked]); // eslint-disable-line react-hooks/exhaustive-deps -- when the project changes
 
+  // ---- Missing toolkit prompt and post-install restart prompt (#118) ----
+  const promptedToolkits = useRef<string>("");
+  const prevBusyToolkits = useRef<Map<string, string>>(new Map());
+  const restartBackend = useCallback(() => {
+    log("info", "restarting backend…");
+    send({ type: "backend.restart" });
+  }, [log, send]);
+  const installToolkit = useCallback(
+    (name: string) => {
+      log("info", `requesting install of toolkit "${name}"…`);
+      send({ type: "toolkit.install", name });
+    },
+    [log, send],
+  );
+  const updateToolkit = useCallback(
+    (name: string) => {
+      log("info", `requesting update of toolkit "${name}"…`);
+      send({ type: "toolkit.update", name });
+    },
+    [log, send],
+  );
+  const uninstallToolkit = useCallback(
+    (name: string) => {
+      log("info", `requesting uninstall of toolkit "${name}"…`);
+      send({ type: "toolkit.uninstall", name });
+    },
+    [log, send],
+  );
+  useEffect(() => {
+    if (state.connection !== "open") return;
+    const missingTypes = nodes.filter(isBlock).filter((n) => n.data.missing).map((n) => n.data.def.type);
+    const missing = missingRequiredToolkits(state.toolkits, missingTypes);
+    if (missing.length === 0) return;
+    const key = `${state.engine}:${missing.map((t) => t.name).sort().join(",")}`;
+    if (promptedToolkits.current === key) return;
+    promptedToolkits.current = key;
+    const names = missing.map((t) => t.name).join(", ");
+    setNotice({
+      title: missing.length === 1 ? `Install missing toolkit “${missing[0].name}”?` : "Install missing toolkits?",
+      text: [
+        `This backend or project requires ${missing.length === 1 ? `the “${names}” toolkit` : `toolkits (${names})`} which ${missing.length === 1 ? "is" : "are"} not installed.`,
+        ...missing.map((t) => `${t.name}${t.description ? ` — ${t.description}` : ""}`),
+      ],
+      actions: [
+        {
+          label: missing.length === 1 ? `Install ${missing[0].name}` : "Install all",
+          primary: true,
+          run: () => {
+            setConsoleShown(true);
+            for (const t of missing) installToolkit(t.name);
+          },
+        },
+        { label: "Not now" },
+      ],
+    });
+  }, [state.connection, state.engine, state.toolkits, nodes, installToolkit]);
+
+  useEffect(() => {
+    const prev = prevBusyToolkits.current;
+    const finished: string[] = [];
+    for (const t of state.toolkits) {
+      const was = prev.get(t.name);
+      if ((was === "installing" || was === "updating") && !t.busy && t.installed) {
+        finished.push(t.name);
+      }
+    }
+    const next = new Map<string, string>();
+    for (const t of state.toolkits) if (t.busy) next.set(t.name, t.busy);
+    prevBusyToolkits.current = next;
+    if (finished.length > 0) {
+      const names = finished.join(", ");
+      setNotice({
+        title: `Toolkit ${names} ready`,
+        text: [`Restart the backend so it loads the updated toolkit (${names}).`],
+        actions: [
+          { label: "Restart backend", primary: true, run: restartBackend },
+          { label: "Later" },
+        ],
+      });
+    }
+  }, [state.toolkits, restartBackend]);
+
   // ---- The commands (#78): what the menus, the command search and the shortcuts all run ----
   // Only what the app already does; backends' commands come with their issue (#85).
   const canRun = state.connection === "open" && !running;
@@ -668,6 +751,7 @@ export function App() {
     { id: "file.restore", label: "Restore last session", menu: "file", group: "session", enabled: !!lastSession, why: "No unsaved session to restore", run: () => lastSession && restore(lastSession) },
     ...recent.map((s): Command => ({ id: `file.recent.${s.name}`, label: s.name, menu: "file", group: "recent", meta: ago(s.savedAt, Date.now()), enabled: state.connection === "open", why: "Not connected to a backend", run: () => openProject(s.project, s.name) })),
     { id: "file.backend", label: "Backend…", menu: "file", group: "backend", run: () => setBackendOpen(true) },
+    { id: "file.restartBackend", label: "Restart backend", menu: "file", group: "backend", enabled: state.connection === "open", why: "Not connected to a backend", run: restartBackend },
 
     { id: "edit.undo", label: "Undo", menu: "edit", group: "history", shortcut: "Ctrl+Z", enabled: history.canUndo, why: "Nothing to undo on the Flow canvas", run: history.undo },
     { id: "edit.redo", label: "Redo", menu: "edit", group: "history", shortcut: "Ctrl+Shift+Z", enabled: history.canRedo, why: "Nothing to redo", run: history.redo },
@@ -753,6 +837,14 @@ export function App() {
         <MenuBar commands={commands} />
         <ProjectLabel name={projectTitle} dirty={dirty} />
         <span className="spacer" />
+        <ToolkitsButton
+          toolkits={state.toolkits}
+          connected={state.connection === "open"}
+          onInstall={installToolkit}
+          onUpdate={updateToolkit}
+          onUninstall={uninstallToolkit}
+          onRestart={restartBackend}
+        />
         <button
           className={`key small${errors > 0 ? " err" : ""}${consoleShown ? " on" : ""}`}
           aria-pressed={consoleShown}

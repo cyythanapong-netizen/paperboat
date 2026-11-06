@@ -19,6 +19,8 @@ python/paperboat/_engine*.so
 *.o
 *.a
 *.tsbuildinfo
+.toolkit-cache/
+engine/toolkit/opencv/
 
 # --- Dependencies and environments ---
 node_modules/

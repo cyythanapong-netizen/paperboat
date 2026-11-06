@@ -1,9 +1,11 @@
+#include <chrono>
 #include <fstream>
 #include <mutex>
 #include <thread>
 
 #include "paperboat/core/backend.hpp"
 
+#include <paperboat/toolkit/installer.hpp>
 #include <paperboat/toolkit/variables.hpp>
 
 namespace paperboat::core {
@@ -22,11 +24,19 @@ struct Session::State {
   json station;
   json variables;  // the list (#36): the backend's defaults until the UI sets its own
   int runs = 0;
+  std::jthread toolkit_task;
   std::jthread run;  // declared last: destroyed (stopped and joined) before the rest
 
   void emit(const json& msg) { send(msg.dump()); }
   void log(const std::string& level, const std::string& text) {
     emit({{"type", "log"}, {"level", level}, {"text", text}});
+  }
+  json current_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}) const {
+    const auto list = toolkit::list_toolkits({}, backend.catalog->dir);
+    return json::parse(toolkit::toolkits_json(list, busy_name, busy_state));
+  }
+  void emit_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}) {
+    emit({{"type", "toolkits.status"}, {"toolkits", current_toolkits(busy_name, busy_state)}});
   }
   // The station as it shows: its objects made with their references resolved. Throws
   // VariableError, GraphError or json::exception.
@@ -46,7 +56,14 @@ Session::Session(const Backend& backend, Send send)
   const auto& catalog = *backend.catalog;
   json station_view = {{"view", catalog.station_view}};
   if (!catalog.station_page.empty()) station_view["page"] = "/" + catalog.station_page;  // on this port, over HTTP
-  s.emit({{"type", "hello"}, {"protocol", "paperboat/0"}, {"engine", backend.engine}, {"station", station_view}, {"run", settings_json(backend.run)}});
+  json hello = {{"type", "hello"},
+                {"protocol", "paperboat/0"},
+                {"engine", backend.engine},
+                {"station", station_view},
+                {"run", settings_json(backend.run)}};
+  const json toolkits = s.current_toolkits();
+  if (!toolkits.empty()) hello["toolkits"] = toolkits;
+  s.emit(hello);
   s.emit(json::parse(toolkit::catalog_message(catalog)));
   s.show(s.station, s.variables, !s.variables.empty());  // checked at load: the starters resolve against the defaults
   if (!s.variables.empty()) s.emit({{"type", "variables.load"}, {"variables", s.variables}});
@@ -119,6 +136,32 @@ void Session::on_message(const std::string& text) {
     std::lock_guard lock(s.mutex);
     if (msg.value("down", false)) s.keys.insert(key);
     else s.keys.erase(key);
+  } else if (type == "backend.restart") {
+    s.log("info", "restarting backend…");
+    std::thread([] {
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      restart_process();
+    }).detach();
+  } else if (type == "toolkit.install" || type == "toolkit.update" || type == "toolkit.uninstall") {
+    const std::string name = msg.value("name", "");
+    if (name.empty()) {
+      s.log("error", type + ": toolkit name is required");
+      return;
+    }
+    const std::string busy =
+        type == "toolkit.install" ? "installing" : type == "toolkit.update" ? "updating" : "uninstalling";
+    s.toolkit_task = std::jthread([&s, type, name, busy]() {
+      s.emit_toolkits(name, busy);
+      auto logger = [&s](std::string_view level, std::string_view line) {
+        s.log(std::string(level), std::string(line));
+      };
+      toolkit::ToolkitResult res;
+      if (type == "toolkit.install") res = toolkit::install_toolkit(name, {}, logger);
+      else if (type == "toolkit.update") res = toolkit::update_toolkit(name, {}, logger);
+      else res = toolkit::uninstall_toolkit(name, {}, logger);
+      if (!res.ok) s.log("error", res.message);
+      s.emit_toolkits();
+    });
   } else {
     s.log("warn", "unknown message: " + type);
   }

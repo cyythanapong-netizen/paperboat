@@ -120,12 +120,23 @@ Server::Server(const Backend& backend, int port) : state_(std::make_unique<State
 Server::~Server() { stop(); }
 
 std::string Server::start() {
-  if (auto [ok, error] = state_->server.listen(); !ok) return error;
+  std::pair<bool, std::string> res{false, "not started"};
+  for (int attempt = 0; attempt < 30; ++attempt) {
+    res = state_->server.listen();
+    if (res.first) break;
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  if (!res.first) return res.second;
   state_->server.start();
+  set_restart_handler([this] {
+    state_->server.stop();
+    exec_remembered_args();
+  });
   return {};
 }
 
 void Server::stop() {
+  set_restart_handler(nullptr);
   state_->server.stop();
   std::lock_guard lock(state_->mutex);
   state_->sessions.clear();

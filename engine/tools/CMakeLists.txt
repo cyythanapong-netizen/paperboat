@@ -4,3 +4,6 @@ if(TARGET paperboat_toolkit_opencv)  # knows the optional packages that were bui
   target_link_libraries(paperboat-catalog PRIVATE paperboat::toolkit_opencv)
   target_compile_definitions(paperboat-catalog PRIVATE PAPERBOAT_HAS_OPENCV)
 endif()
+
+add_executable(paperboat-toolkit paperboat_toolkit.cpp)
+target_link_libraries(paperboat-toolkit PRIVATE paperboat::toolkit paperboat_warnings)

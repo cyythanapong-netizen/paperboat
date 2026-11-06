@@ -8,6 +8,7 @@ set(PAPERBOAT_TOOLKIT_CORE_SOURCES
   src/registry.cpp
   src/descriptor.cpp
   src/variables.cpp
+  src/installer.cpp
   # For domain code: solvers, Model (a station object of ODEs), scene builders.
   src/solve.cpp
   src/model.cpp
@@ -93,6 +94,9 @@ add_library(paperboat_toolkit ${PAPERBOAT_TOOLKIT_CORE_SOURCES} ${package_source
 add_library(paperboat::toolkit ALIAS paperboat_toolkit)
 
 target_include_directories(paperboat_toolkit PUBLIC include PRIVATE src)
+cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH _paperboat_engine_dir)
+cmake_path(GET _paperboat_engine_dir PARENT_PATH _paperboat_repo_root)
+target_compile_definitions(paperboat_toolkit PRIVATE PAPERBOAT_SOURCE_DIR="${_paperboat_repo_root}")
 target_link_libraries(paperboat_toolkit
   PUBLIC nlohmann_json::nlohmann_json  # variables.hpp takes the protocol's JSON
   PRIVATE tomlplusplus::tomlplusplus paperboat_warnings)

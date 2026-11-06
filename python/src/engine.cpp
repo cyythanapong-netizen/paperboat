@@ -782,4 +782,6 @@ NB_MODULE(_engine, m) {
         return std::make_tuple(o.port, o.run, o.vars);
       },
       nb::arg("argv"), nb::arg("default_port"), "(port, run, vars) from a command line: --port N, --run, --var name=value.");
+  m.def("remember_args", nb::overload_cast<std::vector<std::string>>(&core::remember_args), nb::arg("args"),
+        "Remember the process command line for backend.restart.");
 }
