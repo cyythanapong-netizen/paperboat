@@ -451,6 +451,9 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
     env.env.emplace_back("PYTHONPATH", pythonpath);
   }
 
+  env.env.emplace_back("no_proxy", "localhost,127.0.0.1");
+  env.env.emplace_back("NO_PROXY", "localhost,127.0.0.1");
+
   // 3. Ensure C++ Python bindings (_engine*.so) are built
   if (!root.empty() && fs::is_directory(root / "python")) {
     bool need_bindings_build = false;
