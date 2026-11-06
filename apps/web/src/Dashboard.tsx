@@ -83,7 +83,9 @@ function Instrument({ name, kind, state }: { name: string; kind: string; state: 
   if (kind === "image")
     return (
       <figure className={`instrument image${idle ? " idle" : ""}`}>
-        <div className="screen">{typeof latest === "string" && <img src={latest} alt={name} draggable={false} />}</div>
+        <div className="screen">
+          {typeof latest === "string" && latest ? <img src={latest} alt={name} draggable={false} /> : <output>{idle ? "–" : "no image"}</output>}
+        </div>
         <figcaption>
           <span>{name}</span>
           <span>image</span>

@@ -690,8 +690,8 @@ Registering
 .. cpp:function:: const Registry &builtins()
 
    Every built-in template (packages ``base``, ``signal``, ``math``, ``dashboard``,
-   ``control``, ``step``). Copy it and add the domain's own; the optional ``opencv`` package
-   registers with ``paperboat::toolkit::opencv::register_opencv``.
+   ``control``, ``step``). Copy it and add the domain's own; optional external toolkits such
+   as ``opencv`` (``paperboat-toolkit-opencv``) register with ``paperboat::toolkit::opencv::register_opencv``.
 
 Loading
 -------
