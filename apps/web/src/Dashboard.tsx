@@ -65,12 +65,73 @@ function Plot({ name, series, idle }: { name: string; series: Series; idle: bool
   );
 }
 
+function SwitchInstrument({ name, state, send }: { name: string; state: EngineState; send?: (m: any) => void }) {
+  const latest = state.latest[name];
+  const [localActive, setLocalActive] = useState<boolean>(true);
+  const isDown = typeof latest === "number" ? latest > 0.5 : localActive;
+
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !isDown;
+    setLocalActive(next);
+    send?.({ type: "input", key: name, down: true });
+    setTimeout(() => {
+      send?.({ type: "input", key: name, down: false });
+    }, 40);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    setLocalActive(true);
+    send?.({ type: "input", key: name, down: true });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    setLocalActive(false);
+    send?.({ type: "input", key: name, down: false });
+  };
+
+  return (
+    <figure className="instrument switch-instrument">
+      <div className="screen switch-screen">
+        <div className="switch-controls">
+          <button
+            type="button"
+            className={`switch-pill${isDown ? " on" : ""}`}
+            onClick={toggle}
+            title={`Toggle switch (currently ${isDown ? "AUTO / ON" : "MANUAL / OFF"})`}
+          >
+            <span className="switch-text">{isDown ? "AUTO" : "MAN"}</span>
+            <span className="switch-knob" />
+          </button>
+          <button
+            type="button"
+            className="switch-momentary-btn"
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            title="Momentary push button: hold down to activate"
+          >
+            HOLD
+          </button>
+        </div>
+      </div>
+      <figcaption>
+        <span>{name}</span>
+        <output>{isDown ? "active (1)" : "idle (0)"}</output>
+      </figcaption>
+    </figure>
+  );
+}
+
 /**
  * One instrument: how a monitor shows on the Dashboard is up to its block's `instrument`.
  * Before a run sends it anything it is a greyed placeholder of the same frame (#58), so it
  * can be placed and sized before the first run.
  */
-function Instrument({ name, kind, state }: { name: string; kind: string; state: EngineState }) {
+function Instrument({ name, kind, state, send }: { name: string; kind: string; state: EngineState; send?: (m: any) => void }) {
   const latest = state.latest[name];
   const idle = latest === undefined;
   const vector = Array.isArray(latest)
@@ -80,6 +141,8 @@ function Instrument({ name, kind, state }: { name: string; kind: string; state: 
         return `${label}: ${v.toFixed(4)}${component?.unit ? ` ${component.unit}` : ""}`;
       }).join(", ")
     : undefined;
+  if (kind === "switch")
+    return <SwitchInstrument name={name} state={state} send={send} />;
   if (kind === "image")
     return (
       <figure className={`instrument image${idle ? " idle" : ""}`}>
@@ -669,7 +732,7 @@ export function Dashboard({
               onDragStart={(e) => startDrag(e, { kind: "instrument", id: p.block, col: p.col, row: p.row })}
               onDragEnd={stop}
             >
-              <Instrument name={p.block} kind={all[p.block].kind} state={state} />
+              <Instrument name={p.block} kind={all[p.block].kind} state={state} send={send} />
               {canEdit && (
                 <div className="switch cell-tools" role="group" aria-label={`Size of ${p.block}`}>
                   {SIZES.map((s) => (

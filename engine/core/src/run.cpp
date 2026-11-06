@@ -233,6 +233,10 @@ json Run::pass_over(const std::vector<std::string>& order) {
     } else if (node.block) {
       outputs_[id] = node.block->step(ctx_, inputs_of(node));
       validate_vector_outputs(node, outputs_[id]);
+      if (node.def.kind == toolkit::Kind::Monitor || !node.def.instrument.empty()) {
+        double val = toolkit::get_or(outputs_[id], "y", toolkit::get_or(outputs_[id], "value", 0.0));
+        samples.push_back({{"type", "signal"}, {"node", id}, {"t", std::round(ctx_.t * 1e4) / 1e4}, {"v", val}});
+      }
     } else {  // a monitor: what it shows is its "value" output, or its input
       auto in = inputs_of(node);
       if (node.monitor)

@@ -13,7 +13,7 @@ export const DEFAULT_COLUMNS = 6;
 
 /** A readout is a card, a plot is read at a glance, a picture is studied. */
 export function defaultSize(kind: string): Size {
-  return kind === "display" ? "compact" : kind === "image" ? "large" : "normal";
+  return kind === "display" || kind === "switch" ? "compact" : kind === "image" ? "large" : "normal";
 }
 
 /** A monitor on the Flow canvas: what the grid needs to place its instrument. */

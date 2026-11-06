@@ -429,7 +429,13 @@ export function App() {
     );
   };
   const monitors = useMemo(
-    () => Object.fromEntries(nodes.filter(isBlock).filter((n) => n.data.def.kind === "monitor").map((n) => [n.id, { kind: n.data.def.instrument ?? "graph", ...absolute(n, nodes) }])),
+    () =>
+      Object.fromEntries(
+        nodes
+          .filter(isBlock)
+          .filter((n) => n.data.def.kind === "monitor" || !!n.data.def.instrument)
+          .map((n) => [n.id, { kind: n.data.def.instrument ?? "graph", ...absolute(n, nodes) }]),
+      ),
     [nodes],
   );
   const errors = state.logs.filter((l) => l.level === "error").length;

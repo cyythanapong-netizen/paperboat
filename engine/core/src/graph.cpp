@@ -127,7 +127,7 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
       if (it == station.end() || !it->entry->def.block || it->entry->def.block->type != type)
         throw GraphError(node.id, "block " + node.id + " is linked to a station object that isn't there; add it on the Station page");
       node.object = it->instance.get();
-    } else if (def.kind == toolkit::Kind::Monitor) {
+    } else if (def.kind == toolkit::Kind::Monitor && def.outputs.empty()) {
       // The core samples monitors; one from a template may turn its input into what it
       // shows (output "value", such as an image as a picture).
       if (node.entry->from && node.entry->from->make) node.monitor = made([&] { return node.entry->make(params, text); });
