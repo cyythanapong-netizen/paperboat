@@ -32,8 +32,8 @@ TEST_CASE("dashboard switch supports toggle and momentary modes") {
   CHECK(t->def.type == "switch");
   CHECK(t->def.kind == Kind::Monitor);
 
-  // Toggle mode (mode = 0), initial = 1.0, key = "btn"
-  auto toggle_sw = t->make({{"mode", 0.0}, {"initial", 1.0}}, {{"key", "btn"}});
+  // Toggle mode, initial = 1.0, key = "btn"
+  auto toggle_sw = t->make({{"initial", 1.0}}, {{"mode", "toggle"}, {"key", "btn"}});
   KeySet keys;
   Context ctx{.t = 0.0, .dt = 0.01, .keys_down = &keys, .node = "sw1"};
 
@@ -52,8 +52,8 @@ TEST_CASE("dashboard switch supports toggle and momentary modes") {
   keys.insert("btn");
   CHECK(get_or(toggle_sw->step(ctx, {}), "y") == 1.0);
 
-  // Momentary mode (mode = 1), default node name as key fallback
-  auto mom_sw = t->make({{"mode", 1.0}, {"initial", 0.0}}, {});
+  // Momentary mode, default node name as key fallback
+  auto mom_sw = t->make({{"initial", 0.0}}, {{"mode", "momentary"}});
   Context ctx_mom{.t = 0.0, .dt = 0.01, .keys_down = &keys, .node = "mom_node"};
 
   // "mom_node" is not in keys -> 0.0
@@ -68,3 +68,12 @@ TEST_CASE("dashboard switch supports toggle and momentary modes") {
   CHECK(get_or(mom_sw->step(ctx_mom, {}), "y") == 0.0);
 }
 
+TEST_CASE("dashboard switch also answers its node id when a key is set") {
+  const Template* t = builtins().find("dashboard/switch");
+  REQUIRE(t != nullptr);
+  auto sw = t->make({{"initial", 0.0}}, {{"mode", "momentary"}, {"key", "btn"}});
+  KeySet keys{"sw1"};  // what the dashboard control sends
+  Context ctx{.t = 0.0, .dt = 0.01, .keys_down = &keys, .node = "sw1"};
+  CHECK(get_or(sw->step(ctx, {}), "y") == 0.0);  // first pass only latches
+  CHECK(get_or(sw->step(ctx, {}), "y") == 1.0);
+}

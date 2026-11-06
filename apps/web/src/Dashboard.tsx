@@ -82,6 +82,7 @@ function SwitchInstrument({ name, state, send }: { name: string; state: EngineSt
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);  // the release arrives even off the button
     setLocalActive(true);
     send?.({ type: "input", key: name, down: true });
   };
@@ -110,7 +111,6 @@ function SwitchInstrument({ name, state, send }: { name: string; state: EngineSt
             className="switch-momentary-btn"
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
-            onPointerLeave={handlePointerUp}
             onPointerCancel={handlePointerUp}
             title="Momentary push button: hold down to activate"
           >

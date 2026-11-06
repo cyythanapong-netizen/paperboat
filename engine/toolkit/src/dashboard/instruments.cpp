@@ -18,8 +18,11 @@ class Switch final : public Block {
       : key_(std::move(key)), mode_(mode), initial_(initial > 0.0), state_(initial > 0.0) {}
 
   Values step(const Context& ctx, const Values&) override {
-    std::string key = key_.empty() ? std::string(ctx.node) : key_;
-    bool down = ctx.keys_down != nullptr && !key.empty() && ctx.keys_down->contains(key);
+    // The dashboard control sends the node id; `key` is an extra binding (a keyboard key).
+    const auto held = [&](const std::string& key) {
+      return ctx.keys_down != nullptr && !key.empty() && ctx.keys_down->contains(key);
+    };
+    const bool down = held(std::string(ctx.node)) || held(key_);
     if (first_) {
       first_ = false;
       state_ = initial_;
@@ -75,7 +78,7 @@ Template switch_template() {
       .view = {.compact = true, .glyph = "switch"},
   };
   t.make = [](const Values& p, const Config& config) {
-    int mode = static_cast<int>(get_or(p, "mode", 0.0));
+    const int mode = config.contains("mode") && config.at("mode") == "momentary" ? 1 : 0;
     double initial = get_or(p, "initial", 1.0);
     std::string key = config.contains("key") ? config.at("key") : "";
     return std::make_unique<Switch>(std::move(key), mode, initial);
