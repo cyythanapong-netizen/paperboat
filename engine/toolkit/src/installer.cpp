@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <regex>
 #include <set>
 #include <sstream>
 
@@ -56,7 +57,8 @@ std::string trim_line(std::string s) {
 int run_cmd(const std::vector<std::string>& args,
             const fs::path& cwd,
             const ToolkitLog& log,
-            std::string* last_line = nullptr) {
+            std::string* last_line = nullptr,
+            std::string* all_output = nullptr) {
   std::string cmd;
   if (!cwd.empty()) cmd += "cd " + shell_quote(cwd.string()) + " && ";
   for (std::size_t i = 0; i < args.size(); ++i) {
@@ -73,6 +75,7 @@ int run_cmd(const std::vector<std::string>& args,
   std::array<char, 512> buf{};
   std::string line;
   while (fgets(buf.data(), static_cast<int>(buf.size()), pipe)) {
+    if (all_output) *all_output += buf.data();
     line = trim_line(buf.data());
     if (!line.empty()) {
       if (last_line) *last_line = line;
@@ -97,25 +100,32 @@ const ToolkitEntry* find_entry(const std::vector<ToolkitEntry>& list, std::strin
   return it == list.end() ? nullptr : &*it;
 }
 
-ToolkitResult rebuild_engine(const fs::path& root, const ToolkitLog& log) {
-  const fs::path engine_dir = root / "engine";
-  const fs::path build_dir = engine_dir / "build";
-  if (!fs::is_directory(engine_dir)) return {false, "engine directory not found at " + engine_dir.string()};
-  if (log) log("info", "configuring engine build…");
+ToolkitResult rebuild_host(const HostBuild& host, const fs::path& root, const ToolkitLog& log) {
+  if (host.skip_rebuild) return {true, "rebuild skipped"};
+  fs::path src = host.source_dir;
+  fs::path bld = host.build_dir;
+  if (src.empty() && bld.empty()) {
+    if (fs::is_regular_file(root / "engine" / "CMakeLists.txt")) {
+      src = root / "engine";
+      bld = src / "build";
+    } else {
+      return {true, "no host build configured"};
+    }
+  }
+  if (!fs::is_directory(src)) return {false, "source directory not found at " + src.string()};
+  if (log) log("info", "reconfiguring build at " + bld.string() + "…");
   std::string last;
-  if (run_cmd({"cmake", "-S", engine_dir.string(), "-B", build_dir.string()}, root, log, &last) != 0) {
+  if (run_cmd({"cmake", "-S", src.string(), "-B", bld.string()}, root, log, &last) != 0) {
     return {false, "cmake configure failed" + (last.empty() ? "" : ": " + last)};
   }
-  if (log) log("info", "building engine…");
-  if (run_cmd({"cmake", "--build", build_dir.string()}, root, log, &last) != 0) {
+  if (log) log("info", "building…");
+  if (run_cmd({"cmake", "--build", bld.string()}, root, log, &last) != 0) {
     return {false, "cmake build failed" + (last.empty() ? "" : ": " + last)};
   }
-  return {true, "engine build succeeded"};
+  return {true, "build succeeded"};
 }
 
 // Extract the toolkit folder from a cloned repository into `target_dir`.
-// Supports both flat toolkit repos (toolkit.toml at repo root) and nested layouts
-// (engine/toolkit/<name>/toolkit.toml).
 ToolkitResult materialize_toolkit(const fs::path& clone_dir, std::string_view name, const fs::path& target_dir) {
   fs::path src_dir;
   if (fs::is_regular_file(clone_dir / "toolkit.toml")) {
@@ -146,7 +156,84 @@ ToolkitResult materialize_toolkit(const fs::path& clone_dir, std::string_view na
   return {true, {}};
 }
 
+// Marker file helpers
+std::string read_marker_version(const fs::path& toolkit_dir) {
+  const fs::path marker = toolkit_dir / ".paperboat-toolkit.json";
+  if (!fs::is_regular_file(marker)) return "";
+  try {
+    std::ifstream in(marker);
+    const json j = json::parse(in);
+    return j.value("version", "");
+  } catch (...) {
+    return "";
+  }
+}
+
+void write_marker(const fs::path& toolkit_dir, std::string_view version, std::string_view ref, std::string_view commit) {
+  const fs::path marker = toolkit_dir / ".paperboat-toolkit.json";
+  try {
+    json j = {{"version", std::string(version)}, {"ref", std::string(ref)}, {"commit", std::string(commit)}};
+    std::ofstream out(marker);
+    out << j.dump(2) << "\n";
+  } catch (...) {
+  }
+}
+
+struct VersionTriple {
+  int major = 0;
+  int minor = 0;
+  int patch = 0;
+  std::string raw;
+
+  auto operator<=>(const VersionTriple& o) const {
+    if (major != o.major) return major <=> o.major;
+    if (minor != o.minor) return minor <=> o.minor;
+    return patch <=> o.patch;
+  }
+  bool operator==(const VersionTriple& o) const = default;
+};
+
 }  // namespace
+
+std::vector<std::string> parse_release_tags(std::string_view ls_remote_output) {
+  std::istringstream stream{std::string(ls_remote_output)};
+  std::string line;
+  const std::regex tag_regex(R"(refs/tags/v?(\d+)\.(\d+)\.(\d+)(?:\^\{\})?$)");
+  std::vector<VersionTriple> parsed;
+
+  while (std::getline(stream, line)) {
+    std::smatch match;
+    if (std::regex_search(line, match, tag_regex)) {
+      int maj = std::stoi(match[1].str());
+      int min = std::stoi(match[2].str());
+      int pat = std::stoi(match[3].str());
+      std::string ver = match[1].str() + "." + match[2].str() + "." + match[3].str();
+      VersionTriple vt{maj, min, pat, ver};
+      if (std::ranges::find(parsed, vt) == parsed.end()) {
+        parsed.push_back(std::move(vt));
+      }
+    }
+  }
+
+  // Sort newest first
+  std::ranges::sort(parsed, std::greater<VersionTriple>{});
+
+  std::vector<std::string> out;
+  out.reserve(parsed.size());
+  for (const auto& p : parsed) out.push_back(p.raw);
+  return out;
+}
+
+std::vector<std::string> list_releases(const ToolkitEntry& entry, const ToolkitLog& log) {
+  const std::string url = resolve_repo_url(entry);
+  std::string out;
+  std::string last;
+  if (run_cmd({"git", "ls-remote", "--tags", "--refs", url}, {}, log, &last, &out) != 0) {
+    if (log) log("warn", "could not list tags from " + url);
+    return {};
+  }
+  return parse_release_tags(out);
+}
 
 fs::path find_repo_root(const fs::path& hint) {
   if (const char* env = std::getenv("PAPERBOAT_ROOT"); env && *env) {
@@ -258,14 +345,25 @@ std::vector<std::string> load_toolkit_requirements(const fs::path& backend_dir,
   return reqs;
 }
 
-std::vector<ToolkitEntry> list_toolkits(const fs::path& repo_root, const fs::path& backend_dir) {
+std::vector<ToolkitEntry> list_toolkits(const fs::path& repo_root,
+                                        const fs::path& backend_dir,
+                                        bool fetch_versions) {
   const fs::path root = repo_root.empty() ? find_repo_root(backend_dir) : repo_root;
   if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) return {};
   auto entries = load_toolkits_manifest(root / "toolkits.toml");
   const auto reqs = load_toolkit_requirements(backend_dir, entries);
   for (auto& e : entries) {
-    e.installed = fs::is_regular_file(root / "engine" / "toolkit" / e.name / "toolkit.toml");
+    const fs::path target = root / "engine" / "toolkit" / e.name;
+    e.installed = fs::is_regular_file(target / "toolkit.toml");
     e.required = std::ranges::find(reqs, e.name) != reqs.end();
+    if (e.installed) {
+      e.version = read_marker_version(target);
+      if (e.version.empty()) e.version = "unknown";
+    }
+    if (fetch_versions) {
+      e.versions = list_releases(e);
+      e.default_version = !e.versions.empty() ? e.versions.front() : "dev";
+    }
   }
   return entries;
 }
@@ -278,6 +376,9 @@ std::string toolkits_json(const std::vector<ToolkitEntry>& list,
     json item = {{"name", e.name}, {"repo", e.repo}, {"installed", e.installed}};
     if (!e.description.empty()) item["description"] = e.description;
     if (e.required) item["required"] = true;
+    if (!e.version.empty()) item["version"] = e.version;
+    if (!e.versions.empty()) item["versions"] = e.versions;
+    if (!e.default_version.empty()) item["default"] = e.default_version;
     if (!busy_name.empty() && busy_name == e.name && !busy_state.empty()) item["busy"] = busy_state;
     arr.push_back(std::move(item));
   }
@@ -285,9 +386,10 @@ std::string toolkits_json(const std::vector<ToolkitEntry>& list,
 }
 
 ToolkitResult install_toolkit(std::string_view name,
+                              std::string_view requested_version,
                               const fs::path& repo_root,
-                              const ToolkitLog& log,
-                              bool rebuild) {
+                              const HostBuild& host,
+                              const ToolkitLog& log) {
   const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
   if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) {
     return {false, "cannot find toolkits.toml in repository root"};
@@ -296,91 +398,98 @@ ToolkitResult install_toolkit(std::string_view name,
   const ToolkitEntry* entry = find_entry(entries, name);
   if (!entry) return {false, "unknown toolkit \"" + std::string(name) + "\""};
 
-  const fs::path target_dir = root / "engine" / "toolkit" / entry->name;
-  if (fs::is_regular_file(target_dir / "toolkit.toml")) {
-    if (log) log("info", "toolkit \"" + entry->name + "\" is already installed");
-    return {true, "toolkit \"" + entry->name + "\" is already installed"};
+  const std::string url = resolve_repo_url(*entry);
+
+  // Resolve target version and git ref
+  std::string version = std::string(requested_version);
+  std::string git_ref;
+
+  if (version.empty()) {
+    const auto available = list_releases(*entry, log);
+    if (!available.empty()) {
+      version = available.front();
+      git_ref = "v" + version;
+    } else {
+      version = "dev";
+      git_ref = "main";
+    }
+  } else if (version == "dev" || version == "main") {
+    version = "dev";
+    git_ref = "main";
+  } else {
+    // Validate tag exists or format
+    git_ref = version.starts_with('v') ? version : "v" + version;
+    version = version.starts_with('v') ? version.substr(1) : version;
   }
 
-  const std::string url = resolve_repo_url(*entry);
-  if (log) log("info", "installing toolkit \"" + entry->name + "\" from " + url + "…");
+  if (log) log("info", "installing toolkit \"" + entry->name + "\" version " + version + " (" + git_ref + ") from " + url + "…");
 
+  const fs::path target_dir = root / "engine" / "toolkit" / entry->name;
   const fs::path stage_dir = root / ".toolkit-cache" / ("stage-" + entry->name);
   std::error_code ec;
   fs::remove_all(stage_dir, ec);
   fs::create_directories(stage_dir.parent_path(), ec);
 
   std::string last;
-  if (run_cmd({"git", "clone", "--depth", "1", url, stage_dir.string()}, root, log, &last) != 0) {
+  std::vector<std::string> clone_cmd = {"git", "clone", "--depth", "1"};
+  if (!git_ref.empty() && git_ref != "HEAD") {
+    clone_cmd.push_back("--branch");
+    clone_cmd.push_back(git_ref);
+  }
+  clone_cmd.push_back(url);
+  clone_cmd.push_back(stage_dir.string());
+
+  int clone_rc = run_cmd(clone_cmd, root, log, &last);
+  if (clone_rc != 0 && (git_ref == "main" || git_ref == "dev")) {
+    // Try master or default clone
     fs::remove_all(stage_dir, ec);
-    return {false, "failed to clone " + url + (last.empty() ? "" : ": " + last)};
+    clone_rc = run_cmd({"git", "clone", "--depth", "1", url, stage_dir.string()}, root, log, &last);
+  } else if (clone_rc != 0 && git_ref.starts_with('v')) {
+    // Try without 'v' prefix
+    std::string fallback_ref = git_ref.substr(1);
+    fs::remove_all(stage_dir, ec);
+    clone_rc = run_cmd({"git", "clone", "--depth", "1", "--branch", fallback_ref, url, stage_dir.string()}, root, log, &last);
+    if (clone_rc == 0) git_ref = fallback_ref;
+  }
+  if (clone_rc != 0) {
+    fs::remove_all(stage_dir, ec);
+    return {false, "failed to clone " + url + " at ref " + git_ref + (last.empty() ? "" : ": " + last)};
+  }
+
+  std::string commit;
+  run_cmd({"git", "-C", stage_dir.string(), "rev-parse", "HEAD"}, root, {}, nullptr, &commit);
+  commit = trim_line(commit);
+
+  // Backup existing install if present
+  const fs::path prev_backup = root / ".toolkit-cache" / ("prev-" + entry->name);
+  fs::remove_all(prev_backup, ec);
+  if (fs::exists(target_dir)) {
+    fs::rename(target_dir, prev_backup, ec);
   }
 
   const auto mat = materialize_toolkit(stage_dir, entry->name, target_dir);
-  if (!mat.ok) return mat;
+  if (!mat.ok) {
+    if (fs::exists(prev_backup)) fs::rename(prev_backup, target_dir, ec);
+    return mat;
+  }
+  fs::remove_all(prev_backup, ec);
 
-  if (rebuild) {
-    const auto rb = rebuild_engine(root, log);
-    if (!rb.ok) return rb;
+  write_marker(target_dir, version, git_ref, commit);
+
+  const auto rb = rebuild_host(host, root, log);
+  if (!rb.ok) {
+    return {false, "toolkit installed but rebuild failed: " + rb.message};
   }
 
-  const std::string msg = "installed toolkit \"" + entry->name + "\"; restart the backend to load it";
-  if (log) log("info", msg);
-  return {true, msg};
-}
-
-ToolkitResult update_toolkit(std::string_view name,
-                             const fs::path& repo_root,
-                             const ToolkitLog& log,
-                             bool rebuild) {
-  const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
-  if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) {
-    return {false, "cannot find toolkits.toml in repository root"};
-  }
-  const auto entries = load_toolkits_manifest(root / "toolkits.toml");
-  const ToolkitEntry* entry = find_entry(entries, name);
-  if (!entry) return {false, "unknown toolkit \"" + std::string(name) + "\""};
-
-  const fs::path target_dir = root / "engine" / "toolkit" / entry->name;
-  if (!fs::is_regular_file(target_dir / "toolkit.toml")) {
-    return install_toolkit(name, root, log, rebuild);
-  }
-
-  const std::string url = resolve_repo_url(*entry);
-  if (log) log("info", "updating toolkit \"" + entry->name + "\" from " + url + "…");
-
-  std::string last;
-  if (fs::is_directory(target_dir / ".git")) {
-    if (run_cmd({"git", "pull", "--ff-only"}, target_dir, log, &last) != 0) {
-      return {false, "failed to update toolkit \"" + entry->name + "\"" + (last.empty() ? "" : ": " + last)};
-    }
-  } else {
-    const fs::path stage_dir = root / ".toolkit-cache" / ("stage-" + entry->name);
-    std::error_code ec;
-    fs::remove_all(stage_dir, ec);
-    fs::create_directories(stage_dir.parent_path(), ec);
-    if (run_cmd({"git", "clone", "--depth", "1", url, stage_dir.string()}, root, log, &last) != 0) {
-      fs::remove_all(stage_dir, ec);
-      return {false, "failed to fetch " + url + (last.empty() ? "" : ": " + last)};
-    }
-    const auto mat = materialize_toolkit(stage_dir, entry->name, target_dir);
-    if (!mat.ok) return mat;
-  }
-
-  if (rebuild) {
-    const auto rb = rebuild_engine(root, log);
-    if (!rb.ok) return rb;
-  }
-
-  const std::string msg = "updated toolkit \"" + entry->name + "\"; restart the backend to load changes";
+  const std::string msg = "installed toolkit \"" + entry->name + "\" (" + version + "); restart backend to load changes";
   if (log) log("info", msg);
   return {true, msg};
 }
 
 ToolkitResult uninstall_toolkit(std::string_view name,
                                 const fs::path& repo_root,
-                                const ToolkitLog& log,
-                                bool rebuild) {
+                                const HostBuild& host,
+                                const ToolkitLog& log) {
   const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
   if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) {
     return {false, "cannot find toolkits.toml in repository root"};
@@ -400,10 +509,8 @@ ToolkitResult uninstall_toolkit(std::string_view name,
   fs::remove_all(target_dir, ec);
   if (ec) return {false, "failed to remove " + target_dir.string() + ": " + ec.message()};
 
-  if (rebuild) {
-    const auto rb = rebuild_engine(root, log);
-    if (!rb.ok) return rb;
-  }
+  const auto rb = rebuild_host(host, root, log);
+  if (!rb.ok) return rb;
 
   const std::string msg = "uninstalled toolkit \"" + entry->name + "\"";
   if (log) log("info", msg);

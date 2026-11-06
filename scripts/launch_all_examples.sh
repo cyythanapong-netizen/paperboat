@@ -23,11 +23,9 @@ echo "Using examples directory: $EXAMPLES_DIR"
 
 export PYTHONPATH="$REPO_ROOT/python:$PYTHONPATH"
 
-# Build Python bindings if needed
-if [ ! -f "$REPO_ROOT/python/paperboat/_engine"*.so ]; then
-  echo "==> Building python bindings..."
-  (cd "$REPO_ROOT" && npm run build:python)
-fi
+# Always ensure Python bindings are up-to-date
+echo "==> Updating Python bindings..."
+(cd "$REPO_ROOT" && npm run build:python) || echo "Warning: build:python had errors"
 
 echo "==> Launching backends..."
 
@@ -37,11 +35,11 @@ launch_proc() {
   shift 2
   local cmd=("$@")
 
-  if command -v systemd-run >/dev/null 2>&1; then
-    systemd-run --user --unit="paperboat-backend-${port}" \
+  if command -v systemd-run >/dev/null 2>&1 && systemd-run --user --unit="paperboat-backend-${port}" \
       --setenv=PYTHONPATH="$PYTHONPATH" \
       --working-directory="$workdir" \
-      "${cmd[@]}" >/dev/null 2>&1
+      "${cmd[@]}" >/dev/null 2>&1; then
+    :
   else
     (cd "$workdir" && nohup "${cmd[@]}" > "/tmp/backend-${port}.log" 2>&1 &)
   fi
@@ -52,12 +50,13 @@ launch_proc() {
 launch_proc 8765 "$EXAMPLES_DIR/mass-spring-python" python3 server.py
 
 # 2. 8766: cart-pole-cpp
-if [ ! -f "$EXAMPLES_DIR/cart-pole-cpp/build/paperboat-cart-pole" ]; then
-  echo "Building cart-pole-cpp..."
-  cmake -S "$EXAMPLES_DIR/cart-pole-cpp" -B "$EXAMPLES_DIR/cart-pole-cpp/build" >/dev/null
-  cmake --build "$EXAMPLES_DIR/cart-pole-cpp/build"
+echo "==> Building cart-pole-cpp..."
+if cmake -S "$EXAMPLES_DIR/cart-pole-cpp" -B "$EXAMPLES_DIR/cart-pole-cpp/build" >/dev/null && \
+   cmake --build "$EXAMPLES_DIR/cart-pole-cpp/build"; then
+  launch_proc 8766 "$REPO_ROOT" "$EXAMPLES_DIR/cart-pole-cpp/build/paperboat-cart-pole" --port 8766
+else
+  echo "cart-pole-cpp build failed, skipping"
 fi
-launch_proc 8766 "$REPO_ROOT" "$EXAMPLES_DIR/cart-pole-cpp/build/paperboat-cart-pole" --port 8766
 
 # 3. 8767: parametric-python
 launch_proc 8767 "$EXAMPLES_DIR/parametric-python" python3 server.py
@@ -69,12 +68,13 @@ launch_proc 8768 "$EXAMPLES_DIR/runner-python" python3 server.py
 launch_proc 8769 "$EXAMPLES_DIR/animation-python" python3 server.py
 
 # 6. 8770: parts-cpp
-if [ ! -f "$EXAMPLES_DIR/parts-cpp/build/paperboat-parts" ]; then
-  echo "Building parts-cpp..."
-  cmake -S "$EXAMPLES_DIR/parts-cpp" -B "$EXAMPLES_DIR/parts-cpp/build" >/dev/null
-  cmake --build "$EXAMPLES_DIR/parts-cpp/build"
+echo "==> Building parts-cpp..."
+if cmake -S "$EXAMPLES_DIR/parts-cpp" -B "$EXAMPLES_DIR/parts-cpp/build" >/dev/null && \
+   cmake --build "$EXAMPLES_DIR/parts-cpp/build"; then
+  launch_proc 8770 "$REPO_ROOT" "$EXAMPLES_DIR/parts-cpp/build/paperboat-parts" --port 8770
+else
+  echo "parts-cpp build failed, skipping"
 fi
-launch_proc 8770 "$REPO_ROOT" "$EXAMPLES_DIR/parts-cpp/build/paperboat-parts" --port 8770
 
 # 7. 8771: chain-python
 launch_proc 8771 "$EXAMPLES_DIR/chain-python" python3 server.py

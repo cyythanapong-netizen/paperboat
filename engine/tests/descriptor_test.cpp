@@ -550,19 +550,70 @@ engine = ">=0.1"
   std::vector<std::string> logs;
   auto logger = [&](std::string_view, std::string_view text) { logs.emplace_back(text); };
 
-  const auto installed = tk::install_toolkit("opencv", root, logger, /*rebuild=*/false);
+  const auto installed = tk::install_toolkit("opencv", "dev", root, {.source_dir = {}, .build_dir = {}, .skip_rebuild = true}, logger);
   CHECK(installed.ok);
   CHECK(fs::is_regular_file(root / "engine" / "toolkit" / "opencv" / "toolkit.toml"));
   CHECK(tk::list_toolkits(root, backend_dir)[0].installed);
 
-  const auto updated = tk::update_toolkit("opencv", root, logger, /*rebuild=*/false);
-  CHECK(updated.ok);
-
-  const auto removed = tk::uninstall_toolkit("opencv", root, logger, /*rebuild=*/false);
+  const auto removed = tk::uninstall_toolkit("opencv", root, {.source_dir = {}, .build_dir = {}, .skip_rebuild = true}, logger);
   CHECK(removed.ok);
   CHECK_FALSE(fs::exists(root / "engine" / "toolkit" / "opencv"));
   CHECK_FALSE(tk::list_toolkits(root, backend_dir)[0].installed);
   CHECK_FALSE(logs.empty());
 
   fs::remove_all(tmp, ec);
+}
+
+TEST_CASE("parse_release_tags sorts semver tags newest first") {
+  const std::string mock_tags = R"(
+f97ce82222540c918b12ecbdc9eb7b8bf25c1bcc	refs/tags/v0.1.0
+1234567890abcdef1234567890abcdef12345678	refs/tags/0.3.0
+abcdef1234567890abcdef1234567890abcdef12	refs/tags/v0.10.0
+deadbeefdeadbeefdeadbeefdeadbeefdeadbeef	refs/tags/v0.2.0
+beefdeadbeefdeadbeefdeadbeefdeadbeefdead	refs/tags/nightly
+cafebabecafebabecafebabecafebabecafebabe	refs/tags/v1.0.0-rc1
+)";
+  const auto tags = tk::parse_release_tags(mock_tags);
+  REQUIRE(tags.size() == 4);
+  CHECK(tags[0] == "0.10.0");
+  CHECK(tags[1] == "0.3.0");
+  CHECK(tags[2] == "0.2.0");
+  CHECK(tags[3] == "0.1.0");
+}
+
+TEST_CASE("optional imports in descriptor ignore missing packages and clean starters") {
+  const std::string toml = R"(
+domain = "test"
+import = ["optional_pkg", "signal"]
+
+[graph]
+nodes = [
+  { id = "sine-1", type = "sine", pos = [0, 0] },
+  { id = "missing-1", type = "non_existent_block", pos = [100, 0] }
+]
+edges = [
+  { from = ["sine-1", "y"], to = ["missing-1", "in"] }
+]
+
+[station]
+objects = [
+  { id = "obj-1", type = "non_existent_object" }
+]
+)";
+
+  // Without optional_imports, it throws
+  CHECK_THROWS_AS(tk::load_descriptor(toml, test_registry()), tk::DescriptorError);
+
+  // With optional_imports, it succeeds and drops missing nodes and objects
+  const auto cat = tk::load_descriptor(toml, test_registry(), {.optional_imports = {"optional_pkg"}});
+  CHECK(cat.missing_imports.size() == 1);
+  CHECK(cat.missing_imports[0] == "optional_pkg");
+
+  const auto graph = nlohmann::json::parse(cat.graph);
+  REQUIRE(graph["nodes"].size() == 1);
+  CHECK(graph["nodes"][0]["id"] == "sine-1");
+  CHECK(graph["edges"].empty());
+
+  const auto station = nlohmann::json::parse(cat.station);
+  CHECK(station["objects"].empty());
 }

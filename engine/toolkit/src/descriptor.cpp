@@ -364,8 +364,36 @@ void load_variables(const json& doc, Catalog& catalog) {
 void load_starters(const json& doc, Catalog& catalog) {
   json graph = doc.value("graph", json::object());
   only_fields(graph, {"nodes", "edges", "groups"}, "graph");
-  const json groups = graph.value("groups", json::array());
-  graph = {{"nodes", graph.value("nodes", json::array())}, {"edges", graph.value("edges", json::array())}};
+  const json groups_raw = graph.value("groups", json::array());
+  json nodes_raw = graph.value("nodes", json::array());
+  json edges_raw = graph.value("edges", json::array());
+
+  if (!catalog.missing_imports.empty()) {
+    // Drop nodes that belong to missing optional packages
+    json filtered_nodes = json::array();
+    std::set<std::string> kept_node_ids;
+    for (const auto& n : nodes_raw) {
+      if (n.contains("type") && catalog.find(n["type"].get<std::string>())) {
+        filtered_nodes.push_back(n);
+        if (n.contains("id")) kept_node_ids.insert(n["id"].get<std::string>());
+      }
+    }
+    nodes_raw = std::move(filtered_nodes);
+
+    json filtered_edges = json::array();
+    for (const auto& e : edges_raw) {
+      if (e.contains("from") && e["from"].size() >= 1 && e.contains("to") && e["to"].size() >= 1) {
+        if (kept_node_ids.contains(e["from"][0].get<std::string>()) &&
+            kept_node_ids.contains(e["to"][0].get<std::string>())) {
+          filtered_edges.push_back(e);
+        }
+      }
+    }
+    edges_raw = std::move(filtered_edges);
+  }
+
+  graph = {{"nodes", std::move(nodes_raw)}, {"edges", std::move(edges_raw)}};
+  const json groups = groups_raw;
   std::set<std::string> ids;
   for (std::size_t i = 0; i < graph["nodes"].size(); ++i) {
     auto& n = graph["nodes"][i];
@@ -440,7 +468,17 @@ void load_starters(const json& doc, Catalog& catalog) {
     throw DescriptorError("station: a web station needs a page (and only a web station has one)");
   if (catalog.station_page.find("..") != std::string::npos || catalog.station_page.starts_with('/'))
     throw DescriptorError("station.page must be a path inside the backend's folder");
-  station = {{"objects", station.value("objects", json::array())}};
+  json raw_objects = station.value("objects", json::array());
+  if (!catalog.missing_imports.empty()) {
+    json filtered = json::array();
+    for (const auto& o : raw_objects) {
+      if (o.contains("type") && catalog.find_object(o["type"].get<std::string>())) {
+        filtered.push_back(o);
+      }
+    }
+    raw_objects = std::move(filtered);
+  }
+  station = {{"objects", std::move(raw_objects)}};
   for (std::size_t i = 0; i < station["objects"].size(); ++i) {
     auto& o = station["objects"][i];
     const auto at = "station.objects[" + std::to_string(i) + "]";
@@ -541,7 +579,7 @@ const CatalogEntry* Catalog::find(std::string_view type) const {
   return it == entries.end() ? nullptr : &*it;
 }
 
-Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
+Catalog load_descriptor(std::string_view toml_text, const Registry& registry, const DescriptorOptions& options) {
   json doc;
   try {
     doc = to_json(toml::parse(toml_text));
@@ -608,6 +646,10 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry) {
     const auto templates = registry.package(package);
     const auto station = registry.objects(package);
     if (templates.empty() && station.empty()) {
+      if (std::ranges::find(options.optional_imports, package) != options.optional_imports.end()) {
+        catalog.missing_imports.push_back(package);
+        continue;
+      }
       std::string known;
       for (const auto& k : registry.packages()) known += (known.empty() ? "" : ", ") + k;
       throw DescriptorError("import: no package \"" + package + "\" (known: " + known + ")");
@@ -681,12 +723,12 @@ std::string descriptor_domain(std::string_view toml_text) {
   }
 }
 
-Catalog load_descriptor_file(const std::filesystem::path& path, const Registry& registry) {
+Catalog load_descriptor_file(const std::filesystem::path& path, const Registry& registry, const DescriptorOptions& options) {
   std::ifstream in(path);
   if (!in) throw DescriptorError("cannot open " + path.string());
   std::stringstream text;
   text << in.rdbuf();
-  Catalog catalog = load_descriptor(text.str(), registry);
+  Catalog catalog = load_descriptor(text.str(), registry, options);
   catalog.dir = std::filesystem::absolute(path).parent_path();
   if (!catalog.station_page.empty() && !std::filesystem::is_regular_file(catalog.dir / catalog.station_page))
     throw DescriptorError("station.page: no file " + (catalog.dir / catalog.station_page).string());
@@ -755,6 +797,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     blocks.push_back(std::move(block));
   }
   json msg = {{"type", "catalog"}, {"blocks", blocks}};
+  if (!catalog.missing_imports.empty()) msg["missing_imports"] = catalog.missing_imports;
   if (!catalog.dashboard.empty()) msg["dashboard"] = json::parse(catalog.dashboard);
   if (!catalog.objects.empty()) {
     json objects = json::array();

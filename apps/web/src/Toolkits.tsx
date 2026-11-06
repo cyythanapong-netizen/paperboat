@@ -5,28 +5,160 @@ import { Spinner } from "./Spinner";
 
 export { DEFAULT_TOOLKITS, missingRequiredToolkits };
 
+export function MissingToolkitsDialog({
+  missing,
+  onInstall,
+  onCancel,
+}: {
+  missing: ToolkitStatus[];
+  onInstall: (selections: { name: string; version: string }[]) => void;
+  onCancel: () => void;
+}) {
+  const root = useRef<HTMLElement>(null);
+  const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    for (const t of missing) {
+      init[t.name] = t.default ?? (t.versions && t.versions.length > 0 ? t.versions[0] : "dev");
+    }
+    return init;
+  });
+
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    root.current?.querySelector<HTMLElement>("button.run, button")?.focus();
+    return () => {
+      if (before?.isConnected) before.focus?.();
+    };
+  }, []);
+
+  return (
+    <section
+      className="console-window notice missing-toolkits-dialog"
+      role="alertdialog"
+      aria-label="Install missing toolkits"
+      data-own-keys
+      ref={root}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          onCancel();
+        }
+      }}
+    >
+      <header className="console-head">
+        <h2>{missing.length === 1 ? `Install missing toolkit “${missing[0].name}”?` : "Install missing toolkits?"}</h2>
+      </header>
+      <div className="notice-body">
+        <p>
+          This backend or project requires {missing.length === 1 ? "a toolkit" : "toolkits"} that{" "}
+          {missing.length === 1 ? "is" : "are"} not installed.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2, 8px)", margin: "var(--space-2, 8px) 0" }}>
+          {missing.map((t) => {
+            const versions = t.versions ?? [];
+            const cur = selectedVersions[t.name] ?? t.default ?? (versions.length > 0 ? versions[0] : "dev");
+            return (
+              <div
+                key={t.name}
+                className="toolkit-item"
+                style={{
+                  border: "1px solid var(--line)",
+                  borderRadius: "var(--radius-md, 6px)",
+                  padding: "var(--space-2, 8px)",
+                }}
+              >
+                <div
+                  className="toolkit-head"
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-2, 8px)" }}
+                >
+                  <code>{t.name}</code>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <label htmlFor={`ver-${t.name}`} style={{ fontSize: "var(--size-2xs, 11px)", color: "var(--text-muted)" }}>
+                      Version:
+                    </label>
+                    <select
+                      id={`ver-${t.name}`}
+                      value={cur}
+                      onChange={(e) => setSelectedVersions((prev) => ({ ...prev, [t.name]: e.target.value }))}
+                      style={{
+                        padding: "2px 6px",
+                        borderRadius: "var(--radius-sm, 4px)",
+                        background: "var(--surface-screen, #111)",
+                        color: "var(--text, #eee)",
+                        border: "1px solid var(--line, #333)",
+                        font: "var(--size-2xs) var(--font-mono)",
+                      }}
+                    >
+                      {versions.map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                      <option value="dev">dev (main)</option>
+                    </select>
+                  </div>
+                </div>
+                {t.description && <p className="toolkit-desc">{t.description}</p>}
+                <div style={{ marginTop: "4px" }}>
+                  <a className="toolkit-repo" href={t.repo.replace(/\.git$/, "")} target="_blank" rel="noreferrer">
+                    Repository
+                  </a>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <footer className="notice-actions">
+        <button
+          className="key run"
+          onClick={() => {
+            const list = missing.map((t) => ({
+              name: t.name,
+              version: selectedVersions[t.name] ?? t.default ?? (t.versions && t.versions.length > 0 ? t.versions[0] : "dev"),
+            }));
+            onInstall(list);
+          }}
+        >
+          {missing.length === 1 ? `Install ${missing[0].name}` : "Install all"}
+        </button>
+        <button className="key" onClick={onCancel}>
+          Not now
+        </button>
+      </footer>
+    </section>
+  );
+}
+
 export function ToolkitsButton({
   toolkits,
   connected,
   onInstall,
-  onUpdate,
   onUninstall,
   onRestart,
+  onVersions,
 }: {
   toolkits: ToolkitStatus[];
   connected: boolean;
-  onInstall: (name: string) => void;
-  onUpdate: (name: string) => void;
+  onInstall: (name: string, version?: string) => void;
   onUninstall: (name: string) => void;
   onRestart: () => void;
+  onVersions?: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
   const wrap = useRef<HTMLDivElement | null>(null);
   const items = toolkits.length > 0 ? toolkits : DEFAULT_TOOLKITS;
   const anyBusy = items.some((t) => !!t.busy);
 
   useEffect(() => {
     if (!open) return;
+    for (const t of items) {
+      if (!t.versions || t.versions.length === 0) {
+        onVersions?.(t.name);
+      }
+    }
     const onDown = (e: MouseEvent) => {
       if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
     };
@@ -39,7 +171,7 @@ export function ToolkitsButton({
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, items, onVersions]);
 
   return (
     <div ref={wrap} className="toolkits-wrap">
@@ -57,13 +189,22 @@ export function ToolkitsButton({
           <div className="head">Optional toolkits</div>
           {items.map((t) => {
             const busy = t.busy;
+            const versions = t.versions ?? [];
+            const curSelection =
+              selectedVersions[t.name] ??
+              t.version ??
+              t.default ??
+              (versions.length > 0 ? versions[0] : "dev");
             const statusText = busy
               ? `${busy}…`
               : t.installed
-                ? "installed"
+                ? t.version
+                  ? `installed ${t.version}`
+                  : "installed"
                 : t.required
                   ? "missing (required)"
                   : "not installed";
+
             return (
               <div key={t.name} className="toolkit-item">
                 <div className="toolkit-head">
@@ -79,12 +220,32 @@ export function ToolkitsButton({
                     Repository
                   </a>
                   <span className="spacer" />
+                  <select
+                    value={curSelection}
+                    disabled={!connected || !!busy}
+                    onChange={(e) => setSelectedVersions((prev) => ({ ...prev, [t.name]: e.target.value }))}
+                    style={{
+                      padding: "2px 4px",
+                      borderRadius: "var(--radius-sm, 4px)",
+                      background: "var(--surface-screen, #111)",
+                      color: "var(--text, #eee)",
+                      border: "1px solid var(--line, #333)",
+                      font: "var(--size-2xs) var(--font-mono)",
+                    }}
+                  >
+                    {versions.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                      </option>
+                    ))}
+                    <option value="dev">dev (main)</option>
+                  </select>
                   {!t.installed ? (
                     <button
                       className="key small"
                       disabled={!connected || !!busy}
-                      title={connected ? `Install ${t.name} and rebuild the engine` : "Connect to a backend first"}
-                      onClick={() => onInstall(t.name)}
+                      title={connected ? `Install ${t.name} (${curSelection}) and rebuild` : "Connect to a backend first"}
+                      onClick={() => onInstall(t.name, curSelection)}
                     >
                       {busy === "installing" ? (
                         <>
@@ -98,16 +259,20 @@ export function ToolkitsButton({
                     <>
                       <button
                         className="key small"
-                        disabled={!connected || !!busy}
-                        title={`Pull latest ${t.name} changes and rebuild`}
-                        onClick={() => onUpdate(t.name)}
+                        disabled={!connected || !!busy || curSelection === t.version}
+                        title={
+                          curSelection === t.version
+                            ? `Version ${curSelection} already installed`
+                            : `Switch to ${curSelection} and rebuild`
+                        }
+                        onClick={() => onInstall(t.name, curSelection)}
                       >
-                        {busy === "updating" ? (
+                        {busy === "installing" ? (
                           <>
-                            <Spinner /> Updating…
+                            <Spinner /> Installing…
                           </>
                         ) : (
-                          "Update"
+                          "Install selected"
                         )}
                       </button>
                       <button

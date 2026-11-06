@@ -39,7 +39,8 @@ Default address: `ws://localhost:8765`.
 | `run.cancel` | —                          |
 | `input`      | `key: string` (a `KeyboardEvent.code`, e.g. `"Space"`), `down: boolean` |
 | `backend.restart` | — (restarts the backend process with its startup arguments) |
-| `toolkit.install` | `name: string` (installs the named toolkit from `toolkits.toml` and rebuilds the engine) |
+| `toolkit.install` | `name: string`, `version?: string` (installs the named toolkit from `toolkits.toml` and rebuilds the engine; version is tag like `0.1.0` or `dev`) |
+| `toolkit.versions` | `name: string` (requests available release tags for the named toolkit) |
 | `toolkit.update`  | `name: string` (updates the named toolkit from its repository and rebuilds the engine) |
 | `toolkit.uninstall` | `name: string` (removes the named toolkit and rebuilds the engine) |
 

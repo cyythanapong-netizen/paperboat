@@ -22,5 +22,16 @@ fi
 pkill -f "paperboat-cart-pole" 2>/dev/null || true
 pkill -f "paperboat-parts" 2>/dev/null || true
 pkill -f "paperboat-double-pendulum" 2>/dev/null || true
+pkill -f "python3.*server\.py" 2>/dev/null || true
+
+# Wait until ports are freed
+for p in "${PORTS[@]}"; do
+  for _ in {1..20}; do
+    if ! fuser "${p}/tcp" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.1
+  done
+done
 
 echo "==> All example backends stopped."

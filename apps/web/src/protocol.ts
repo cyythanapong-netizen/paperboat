@@ -155,6 +155,12 @@ export type ToolkitStatus = {
   installed: boolean;
   /** Whether the current backend requires this toolkit. */
   required?: boolean;
+  /** Currently installed release tag or 'dev'/'unknown'. */
+  version?: string;
+  /** Available release versions from the remote repository, newest first. */
+  versions?: string[];
+  /** Suggested default release version to install. */
+  default?: string;
   /** Set while an operation is running for this toolkit. */
   busy?: "installing" | "updating" | "uninstalling";
 };
@@ -463,6 +469,12 @@ export type ClientMsg =
   }
   | {
     type: "toolkit.install";
+    name: string;
+    /** Release tag (e.g. 0.1.0) or 'dev' for main branch. Absent: latest release or dev. */
+    version?: string;
+  }
+  | {
+    type: "toolkit.versions";
     name: string;
   }
   | {

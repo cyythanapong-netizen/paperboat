@@ -31,12 +31,26 @@ struct Session::State {
   void log(const std::string& level, const std::string& text) {
     emit({{"type", "log"}, {"level", level}, {"text", text}});
   }
-  json current_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}) const {
-    const auto list = toolkit::list_toolkits({}, backend.catalog->dir);
+  toolkit::HostBuild host_build() const {
+#if defined(PAPERBOAT_HOST_SOURCE_DIR) && defined(PAPERBOAT_HOST_BUILD_DIR)
+    return {PAPERBOAT_HOST_SOURCE_DIR, PAPERBOAT_HOST_BUILD_DIR};
+#else
+    return {};
+#endif
+  }
+  std::filesystem::path repo_root() const {
+#if defined(PAPERBOAT_REPO_ROOT)
+    return PAPERBOAT_REPO_ROOT;
+#else
+    return {};
+#endif
+  }
+  json current_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}, bool fetch_versions = false) const {
+    const auto list = toolkit::list_toolkits(repo_root(), backend.catalog->dir, fetch_versions);
     return json::parse(toolkit::toolkits_json(list, busy_name, busy_state));
   }
-  void emit_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}) {
-    emit({{"type", "toolkits.status"}, {"toolkits", current_toolkits(busy_name, busy_state)}});
+  void emit_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}, bool fetch_versions = false) {
+    emit({{"type", "toolkits.status"}, {"toolkits", current_toolkits(busy_name, busy_state, fetch_versions)}});
   }
   // The station as it shows: its objects made with their references resolved. Throws
   // VariableError, GraphError or json::exception.
@@ -61,7 +75,7 @@ Session::Session(const Backend& backend, Send send)
                 {"engine", backend.engine},
                 {"station", station_view},
                 {"run", settings_json(backend.run)}};
-  const json toolkits = s.current_toolkits();
+  const json toolkits = s.current_toolkits(/*busy_name=*/{}, /*busy_state=*/{}, /*fetch_versions=*/true);
   if (!toolkits.empty()) hello["toolkits"] = toolkits;
   s.emit(hello);
   s.emit(json::parse(toolkit::catalog_message(catalog)));
@@ -142,25 +156,28 @@ void Session::on_message(const std::string& text) {
       std::this_thread::sleep_for(std::chrono::milliseconds(50));
       restart_process();
     }).detach();
-  } else if (type == "toolkit.install" || type == "toolkit.update" || type == "toolkit.uninstall") {
+  } else if (type == "toolkit.install" || type == "toolkit.uninstall") {
     const std::string name = msg.value("name", "");
+    const std::string version = msg.value("version", "");
     if (name.empty()) {
       s.log("error", type + ": toolkit name is required");
       return;
     }
-    const std::string busy =
-        type == "toolkit.install" ? "installing" : type == "toolkit.update" ? "updating" : "uninstalling";
-    s.toolkit_task = std::jthread([&s, type, name, busy]() {
+    const std::string busy = type == "toolkit.install" ? "installing" : "uninstalling";
+    s.toolkit_task = std::jthread([&s, type, name, version, busy]() {
       s.emit_toolkits(name, busy);
       auto logger = [&s](std::string_view level, std::string_view line) {
         s.log(std::string(level), std::string(line));
       };
       toolkit::ToolkitResult res;
-      if (type == "toolkit.install") res = toolkit::install_toolkit(name, {}, logger);
-      else if (type == "toolkit.update") res = toolkit::update_toolkit(name, {}, logger);
-      else res = toolkit::uninstall_toolkit(name, {}, logger);
+      if (type == "toolkit.install") res = toolkit::install_toolkit(name, version, s.repo_root(), s.host_build(), logger);
+      else res = toolkit::uninstall_toolkit(name, s.repo_root(), s.host_build(), logger);
       if (!res.ok) s.log("error", res.message);
       s.emit_toolkits();
+    });
+  } else if (type == "toolkit.versions") {
+    s.toolkit_task = std::jthread([&s]() {
+      s.emit_toolkits(/*busy_name=*/{}, /*busy_state=*/{}, /*fetch_versions=*/true);
     });
   } else {
     s.log("warn", "unknown message: " + type);
