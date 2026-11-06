@@ -185,6 +185,10 @@ dashboard
 ---------
 
 Monitors: ``graph`` (plots ``in`` over time) and ``display`` (its latest number or text).
+Control: ``switch`` (output ``y``, 0 or 1), a Board switch the user flips during a run. Param
+``mode`` is ``toggle`` (a click flips it) or ``momentary`` (on while held); ``initial`` is its
+state at the start of a run; ``key`` also binds a keyboard key. A Monitor that declares outputs,
+like ``switch``, runs as an ordinary block and is shown from its first output.
 
 .. _pkg-control:
 

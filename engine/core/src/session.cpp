@@ -22,6 +22,7 @@ struct Session::State {
   Send send;
   std::mutex mutex;  // guards keys, station and variables: the socket thread writes, the run thread reads
   toolkit::KeySet keys;
+  toolkit::KeySet pressed;  // pressed since the run last read the keys: a short tap still shows for one pass
   json station;
   json variables;  // the list (#36): the backend's defaults until the UI sets its own
   int runs = 0;
@@ -123,11 +124,15 @@ void Session::on_message(const std::string& text) {
       if (msg.contains("variables")) s.variables = msg.at("variables");
       station = s.station;
       variables = s.variables;
+      s.pressed.clear();  // presses from before this run don't count
     }
     const std::string id = "run-" + std::to_string(++s.runs);
     auto keys_now = [&s] {
       std::lock_guard lock(s.mutex);
-      return s.keys;
+      auto down = s.keys;
+      down.merge(s.pressed);
+      s.pressed.clear();
+      return down;
     };
     // Assigning a new jthread stops and joins the previous run first.
     s.run = std::jthread([&s, id, graph = msg.value("graph", json::object()), station, variables, keys_now,
@@ -169,11 +174,15 @@ void Session::on_message(const std::string& text) {
     }
   } else if (type == "run.cancel") {
     s.run.request_stop();
-  } else if (type == "input") {  // read by Key blocks
+  } else if (type == "input") {  // read by Key and Switch blocks
     const std::string key = msg.value("key", "");
     std::lock_guard lock(s.mutex);
-    if (msg.value("down", false)) s.keys.insert(key);
-    else s.keys.erase(key);
+    if (msg.value("down", false)) {
+      s.keys.insert(key);
+      s.pressed.insert(key);
+    } else {
+      s.keys.erase(key);
+    }
   } else if (type == "backend.restart") {
     s.log("info", "restarting backend…");
     const auto dir = s.backend.catalog ? s.backend.catalog->dir : std::filesystem::path{};

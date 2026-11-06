@@ -65,7 +65,8 @@ Message Quick Reference
      - Abort the running simulation loop immediately.
    * -
      - ``input``
-     - Forward keyboard down/up events to active ``Key`` blocks.
+     - Forward key and dashboard-control down/up events to ``Key`` and ``Switch`` blocks.
+       A press shows for at least one pass, even if it is released before the pass runs.
 
 Backend → UI
 ------------

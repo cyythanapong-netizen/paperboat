@@ -221,6 +221,35 @@ json Run::pass() { return pass_over(g_.order); }
 
 json Run::pass_over(const std::vector<std::string>& order) {
   json samples = json::array();
+  // What an instrument shows, `in` of `shown`, as `signal` samples. `port` is the output it
+  // came from, for a vector's component names.
+  const auto sample = [&](const Node& node, const toolkit::Values& shown, const toolkit::PortDef* port) {
+    const double t = std::round(ctx_.t * 1e4) / 1e4;
+    if (const auto* text = toolkit::get_if<std::string>(shown, "in")) {
+      samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", *text}});
+    } else if (const auto* vector = toolkit::get_vector(shown, "in")) {
+      if (node.def.instrument == "display") {
+        // A Display is a readout: preserve the vector as one value. A Graph keeps its
+        // existing list-as-samples behavior (index is x), useful for point series.
+        json item = {{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", *vector}};
+        if (port != nullptr && !port->components.empty()) {
+          json components = json::array();
+          for (const auto& component : port->components) {
+            json c = {{"id", component.id}};
+            if (!component.unit.empty()) c["unit"] = component.unit;
+            components.push_back(std::move(c));
+          }
+          item["components"] = std::move(components);
+        }
+        samples.push_back(std::move(item));
+      } else {
+        for (std::size_t i = 0; i < vector->size(); ++i)
+          samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", i}, {"v", (*vector)[i]}});
+      }
+    } else {
+      samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", toolkit::get_or(shown, "in")}});
+    }
+  };
   for (const auto& id : order) {
     auto& node = g_.nodes.at(id);
     const auto call = calling(id);
@@ -233,43 +262,25 @@ json Run::pass_over(const std::vector<std::string>& order) {
     } else if (node.block) {
       outputs_[id] = node.block->step(ctx_, inputs_of(node));
       validate_vector_outputs(node, outputs_[id]);
-      if (node.def.kind == toolkit::Kind::Monitor || !node.def.instrument.empty()) {
-        double val = toolkit::get_or(outputs_[id], "y", toolkit::get_or(outputs_[id], "value", 0.0));
-        samples.push_back({{"type", "signal"}, {"node", id}, {"t", std::round(ctx_.t * 1e4) / 1e4}, {"v", val}});
-      }
     } else {  // a monitor: what it shows is its "value" output, or its input
       auto in = inputs_of(node);
       if (node.monitor)
         if (auto shown = node.monitor->step(ctx_, in); shown.contains("value")) in["in"] = shown.at("value");
-      if (const auto* text = toolkit::get_if<std::string>(in, "in")) {
-        samples.push_back({{"type", "signal"}, {"node", id}, {"t", std::round(ctx_.t * 1e4) / 1e4}, {"v", *text}});
-      } else if (const auto* vector = toolkit::get_vector(in, "in")) {
-        if (node.def.instrument == "display") {
-          // A Display is a readout: preserve the vector as one value. A Graph keeps its
-          // existing list-as-samples behavior (index is x), useful for point series.
-          json sample = {{"type", "signal"}, {"node", id}, {"t", std::round(ctx_.t * 1e4) / 1e4}, {"v", *vector}};
-          if (const auto wire = g_.wires.find({id, "in"}); wire != g_.wires.end()) {
-            const auto& source = g_.nodes.at(wire->second.first);
-            const auto port = std::ranges::find(source.def.outputs, wire->second.second, &toolkit::PortDef::id);
-            if (port != source.def.outputs.end() && !port->components.empty()) {
-              json components = json::array();
-              for (const auto& component : port->components) {
-                json item = {{"id", component.id}};
-                if (!component.unit.empty()) item["unit"] = component.unit;
-                components.push_back(std::move(item));
-              }
-              sample["components"] = std::move(components);
-            }
-          }
-          samples.push_back(std::move(sample));
-        } else {
-          for (std::size_t i = 0; i < vector->size(); ++i)
-            samples.push_back({{"type", "signal"}, {"node", id}, {"t", i}, {"v", (*vector)[i]}});
-        }
-      } else {
-        samples.push_back({{"type", "signal"}, {"node", id}, {"t", std::round(ctx_.t * 1e4) / 1e4},
-                           {"v", toolkit::get_or(in, "in")}});
+      const toolkit::PortDef* port = nullptr;
+      if (const auto wire = g_.wires.find({id, "in"}); wire != g_.wires.end()) {
+        const auto& source = g_.nodes.at(wire->second.first);
+        const auto it = std::ranges::find(source.def.outputs, wire->second.second, &toolkit::PortDef::id);
+        if (it != source.def.outputs.end()) port = &*it;
       }
+      sample(node, in, port);
+      continue;
+    }
+    // A block with an instrument and outputs (a Switch) shows its first output.
+    if (!node.def.instrument.empty() && !node.def.outputs.empty()) {
+      const auto& port = node.def.outputs.front();
+      toolkit::Values shown;
+      if (const auto it = outputs_[id].find(port.id); it != outputs_[id].end()) shown["in"] = it->second;
+      sample(node, shown, &port);
     }
   }
   // Blocks without feedthrough take this pass's inputs now that every block has run.

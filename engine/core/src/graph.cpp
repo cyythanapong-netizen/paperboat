@@ -129,7 +129,8 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
       node.object = it->instance.get();
     } else if (def.kind == toolkit::Kind::Monitor && def.outputs.empty()) {
       // The core samples monitors; one from a template may turn its input into what it
-      // shows (output "value", such as an image as a picture).
+      // shows (output "value", such as an image as a picture). A Monitor that declares
+      // outputs (a Switch) is an ordinary block instead, sampled on its first output.
       if (node.entry->from && node.entry->from->make) node.monitor = made([&] { return node.entry->make(params, text); });
     } else if (toolkit::has_step_ports(def)) {
       if (!node.entry->from || !node.entry->from->make_step) throw GraphError(node.id, "no implementation for step block type: " + type);

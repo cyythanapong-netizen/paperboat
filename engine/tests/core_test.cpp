@@ -850,3 +850,27 @@ TEST_CASE("session reports toolkits in hello and triggers restart handler on bac
     return m["type"] == "log" && m["text"] == "restarting backend…";
   }));
 }
+
+TEST_CASE("a dashboard Switch runs from its descriptor params and is sampled as a signal") {
+  static const tk::Catalog catalog = tk::load_descriptor("domain = \"switches\"\nimport = [\"dashboard\"]\n", tk::builtins());
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 0.5, .emit_every = 1, .real_time = false}};
+  const auto graph = [](const std::string& mode) {
+    return json{{"nodes", {{{"id", "sw"}, {"type", "switch"}, {"params", {{"mode", mode}, {"initial", false}}}},
+                           {{"id", "d"}, {"type", "display"}}}},
+                {"edges", {{{"from", {"sw", "y"}}, {"to", {"d", "in"}}}}}};
+  };
+  int calls = 0;
+  SECTION("momentary: on while the control is held") {
+    core::KeysNow keys = [&] { return ++calls > 10 ? tk::KeySet{"sw"} : tk::KeySet{}; };
+    Collected out;
+    CHECK(core::run("r", graph("momentary"), nullptr, backend, out.emit(), keys, {}) == "done");
+    CHECK(out.last_signal("sw") == 1.0);  // the Switch itself is an instrument
+    CHECK(out.last_signal("d") == 1.0);
+  }
+  SECTION("toggle: one tap seen for a single pass flips it once") {
+    core::KeysNow keys = [&] { return ++calls == 10 ? tk::KeySet{"sw"} : tk::KeySet{}; };
+    Collected out;
+    CHECK(core::run("r", graph("toggle"), nullptr, backend, out.emit(), keys, {}) == "done");
+    CHECK(out.last_signal("sw") == 1.0);
+  }
+}
