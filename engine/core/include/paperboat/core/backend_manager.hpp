@@ -46,8 +46,33 @@ struct ExampleBackend {
   std::string ws_url;
 };
 
+struct BackendManifest {
+  int format = 0;
+  std::string name;
+  std::string version = "0.1.0";
+  std::string engine = ">=0.1";
+  std::string language;  // "cpp" or "python"
+  std::string run;       // path to binary or script relative to backend root
+  int port = 8765;
+  std::string descriptor = "descriptor.toml";
+  std::vector<std::string> toolkits;
+  std::string golden;    // from [test].golden
+  bool has_manifest = false;
+};
+
+struct CheckStep {
+  std::string name;       // "manifest", "catalog", "smoke", "golden"
+  bool ok = false;
+  bool skipped = false;
+  std::string message;
+  double duration_seconds = 0.0;
+};
+
 struct CheckResult {
   bool ok = false;
+  std::string name;
+  std::string version = "0.1.0";
+  std::string language;
   std::string domain;
   std::string engine;
   std::vector<std::string> errors;
@@ -58,6 +83,31 @@ struct CheckResult {
   int object_count = 0;
   bool has_starter_graph = false;
   bool has_starter_station = false;
+  std::vector<CheckStep> steps;
+  bool manifest_ok = false;
+  bool catalog_ok = false;
+  bool smoke_ok = false;
+  bool golden_ok = false;
+};
+
+struct PackResult {
+  bool ok = false;
+  std::filesystem::path package_path;
+  std::string name;
+  std::string version;
+  int file_count = 0;
+  uint64_t total_bytes = 0;
+  std::string sha256;
+  std::vector<std::string> errors;
+};
+
+struct UnpackResult {
+  bool ok = false;
+  std::filesystem::path destination_dir;
+  std::string name;
+  std::string version;
+  int file_count = 0;
+  std::vector<std::string> errors;
 };
 
 class BackendManager {
@@ -116,7 +166,17 @@ class BackendManager {
   static bool build_app();
 
   // Verification & checking
+  static BackendManifest load_manifest(const std::filesystem::path& backend_dir, std::string* error_msg = nullptr);
+  static int find_free_port(int start_port = 18765, int end_port = 18999);
   static CheckResult check_backend(const std::filesystem::path& path = {}, bool fast = false);
+
+  // Packaging & unpack
+  static PackResult pack_backend(const std::filesystem::path& path = {},
+                                 const std::filesystem::path& out_path = {},
+                                 bool fast = true);
+  static UnpackResult unpack_backend(const std::filesystem::path& archive_path,
+                                     const std::filesystem::path& dest_dir = {},
+                                     bool verify = true);
 };
 
 }  // namespace paperboat::core

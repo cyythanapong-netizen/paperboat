@@ -29,7 +29,19 @@ TO_UI = jsonschema.Draft202012Validator(SCHEMA)
 
 
 def run(example: Path, expected: dict) -> list[str]:
-    target = expected["run"]
+    target = expected.get("run")
+    if not target and (example / "backend.toml").exists():
+        try:
+            try:
+                import tomllib
+            except ImportError:
+                import tomli as tomllib
+            data = tomllib.loads((example / "backend.toml").read_text(encoding="utf-8"))
+            target = data.get("backend", {}).get("run")
+        except Exception:
+            pass
+    if not target:
+        return ["no run target specified in expected.json or backend.toml"]
     if target.endswith(".py"):
         cmd = [sys.executable, target, "--run"]
         env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
@@ -80,10 +92,20 @@ def main() -> None:
     names = args or sorted(p.parent.name for p in EXAMPLES.glob("*/expected.json"))
     failed = 0
     for name in names:
-        example = EXAMPLES / name
+        p = Path(name)
+        if p.is_dir() and (p / "expected.json").exists():
+            example = p.resolve()
+            display_name = example.name
+        else:
+            example = EXAMPLES / name
+            display_name = name
+        if not (example / "expected.json").exists():
+            print(f"FAIL {display_name}\n      expected.json not found in {example}", flush=True)
+            failed += 1
+            continue
         expected = json.loads((example / "expected.json").read_text())
         problems = run(example, expected)
-        print(f"{'ok  ' if not problems else 'FAIL'} {name}" + "".join(f"\n      {p}" for p in problems), flush=True)
+        print(f"{'ok  ' if not problems else 'FAIL'} {display_name}" + "".join(f"\n      {p}" for p in problems), flush=True)
         failed += bool(problems)
     print("PASS" if not failed else f"{failed} failed")
     sys.exit(1 if failed else 0)
