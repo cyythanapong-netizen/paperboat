@@ -21,6 +21,7 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/array.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/tuple.h>
@@ -694,7 +695,7 @@ NB_MODULE(_engine, m) {
   nb::class_<Hosted>(m, "Hosted", "A backend: the domain's package, its catalog and (once listening) a server.")
       .def("listen", &Hosted::listen, nb::arg("port"), "Serve the protocol (and a web station) on the port.")
       .def("run_starter", &Hosted::run_starter, nb::arg("vars") = std::vector<std::pair<std::string, std::string>>{},
-           nb::arg("duration") = std::nullopt,
+           nb::arg("duration").none() = nb::none(),
            "Run the starter graph on the starter station once, headless; print each message as a JSON line.")
       .def("stop", &Hosted::stop);
 

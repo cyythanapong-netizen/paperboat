@@ -136,7 +136,7 @@ async def main() -> None:
         if empty:
             print("--  starter graph is empty: starter run and cancel skipped")
         else:
-            await starter_and_cancel(ws, starter, monitors)
+            await starter_and_cancel(ws, starter, monitors, hello["run"].get("duration", 10.0))
 
         msgs = await run_until_finished(ws, cycle_graph(catalog["blocks"]))
         check(msgs[-1]["status"] == "failed", f"cycle run status {msgs[-1]['status']}")
@@ -154,16 +154,19 @@ async def main() -> None:
     print("PASS")
 
 
-async def starter_and_cancel(ws: ClientConnection, starter: dict, monitors: set[str]) -> None:
+async def starter_and_cancel(ws: ClientConnection, starter: dict, monitors: set[str], duration: float = 10.0) -> None:
     """Run the starter graph to the end, then again with a cancel."""
-    msgs = await run_until_finished(ws, starter)
+    infinite = duration <= 0
+    run_settings = {"duration": 0.5, "speed": 0} if infinite else None
+    msgs = await run_until_finished(ws, starter, settings=run_settings)
     signals = [m for m in msgs if m["type"] == "signal" and m["node"] in monitors]
     scene_updates = [m for m in msgs if m["type"] in ("scene", "scene.patch")]
     progress = max((m["fraction"] for m in msgs if m["type"] == "run.progress"), default=0)
     check(msgs[-1]["status"] == "done", f"starter run status {msgs[-1]['status']}")
     check({m["node"] for m in signals} == monitors, "not every monitor node got signals")
     check(len(scene_updates) >= 1, "run never updated the scene")
-    check(progress >= 0.99, f"progress only reached {progress}")
+    if not infinite:
+        check(progress >= 0.99, f"progress only reached {progress}")
     print(f"ok  starter run: {len(signals)} signals, {len(scene_updates)} scene updates, progress {progress:.2f}")
 
     msgs = await run_until_finished(ws, starter, cancel_after=0.5)
