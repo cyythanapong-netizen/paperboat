@@ -526,6 +526,14 @@ BackendKind BackendManager::detect_backend_kind(const fs::path& path) {
   return BackendKind::Unknown;
 }
 
+fs::path BackendManager::user_backends_dir() {
+  const char* home = std::getenv("HOME");
+  if (home && *home) {
+    return fs::path(home) / ".paperboat" / "backends";
+  }
+  return fs::temp_directory_path() / "paperboat" / "backends";
+}
+
 fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
   auto is_valid_backend_dir = [](const fs::path& p) {
     return fs::is_directory(p) && (
@@ -540,15 +548,25 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
     return fs::current_path();
   }
 
-  if (fs::exists(path_or_domain)) {
-    if (is_valid_backend_dir(path_or_domain)) return path_or_domain;
-    if (fs::is_regular_file(path_or_domain)) return path_or_domain.parent_path();
+  // Handle .pkk typo if .ppk exists
+  fs::path p_check = path_or_domain;
+  if (!fs::exists(p_check) && p_check.extension() == ".pkk") {
+    fs::path p_ppk = p_check;
+    p_ppk.replace_extension(".ppk");
+    if (fs::exists(p_ppk)) p_check = p_ppk;
   }
 
-  // Look in paperboat-examples or examples/backends
+  if (fs::exists(p_check)) {
+    if (is_valid_backend_dir(p_check)) return p_check;
+    if (fs::is_regular_file(p_check)) return p_check;
+  }
+
+  // Look in paperboat-examples, examples/backends, user backends, or sibling directory
   const fs::path root = toolkit::find_repo_root();
   const fs::path edir = find_examples_dir();
-  const std::string name = path_or_domain.string();
+  const std::string name = p_check.string();
+  const fs::path ub_dir = user_backends_dir();
+
   std::vector<fs::path> candidates = {
       edir / name,
       edir / (name + "-cpp"),
@@ -556,17 +574,73 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
       root / "examples" / "backends" / name,
       root / "examples" / "backends" / (name + "-cpp"),
       root / "examples" / "backends" / (name + "-python"),
+      ub_dir / name,
+      fs::current_path().parent_path() / name,
   };
 
   for (const auto& c : candidates) {
     if (is_valid_backend_dir(c)) return c;
   }
 
-  return path_or_domain;
+  // Check matching directory in user_backends_dir with version prefix (e.g. name-0.1.0)
+  std::error_code ec;
+  if (fs::is_directory(ub_dir, ec)) {
+    for (const auto& entry : fs::directory_iterator(ub_dir, ec)) {
+      if (entry.is_directory() && entry.path().filename().string().starts_with(name + "-")) {
+        if (is_valid_backend_dir(entry.path())) return entry.path();
+      }
+    }
+  }
+
+  return p_check;
 }
 
 int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRunOptions& opts) {
-  const fs::path dir = resolve_backend_dir(path_or_domain);
+  fs::path target = path_or_domain.empty() ? fs::current_path() : path_or_domain;
+
+  // Handle .pkk typo if .ppk exists
+  if (!fs::exists(target) && target.extension() == ".pkk") {
+    fs::path candidate = target;
+    candidate.replace_extension(".ppk");
+    if (fs::exists(candidate)) target = candidate;
+  }
+
+  // If target does not exist as-is, check if matching archive (.ppk / .paperboat-pkg) exists locally
+  if (!fs::exists(target)) {
+    std::string stem = target.filename().string();
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(fs::current_path(), ec)) {
+      if (entry.is_regular_file()) {
+        std::string fn = entry.path().filename().string();
+        if ((fn == stem + ".ppk" || fn == stem + ".paperboat-pkg" || fn.starts_with(stem + "-")) &&
+            (fn.ends_with(".ppk") || fn.ends_with(".paperboat-pkg"))) {
+          target = entry.path();
+          break;
+        }
+      }
+    }
+  }
+
+  // If target is an archive (.ppk or .paperboat-pkg or .pkk), unpack it first to user_backends_dir
+  if (fs::is_regular_file(target) &&
+      (target.extension() == ".ppk" || target.extension() == ".paperboat-pkg" || target.extension() == ".pkk")) {
+    fs::path udir = user_backends_dir();
+    std::error_code ec;
+    fs::create_directories(udir, ec);
+    std::string stem = target.stem().string();
+    fs::path dest = udir / stem;
+    std::cout << "==> Unpacking package " << target.filename().string() << " to " << dest.string() << "…\n";
+    auto unpack_res = unpack_backend(target, dest, /*verify=*/true);
+    if (!unpack_res.ok) {
+      std::cerr << "error: failed to unpack package: ";
+      for (const auto& err : unpack_res.errors) std::cerr << err << "; ";
+      std::cerr << '\n';
+      return 1;
+    }
+    target = unpack_res.destination_dir;
+  }
+
+  const fs::path dir = resolve_backend_dir(target);
   if (!fs::is_directory(dir)) {
     std::cerr << "error: directory not found: " << path_or_domain << '\n';
     return 1;
@@ -1089,7 +1163,41 @@ int BackendManager::find_free_port(int start_port, int end_port) {
 
 CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   CheckResult res;
-  const fs::path dir = resolve_backend_dir(path);
+  fs::path target = path.empty() ? fs::current_path() : path;
+
+  // Handle .pkk typo if .ppk exists
+  if (!fs::exists(target) && target.extension() == ".pkk") {
+    fs::path candidate = target;
+    candidate.replace_extension(".ppk");
+    if (fs::exists(candidate)) target = candidate;
+  }
+
+  // If path is an archive (.ppk or .paperboat-pkg or .pkk), unpack to a temporary directory for verification
+  fs::path temp_unpack_dir;
+  if (fs::is_regular_file(target) &&
+      (target.extension() == ".ppk" || target.extension() == ".paperboat-pkg" || target.extension() == ".pkk")) {
+    temp_unpack_dir = fs::temp_directory_path() / ("pb_check_" + target.stem().string());
+    std::error_code ec;
+    fs::remove_all(temp_unpack_dir, ec);
+    auto u_res = unpack_backend(target, temp_unpack_dir, /*verify=*/true);
+    if (!u_res.ok) {
+      res.errors.push_back("failed to unpack archive for verification");
+      return res;
+    }
+    target = temp_unpack_dir;
+  }
+
+  struct TempCleaner {
+    fs::path dir;
+    ~TempCleaner() {
+      if (!dir.empty()) {
+        std::error_code ec;
+        fs::remove_all(dir, ec);
+      }
+    }
+  } temp_cleaner{temp_unpack_dir};
+
+  const fs::path dir = resolve_backend_dir(target);
   if (!fs::is_directory(dir)) {
     res.errors.push_back("backend directory not found: " + path.string());
     return res;

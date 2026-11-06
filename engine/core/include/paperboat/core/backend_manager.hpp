@@ -144,6 +144,7 @@ class BackendManager {
 
   // Backend kind and directory resolution
   static BackendKind detect_backend_kind(const std::filesystem::path& path);
+  static std::filesystem::path user_backends_dir();
   static std::filesystem::path resolve_backend_dir(const std::filesystem::path& path_or_domain = {});
 
   // Lifecycle execution

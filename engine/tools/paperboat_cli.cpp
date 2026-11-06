@@ -29,7 +29,8 @@ Usage:
   paperboat <command> [arguments...]
 
 Backend Commands:
-  run [path] [options]       Build and run a backend in foreground
+  run, start [path | pkg.ppk] [options]
+                             Build and run a backend (or .ppk package) in foreground
                              Options:
                                --port <N>      Specify listen port (default: 8765)
                                --no-build      Skip C++ build step
@@ -485,7 +486,7 @@ int cmd_unpack(const std::vector<std::string_view>& args) {
 
 void print_interactive_help() {
   std::cout << R"(Interactive Commands:
-  run <backend>            Build and start backend (e.g. `run cart-pole`, `run parts`)
+  run, start <target>      Build and start backend (or .ppk package)
   list (or ps)             List running Paperboat backends
   restart <target>         Restart backend on port or name
   stop <target|--all>      Stop running backend
@@ -546,7 +547,7 @@ int run_interactive_prompt() {
     for (const auto& t : tokens) sv_tokens.emplace_back(t);
 
     std::vector<std::string_view> rest(sv_tokens.begin() + 1, sv_tokens.end());
-    if (cmd == "run") cmd_run(rest);
+    if (cmd == "run" || cmd == "start") cmd_run(rest);
     else if (cmd == "list" || cmd == "ps") cmd_list(rest);
     else if (cmd == "restart") cmd_restart(rest);
     else if (cmd == "stop") cmd_stop(rest);
@@ -591,7 +592,7 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  if (cmd == "run") return cmd_run(rest);
+  if (cmd == "run" || cmd == "start") return cmd_run(rest);
   if (cmd == "list" || cmd == "ps") return cmd_list(rest);
   if (cmd == "restart") return cmd_restart(rest);
   if (cmd == "stop") return cmd_stop(rest);
