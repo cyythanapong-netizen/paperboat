@@ -60,31 +60,37 @@ inline std::string get_compact_cwd() {
 inline void render_banner(bool animated = true) {
   const bool is_tty = isatty(STDOUT_FILENO) && isatty(STDIN_FILENO);
 
-  const std::string INK = is_tty ? "\033[38;2;233;233;228m" : "";
-  const std::string SHADE = is_tty ? "\033[38;2;141;132;158m" : "";
+  const std::string W = is_tty ? "\033[38;2;233;233;228m" : "";
+  const std::string S = is_tty ? "\033[38;2;163;163;157m" : "";
   const std::string ORANGE = is_tty ? "\033[38;2;255;106;48m" : "";
+  const std::string BRIGHT_ORANGE = is_tty ? "\033[1;38;2;255;160;100m" : "";
   const std::string BLUE = is_tty ? "\033[1;38;2;74;144;226m" : "";
   const std::string GRAY = is_tty ? "\033[38;2;140;140;140m" : "";
-  const std::string DIM_ORANGE = is_tty ? "\033[38;2;160;65;30m" : "";
-  const std::string BRIGHT_ORANGE = is_tty ? "\033[1;38;2;255;150;90m" : "";
   const std::string RST = is_tty ? "\033[0m" : "";
 
   std::string git_info = get_git_info();
   std::string cwd_info = get_compact_cwd();
 
+  // The 31x21 brand pixel boat (rows 0 to 7)
   const std::vector<std::string> logo_lines = {
-      "        " + INK + "█" + SHADE + "█" + RST + "        ",
-      "      " + INK + "███" + SHADE + "███" + RST + "      ",
-      "    " + INK + "█████" + SHADE + "█████" + RST + "    ",
-      "  " + INK + "▄██████████████▄" + RST,
-      "   " + INK + "▀████████████▀" + RST + " ",
+      "              " + W + "▄█" + S + "▄" + RST + "              ",
+      "            " + W + "▄███" + S + "██▄" + RST + "            ",
+      "          " + W + "▄█████" + S + "████▄" + RST + "          ",
+      "        " + W + "▄███████" + S + "██████▄" + RST + "        ",
+      W + "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄" + RST,
+      "  " + W + "▀█████████████████████████▀" + RST + "  ",
+      "    " + W + "▀█████████████████████▀" + RST + "    ",
+      "      " + W + "▀█████████████████▀" + RST + "      ",
   };
 
   const std::vector<std::string> text_lines = {
+      "",
       BLUE + "Paperboat CLI 0.1.0" + RST,
       GRAY + git_info + RST,
       GRAY + "C++20 core · protocol paperboat/0" + RST,
       GRAY + cwd_info + RST,
+      "",
+      "",
       "",
   };
 
@@ -92,32 +98,47 @@ inline void render_banner(bool animated = true) {
     std::cout << "  " << logo_lines[i] << "   " << text_lines[i] << '\n';
   }
 
-  // Water line with ripple animation
-  auto make_water = [&](int active_dot) {
-    std::string w = "   ";
+  // Water lines: 3 rows (line 8: gap / wave peak; line 9: dot mid; line 10: dot bottom)
+  auto render_water_lines = [&](int active_dot) {
+    std::string l8 = "  ";
+    std::string l9 = "  ";
+    std::string l10 = "  ";
     for (int dot = 0; dot < 5; ++dot) {
-      if (dot > 0) w += "  ";
-      if (active_dot == -1) {
-        w += ORANGE + "█" + RST;
-      } else if (dot == active_dot) {
-        w += BRIGHT_ORANGE + "█" + RST;
+      if (dot > 0) {
+        l8 += "    ";
+        l9 += "    ";
+        l10 += "    ";
+      }
+      if (dot == active_dot) {
+        // Dot lifts up by 1 half-block into line 8 with bright wave crest
+        l8 += BRIGHT_ORANGE + "▄▄▄" + RST;
+        l9 += BRIGHT_ORANGE + "███" + RST;
+        l10 += "   ";
       } else {
-        w += DIM_ORANGE + "█" + RST;
+        l8 += "   ";
+        l9 += ORANGE + "███" + RST;
+        l10 += ORANGE + "▀▀▀" + RST;
       }
     }
-    w += "  ";
-    return w;
+    l8 += "   \n";
+    l9 += "   \n";
+    l10 += "   \n";
+    return std::tuple{l8, l9, l10};
   };
 
+  auto [w8, w9, w10] = render_water_lines(-1);
+
   if (is_tty && animated) {
-    std::cout << "  " << make_water(-1) << "\n" << std::flush;
+    std::cout << w8 << w9 << w10 << std::flush;
     for (int step = 0; step < 5; ++step) {
-      std::cout << "\033[1A\r  " << make_water(step) << "\n" << std::flush;
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+      auto [u8, u9, u10] = render_water_lines(step);
+      std::cout << "\033[3A\r" << u8 << u9 << u10 << std::flush;
+      std::this_thread::sleep_for(std::chrono::milliseconds(90));
     }
-    std::cout << "\033[1A\r  " << make_water(-1) << "\n\n" << std::flush;
+    // Return to rest
+    std::cout << "\033[3A\r" << w8 << w9 << w10 << "\n" << std::flush;
   } else {
-    std::cout << "  " << make_water(-1) << "\n\n" << std::flush;
+    std::cout << w8 << w9 << w10 << "\n" << std::flush;
   }
 }
 
