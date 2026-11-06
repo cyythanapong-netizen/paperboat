@@ -3,8 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { parseInputs, portHint, portLabel, wireMismatch } from "../src/ports.ts";
-import type { PortDef } from "../src/protocol.ts";
+import { inForm, parseInputs, parsePlaceholders, parseSigns, portHint, portLabel, wireMismatch } from "../src/ports.ts";
+import type { BlockDef, PortDef } from "../src/protocol.ts";
 
 const state: PortDef = {
   id: "state",
@@ -40,6 +40,52 @@ test("vector dimensions and per-component units are checked while wiring", () =>
 test("vector port labels and hover hints expose component metadata", () => {
   assert.equal(portLabel(state), "state [2]");
   assert.equal(portHint(state), "Ordered numeric vector (2 values): x (m), angle (rad)");
+});
+
+test("parsePlaceholders extracts unique tokens and ignores escaped braces", () => {
+  assert.deepEqual(parsePlaceholders("Hello {name}, your id is {id} and {{escaped}}! Also { name }."), ["name", "id"]);
+  assert.deepEqual(parsePlaceholders("constant string without braces"), []);
+  assert.deepEqual(parsePlaceholders("{x} + {y} = {x}"), ["x", "y"]);
+});
+
+test("inForm dynamicDef resolves template, inputs count, and signs", () => {
+  const sumDef: BlockDef = {
+    type: "sum",
+    label: "Sum",
+    kind: "function",
+    inputs: [{ id: "a", type: "signal" }, { id: "b", type: "signal" }],
+    outputs: [{ id: "y", type: "signal" }],
+    params: [{ id: "signs", type: "text", default: "++" }],
+    ports_from: "signs",
+  };
+  const sum3 = inForm(sumDef, { signs: "+-+" });
+  assert.equal(sum3.inputs.length, 3);
+  assert.deepEqual(sum3.inputs.map((p) => p.id), ["a", "b", "c"]);
+
+  const fmtDef: BlockDef = {
+    type: "format",
+    label: "Format",
+    kind: "function",
+    inputs: [],
+    outputs: [{ id: "y", type: "text" }],
+    params: [{ id: "template", type: "text", default: "Hello {name}" }],
+    ports_from: "template",
+  };
+  const fmtResolved = inForm(fmtDef, { template: "Coords: ({x}, {y}, {z})" });
+  assert.deepEqual(fmtResolved.inputs.map((p) => p.id), ["x", "y", "z"]);
+  assert.equal(fmtResolved.inputs[0].type, "any");
+
+  const andDef: BlockDef = {
+    type: "and",
+    label: "And",
+    kind: "function",
+    inputs: [{ id: "a", type: "signal" }, { id: "b", type: "signal" }],
+    outputs: [{ id: "y", type: "signal" }],
+    params: [{ id: "inputs", type: "number", default: 2 }],
+    ports_from: "inputs",
+  };
+  const and4 = inForm(andDef, { inputs: 4 });
+  assert.deepEqual(and4.inputs.map((p) => p.id), ["a", "b", "c", "d"]);
 });
 
 test("parseInputs matches the engine's shared inputs_from test vector", () => {

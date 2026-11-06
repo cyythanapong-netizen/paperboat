@@ -8,6 +8,7 @@ add_executable(paperboat_tests
   core_test.cpp
   variables_test.cpp
   connection_test.cpp
+  toolkit_phase1_test.cpp
   cli_test.cpp
 )
 target_link_libraries(paperboat_tests

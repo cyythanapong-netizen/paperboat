@@ -103,9 +103,8 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     }
     // A magic block's ports are those of its form.
     node.def = toolkit::in_form(node.entry->def, text.contains("form") ? text.at("form") : "");
-    // A block whose param decides its inputs (Sum's signs) has one per character of it.
-    const auto& from = node.entry->def.ports_from;
-    node.def = toolkit::with_signs(node.def, from.empty() || !text.contains(from) ? "" : text.at(from));
+    // A block whose param decides its inputs (Sum's signs, Format's template, multi-input And/Or).
+    node.def = toolkit::with_dynamic_ports(node.def, params, text);
     // A block whose expression param decides its inputs (f(t)'s f) has one per free name in it.
     const auto& inputs_from = node.entry->def.inputs_from;
     node.def = toolkit::with_inputs(node.def, inputs_from.empty() || !text.contains(inputs_from) ? "" : text.at(inputs_from));

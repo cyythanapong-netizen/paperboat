@@ -146,6 +146,9 @@ BlockDef in_form(const BlockDef& def, std::string_view form);
 // is skipped. At most 26 (inputs a–z); none at all reads as "++".
 std::vector<int> parse_signs(std::string_view text);
 
+// Scans `text` for {placeholder} tokens, skipping escaped {{ and }}, returning unique names.
+std::vector<std::string> parse_placeholders(std::string_view text);
+
 // The definition with the inputs its `ports_from` param (`text`) gives: ids a, b, c… of the
 // first input's type. `def` itself if it has no `ports_from`.
 BlockDef with_signs(const BlockDef& def, std::string_view text);
@@ -208,6 +211,9 @@ struct Value : std::variant<double, Vector, Table, std::string, Handle> {
 using Values = std::map<std::string, Value, std::less<>>;        // port or param id → value
 using Config = std::map<std::string, std::string, std::less<>>;  // set once in a descriptor
 using KeySet = std::set<std::string, std::less<>>;               // KeyboardEvent.code values
+
+// Generalizes dynamic inputs: supports count (inputs = N), template ("{a} + {b}"), and signs ("+-+").
+BlockDef with_dynamic_ports(const BlockDef& def, const Values& params, const Config& text);
 
 // Why a value doesn't fit a declared vector port, if it doesn't. Used on block inputs and
 // outputs so a dynamic vector is still checked against a fixed-size port at run time.
@@ -320,5 +326,8 @@ inline std::string get_text(const Values& values, std::string_view id, std::stri
   const std::string* text = get_if<std::string>(values, id);
   return text ? *text : fallback;
 }
+
+// Clean textual representation of any Value (used by to_text, string formatting, etc.).
+std::string value_to_text(const Value& value);
 
 }  // namespace paperboat::toolkit

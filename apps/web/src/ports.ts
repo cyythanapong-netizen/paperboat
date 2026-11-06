@@ -107,9 +107,28 @@ export function parseSigns(text: ParamValue | undefined): number[] {
   return signs.length ? signs : [1, 1];
 }
 
+/** Scans a template string for {placeholder} tokens, skipping escaped {{ and }}, returning unique names in order. */
+export function parsePlaceholders(text: ParamValue | undefined): string[] {
+  const str = String(text ?? "");
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const regex = /\{\{|\}\}|\{([^}]+)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = regex.exec(str)) !== null) {
+    if (m[1] !== undefined) {
+      const name = m[1].trim();
+      if (name && !name.includes("{") && !name.includes("}") && !seen.has(name)) {
+        seen.add(name);
+        out.push(name);
+      }
+    }
+  }
+  return out;
+}
+
 /** The sign shown beside input `i` of a block whose inputs come from signs: "+" or "−"; "" for any other block. */
 export function signOf(def: BlockDef, params: Record<string, ParamValue>, i: number): string {
-  if (!def.ports_from) return "";
+  if (!def.ports_from || def.ports_from !== "signs") return "";
   return parseSigns(params[def.ports_from])[i] < 0 ? "\u2212" : "+";
 }
 
@@ -132,6 +151,32 @@ export function parseInputs(text: ParamValue | undefined): string[] {
     const name = m[1];
     const call = m[2];
     if (name && !call && !BUILTINS.has(name) && !out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
+/** A block's definition as its params make it: a magic block in the form its `form` param picks, a block with `ports_from` (signs, template placeholders, or multi-input count), or a block with `inputs_from` with one input per free name in its expression. */
+export function inForm(def: BlockDef, params: Record<string, ParamValue>): BlockDef {
+  const form = def.forms?.find((f) => f.name === params.form);
+  let out = form ? { ...def, inputs: form.inputs, outputs: form.outputs } : def;
+  if (def.ports_from) {
+    if (def.ports_from === "template") {
+      const tmpl = params.template ?? def.params.find((p) => p.id === "template")?.default ?? "Hello {name}";
+      const names = parsePlaceholders(tmpl);
+      out = { ...out, inputs: names.map((name) => ({ id: name, type: "any" })) };
+    } else if (def.ports_from === "inputs" || typeof params[def.ports_from] === "number") {
+      const countVal = typeof params[def.ports_from] === "number" ? Number(params[def.ports_from]) : 2;
+      const count = Math.max(2, Math.min(26, Math.floor(countVal)));
+      const proto = def.inputs[0] ?? { id: "a" };
+      out = { ...out, inputs: Array.from({ length: count }, (_, i) => ({ ...proto, id: String.fromCharCode(97 + i) })) };
+    } else {
+      const proto = def.inputs[0] ?? { id: "a" };
+      out = { ...out, inputs: parseSigns(params[def.ports_from]).map((_, i) => ({ ...proto, id: String.fromCharCode(97 + i) })) };
+    }
+  }
+  if (def.inputs_from) {
+    const proto = def.inputs[0] ?? { id: "t", type: "signal" };
+    out = { ...out, inputs: parseInputs(params[def.inputs_from]).map((id) => ({ ...proto, id })) };
   }
   return out;
 }

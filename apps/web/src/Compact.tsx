@@ -32,6 +32,52 @@ const CURVES: Record<string, ReactNode> = {
       <path d="M4 12H26" />
     </>
   ),
+  abs: (
+    <>
+      <path className="ax" d="M3 24H27" />
+      <path d="M5 8L15 22L25 8" />
+    </>
+  ),
+  staircase: (
+    <>
+      <path className="ax" d="M3 15H27" />
+      <path d="M4 23H11V16H18V9H25" />
+    </>
+  ),
+  window: (
+    <>
+      <path className="ax" d="M3 24H27" />
+      <path d="M4 22H9V10H21V22H26" />
+    </>
+  ),
+  pulse: (
+    <>
+      <path className="ax" d="M3 24H27" />
+      <path d="M4 22H8V10H14V22H18V10H24V22H26" />
+    </>
+  ),
+  timer: (
+    <>
+      <path className="ax" d="M3 24H27" />
+      <path d="M4 22H17V9H26" />
+      <path className="ax" strokeDasharray="2 2" d="M17 9V24" />
+    </>
+  ),
+  ramp: (
+    <>
+      <path className="ax" d="M3 24H27" />
+      <path d="M5 21L25 7" />
+      <circle cx="5" cy="21" r="1.5" />
+      <circle cx="25" cy="7" r="1.5" />
+    </>
+  ),
+  lerp: (
+    <>
+      <path className="ax" d="M3 24H27" />
+      <path d="M5 20L25 8" />
+      <circle cx="15" cy="14" r="2" fill="currentColor" />
+    </>
+  ),
 };
 
 export function Glyph({ name }: { name: string }) {
@@ -99,6 +145,7 @@ export function CompactBlock({
   }, [open]);
 
   const value = captionValue(def.view?.value, params);
+  const glyphName = def.view?.glyph ? captionValue(def.view.glyph, params) : "const";
   const spread = (n: number, i: number) => `${((i + 1) / (n + 1)) * 100}%`;
   const hasParams = def.params.length > 0;
   return (
@@ -120,7 +167,7 @@ export function CompactBlock({
           if ((e.key === "Enter" || e.key === " ") && hasParams) setOpen(!open);
         }}
       >
-        <Glyph name={def.view?.glyph ?? "const"} />
+        <Glyph name={glyphName} />
         {def.inputs.map((p, i) => (
           <PortHandle key={p.id} type="target" position={Position.Left} id={p.id} top={spread(def.inputs.length, i)} label={portLabel(p)} title={portHint(p)} className={`t-${p.type}`} />
         ))}
