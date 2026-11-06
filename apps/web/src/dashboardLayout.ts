@@ -1,4 +1,4 @@
-import type { DashboardLayout } from "./protocol";
+import type { DashboardLayout, ParamValue } from "./protocol";
 
 export type Size = "compact" | "normal" | "large" | "xlarge";
 
@@ -17,7 +17,7 @@ export function defaultSize(kind: string): Size {
 }
 
 /** A monitor on the Flow canvas: what the grid needs to place its instrument. */
-export type Monitor = { kind: string; x: number; y: number };
+export type Monitor = { kind: string; x: number; y: number; params?: Record<string, ParamValue> };
 
 type Deco = NonNullable<DashboardLayout["decorations"]>[number];
 export type DecoKind = Deco["kind"];

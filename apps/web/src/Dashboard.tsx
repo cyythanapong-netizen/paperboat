@@ -24,7 +24,7 @@ import {
   tabIsEmpty,
 } from "./dashboardLayout";
 import type { Monitor, PlacedDeco } from "./dashboardLayout";
-import type { DashboardLayout } from "./protocol";
+import type { DashboardLayout, ParamValue } from "./protocol";
 import { Console } from "./Console";
 import { WebStation } from "./WebStation";
 import { SceneView } from "./SceneView";
@@ -65,62 +65,75 @@ function Plot({ name, series, idle }: { name: string; series: Series; idle: bool
   );
 }
 
-function SwitchInstrument({ name, state, send }: { name: string; state: EngineState; send?: (m: any) => void }) {
+/**
+ * A Switch: a control the user flips during a run. It shows only what the engine sends
+ * (no local guess), its `initial` state before the first sample, and is inert while no
+ * run is going or the Dashboard can't send. Toggle mode has a click pill; momentary mode
+ * a hold button, so the two never share a press.
+ */
+function SwitchInstrument({ name, state, send, params }: { name: string; state: EngineState; send?: (m: any) => void; params?: Record<string, ParamValue> }) {
   const latest = state.latest[name];
-  const [localActive, setLocalActive] = useState<boolean>(true);
-  const isDown = typeof latest === "number" ? latest > 0.5 : localActive;
+  const momentary = params?.mode === "momentary";
+  const initialOn = params?.initial === undefined ? true : !!params.initial;
+  const live = !!send && state.run?.status === "running";
+  const on = live && typeof latest === "number" ? latest > 0.5 : initialOn;
+  const held = useRef(false);
+  const input = (down: boolean) => send?.({ type: "input", key: name, down });
 
-  const toggle = (e: React.MouseEvent) => {
+  // The engine latches a press until its next pass, so a click is a press and a release.
+  const click = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const next = !isDown;
-    setLocalActive(next);
-    send?.({ type: "input", key: name, down: true });
-    setTimeout(() => {
-      send?.({ type: "input", key: name, down: false });
-    }, 40);
+    if (!live) return;
+    input(true);
+    input(false);
   };
-
-  const handlePointerDown = (e: React.PointerEvent) => {
+  const press = (e: React.PointerEvent) => {
     e.stopPropagation();
-    e.currentTarget.setPointerCapture(e.pointerId);  // the release arrives even off the button
-    setLocalActive(true);
-    send?.({ type: "input", key: name, down: true });
+    if (!live) return;
+    e.currentTarget.setPointerCapture(e.pointerId); // the release arrives even off the button
+    held.current = true;
+    input(true);
   };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
+  const release = (e: React.PointerEvent) => {
     e.stopPropagation();
-    setLocalActive(false);
-    send?.({ type: "input", key: name, down: false });
+    if (!held.current) return;
+    held.current = false;
+    input(false);
   };
 
   return (
-    <figure className="instrument switch-instrument">
+    <figure className={`instrument switch-instrument${live ? "" : " idle"}`}>
       <div className="screen switch-screen">
         <div className="switch-controls">
-          <button
-            type="button"
-            className={`switch-pill${isDown ? " on" : ""}`}
-            onClick={toggle}
-            title={`Toggle switch (currently ${isDown ? "AUTO / ON" : "MANUAL / OFF"})`}
-          >
-            <span className="switch-text">{isDown ? "AUTO" : "MAN"}</span>
-            <span className="switch-knob" />
-          </button>
-          <button
-            type="button"
-            className="switch-momentary-btn"
-            onPointerDown={handlePointerDown}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            title="Momentary push button: hold down to activate"
-          >
-            HOLD
-          </button>
+          {momentary ? (
+            <button
+              type="button"
+              className={`switch-momentary-btn${on ? " on" : ""}`}
+              disabled={!live}
+              onPointerDown={press}
+              onPointerUp={release}
+              onPointerCancel={release}
+              title="Hold to switch on"
+            >
+              HOLD
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={`switch-pill${on ? " on" : ""}`}
+              disabled={!live}
+              onClick={click}
+              title={`Click to switch ${on ? "off" : "on"}`}
+            >
+              <span className="switch-text">{on ? "ON" : "OFF"}</span>
+              <span className="switch-knob" />
+            </button>
+          )}
         </div>
       </div>
       <figcaption>
         <span>{name}</span>
-        <output>{isDown ? "active (1)" : "idle (0)"}</output>
+        <output>{on ? "on (1)" : "off (0)"}</output>
       </figcaption>
     </figure>
   );
@@ -131,7 +144,7 @@ function SwitchInstrument({ name, state, send }: { name: string; state: EngineSt
  * Before a run sends it anything it is a greyed placeholder of the same frame (#58), so it
  * can be placed and sized before the first run.
  */
-function Instrument({ name, kind, state, send }: { name: string; kind: string; state: EngineState; send?: (m: any) => void }) {
+function Instrument({ name, kind, state, send, params }: { name: string; kind: string; state: EngineState; send?: (m: any) => void; params?: Record<string, ParamValue> }) {
   const latest = state.latest[name];
   const idle = latest === undefined;
   const vector = Array.isArray(latest)
@@ -142,7 +155,7 @@ function Instrument({ name, kind, state, send }: { name: string; kind: string; s
       }).join(", ")
     : undefined;
   if (kind === "switch")
-    return <SwitchInstrument name={name} state={state} send={send} />;
+    return <SwitchInstrument name={name} state={state} send={send} params={params} />;
   if (kind === "image")
     return (
       <figure className={`instrument image${idle ? " idle" : ""}`}>
@@ -732,7 +745,7 @@ export function Dashboard({
               onDragStart={(e) => startDrag(e, { kind: "instrument", id: p.block, col: p.col, row: p.row })}
               onDragEnd={stop}
             >
-              <Instrument name={p.block} kind={all[p.block].kind} state={state} send={send} />
+              <Instrument name={p.block} kind={all[p.block].kind} state={state} send={send} params={all[p.block].params} />
               {canEdit && (
                 <div className="switch cell-tools" role="group" aria-label={`Size of ${p.block}`}>
                   {SIZES.map((s) => (

@@ -434,7 +434,7 @@ export function App() {
         nodes
           .filter(isBlock)
           .filter((n) => n.data.def.kind === "monitor" || !!n.data.def.instrument)
-          .map((n) => [n.id, { kind: n.data.def.instrument ?? "graph", ...absolute(n, nodes) }]),
+          .map((n) => [n.id, { kind: n.data.def.instrument ?? "graph", params: n.data.params, ...absolute(n, nodes) }]),
       ),
     [nodes],
   );
