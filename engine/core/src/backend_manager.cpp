@@ -1157,27 +1157,20 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   }
 
   // Check required toolkits
-  std::vector<std::string> all_toolkits;
-  const auto known = toolkit::list_toolkits(repo_root);
-  bool has_all = std::find(manifest.toolkits.begin(), manifest.toolkits.end(), "__all__") != manifest.toolkits.end();
-  if (has_all) {
-    all_toolkits.push_back("__all__");
-    for (const auto& k : known) {
-      if (std::find(all_toolkits.begin(), all_toolkits.end(), k.name) == all_toolkits.end()) {
-        all_toolkits.push_back(k.name);
-      }
+  std::vector<std::string> required_toolkits;
+  for (const auto& tk : manifest.toolkits) {
+    if (tk != "__all__" && std::find(required_toolkits.begin(), required_toolkits.end(), tk) == required_toolkits.end()) {
+      required_toolkits.push_back(tk);
     }
-  } else {
-    all_toolkits = manifest.toolkits;
   }
+  const auto known = toolkit::list_toolkits(repo_root);
   const auto reqs = toolkit::load_toolkit_requirements(dir, known);
   for (const auto& r : reqs) {
-    if (std::find(all_toolkits.begin(), all_toolkits.end(), r) == all_toolkits.end()) {
-      all_toolkits.push_back(r);
+    if (std::find(required_toolkits.begin(), required_toolkits.end(), r) == required_toolkits.end()) {
+      required_toolkits.push_back(r);
     }
   }
-  for (const auto& tk : all_toolkits) {
-    if (tk == "__all__") continue;
+  for (const auto& tk : required_toolkits) {
     const fs::path tk_dir = repo_root / "engine" / "toolkit" / tk;
     if (!fs::is_regular_file(tk_dir / "toolkit.toml")) {
       res.missing_toolkits.push_back(tk);
@@ -1193,9 +1186,19 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   }
 
   // Parse descriptor syntax
+  bool has_all = std::find(manifest.toolkits.begin(), manifest.toolkits.end(), "__all__") != manifest.toolkits.end();
   try {
     auto doc = toml::parse_file(desc_file.string());
     res.domain = doc["domain"].value_or(manifest.name);
+    for (const char* key : {"toolkits", "toolkit", "import"}) {
+      if (auto arr = doc[key].as_array()) {
+        for (const auto& el : *arr) {
+          if (auto s = el.value<std::string>(); s && *s == "__all__") has_all = true;
+        }
+      } else if (auto s = doc[key].value<std::string>(); s && *s == "__all__") {
+        has_all = true;
+      }
+    }
   } catch (const toml::parse_error& err) {
     step_manifest.message = "descriptor syntax error: " + desc_file.string() + ":" +
                             std::to_string(err.source().begin.line) + ":" +
@@ -1204,6 +1207,20 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
     res.errors.push_back(step_manifest.message);
     res.steps.push_back(step_manifest);
     return res;
+  }
+
+  // Available toolkits for descriptor loading (required toolkits + installed optional toolkits if __all__)
+  std::vector<std::string> available_toolkits = required_toolkits;
+  if (has_all) {
+    available_toolkits.push_back("__all__");
+    for (const auto& k : known) {
+      const fs::path tk_dir = repo_root / "engine" / "toolkit" / k.name;
+      if (fs::is_regular_file(tk_dir / "toolkit.toml")) {
+        if (std::find(available_toolkits.begin(), available_toolkits.end(), k.name) == available_toolkits.end()) {
+          available_toolkits.push_back(k.name);
+        }
+      }
+    }
   }
 
   auto t_end = std::chrono::steady_clock::now();
@@ -1222,7 +1239,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   bool catalog_success = false;
   try {
     toolkit::DescriptorOptions desc_opts;
-    desc_opts.optional_imports = all_toolkits;
+    desc_opts.optional_imports = available_toolkits;
     const auto catalog = toolkit::load_descriptor_file(desc_file, toolkit::builtins(), desc_opts);
     res.domain = catalog.domain.empty() ? res.domain : catalog.domain;
     res.block_count = static_cast<int>(catalog.entries.size());
