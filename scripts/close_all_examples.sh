@@ -8,6 +8,7 @@ echo "==> Stopping all example backends..."
 if command -v systemctl >/dev/null 2>&1; then
   for p in "${PORTS[@]}"; do
     systemctl --user stop "paperboat-backend-${p}.service" 2>/dev/null || true
+    systemctl --user reset-failed "paperboat-backend-${p}.service" 2>/dev/null || true
   done
 fi
 
