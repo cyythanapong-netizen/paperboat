@@ -27,7 +27,7 @@ export type EngineState = {
   /** What the variables come to (variables.values), and why not when they don't hold. */
   varValues: Record<string, number | boolean | string>;
   varError: { text: string; at?: string } | null;
-  run: { id: string; progress: number; status: "running" | RunStatus } | null;
+  run: { id: string; progress: number; status: "running" | RunStatus; startedAt?: number; simTime?: number } | null;
   signals: Record<string, Series>;
   /** The latest value each monitor sent: what a Display or Image view shows. */
   latest: Record<string, number | string | number[]>;
@@ -190,7 +190,7 @@ export function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, entities };
     }
     case "run.started":
-      return { ...s, run: { id: m.run, progress: 0, status: "running" }, signals: {}, latest: {}, vectorComponents: {}, active: [], failed: [], progress: {} };
+      return { ...s, run: { id: m.run, progress: 0, status: "running", startedAt: Date.now(), simTime: 0 }, signals: {}, latest: {}, vectorComponents: {}, active: [], failed: [], progress: {} };
     case "run.progress":
       return s.run?.id === m.run ? { ...s, run: { ...s.run, progress: m.fraction } } : s;
     case "run.finished":
@@ -205,8 +205,9 @@ export function reduce(s: EngineState, m: Action): EngineState {
     case "signal": {
       const latest = { ...s.latest, [m.node]: m.v };
       const vectorComponents = m.components ? { ...s.vectorComponents, [m.node]: m.components } : s.vectorComponents;
-      if (typeof m.v !== "number") return { ...s, latest, vectorComponents };
-      return { ...s, latest, vectorComponents, signals: { ...s.signals, [m.node]: append(s.signals[m.node], m.t, m.v) } };
+      const run = s.run ? { ...s.run, simTime: Math.max(s.run.simTime ?? 0, m.t) } : s.run;
+      if (typeof m.v !== "number") return { ...s, run, latest, vectorComponents };
+      return { ...s, run, latest, vectorComponents, signals: { ...s.signals, [m.node]: append(s.signals[m.node], m.t, m.v) } };
     }
     case "log":
       return { ...s, logs: pushLog(s.logs, { level: m.level, text: m.text, node: m.node }) };

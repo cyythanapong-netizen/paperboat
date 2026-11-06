@@ -1887,8 +1887,8 @@
         },
         "duration": {
           "type": "number",
-          "exclusiveMinimum": 0,
-          "description": "Run length, s (a Step flow: its limit)."
+          "minimum": 0,
+          "description": "Run length, s (0: run indefinitely until cancelled or stopped; a Step flow: its limit)."
         },
         "dt": {
           "type": "number",

@@ -743,6 +743,8 @@ TEST_CASE("graph.run's settings override the backend's run settings") {
   CHECK(s.speed == 0);
   CHECK(s.mode == base.mode);  // the backend's to say
   CHECK(core::with_overrides(base, nullptr).duration == 10);
+  CHECK(core::with_overrides(base, json{{"duration", 0}}).duration == 0);
+  CHECK_THROWS_WITH(core::with_overrides(base, json{{"duration", -1}}), ContainsSubstring("duration"));
   CHECK_THROWS_WITH(core::with_overrides(base, json{{"dt", 0}}), ContainsSubstring("dt"));
   CHECK_THROWS_WITH(core::with_overrides(base, json{{"duration", "long"}}), ContainsSubstring("duration"));
   CHECK_THROWS_WITH(core::with_overrides(base, json{{"duration", 1e6}, {"dt", 1e-3}}), ContainsSubstring("10 million"));
@@ -759,6 +761,17 @@ TEST_CASE("graph.run's settings override the backend's run settings") {
   Collected bad;
   CHECK(core::run("r", starter_graph(), starter_station(), backend, bad.emit(), nullptr, {}, json{{"dt", -1}}) == "failed");
   CHECK(bad.messages.back()["status"] == "failed");
+
+  // An infinite run (duration = 0) runs until cancelled
+  std::stop_source stop;
+  int steps_seen = 0;
+  auto emit_fn = [&](const json& m) {
+    if (m.value("type", "") == "signal") {
+      if (++steps_seen >= 5) stop.request_stop();
+    }
+  };
+  CHECK(core::run("inf", starter_graph(), starter_station(), backend, emit_fn, nullptr, stop.get_token(), json{{"duration", 0}}) == "cancelled");
+  CHECK(steps_seen >= 5);
 }
 
 TEST_CASE("a feedback loop through a block without feedthrough runs; an algebraic loop fails, naming a block") {

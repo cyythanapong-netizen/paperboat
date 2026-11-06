@@ -485,7 +485,21 @@ export function App() {
   };
 
   const status = state.run?.status;
-  const elapsed = state.run ? `${(state.run.progress * (Number(runSettings.duration ?? state.runDefaults.duration) || 0)).toFixed(1)} / ${runSettings.duration ?? state.runDefaults.duration ?? "?"} s` : "";
+  const durationVal = Number(runSettings.duration ?? state.runDefaults.duration);
+  const isInfinite = durationVal <= 0;
+  const simTime = state.run?.simTime ?? (isInfinite ? 0 : (state.run ? state.run.progress * durationVal : 0));
+  const speed = Number(runSettings.speed ?? state.runDefaults.speed ?? 1);
+  const wallElapsed = state.run?.startedAt ? (Date.now() - state.run.startedAt) / 1000 : 0;
+  const expectedWall = speed > 0 ? simTime / speed : 0;
+  const delaySeconds = speed > 0 && wallElapsed > 1.2 && simTime > 0 ? wallElapsed - expectedWall : 0;
+  const isDelayed = delaySeconds > 0.35;
+
+  const elapsed = state.run
+    ? isInfinite
+      ? `${simTime.toFixed(1)} s`
+      : `${(state.run.progress * durationVal).toFixed(1)} / ${durationVal} s`
+    : "";
+  const delayNotice = isDelayed ? ` • ⚠ delay +${delaySeconds.toFixed(1)}s` : "";
 
   // ---- Projects (#82): the whole session as one file ----
   // A project is the Flow, the Station, the variables, the Dashboard layout and the run settings. `projectKey` is
@@ -999,7 +1013,7 @@ export function App() {
           whyNot={whyNotRun}
           running={running}
           status={state.run ? status : undefined}
-          statusText={status === "running" ? `running ${elapsed}` : status}
+          statusText={status === "running" ? `running ${elapsed}${delayNotice}` : status}
           defaults={state.runDefaults}
           settings={runSettings}
           onSettings={setRunSettings}

@@ -96,6 +96,9 @@ class Run {
   toolkit::LogFn log_;
   toolkit::ProgressFn progress_;
   std::map<std::string, std::chrono::steady_clock::time_point, std::less<>> progress_sent_;  // node → last node.progress
+  std::chrono::steady_clock::time_point run_start_time_{};
+  bool run_started_time_set_ = false;
+  std::chrono::steady_clock::time_point last_lag_warn_{};
   toolkit::Context ctx_;
   Station station_;
   std::unique_ptr<toolkit::DomainState> state_;

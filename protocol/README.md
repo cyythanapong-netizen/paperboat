@@ -101,6 +101,7 @@ Default address: `ws://localhost:8765`.
 
 // RunSettings: hello.run (the backend's defaults) and graph.run.settings (this run's
 // changes; any but mode). A value out of range fails the run with a log, not the backend.
+// duration: 0 means run indefinitely until cancelled, a Stop block, or every path ending.
 { "mode": "clock", "duration": 10, "dt": 0.01, "speed": 1 }   // mode: clock | once; speed: times real time, 0 as fast as it can
 
 // Graph: sent by the UI with graph.run, and by the backend with graph.load

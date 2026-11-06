@@ -20,6 +20,24 @@ class Clock final : public Executor {
  public:
   std::string execute(Run& run) override {
     const auto& s = run.settings();
+    if (s.duration <= 0) {
+      char what[96];
+      std::snprintf(what, sizeof what, "running %zu blocks on %zu station objects indefinitely",
+                    run.graph().order.size(), run.station().size());
+      run.log("info", what);
+      for (int k = 0;; ++k) {
+        if (run.cancelled()) return "cancelled";
+        run.at_time(k * s.dt);
+        const json samples = run.pass();
+        const auto ended = run.advance();
+        if (k % s.emit_every == 0 || ended) run.frame(samples, std::nullopt);
+        if (ended) {
+          run.log("warn", *ended);
+          break;
+        }
+      }
+      return "done";
+    }
     char what[96];
     std::snprintf(what, sizeof what, "running %zu blocks on %zu station objects for %g s", run.graph().order.size(),
                   run.station().size(), s.duration);
@@ -70,7 +88,11 @@ class Steps final : public Executor {
     if (g.hats.empty()) throw GraphError("a Step flow needs a Start or When block");
     const bool listens = std::ranges::any_of(g.hats, [&](const std::string& h) { return g.nodes.at(h).step->may_start(); });
     char what[96];
-    std::snprintf(what, sizeof what, "running; hats listen until Cancel, Stop or %g s", s.duration);
+    if (s.duration > 0) {
+      std::snprintf(what, sizeof what, "running; hats listen until Cancel, Stop or %g s", s.duration);
+    } else {
+      std::snprintf(what, sizeof what, "running; hats listen until Cancel or Stop");
+    }
     run.log("info", listens ? what : "running");
 
     struct Path {
@@ -175,7 +197,7 @@ class Steps final : public Executor {
         run.log("info", std::string("every path ended") + at);
         break;
       }
-      if (t >= s.duration) {
+      if (s.duration > 0 && t >= s.duration) {
         char limit[64];
         std::snprintf(limit, sizeof limit, "stopped after %g s", s.duration);
         run.log("info", limit);

@@ -96,6 +96,9 @@ Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit
 }
 
 std::string Run::go(const json& graph_given, const json& station_given, const json& variables) {
+  run_start_time_ = std::chrono::steady_clock::now();
+  run_started_time_set_ = true;
+  last_lag_warn_ = run_start_time_;
   emit_({{"type", "run.started"}, {"run", id_}});
   json graph_json, station_json;
   try {  // variables first (#36): blocks and objects get the values they stand for
@@ -176,7 +179,7 @@ std::string Run::finish(const std::string& status) {
       if (auto summary = state_->summary()) emit_(log_msg("info", *summary));
     for (const auto& item : station_)
       if (auto values = format_values(item.instance->read()); !values.empty()) emit_(log_msg("info", item.id + ": " + values));
-    emit_({{"type", "run.progress"}, {"run", id_}, {"fraction", 1.0}});
+    if (settings_.duration > 0) emit_({{"type", "run.progress"}, {"run", id_}, {"fraction", 1.0}});
   }
   emit_({{"type", "run.finished"}, {"run", id_}, {"status", status}});
   return status;
@@ -308,8 +311,25 @@ void Run::frame(const json& samples, std::optional<double> progress) {
   for (const auto& e : scene_of_blocks(blocks())) patch.push_back(e);
   if (!patch.empty()) emit_({{"type", "scene.patch"}, {"entities", patch}});
   if (progress) emit_({{"type", "run.progress"}, {"run", id_}, {"fraction", *progress}});
-  if (settings_.real_time && settings_.speed > 0)
-    std::this_thread::sleep_for(std::chrono::duration<double>(settings_.dt * settings_.emit_every / settings_.speed));
+  if (settings_.real_time && settings_.speed > 0) {
+    if (!run_started_time_set_) {
+      run_start_time_ = std::chrono::steady_clock::now();
+      run_started_time_set_ = true;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    const auto target_time = run_start_time_ + std::chrono::duration<double>(ctx_.t / settings_.speed);
+    if (target_time > now) {
+      std::this_thread::sleep_for(target_time - now);
+    } else {
+      const auto lag = std::chrono::duration<double>(now - target_time).count();
+      if (lag > 0.25 && (now - last_lag_warn_ > std::chrono::seconds(2))) {
+        last_lag_warn_ = now;
+        char buf[96];
+        std::snprintf(buf, sizeof buf, "computation delay: behind real-time by %.2f s", lag);
+        log("warn", buf);
+      }
+    }
+  }
 }
 
 json Run::scene(bool with_blocks) const {
@@ -344,10 +364,11 @@ RunSettings with_overrides(RunSettings base, const json& settings) {
       throw std::invalid_argument(std::string("run setting ") + key + (zero_ok ? " must be 0 or more" : " must be more than 0"));
     into = v.get<double>();
   };
-  number("duration", base.duration, false);
+  number("duration", base.duration, true);
   number("dt", base.dt, false);
   number("speed", base.speed, true);
-  if (base.duration / base.dt > 1e7) throw std::invalid_argument("run settings: more than 10 million clock steps (duration / dt)");
+  if (base.duration > 0 && base.duration / base.dt > 1e7)
+    throw std::invalid_argument("run settings: more than 10 million clock steps (duration / dt)");
   return base;
 }
 
