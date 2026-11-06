@@ -116,14 +116,12 @@ A Step flow's path: ``start`` (a hat: once), ``when`` (a hat: each time signal `
 ``wait`` (``seconds``), ``repeat`` (leaves by ``loop`` ``times`` times, then ``done``), ``stop``
 (ends the run). To branch, use a ``base`` logic block in its step form.
 
-opencv (optional, external)
----------------------------
+opencv
+------
 
-Image processing toolkit, shipped separately as ``paperboat-toolkit-opencv``
-(https://github.com/cyythanapong-netizen/paperboat-toolkit-opencv). Built against OpenCV;
-register with ``paperboat::toolkit::opencv::register_opencv``. Image filters, ``image`` →
-``image``: ``gray``, ``blur`` (``size``), ``median`` (``size``), ``threshold`` (``level``,
-``otsu``, ``invert``), ``adaptive_threshold`` (``size``, ``c``, ``invert``), ``hsv_range``,
-``canny`` (``low``, ``high``), ``erode``, ``dilate``, ``open``, ``close`` (``size``,
-``iterations``), ``invert``, ``distance``. Monitor ``view`` (an image instrument). Station
-object ``image`` (props ``file``, ``width``; linked block out ``image``).
+Optional (built when OpenCV is found; ``paperboat::toolkit_opencv``,
+``register_opencv``). Image filters, ``image`` → ``image``: ``gray``, ``blur`` (``size``),
+``median`` (``size``), ``threshold`` (``level``, ``otsu``, ``invert``), ``adaptive_threshold``
+(``size``, ``c``, ``invert``), ``hsv_range``, ``canny`` (``low``, ``high``), ``erode``, ``dilate``,
+``open``, ``close`` (``size``, ``iterations``), ``invert``, ``distance``. Monitor ``view`` (an image
+instrument). Station object ``image`` (props ``file``, ``width``; linked block out ``image``).

@@ -46,8 +46,7 @@ wire joins compatible ports of one type.
 
 Definitions live in **code**, next to what the block does: C++ ``define_block``, Python
 class attributes. The **toolkit** offers packages of them (``base``, ``signal``, ``math``,
-``dashboard``, ``control``, ``step``); a domain registers its own in a package
-(the optional ``opencv`` toolkit lives in ``paperboat-toolkit-opencv``)
+``dashboard``, ``control``, ``step``, ``opencv``); a domain registers its own in a package
 named after the domain. A **descriptor** (:doc:`descriptor`) picks which packages and
 templates an app offers, customises them and holds the starters. It never defines a block.
 

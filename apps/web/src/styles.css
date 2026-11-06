@@ -862,26 +862,6 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 }
 @media (max-width: 860px) { .toast { left: var(--space-3); bottom: 72px; } }
 
-.deco .deco-station { position: absolute; inset: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-screen); pointer-events: auto; }
+ .deco .deco-station { position: absolute; inset: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-screen); pointer-events: auto; }
 .deco .deco-station > * { width: 100%; height: 100%; }
 .deco-station-fallback { display: grid; place-items: center; height: 100%; color: var(--text-muted); font-size: var(--text-sm); }
-
-/* Reusable indeterminate spinner (Spinner.tsx). */
-.spinner {
-  display: inline-block;
-  border: 2px solid var(--line-soft, #ccc);
-  border-top-color: var(--ink, #222);
-  border-radius: 50%;
-  animation: spinner-rotate 0.7s linear infinite;
-  vertical-align: middle;
-}
-@keyframes spinner-rotate { to { transform: rotate(360deg); } }
-
-/* Toolkits top-bar control (Toolkits.tsx). */
-.toolkits { position: relative; display: inline-block; }
-.toolkits-popover { position: absolute; right: 0; top: 100%; margin-top: 4px; min-width: 260px; background: var(--surface-panel, #fff); border: 1.5px solid var(--line-ink, #222); border-radius: 6px; padding: 8px; box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); z-index: 50; }
-.toolkits-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line-soft, #ddd); }
-.toolkits-row:last-of-type { border-bottom: none; }
-.toolkits-info { display: flex; flex-direction: column; flex: 1; gap: 2px; }
-.toolkits-desc { font-size: 0.75rem; opacity: 0.7; }
-.toolkits-msg { margin-top: 8px; font-size: 0.75rem; word-break: break-word; }

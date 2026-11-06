@@ -20,8 +20,8 @@ jobs:
       CC: gcc-14
     steps:
       - uses: actions/checkout@v4
-      - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
+      - name: Install OpenCV (the optional opencv toolkit package)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libopencv-dev ninja-build
       - name: Configure
         run: cmake -S engine -B engine/build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPAPERBOAT_BUILD_TESTS=ON
       - name: Build

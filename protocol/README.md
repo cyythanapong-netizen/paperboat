@@ -290,6 +290,5 @@ runs each example's starter headless (`--run`) and compares the results with its
 - **Authoring block definitions:** in code, next to what the block does (C++
   `define_block`, Python class attributes); the descriptor picks and customises them and
   holds the starters. The engine emits them as this JSON.
-- **Scripting:** none. Expressions (`Expression`) plus TOML definitions and variables with
-  `expr` cover user expression nodes and parametric scenes; stateful or control-flow logic is
-  written in C++ or Python. Lua (sol2) was considered (paperboat#28) and dropped as not needed.
+- **Scripting (later):** embed Lua (via sol2) in the engine for user expression nodes
+  and parametric scenes. Lua is small, sandboxable and fast to embed from C++.
