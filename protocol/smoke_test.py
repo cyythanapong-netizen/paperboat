@@ -16,6 +16,10 @@ from pathlib import Path
 import jsonschema
 from websockets.asyncio.client import ClientConnection, connect
 
+import os
+os.environ["NO_PROXY"] = "localhost,127.0.0.1"
+os.environ["no_proxy"] = "localhost,127.0.0.1"
+
 SCHEMA = json.loads((Path(__file__).parent / "schema" / "paperboat-0.schema.json").read_text())
 TO_UI = jsonschema.Draft202012Validator({**SCHEMA, "$ref": "#/$defs/toUI"})
 TO_BACKEND = jsonschema.Draft202012Validator({**SCHEMA, "$ref": "#/$defs/toBackend"})
@@ -90,7 +94,7 @@ async def main() -> None:
     parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
 
-    async with connect(f"ws://localhost:{args.port}") as ws:
+    async with connect(f"ws://localhost:{args.port}", proxy=None) as ws:
         # The handshake, up to graph.load: hello and catalog first, then the scene; a backend
         # with variables also sends variables.load and variables.values, in among them.
         first = {}
