@@ -35,6 +35,57 @@ int64_t current_timestamp() {
       std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
+double seconds_since(std::chrono::steady_clock::time_point start) {
+  return std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+}
+
+std::string ws_url(int port) { return "ws://localhost:" + std::to_string(port); }
+
+void add_unique(std::vector<std::string>& list, const std::string& item) {
+  if (std::ranges::find(list, item) == list.end()) list.push_back(item);
+}
+
+// The executable a C++ backend's build made: the first `paperboat-*` file in `build_dir`
+// that isn't an object or an archive.
+fs::path built_binary(const fs::path& build_dir) {
+  std::error_code ec;
+  for (const auto& entry : fs::directory_iterator(build_dir, ec)) {
+    if (!entry.is_regular_file()) continue;
+    const auto name = entry.path().filename().string();
+    if (name.starts_with("paperboat-") && !name.ends_with(".o") && !name.ends_with(".a")) return entry.path();
+  }
+  return {};
+}
+
+// `name.pkk` is a common typo for `name.ppk`: take the .ppk when only it exists.
+fs::path fix_pkk_typo(fs::path p) {
+  if (!fs::exists(p) && p.extension() == ".pkk") {
+    fs::path ppk = p;
+    ppk.replace_extension(".ppk");
+    if (fs::exists(ppk)) p = ppk;
+  }
+  return p;
+}
+
+// A packed backend: a .ppk (or .paperboat-pkg, or the .pkk typo) file.
+bool is_package(const fs::path& p) {
+  return fs::is_regular_file(p) &&
+         (p.extension() == ".ppk" || p.extension() == ".paperboat-pkg" || p.extension() == ".pkk");
+}
+
+// `--var k=v` for each of the run's variables.
+void append_vars(std::vector<std::string>& args, const BackendRunOptions& opts) {
+  for (const auto& [k, v] : opts.vars) {
+    args.push_back("--var");
+    args.push_back(k + "=" + v);
+  }
+}
+
+// What a failed helper process said: its stdout, else its stderr.
+const std::string& output_of(const ProcessResult& r) {
+  return !r.stdout_text.empty() ? r.stdout_text : r.stderr_text;
+}
+
 }  // namespace
 
 bool BackendManager::is_port_listening(int port) {
@@ -209,7 +260,7 @@ void BackendManager::register_running_backend(const RunningBackend& backend) {
       {"cwd", backend.cwd.string()},
       {"backend_dir", backend.backend_dir.string()},
       {"executable", backend.executable},
-      {"ws_url", backend.ws_url.empty() ? ("ws://localhost:" + std::to_string(backend.port)) : backend.ws_url},
+      {"ws_url", backend.ws_url.empty() ? ws_url(backend.port) : backend.ws_url},
       {"started_at", backend.started_at > 0 ? backend.started_at : current_timestamp()}};
 
   std::ofstream out(p);
@@ -255,7 +306,7 @@ std::vector<RunningBackend> BackendManager::list_running_backends() {
         b.cwd = doc.value("cwd", "");
         b.backend_dir = doc.value("backend_dir", "");
         b.executable = doc.value("executable", "");
-        b.ws_url = doc.value("ws_url", "ws://localhost:" + std::to_string(port));
+        b.ws_url = doc.value("ws_url", ws_url(port));
         b.started_at = doc.value("started_at", int64_t{0});
 
         result.push_back(std::move(b));
@@ -277,39 +328,29 @@ std::vector<RunningBackend> BackendManager::list_running_backends() {
         RunningBackend b;
         b.port = p;
         b.pid = pid;
-        b.ws_url = "ws://localhost:" + std::to_string(p);
+        b.ws_url = ws_url(p);
         b.executable = cmd;
 
-        if (cmd.find("cart-pole") != std::string::npos) {
-          b.domain = "cart-pole";
-          b.engine = "paperboat/cart-pole-cpp";
-        } else if (cmd.find("parts") != std::string::npos) {
-          b.domain = "parts";
-          b.engine = "paperboat/parts-cpp";
-        } else if (cmd.find("double-pendulum") != std::string::npos) {
-          b.domain = "double-pendulum";
-          b.engine = "paperboat/double-pendulum-cpp";
-        } else if (cmd.find("mass-spring") != std::string::npos) {
-          b.domain = "mass-spring";
-          b.engine = "python";
-        } else if (cmd.find("runner") != std::string::npos) {
-          b.domain = "runner";
-          b.engine = "python";
-        } else if (cmd.find("animation") != std::string::npos) {
-          b.domain = "animation";
-          b.engine = "python";
-        } else if (cmd.find("chain") != std::string::npos) {
-          b.domain = "chain";
-          b.engine = "python";
-        } else if (cmd.find("supply") != std::string::npos) {
-          b.domain = "supply";
-          b.engine = "python";
-        } else if (cmd.find("parametric") != std::string::npos) {
-          b.domain = "parametric";
-          b.engine = "python";
-        } else {
-          b.domain = "unknown";
-          b.engine = "paperboat";
+        // The first name found in the command line wins, so the order matters.
+        static constexpr std::pair<std::string_view, std::string_view> known[] = {
+            {"cart-pole", "paperboat/cart-pole-cpp"},
+            {"parts", "paperboat/parts-cpp"},
+            {"double-pendulum", "paperboat/double-pendulum-cpp"},
+            {"mass-spring", "python"},
+            {"runner", "python"},
+            {"animation", "python"},
+            {"chain", "python"},
+            {"supply", "python"},
+            {"parametric", "python"},
+        };
+        b.domain = "unknown";
+        b.engine = "paperboat";
+        for (const auto& [domain, engine] : known) {
+          if (cmd.find(domain) != std::string::npos) {
+            b.domain = domain;
+            b.engine = engine;
+            break;
+          }
         }
 
         result.push_back(std::move(b));
@@ -331,21 +372,10 @@ bool BackendManager::needs_rebuild(const fs::path& backend_dir, const fs::path& 
     return true;
   }
 
-  // Find compiled binary in build_dir
-  bool has_bin = false;
-  std::filesystem::file_time_type bin_time;
+  const fs::path bin = built_binary(bdir);
+  if (bin.empty()) return true;
   std::error_code ec;
-  for (const auto& entry : fs::directory_iterator(bdir, ec)) {
-    if (entry.is_regular_file()) {
-      auto name = entry.path().filename().string();
-      if (name.starts_with("paperboat-") && !name.ends_with(".o") && !name.ends_with(".a")) {
-        has_bin = true;
-        bin_time = fs::last_write_time(entry.path(), ec);
-        break;
-      }
-    }
-  }
-  if (!has_bin) return true;
+  const auto bin_time = fs::last_write_time(bin, ec);
 
   auto stamp_time = fs::last_write_time(stamp_file, ec);
   if (stamp_time > bin_time) stamp_time = bin_time;
@@ -389,11 +419,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
 
   if (!needs_rebuild(backend_dir, build_dir)) {
     if (verbose) std::cout << "[build] up to date (skipped)\n";
-    if (elapsed_seconds) {
-      auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-          std::chrono::steady_clock::now() - start_time);
-      *elapsed_seconds = static_cast<double>(duration.count()) / 1000000.0;
-    }
+    if (elapsed_seconds) *elapsed_seconds = seconds_since(start_time);
     return true;
   }
 
@@ -424,11 +450,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
     stamp << current_timestamp() << '\n';
   }
 
-  if (elapsed_seconds) {
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now() - start_time);
-    *elapsed_seconds = static_cast<double>(duration.count()) / 1000000.0;
-  }
+  if (elapsed_seconds) *elapsed_seconds = seconds_since(start_time);
   return true;
 }
 
@@ -548,13 +570,7 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
     return fs::current_path();
   }
 
-  // Handle .pkk typo if .ppk exists
-  fs::path p_check = path_or_domain;
-  if (!fs::exists(p_check) && p_check.extension() == ".pkk") {
-    fs::path p_ppk = p_check;
-    p_ppk.replace_extension(".ppk");
-    if (fs::exists(p_ppk)) p_check = p_ppk;
-  }
+  const fs::path p_check = fix_pkk_typo(path_or_domain);
 
   if (fs::exists(p_check)) {
     if (is_valid_backend_dir(p_check)) return p_check;
@@ -596,14 +612,7 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
 }
 
 int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRunOptions& opts) {
-  fs::path target = path_or_domain.empty() ? fs::current_path() : path_or_domain;
-
-  // Handle .pkk typo if .ppk exists
-  if (!fs::exists(target) && target.extension() == ".pkk") {
-    fs::path candidate = target;
-    candidate.replace_extension(".ppk");
-    if (fs::exists(candidate)) target = candidate;
-  }
+  fs::path target = fix_pkk_typo(path_or_domain.empty() ? fs::current_path() : path_or_domain);
 
   // If target does not exist as-is, check if matching archive (.ppk / .paperboat-pkg) exists locally
   if (!fs::exists(target)) {
@@ -622,8 +631,7 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
   }
 
   // If target is an archive (.ppk or .paperboat-pkg or .pkk), unpack it first to user_backends_dir
-  if (fs::is_regular_file(target) &&
-      (target.extension() == ".ppk" || target.extension() == ".paperboat-pkg" || target.extension() == ".pkk")) {
+  if (is_package(target)) {
     fs::path udir = user_backends_dir();
     std::error_code ec;
     fs::create_directories(udir, ec);
@@ -699,33 +707,18 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     }
 
     // Locate binary in build/
-    fs::path bin;
-    if (manifest.has_manifest && !manifest.run.empty() && fs::is_regular_file(dir / manifest.run)) {
-      bin = dir / manifest.run;
-    } else {
-      std::error_code ec;
-      for (const auto& entry : fs::directory_iterator(dir / "build", ec)) {
-        if (entry.is_regular_file()) {
-          auto fn = entry.path().filename().string();
-          if (fn.starts_with("paperboat-") && !fn.ends_with(".o") && !fn.ends_with(".a")) {
-            bin = entry.path();
-            break;
-          }
-        }
-      }
-    }
+    const fs::path bin = manifest.has_manifest && !manifest.run.empty() && fs::is_regular_file(dir / manifest.run)
+                             ? dir / manifest.run
+                             : built_binary(dir / "build");
     if (bin.empty()) {
       std::cerr << "error: compiled binary not found in " << (dir / "build") << '\n';
       return 1;
     }
 
     std::vector<std::string> args = {bin.string(), "--port", std::to_string(port)};
-    for (const auto& [k, v] : opts.vars) {
-      args.push_back("--var");
-      args.push_back(k + "=" + v);
-    }
+    append_vars(args, opts);
 
-    std::cout << "paperboat running " << bin.filename().string() << " on ws://localhost:" << port << '\n';
+    std::cout << "paperboat running " << bin.filename().string() << " on " << ws_url(port) << '\n';
     return ProcessRunner::run_stream(args, dir, {}, log_cb);
   } else {
     // Python backend
@@ -743,12 +736,9 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     }
 
     std::vector<std::string> args = {py_env.python_bin.string(), script_run_arg, "--port", std::to_string(port)};
-    for (const auto& [k, v] : opts.vars) {
-      args.push_back("--var");
-      args.push_back(k + "=" + v);
-    }
+    append_vars(args, opts);
 
-    std::cout << "paperboat running python " << server_script.filename().string() << " on ws://localhost:" << port << '\n';
+    std::cout << "paperboat running python " << server_script.filename().string() << " on " << ws_url(port) << '\n';
     return ProcessRunner::run_stream(args, dir, py_env.env, log_cb);
   }
 }
@@ -867,23 +857,27 @@ fs::path BackendManager::find_examples_dir(const fs::path& hint) {
 
 std::vector<ExampleBackend> BackendManager::get_examples(const fs::path& examples_dir) {
   const fs::path edir = find_examples_dir(examples_dir);
-  std::vector<ExampleBackend> list = {
-      {8765, "mass-spring-python", "python", edir / "mass-spring-python", false, 0, "ws://localhost:8765"},
-      {8766, "cart-pole-cpp", "cpp", edir / "cart-pole-cpp", false, 0, "ws://localhost:8766"},
-      {8767, "parametric-python", "python", edir / "parametric-python", false, 0, "ws://localhost:8767"},
-      {8768, "runner-python", "python", edir / "runner-python", false, 0, "ws://localhost:8768"},
-      {8769, "animation-python", "python", edir / "animation-python", false, 0, "ws://localhost:8769"},
-      {8770, "parts-cpp", "cpp", edir / "parts-cpp", false, 0, "ws://localhost:8770"},
-      {8771, "chain-python", "python", edir / "chain-python", false, 0, "ws://localhost:8771"},
-      {8772, "supply-python", "python", edir / "supply-python", false, 0, "ws://localhost:8772"},
-      {8773, "double-pendulum-cpp", "cpp", edir / "double-pendulum-cpp", false, 0, "ws://localhost:8773"},
+  struct Known {
+    int port;
+    const char* name;
+    const char* type;
+  };
+  static constexpr Known known[] = {
+      {8765, "mass-spring-python", "python"}, {8766, "cart-pole-cpp", "cpp"},
+      {8767, "parametric-python", "python"},  {8768, "runner-python", "python"},
+      {8769, "animation-python", "python"},   {8770, "parts-cpp", "cpp"},
+      {8771, "chain-python", "python"},       {8772, "supply-python", "python"},
+      {8773, "double-pendulum-cpp", "cpp"},
   };
 
-  for (auto& item : list) {
+  std::vector<ExampleBackend> list;
+  for (const auto& k : known) {
+    ExampleBackend item{k.port, k.name, k.type, edir / k.name, false, 0, ws_url(k.port)};
     if (is_port_listening(item.port)) {
       item.running = true;
       item.pid = find_pid_by_port(item.port);
     }
+    list.push_back(std::move(item));
   }
   return list;
 }
@@ -901,6 +895,24 @@ bool BackendManager::start_examples(const fs::path& examples_dir) {
   const fs::path root = toolkit::find_repo_root();
   auto py_env = prepare_python_env(root);
 
+  // Record a launched example so `paperboat list` and `stop` find it.
+  const auto launched = [](const ExampleBackend& ex, int pid, const std::string& engine, const std::string& domain,
+                           const fs::path& cwd, const std::string& executable) {
+    if (pid <= 0) return;
+    std::cout << "Started " << ex.name << " on port " << ex.port << " (PID " << pid << ")\n";
+    RunningBackend rb;
+    rb.port = ex.port;
+    rb.pid = pid;
+    rb.engine = engine;
+    rb.domain = domain;
+    rb.cwd = cwd;
+    rb.backend_dir = ex.dir;
+    rb.executable = executable;
+    rb.ws_url = ws_url(ex.port);
+    rb.started_at = current_timestamp();
+    register_running_backend(rb);
+  };
+
   auto examples = get_examples(edir);
   for (const auto& ex : examples) {
     if (!fs::is_directory(ex.dir)) {
@@ -908,6 +920,7 @@ bool BackendManager::start_examples(const fs::path& examples_dir) {
       continue;
     }
 
+    const fs::path log_path = fs::path("/tmp") / ("backend-" + std::to_string(ex.port) + ".log");
     if (ex.type == "cpp") {
       std::cout << "==> Building " << ex.name << "…\n";
       std::string err;
@@ -916,57 +929,20 @@ bool BackendManager::start_examples(const fs::path& examples_dir) {
         continue;
       }
 
-      fs::path bin;
-      std::error_code ec;
-      for (const auto& entry : fs::directory_iterator(ex.dir / "build", ec)) {
-        if (entry.is_regular_file()) {
-          auto fn = entry.path().filename().string();
-          if (fn.starts_with("paperboat-") && !fn.ends_with(".o") && !fn.ends_with(".a")) {
-            bin = entry.path();
-            break;
-          }
-        }
-      }
+      const fs::path bin = built_binary(ex.dir / "build");
       if (bin.empty()) {
         std::cerr << "warning: binary for " << ex.name << " not found\n";
         continue;
       }
 
-      const fs::path log_path = fs::path("/tmp") / ("backend-" + std::to_string(ex.port) + ".log");
       int pid = ProcessRunner::run_detached({bin.string(), "--port", std::to_string(ex.port)}, root, {}, log_path);
-      if (pid > 0) {
-        std::cout << "Started " << ex.name << " on port " << ex.port << " (PID " << pid << ")\n";
-        RunningBackend rb;
-        rb.port = ex.port;
-        rb.pid = pid;
-        rb.engine = "paperboat/" + ex.name;
-        rb.domain = ex.name.substr(0, ex.name.find("-cpp"));
-        rb.cwd = root;
-        rb.backend_dir = ex.dir;
-        rb.executable = bin.string();
-        rb.ws_url = "ws://localhost:" + std::to_string(ex.port);
-        rb.started_at = current_timestamp();
-        register_running_backend(rb);
-      }
+      launched(ex, pid, "paperboat/" + ex.name, ex.name.substr(0, ex.name.find("-cpp")), root, bin.string());
     } else {
       // Python
-      const fs::path log_path = fs::path("/tmp") / ("backend-" + std::to_string(ex.port) + ".log");
       int pid = ProcessRunner::run_detached({py_env.python_bin.string(), "server.py", "--port", std::to_string(ex.port)},
                                             ex.dir, py_env.env, log_path);
-      if (pid > 0) {
-        std::cout << "Started " << ex.name << " on port " << ex.port << " (PID " << pid << ")\n";
-        RunningBackend rb;
-        rb.port = ex.port;
-        rb.pid = pid;
-        rb.engine = "python";
-        rb.domain = ex.name.substr(0, ex.name.find("-python"));
-        rb.cwd = ex.dir;
-        rb.backend_dir = ex.dir;
-        rb.executable = py_env.python_bin.string() + " server.py";
-        rb.ws_url = "ws://localhost:" + std::to_string(ex.port);
-        rb.started_at = current_timestamp();
-        register_running_backend(rb);
-      }
+      launched(ex, pid, "python", ex.name.substr(0, ex.name.find("-python")), ex.dir,
+               py_env.python_bin.string() + " server.py");
     }
   }
 
@@ -1088,16 +1064,10 @@ BackendManifest BackendManager::load_manifest(const fs::path& backend_dir, std::
       if (!node) return;
       if (const auto* arr = node->as_array()) {
         for (const auto& el : *arr) {
-          if (auto s = el.value<std::string>()) {
-            if (std::find(m.toolkits.begin(), m.toolkits.end(), *s) == m.toolkits.end()) {
-              m.toolkits.push_back(*s);
-            }
-          }
+          if (auto s = el.value<std::string>()) add_unique(m.toolkits, *s);
         }
       } else if (auto s = node->value<std::string>()) {
-        if (std::find(m.toolkits.begin(), m.toolkits.end(), *s) == m.toolkits.end()) {
-          m.toolkits.push_back(*s);
-        }
+        add_unique(m.toolkits, *s);
       }
     };
     parse_toolkit_node(doc["backend"]["toolkits"].node());
@@ -1163,19 +1133,11 @@ int BackendManager::find_free_port(int start_port, int end_port) {
 
 CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   CheckResult res;
-  fs::path target = path.empty() ? fs::current_path() : path;
-
-  // Handle .pkk typo if .ppk exists
-  if (!fs::exists(target) && target.extension() == ".pkk") {
-    fs::path candidate = target;
-    candidate.replace_extension(".ppk");
-    if (fs::exists(candidate)) target = candidate;
-  }
+  fs::path target = fix_pkk_typo(path.empty() ? fs::current_path() : path);
 
   // If path is an archive (.ppk or .paperboat-pkg or .pkk), unpack to a temporary directory for verification
   fs::path temp_unpack_dir;
-  if (fs::is_regular_file(target) &&
-      (target.extension() == ".ppk" || target.extension() == ".paperboat-pkg" || target.extension() == ".pkk")) {
+  if (is_package(target)) {
     temp_unpack_dir = fs::temp_directory_path() / ("pb_check_" + target.stem().string());
     std::error_code ec;
     fs::remove_all(temp_unpack_dir, ec);
@@ -1205,6 +1167,15 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
 
   const fs::path repo_root = toolkit::find_repo_root(dir);
 
+  // A stage that fails ends the check: it is the last step, its message the last error.
+  const auto fail = [&res](CheckStep& step, std::string message) {
+    step.message = std::move(message);
+    step.ok = false;
+    res.errors.push_back(step.message);
+    res.steps.push_back(step);
+    return res;
+  };
+
   // -------------------------------------------------------------
   // Stage 1: Manifest & Folder Layout
   // -------------------------------------------------------------
@@ -1214,11 +1185,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   std::string manifest_err;
   BackendManifest manifest = load_manifest(dir, &manifest_err);
   if (!manifest_err.empty() || !manifest.has_manifest) {
-    step_manifest.message = manifest_err.empty() ? "failed to load backend.toml" : manifest_err;
-    step_manifest.ok = false;
-    res.errors.push_back(step_manifest.message);
-    res.steps.push_back(step_manifest);
-    return res;
+    return fail(step_manifest, manifest_err.empty() ? "failed to load backend.toml" : manifest_err);
   }
 
   res.name = manifest.name;
@@ -1229,55 +1196,32 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   // Check descriptor file exists
   const fs::path desc_file = dir / manifest.descriptor;
   if (!fs::is_regular_file(desc_file)) {
-    step_manifest.message = "descriptor file missing: " + manifest.descriptor;
-    step_manifest.ok = false;
-    res.errors.push_back(step_manifest.message);
-    res.steps.push_back(step_manifest);
-    return res;
+    return fail(step_manifest, "descriptor file missing: " + manifest.descriptor);
   }
 
   // Check build / entry point files
   if (manifest.language == "cpp") {
     if (!fs::is_regular_file(dir / "CMakeLists.txt")) {
-      step_manifest.message = "CMakeLists.txt missing in C++ backend: " + dir.string();
-      step_manifest.ok = false;
-      res.errors.push_back(step_manifest.message);
-      res.steps.push_back(step_manifest);
-      return res;
+      return fail(step_manifest, "CMakeLists.txt missing in C++ backend: " + dir.string());
     }
   } else if (manifest.language == "python") {
     if (!fs::is_regular_file(dir / manifest.run) && !fs::is_regular_file(dir / "server.py")) {
-      step_manifest.message = "Python entrypoint missing (" + manifest.run + " or server.py) in " + dir.string();
-      step_manifest.ok = false;
-      res.errors.push_back(step_manifest.message);
-      res.steps.push_back(step_manifest);
-      return res;
+      return fail(step_manifest, "Python entrypoint missing (" + manifest.run + " or server.py) in " + dir.string());
     }
   }
 
   // Check golden file if declared
   if (!manifest.golden.empty() && !fs::is_regular_file(dir / manifest.golden)) {
-    step_manifest.message = "declared golden file missing: " + (dir / manifest.golden).string();
-    step_manifest.ok = false;
-    res.errors.push_back(step_manifest.message);
-    res.steps.push_back(step_manifest);
-    return res;
+    return fail(step_manifest, "declared golden file missing: " + (dir / manifest.golden).string());
   }
 
   // Check required toolkits
   std::vector<std::string> required_toolkits;
   for (const auto& tk : manifest.toolkits) {
-    if (tk != "__all__" && std::find(required_toolkits.begin(), required_toolkits.end(), tk) == required_toolkits.end()) {
-      required_toolkits.push_back(tk);
-    }
+    if (tk != "__all__") add_unique(required_toolkits, tk);
   }
   const auto known = toolkit::list_toolkits(repo_root);
-  const auto reqs = toolkit::load_toolkit_requirements(dir, known);
-  for (const auto& r : reqs) {
-    if (std::find(required_toolkits.begin(), required_toolkits.end(), r) == required_toolkits.end()) {
-      required_toolkits.push_back(r);
-    }
-  }
+  for (const auto& r : toolkit::load_toolkit_requirements(dir, known)) add_unique(required_toolkits, r);
   for (const auto& tk : required_toolkits) {
     const fs::path tk_dir = repo_root / "engine" / "toolkit" / tk;
     if (!fs::is_regular_file(tk_dir / "toolkit.toml")) {
@@ -1286,11 +1230,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
     }
   }
   if (!res.missing_toolkits.empty()) {
-    step_manifest.message = "missing required toolkit: " + res.missing_toolkits.front();
-    step_manifest.ok = false;
-    res.errors.push_back(step_manifest.message);
-    res.steps.push_back(step_manifest);
-    return res;
+    return fail(step_manifest, "missing required toolkit: " + res.missing_toolkits.front());
   }
 
   // Parse descriptor syntax
@@ -1308,13 +1248,9 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
       }
     }
   } catch (const toml::parse_error& err) {
-    step_manifest.message = "descriptor syntax error: " + desc_file.string() + ":" +
-                            std::to_string(err.source().begin.line) + ":" +
-                            std::to_string(err.source().begin.column) + ": " + std::string(err.description());
-    step_manifest.ok = false;
-    res.errors.push_back(step_manifest.message);
-    res.steps.push_back(step_manifest);
-    return res;
+    return fail(step_manifest, "descriptor syntax error: " + desc_file.string() + ":" +
+                                   std::to_string(err.source().begin.line) + ":" +
+                                   std::to_string(err.source().begin.column) + ": " + std::string(err.description()));
   }
 
   // Available toolkits for descriptor loading (required toolkits + installed optional toolkits if __all__)
@@ -1323,16 +1259,11 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
     available_toolkits.push_back("__all__");
     for (const auto& k : known) {
       const fs::path tk_dir = repo_root / "engine" / "toolkit" / k.name;
-      if (fs::is_regular_file(tk_dir / "toolkit.toml")) {
-        if (std::find(available_toolkits.begin(), available_toolkits.end(), k.name) == available_toolkits.end()) {
-          available_toolkits.push_back(k.name);
-        }
-      }
+      if (fs::is_regular_file(tk_dir / "toolkit.toml")) add_unique(available_toolkits, k.name);
     }
   }
 
-  auto t_end = std::chrono::steady_clock::now();
-  step_manifest.duration_seconds = std::chrono::duration<double>(t_end - t_start).count();
+  step_manifest.duration_seconds = seconds_since(t_start);
   step_manifest.ok = true;
   step_manifest.message = "format 0, " + manifest.descriptor + ", " + manifest.language;
   res.steps.push_back(step_manifest);
@@ -1411,8 +1342,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
     res.errors.push_back(err.what());
   }
 
-  t_end = std::chrono::steady_clock::now();
-  step_catalog.duration_seconds = std::chrono::duration<double>(t_end - t_start).count();
+  step_catalog.duration_seconds = seconds_since(t_start);
 
   if (!catalog_success) {
     step_catalog.ok = false;
@@ -1448,21 +1378,13 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   if (manifest.language == "cpp") {
     std::string build_err;
     if (!ensure_built(dir, false, false, &build_err)) {
-      step_smoke.message = "build failed: " + build_err;
-      step_smoke.ok = false;
-      res.errors.push_back(step_smoke.message);
-      res.steps.push_back(step_smoke);
-      return res;
+      return fail(step_smoke, "build failed: " + build_err);
     }
   }
 
   int smoke_port = find_free_port(18765, 18999);
   if (smoke_port <= 0) {
-    step_smoke.message = "no ephemeral port available for smoke test";
-    step_smoke.ok = false;
-    res.errors.push_back(step_smoke.message);
-    res.steps.push_back(step_smoke);
-    return res;
+    return fail(step_smoke, "no ephemeral port available for smoke test");
   }
 
   // Construct launch command
@@ -1470,11 +1392,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   if (manifest.language == "cpp") {
     fs::path bin = dir / manifest.run;
     if (!fs::is_regular_file(bin)) {
-      step_smoke.message = "executable not found: " + bin.string();
-      step_smoke.ok = false;
-      res.errors.push_back(step_smoke.message);
-      res.steps.push_back(step_smoke);
-      return res;
+      return fail(step_smoke, "executable not found: " + bin.string());
     }
     launch_cmd = {bin.string(), "--port", std::to_string(smoke_port)};
   } else {
@@ -1487,11 +1405,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
 
   int backend_pid = ProcessRunner::run_detached(launch_cmd, dir, py_env.env, log_path);
   if (backend_pid <= 0) {
-    step_smoke.message = "failed to start backend process";
-    step_smoke.ok = false;
-    res.errors.push_back(step_smoke.message);
-    res.steps.push_back(step_smoke);
-    return res;
+    return fail(step_smoke, "failed to start backend process");
   }
 
   struct BackendCleaner {
@@ -1535,12 +1449,8 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
       buf << log_file.rdbuf();
       err_output = buf.str();
     }
-    step_smoke.message = "backend failed to start on port " + std::to_string(smoke_port) +
-                         (err_output.empty() ? "" : ": " + err_output);
-    step_smoke.ok = false;
-    res.errors.push_back(step_smoke.message);
-    res.steps.push_back(step_smoke);
-    return res;
+    return fail(step_smoke, "backend failed to start on port " + std::to_string(smoke_port) +
+                                (err_output.empty() ? "" : ": " + err_output));
   }
 
   fs::path smoke_script = repo_root / "protocol" / "smoke_test.py";
@@ -1548,17 +1458,12 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
       {py_env.python_bin.string(), smoke_script.string(), "--port", std::to_string(smoke_port)},
       repo_root, py_env.env, std::chrono::milliseconds(20000));
 
-  t_end = std::chrono::steady_clock::now();
-  step_smoke.duration_seconds = std::chrono::duration<double>(t_end - t_start).count();
+  step_smoke.duration_seconds = seconds_since(t_start);
 
   if (!smoke_res.ok()) {
-    std::string failure_msg = !smoke_res.stdout_text.empty() ? smoke_res.stdout_text : smoke_res.stderr_text;
+    std::string failure_msg = output_of(smoke_res);
     if (failure_msg.empty()) failure_msg = "smoke test failed (exit code " + std::to_string(smoke_res.exit_code) + ")";
-    step_smoke.message = failure_msg;
-    step_smoke.ok = false;
-    res.errors.push_back(failure_msg);
-    res.steps.push_back(step_smoke);
-    return res;
+    return fail(step_smoke, failure_msg);
   }
 
   step_smoke.ok = true;
@@ -1584,17 +1489,12 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
         {py_env.python_bin.string(), golden_script.string(), dir.string()},
         repo_root, py_env.env, std::chrono::milliseconds(30000));
 
-    t_end = std::chrono::steady_clock::now();
-    step_golden.duration_seconds = std::chrono::duration<double>(t_end - t_start).count();
+    step_golden.duration_seconds = seconds_since(t_start);
 
     if (!golden_res.ok()) {
-      std::string failure_msg = !golden_res.stdout_text.empty() ? golden_res.stdout_text : golden_res.stderr_text;
+      std::string failure_msg = output_of(golden_res);
       if (failure_msg.empty()) failure_msg = "golden test failed (exit code " + std::to_string(golden_res.exit_code) + ")";
-      step_golden.message = failure_msg;
-      step_golden.ok = false;
-      res.errors.push_back(failure_msg);
-      res.steps.push_back(step_golden);
-      return res;
+      return fail(step_golden, failure_msg);
     }
 
     step_golden.ok = true;
@@ -1641,8 +1541,7 @@ PackResult BackendManager::pack_backend(const fs::path& path, const fs::path& ou
       repo_root, py_env.env, std::chrono::milliseconds(30000));
 
   if (!pack_proc.ok()) {
-    res.errors.push_back("packing script failed: " +
-                         (!pack_proc.stdout_text.empty() ? pack_proc.stdout_text : pack_proc.stderr_text));
+    res.errors.push_back("packing script failed: " + output_of(pack_proc));
     return res;
   }
 
@@ -1692,8 +1591,7 @@ UnpackResult BackendManager::unpack_backend(const fs::path& archive_path, const 
 
   auto unpack_proc = ProcessRunner::run_sync(args, repo_root, py_env.env, std::chrono::milliseconds(30000));
   if (!unpack_proc.ok()) {
-    res.errors.push_back("unpack failed: " +
-                         (!unpack_proc.stdout_text.empty() ? unpack_proc.stdout_text : unpack_proc.stderr_text));
+    res.errors.push_back("unpack failed: " + output_of(unpack_proc));
     return res;
   }
 
