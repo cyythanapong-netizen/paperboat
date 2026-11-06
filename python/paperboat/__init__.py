@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, NamedTuple
 
-from ._engine import Context, Entity, Handle, make, options, scene, solve
+from ._engine import Context, Entity, Handle, make, options, remember_args, scene, solve
 
 Vector = list[float]
 
@@ -315,6 +315,7 @@ def serve(backend: Backend) -> None:
     """The backend's command line (the engine's): serve on `--port N` until Ctrl+C, or with
     `--run`, run the starter once headless, print each protocol message as a JSON line and
     exit (0 when the run is done)."""
+    remember_args([sys.executable, *sys.argv])
     try:
         port, run, variables = options(sys.argv, backend.port)
     except ValueError as err:

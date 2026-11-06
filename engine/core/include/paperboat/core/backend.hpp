@@ -59,6 +59,13 @@ json with_vars(const toolkit::Catalog& catalog, const std::vector<std::pair<std:
 // What a backend's main() returns: parse the options, then serve or run the starter.
 int main(const Backend& backend, int argc, char** argv, int default_port);
 
+// Remember the process command line so `backend.restart` can relaunch the same command.
+void remember_args(int argc, char** argv);
+void remember_args(std::vector<std::string> args);
+void set_restart_handler(std::function<void()> on_restart);
+void exec_remembered_args();
+bool restart_process();
+
 // `--port N` from the command line, or `fallback` (parse_options reads every option).
 int port_arg(int argc, char** argv, int fallback);
 

@@ -12,7 +12,7 @@ Default address: `ws://localhost:8765`.
 
 | `type`         | Fields                                      | Sent                         |
 | -------------- | ------------------------------------------- | ---------------------------- |
-| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults) | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
+| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults), `toolkits?: ToolkitStatus[]` | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
 | `catalog`      | `blocks: BlockDef[]`                        | on connect                   |
 | `scene`        | `entities: Entity[]`, `view?: View`         | on connect, and on reset     |
 | `graph.load`   | `graph: { nodes, edges }`                   | on connect (starter graph)   |
@@ -26,6 +26,7 @@ Default address: `ws://localhost:8765`.
 | `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them; any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
 | `node.progress` | `node: string`, `fraction: number` (0–1) | How far a block's long step has got (`Context::progress`), at most ~20 a second per block; the UI shows it on the running block |
 | `log`          | `level: "info" \| "warn" \| "error"`, `text`, `node?: string` | any time. `node`: the block or station object that wrote it, or that failed |
+| `toolkits.status` | `toolkits: ToolkitStatus[]`              | when an optional toolkit's installation or busy state changes |
 | `run.finished` | `run: string`, `status: "done" \| "failed" \| "cancelled"` | when a run ends |
 
 ## UI → Backend
@@ -37,6 +38,10 @@ Default address: `ws://localhost:8765`.
 | `variables.set` | `variables: Variable[]`: the user's variables changed; the backend checks them, keeps them for the next run and answers with a `scene` (the station they shape), or a `log` error |
 | `run.cancel` | —                          |
 | `input`      | `key: string` (a `KeyboardEvent.code`, e.g. `"Space"`), `down: boolean` |
+| `backend.restart` | — (restarts the backend process with its startup arguments) |
+| `toolkit.install` | `name: string` (installs the named toolkit from `toolkits.toml` and rebuilds the engine) |
+| `toolkit.update`  | `name: string` (updates the named toolkit from its repository and rebuilds the engine) |
+| `toolkit.uninstall` | `name: string` (removes the named toolkit and rebuilds the engine) |
 
 ## Shapes
 

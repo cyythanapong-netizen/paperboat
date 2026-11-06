@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { initial, reduce } from "../src/engine.ts";
+import { initial, missingRequiredToolkits, reduce } from "../src/engine.ts";
 
 test("console starts ready before the first run and records non-run logs", () => {
   assert.equal(initial.run, null);
@@ -33,4 +33,29 @@ test("console records connection failures before and after connecting without fl
   // Preserves logs across reset (e.g. switching or reconnecting backend).
   const s3 = reduce(s2, { type: "reset" });
   assert.equal(s3.logs.length, 1);
+});
+
+test("toolkits status updates from hello and toolkits.status and detects missing required toolkits", () => {
+  const s1 = reduce(initial, {
+    type: "hello",
+    protocol: "paperboat/0",
+    engine: "parts",
+    toolkits: [{ name: "opencv", repo: "https://example.com/opencv.git", installed: false, required: true }],
+  });
+  assert.equal(s1.toolkits.length, 1);
+  assert.equal(s1.toolkits[0].installed, false);
+  assert.deepEqual(missingRequiredToolkits(s1.toolkits).map((t) => t.name), ["opencv"]);
+
+  const s2 = reduce(s1, {
+    type: "toolkits.status",
+    toolkits: [{ name: "opencv", repo: "https://example.com/opencv.git", installed: true, required: true }],
+  });
+  assert.equal(s2.toolkits[0].installed, true);
+  assert.deepEqual(missingRequiredToolkits(s2.toolkits), []);
+
+  // Also detects missing toolkits from missing block types in an opened project/flow.
+  assert.deepEqual(
+    missingRequiredToolkits([{ name: "opencv", repo: "https://example.com/opencv.git", installed: false }], ["canny"]).map((t) => t.name),
+    ["opencv"],
+  );
 });

@@ -789,3 +789,31 @@ TEST_CASE("a delay gives its input from n clock steps ago, any value") {
   CHECK_THAT(v[3], WithinAbs(0.0, 1e-12));   // t = 0, three steps late
   CHECK_THAT(v[10], WithinAbs(0.7, 1e-12));  // t = 1.0 shows t = 0.7
 }
+
+TEST_CASE("session reports toolkits in hello and triggers restart handler on backend.restart") {
+  const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = {.real_time = false}};
+  std::vector<json> sent;
+  std::mutex mutex;
+  bool restarted = false;
+  core::set_restart_handler([&] { restarted = true; });
+  {
+    core::Session session(backend, [&](const std::string& text) {
+      std::lock_guard lock(mutex);
+      sent.push_back(json::parse(text));
+    });
+    REQUIRE_FALSE(sent.empty());
+    CHECK(sent.front()["type"] == "hello");
+    if (sent.front().contains("toolkits")) {
+      CHECK(sent.front()["toolkits"].is_array());
+    }
+    session.on_message(R"({"type": "backend.restart"})");
+    for (int i = 0; i < 50 && !restarted; ++i) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+  }
+  core::set_restart_handler(nullptr);
+  CHECK(restarted);
+  CHECK(std::ranges::any_of(sent, [](const json& m) {
+    return m["type"] == "log" && m["text"] == "restarting backend…";
+  }));
+}

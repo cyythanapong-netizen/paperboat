@@ -1,5 +1,7 @@
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -8,6 +10,7 @@
 #include <nlohmann/json.hpp>
 
 #include "paperboat/toolkit/descriptor.hpp"
+#include "paperboat/toolkit/installer.hpp"
 #include "rig.hpp"
 
 namespace tk = paperboat::toolkit;
@@ -492,4 +495,74 @@ TEST_CASE("built-in templates carry their own descriptions") {
   for (const auto* entry : tk::builtins().all())
     if (!entry->abstract && entry->def.description.empty()) missing.push_back(entry->name);
   CHECK(missing.empty());
+}
+
+TEST_CASE("toolkits manifest, requirements detection, and installer lifecycle") {
+  namespace fs = std::filesystem;
+  const auto parsed = tk::parse_toolkits_manifest(R"(
+[[toolkits]]
+name = "opencv"
+repo = "https://github.com/cyythanapong-netizen/paperboat-toolkit-opencv.git"
+description = "Image blocks."
+optional = true
+engine = ">=0.1"
+)");
+  REQUIRE(parsed.size() == 1);
+  CHECK(parsed[0].name == "opencv");
+  CHECK(parsed[0].optional);
+  CHECK(parsed[0].engine == ">=0.1");
+
+  const fs::path tmp = fs::temp_directory_path() / "paperboat_toolkit_installer_test";
+  std::error_code ec;
+  fs::remove_all(tmp, ec);
+  const fs::path root = tmp / "repo";
+  const fs::path backend_dir = tmp / "backend";
+  const fs::path remote = tmp / "remote-opencv";
+  fs::create_directories(root / "engine" / "toolkit");
+  fs::create_directories(backend_dir);
+  fs::create_directories(remote);
+
+  {
+    std::ofstream out(root / "toolkits.toml");
+    out << "[[toolkits]]\nname = \"opencv\"\nrepo = \"" << remote.string()
+        << "\"\ndescription = \"OpenCV toolkit\"\noptional = true\nengine = \">=0.1\"\n";
+  }
+  {
+    std::ofstream out(backend_dir / "toolkit_requirements.toml");
+    out << "toolkits = [\"opencv\"]\n";
+  }
+  {
+    std::ofstream out(remote / "toolkit.toml");
+    out << "name = \"opencv\"\nregister = [\"register_opencv\"]\n";
+  }
+  REQUIRE(std::system(("git -C '" + remote.string() +
+                       "' init -q && git -C '" + remote.string() +
+                       "' config user.email test@example.com && git -C '" + remote.string() +
+                       "' config user.name test && git -C '" + remote.string() +
+                       "' add toolkit.toml && git -C '" + remote.string() + "' commit -qm init")
+                          .c_str()) == 0);
+
+  auto list = tk::list_toolkits(root, backend_dir);
+  REQUIRE(list.size() == 1);
+  CHECK_FALSE(list[0].installed);
+  CHECK(list[0].required);
+
+  std::vector<std::string> logs;
+  auto logger = [&](std::string_view, std::string_view text) { logs.emplace_back(text); };
+
+  const auto installed = tk::install_toolkit("opencv", root, logger, /*rebuild=*/false);
+  CHECK(installed.ok);
+  CHECK(fs::is_regular_file(root / "engine" / "toolkit" / "opencv" / "toolkit.toml"));
+  CHECK(tk::list_toolkits(root, backend_dir)[0].installed);
+
+  const auto updated = tk::update_toolkit("opencv", root, logger, /*rebuild=*/false);
+  CHECK(updated.ok);
+
+  const auto removed = tk::uninstall_toolkit("opencv", root, logger, /*rebuild=*/false);
+  CHECK(removed.ok);
+  CHECK_FALSE(fs::exists(root / "engine" / "toolkit" / "opencv"));
+  CHECK_FALSE(tk::list_toolkits(root, backend_dir)[0].installed);
+  CHECK_FALSE(logs.empty());
+
+  fs::remove_all(tmp, ec);
 }

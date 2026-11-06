@@ -3,12 +3,77 @@
 
 #include <algorithm>
 #include <iostream>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <vector>
+
+#if !defined(_WIN32)
+#include <unistd.h>
+#endif
 
 #include "paperboat/core/backend.hpp"
 
 namespace paperboat::core {
+namespace {
+
+std::mutex g_restart_mutex;
+std::vector<std::string> g_restart_args;
+std::function<void()> g_restart_handler;
+
+}  // namespace
+
+void remember_args(int argc, char** argv) {
+  std::vector<std::string> args;
+  args.reserve(static_cast<std::size_t>(std::max(argc, 0)));
+  for (int i = 0; i < argc; ++i) {
+    if (argv[i]) args.emplace_back(argv[i]);
+  }
+  remember_args(std::move(args));
+}
+
+void remember_args(std::vector<std::string> args) {
+  std::lock_guard lock(g_restart_mutex);
+  g_restart_args = std::move(args);
+}
+
+void set_restart_handler(std::function<void()> on_restart) {
+  std::lock_guard lock(g_restart_mutex);
+  g_restart_handler = std::move(on_restart);
+}
+
+void exec_remembered_args() {
+  std::vector<std::string> args;
+  {
+    std::lock_guard lock(g_restart_mutex);
+    args = g_restart_args;
+  }
+  if (args.empty()) return;
+#if !defined(_WIN32)
+  std::vector<char*> argv;
+  argv.reserve(args.size() + 1);
+  for (auto& a : args) argv.push_back(a.data());
+  argv.push_back(nullptr);
+  execvp(argv[0], argv.data());
+#endif
+}
+
+bool restart_process() {
+  std::function<void()> handler;
+  bool has_args = false;
+  {
+    std::lock_guard lock(g_restart_mutex);
+    handler = g_restart_handler;
+    has_args = !g_restart_args.empty();
+  }
+  if (handler) {
+    handler();
+    return true;
+  }
+  if (!has_args) return false;
+  exec_remembered_args();
+  return false;
+}
 
 Options parse_options(int argc, char** argv, int default_port) {
   Options options{.port = default_port, .run = false};
@@ -74,6 +139,7 @@ std::string run_starter(const Backend& backend, std::ostream& out, const std::ve
 }
 
 int main(const Backend& backend, int argc, char** argv, int default_port) {
+  remember_args(argc, argv);
   Options options;
   try {
     options = parse_options(argc, argv, default_port);

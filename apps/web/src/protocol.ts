@@ -146,6 +146,19 @@ export type Station = {
   objects: StationObject[];
 };
 
+/** One optional external toolkit from toolkits.toml and its status on this machine. */
+export type ToolkitStatus = {
+  name: string;
+  repo: string;
+  description?: string;
+  /** Whether engine/toolkit/<name>/toolkit.toml is installed. */
+  installed: boolean;
+  /** Whether the current backend requires this toolkit. */
+  required?: boolean;
+  /** Set while an operation is running for this toolkit. */
+  busy?: "installing" | "updating" | "uninstalling";
+};
+
 export type GraphNode = {
   id: string;
   type: string;
@@ -338,6 +351,8 @@ export type ServerMsg =
     engine: string;
     station?: StationView;
     run?: RunSettings;
+    /** Available optional toolkits and their installed status on this machine. */
+    toolkits?: ToolkitStatus[];
   }
   | {
     type: "catalog";
@@ -411,6 +426,10 @@ export type ServerMsg =
     level: "info" | "warn" | "error";
     text: string;
     node?: string;
+  }
+  | {
+    type: "toolkits.status";
+    toolkits: ToolkitStatus[];
   };
 
 /** Every message the UI sends. */
@@ -438,4 +457,19 @@ export type ClientMsg =
     type: "input";
     key: string;
     down: boolean;
+  }
+  | {
+    type: "backend.restart";
+  }
+  | {
+    type: "toolkit.install";
+    name: string;
+  }
+  | {
+    type: "toolkit.update";
+    name: string;
+  }
+  | {
+    type: "toolkit.uninstall";
+    name: string;
   };

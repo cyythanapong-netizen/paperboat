@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import type { BlockDef, ClientMsg, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, Variables, VectorComponent, View } from "./protocol";
+import type { BlockDef, ClientMsg, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
 
 export type Series = { t: number[]; v: number[] };
 
@@ -10,6 +10,8 @@ export type EngineState = {
   stationView: StationView;
   /** The backend's run defaults (from hello); empty if it didn't say. */
   runDefaults: RunSettings;
+  /** Available optional toolkits and their installation status (from hello and toolkits.status). */
+  toolkits: ToolkitStatus[];
   blocks: BlockDef[];
   objects: ObjectDef[];
   /** The backend's default Dashboard layout (from catalog), if it shipped one. */
@@ -46,6 +48,7 @@ export const initial: EngineState = {
   engine: "",
   stationView: { view: "scene" },
   runDefaults: {},
+  toolkits: [],
   blocks: [],
   objects: [],
   entities: {},
@@ -72,6 +75,54 @@ export const MAX_POINTS = 20000;
 
 /** Max Console lines kept in memory. */
 export const MAX_LOGS = 200;
+
+export const DEFAULT_TOOLKITS: ToolkitStatus[] = [
+  {
+    name: "opencv",
+    repo: "https://github.com/cyythanapong-netizen/paperboat-toolkit-opencv.git",
+    description: "Image processing blocks, view monitor, and image station object (OpenCV).",
+    installed: false,
+  },
+];
+
+/** Known block types belonging to optional external toolkits, so missing blocks in a project or graph can identify their toolkit. */
+const TOOLKIT_BLOCKS: Record<string, readonly string[]> = {
+  opencv: [
+    "gray",
+    "blur",
+    "median",
+    "threshold",
+    "adaptive_threshold",
+    "hsv_range",
+    "canny",
+    "erode",
+    "dilate",
+    "open",
+    "close",
+    "invert",
+    "distance",
+    "view",
+    "image",
+  ],
+};
+
+/**
+ * Return all toolkits that are required by the current backend or by missing blocks in the
+ * open graph/project and are not currently installed.
+ */
+export function missingRequiredToolkits(
+  toolkits: ToolkitStatus[],
+  missingBlockTypes: Iterable<string> = [],
+): ToolkitStatus[] {
+  const list = toolkits.length > 0 ? toolkits : DEFAULT_TOOLKITS;
+  const missingTypes = new Set(missingBlockTypes);
+  return list.filter((t) => {
+    if (t.installed) return false;
+    if (t.required) return true;
+    const known = TOOLKIT_BLOCKS[t.name];
+    return !!known?.some((type) => missingTypes.has(type));
+  });
+}
 
 function pushLog(logs: EngineState["logs"], entry: EngineState["logs"][number]): EngineState["logs"] {
   return [...logs.slice(-(MAX_LOGS - 1)), entry];
@@ -110,8 +161,17 @@ export function reduce(s: EngineState, m: Action): EngineState {
     case "hello": {
       const text = `connected to ${m.engine}`;
       const logs = s.logs.at(-1)?.text === text ? s.logs : pushLog(s.logs, { level: "info", text });
-      return { ...s, engine: m.engine, stationView: m.station ?? { view: "scene" }, runDefaults: m.run ?? {}, logs };
+      return {
+        ...s,
+        engine: m.engine,
+        stationView: m.station ?? { view: "scene" },
+        runDefaults: m.run ?? {},
+        toolkits: m.toolkits ?? s.toolkits,
+        logs,
+      };
     }
+    case "toolkits.status":
+      return { ...s, toolkits: m.toolkits };
     case "catalog":
       return { ...s, blocks: m.blocks, objects: m.objects ?? [], dashboard: m.dashboard };
     case "scene":

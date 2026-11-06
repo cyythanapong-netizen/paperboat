@@ -508,6 +508,43 @@
       ],
       "additionalProperties": false
     },
+    "ToolkitStatus": {
+      "type": "object",
+      "description": "One optional external toolkit from toolkits.toml and its status on this machine.",
+      "required": [
+        "name",
+        "repo",
+        "installed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "installed": {
+          "type": "boolean",
+          "description": "Whether engine/toolkit/<name>/toolkit.toml is installed."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether the current backend requires this toolkit."
+        },
+        "busy": {
+          "enum": [
+            "installing",
+            "updating",
+            "uninstalling"
+          ],
+          "description": "Set while an operation is running for this toolkit."
+        }
+      }
+    },
     "hello": {
       "type": "object",
       "properties": {
@@ -525,6 +562,13 @@
         },
         "run": {
           "$ref": "#/$defs/RunSettings"
+        },
+        "toolkits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolkitStatus"
+          },
+          "description": "Available optional toolkits and their installed status on this machine."
         }
       },
       "required": [
@@ -823,6 +867,26 @@
       ],
       "additionalProperties": false
     },
+    "toolkits.status": {
+      "type": "object",
+      "description": "Updated toolkit statuses sent while or after installing, updating, or uninstalling a toolkit.",
+      "properties": {
+        "type": {
+          "const": "toolkits.status"
+        },
+        "toolkits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ToolkitStatus"
+          }
+        }
+      },
+      "required": [
+        "type",
+        "toolkits"
+      ],
+      "additionalProperties": false
+    },
     "graph.run": {
       "type": "object",
       "properties": {
@@ -914,6 +978,70 @@
       ],
       "additionalProperties": false
     },
+    "backend.restart": {
+      "type": "object",
+      "description": "Ask the backend process to restart itself with the same command-line arguments.",
+      "properties": {
+        "type": {
+          "const": "backend.restart"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "toolkit.install": {
+      "type": "object",
+      "description": "Install an optional toolkit from toolkits.toml and rebuild the engine.",
+      "properties": {
+        "type": {
+          "const": "toolkit.install"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "toolkit.update": {
+      "type": "object",
+      "description": "Update an installed toolkit from its repository and rebuild the engine.",
+      "properties": {
+        "type": {
+          "const": "toolkit.update"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "toolkit.uninstall": {
+      "type": "object",
+      "description": "Remove an installed optional toolkit and rebuild the engine.",
+      "properties": {
+        "type": {
+          "const": "toolkit.uninstall"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "name"
+      ],
+      "additionalProperties": false
+    },
     "toUI": {
       "title": "Backend → UI",
       "type": "object",
@@ -937,7 +1065,8 @@
             "signal",
             "node.state",
             "node.progress",
-            "log"
+            "log",
+            "toolkits.status"
           ]
         }
       },
@@ -1121,6 +1250,18 @@
           "then": {
             "$ref": "#/$defs/log"
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "toolkits.status"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/toolkits.status"
+          }
         }
       ],
       "description": "Every message a backend sends."
@@ -1138,7 +1279,11 @@
             "station.set",
             "variables.set",
             "run.cancel",
-            "input"
+            "input",
+            "backend.restart",
+            "toolkit.install",
+            "toolkit.update",
+            "toolkit.uninstall"
           ]
         }
       },
@@ -1201,6 +1346,54 @@
           },
           "then": {
             "$ref": "#/$defs/input"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "backend.restart"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/backend.restart"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "toolkit.install"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/toolkit.install"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "toolkit.update"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/toolkit.update"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "toolkit.uninstall"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/toolkit.uninstall"
           }
         }
       ],
