@@ -130,6 +130,14 @@ std::string run_starter(const Backend& backend, std::ostream& out, const std::ve
   Backend headless = backend;
   headless.run.real_time = false;
   const auto& catalog = *backend.catalog;
+  if (!catalog.missing_imports.empty()) {
+    std::string missing;
+    for (const auto& m : catalog.missing_imports) missing += (missing.empty() ? "" : ", ") + m;
+    out << json({{"type", "log"}, {"level", "error"}, {"text", "cannot run starter: missing required toolkits: " + missing}}).dump() << '\n';
+    out << json({{"type", "run.finished"}, {"run", "run-1"}, {"status", "failed"}}).dump() << '\n';
+    out.flush();
+    return "failed";
+  }
   const json station = catalog.station.empty() ? json() : json::parse(catalog.station);
   const json variables = with_vars(catalog, vars);
   const auto emit = [&out](const json& msg) { out << msg.dump() << '\n'; };

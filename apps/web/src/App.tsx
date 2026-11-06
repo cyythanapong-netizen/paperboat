@@ -456,7 +456,24 @@ export function App() {
         : mode === "lookout" && p === "flow"
           ? flowDrawer
           : undefined;
+  const hasMissingBlocks = nodes.some((n) => isBlock(n) && n.data.missing);
+  const hasMissingToolkits = state.toolkits.some((t) => t.required && !t.installed);
+  const canRun = state.connection === "open" && !running && !hasMissingBlocks && !hasMissingToolkits;
+  const whyNotRun = running
+    ? "A run is in progress"
+    : state.connection !== "open"
+      ? "Not connected to a backend"
+      : hasMissingToolkits
+        ? "Required toolkits are not installed"
+        : hasMissingBlocks
+          ? "Flow contains blocks with missing types"
+          : "";
   const run = () => {
+    if (hasMissingToolkits) {
+      setMissingDialog(state.toolkits.filter((t) => t.required && !t.installed));
+      return;
+    }
+    if (!canRun) return;
     if (mode === "commander") boardDrawer.setOpen(true); // a run is watched on the Board
     send({
       type: "graph.run",
@@ -757,7 +774,6 @@ export function App() {
 
   // ---- The commands (#78): what the menus, the command search and the shortcuts all run ----
   // Only what the app already does; backends' commands come with their issue (#85).
-  const canRun = state.connection === "open" && !running;
   const flowInView = mode === "commander" || (mode === "lookout" ? flowDrawer.open : page === "flow");
   const stationInView = view === "graph" && (mode === "commander" || (mode === "lookout" ? stationDrawer.open : page === "station"));
   const arrangeVisible = () => {
@@ -848,7 +864,7 @@ export function App() {
       },
     },
 
-    { id: "run.run", label: "Run", menu: "run", group: "run", enabled: canRun, why: running ? "A run is in progress" : "Not connected to a backend", run },
+    { id: "run.run", label: "Run", menu: "run", group: "run", enabled: canRun, why: whyNotRun || undefined, run },
     { id: "run.cancel", label: "Cancel", menu: "run", group: "run", enabled: running, why: "No run in progress", run: () => send({ type: "run.cancel" }) },
   ];
   useShortcuts(commands);
@@ -980,7 +996,7 @@ export function App() {
         />
         <Dock
           canRun={canRun}
-          whyNot={running ? "A run is in progress" : "Not connected to a backend"}
+          whyNot={whyNotRun}
           running={running}
           status={state.run ? status : undefined}
           statusText={status === "running" ? `running ${elapsed}` : status}

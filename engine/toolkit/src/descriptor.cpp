@@ -364,36 +364,8 @@ void load_variables(const json& doc, Catalog& catalog) {
 void load_starters(const json& doc, Catalog& catalog) {
   json graph = doc.value("graph", json::object());
   only_fields(graph, {"nodes", "edges", "groups"}, "graph");
-  const json groups_raw = graph.value("groups", json::array());
-  json nodes_raw = graph.value("nodes", json::array());
-  json edges_raw = graph.value("edges", json::array());
-
-  if (!catalog.missing_imports.empty()) {
-    // Drop nodes that belong to missing optional packages
-    json filtered_nodes = json::array();
-    std::set<std::string> kept_node_ids;
-    for (const auto& n : nodes_raw) {
-      if (n.contains("type") && catalog.find(n["type"].get<std::string>())) {
-        filtered_nodes.push_back(n);
-        if (n.contains("id")) kept_node_ids.insert(n["id"].get<std::string>());
-      }
-    }
-    nodes_raw = std::move(filtered_nodes);
-
-    json filtered_edges = json::array();
-    for (const auto& e : edges_raw) {
-      if (e.contains("from") && e["from"].size() >= 1 && e.contains("to") && e["to"].size() >= 1) {
-        if (kept_node_ids.contains(e["from"][0].get<std::string>()) &&
-            kept_node_ids.contains(e["to"][0].get<std::string>())) {
-          filtered_edges.push_back(e);
-        }
-      }
-    }
-    edges_raw = std::move(filtered_edges);
-  }
-
-  graph = {{"nodes", std::move(nodes_raw)}, {"edges", std::move(edges_raw)}};
-  const json groups = groups_raw;
+  const json groups = doc.value("graph", json::object()).value("groups", json::array());
+  graph = {{"nodes", graph.value("nodes", json::array())}, {"edges", graph.value("edges", json::array())}};
   std::set<std::string> ids;
   for (std::size_t i = 0; i < graph["nodes"].size(); ++i) {
     auto& n = graph["nodes"][i];
@@ -402,7 +374,11 @@ void load_starters(const json& doc, Catalog& catalog) {
     if (n.contains("ports")) only_fields(n["ports"], {"left", "right", "top", "bottom"}, at + ".ports");
     if (!n.contains("id") || !n.contains("type")) throw DescriptorError(at + ": needs an id and a type");
     const auto type = n["type"].get<std::string>();
-    if (!catalog.find(type)) throw DescriptorError(at + ": no block type \"" + type + "\" in this catalog");
+    if (!catalog.find(type)) {
+      if (catalog.missing_imports.empty()) {
+        throw DescriptorError(at + ": no block type \"" + type + "\" in this catalog");
+      }
+    }
     if (!ids.insert(n["id"].get<std::string>()).second) throw DescriptorError(at + ": duplicate id");
     if (!n.contains("params")) n["params"] = json::object();
   }
@@ -468,30 +444,24 @@ void load_starters(const json& doc, Catalog& catalog) {
     throw DescriptorError("station: a web station needs a page (and only a web station has one)");
   if (catalog.station_page.find("..") != std::string::npos || catalog.station_page.starts_with('/'))
     throw DescriptorError("station.page must be a path inside the backend's folder");
-  json raw_objects = station.value("objects", json::array());
-  if (!catalog.missing_imports.empty()) {
-    json filtered = json::array();
-    for (const auto& o : raw_objects) {
-      if (o.contains("type") && catalog.find_object(o["type"].get<std::string>())) {
-        filtered.push_back(o);
-      }
-    }
-    raw_objects = std::move(filtered);
-  }
-  station = {{"objects", std::move(raw_objects)}};
+  station = {{"objects", station.value("objects", json::array())}};
   for (std::size_t i = 0; i < station["objects"].size(); ++i) {
     auto& o = station["objects"][i];
     const auto at = "station.objects[" + std::to_string(i) + "]";
     only_fields(o, {"id", "type", "props", "links", "pos"}, at);
     if (!o.contains("id") || !o.contains("type")) throw DescriptorError(at + ": needs an id and a type");
-    if (!catalog.find_object(o["type"].get<std::string>()))
-      throw DescriptorError(at + ": no station object type \"" + o["type"].get<std::string>() + "\"");
+    if (!catalog.find_object(o["type"].get<std::string>())) {
+      if (catalog.missing_imports.empty()) {
+        throw DescriptorError(at + ": no station object type \"" + o["type"].get<std::string>() + "\"");
+      }
+    }
     if (!o.contains("props")) o["props"] = json::object();
   }
   std::set<std::string> object_ids;
   for (const auto& o : station["objects"]) object_ids.insert(o["id"].get<std::string>());
   for (const auto& o : station["objects"]) {
     const ObjectEntry* entry = catalog.find_object(o["type"].get<std::string>());
+    if (!entry) continue;
     const auto& slots = entry->def.links;
     const json links = o.value("links", json::object());  // a copy: keep it alive while iterating
     for (const auto& [slot, target] : links.items()) {

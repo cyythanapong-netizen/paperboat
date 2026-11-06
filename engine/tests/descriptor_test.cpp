@@ -604,16 +604,18 @@ objects = [
   // Without optional_imports, it throws
   CHECK_THROWS_AS(tk::load_descriptor(toml, test_registry()), tk::DescriptorError);
 
-  // With optional_imports, it succeeds and drops missing nodes and objects
+  // With optional_imports, it succeeds and keeps nodes and objects even if types are not in catalog
   const auto cat = tk::load_descriptor(toml, test_registry(), {.optional_imports = {"optional_pkg"}});
   CHECK(cat.missing_imports.size() == 1);
   CHECK(cat.missing_imports[0] == "optional_pkg");
 
   const auto graph = nlohmann::json::parse(cat.graph);
-  REQUIRE(graph["nodes"].size() == 1);
+  REQUIRE(graph["nodes"].size() == 2);
   CHECK(graph["nodes"][0]["id"] == "sine-1");
-  CHECK(graph["edges"].empty());
+  CHECK(graph["nodes"][1]["id"] == "missing-1");
+  CHECK(graph["edges"].size() == 1);
 
   const auto station = nlohmann::json::parse(cat.station);
-  CHECK(station["objects"].empty());
+  REQUIRE(station["objects"].size() == 1);
+  CHECK(station["objects"][0]["id"] == "obj-1");
 }

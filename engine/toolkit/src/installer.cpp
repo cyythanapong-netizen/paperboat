@@ -59,7 +59,7 @@ int run_cmd(const std::vector<std::string>& args,
             const ToolkitLog& log,
             std::string* last_line = nullptr,
             std::string* all_output = nullptr) {
-  std::string cmd;
+  std::string cmd = "TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp ";
   if (!cwd.empty()) cmd += "cd " + shell_quote(cwd.string()) + " && ";
   for (std::size_t i = 0; i < args.size(); ++i) {
     if (i > 0) cmd += ' ';

@@ -62,15 +62,20 @@ struct Session::State {
   void emit_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}, bool fetch_versions = false) {
     emit({{"type", "toolkits.status"}, {"toolkits", current_toolkits(busy_name, busy_state, fetch_versions)}});
   }
-  // The station as it shows: its objects made with their references resolved. Throws
-  // VariableError, GraphError or json::exception.
+  // The station as it shows: its objects made with their references resolved.
   // `report`: also send what the variables come to (variables.values), for the UI.
   void show(const json& with_station, const json& with_variables, bool report = false) {
-    const toolkit::Variables vars(with_variables);
-    if (report) emit({{"type", "variables.values"}, {"values", vars.values()}});
-    const auto objects = make_station(toolkit::resolve_station(with_station, *backend.catalog, vars), *backend.catalog);
-    const auto state = backend.state ? backend.state() : nullptr;
-    emit(scene_message(objects, state.get(), backend.view));
+    try {
+      const toolkit::Variables vars(with_variables);
+      if (report) emit({{"type", "variables.values"}, {"values", vars.values()}});
+      const auto objects = make_station(toolkit::resolve_station(with_station, *backend.catalog, vars), *backend.catalog);
+      const auto state = backend.state ? backend.state() : nullptr;
+      emit(scene_message(objects, state.get(), backend.view));
+    } catch (const std::exception& err) {
+      if (backend.catalog->missing_imports.empty()) {
+        log("error", std::string("cannot show station: ") + err.what());
+      }
+    }
   }
 };
 
@@ -102,6 +107,13 @@ void Session::on_message(const std::string& text) {
   const json msg = json::parse(text, nullptr, /*allow_exceptions=*/false);
   const std::string type = msg.is_object() ? msg.value("type", "") : "";
   if (type == "graph.run") {
+    if (!s.backend.catalog->missing_imports.empty()) {
+      std::string missing;
+      for (const auto& m : s.backend.catalog->missing_imports) missing += (missing.empty() ? "" : ", ") + m;
+      s.log("error", "Cannot run: missing required toolkits (" + missing + "). Please install them first.");
+      s.emit({{"type", "run.finished"}, {"run", "run-" + std::to_string(s.runs + 1)}, {"status", "failed"}});
+      return;
+    }
     json station, variables;
     {
       std::lock_guard lock(s.mutex);
