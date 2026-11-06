@@ -214,6 +214,10 @@ Ripple amplitudes scale with the mark (`--lr`, `--lb` set on the svg by `Logo.ts
 The name is always lowercase, Geist Sans 600, tracking −0.01em, after the mark. Keep the
 favicon and `Logo.tsx` on the same geometry: change both together.
 
+### Interactive Logo Guides
+- **Final specification & animation guide**: [`docs/design/logo-final.html`](../../docs/design/logo-final.html) (interactive scale ladder from 12px to 64px, ripple motion, S2 geometric variant, and color tokens).
+- **Variant exploration**: [`docs/design/logo-variants.html`](../../docs/design/logo-variants.html) (comparison of all geometric, pixel, and ripple explorations).
+
 ## Motion
 
 Only in answer to an action, and all on one ease (`--ease`, an even in-and-out), so the app
