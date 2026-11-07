@@ -22,9 +22,14 @@ jobs:
           cache: npm
       - name: The protocol types are generated from the schema, and current
         run: python3 protocol/gen_ts.py --check
+      - name: The design tokens are current
+        run: python3 docs/gen_tokens.py --check
       - run: npm ci
       - run: npm run typecheck
       - run: npm test -w @paperboat/web
       - run: npm test -w @paperboat/cli
+      - run: npm test -w @paperboat/shared
+      - run: npm test -w @paperboat/studio
       - run: npm run build
+      - run: npm run build:studio
 

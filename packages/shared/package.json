@@ -27,6 +27,7 @@
       "types": "./src/components.ts",
       "default": "./src/components.ts"
     },
-    "./tokens.css": "./src/tokens.css"
+    "./tokens.css": "./src/tokens.css",
+    "./plates.css": "./src/plates.css"
   }
 }

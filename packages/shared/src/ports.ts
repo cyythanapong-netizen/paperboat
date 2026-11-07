@@ -243,7 +243,11 @@ export function connectError(from: WireEnd, to: WireEnd): string | null {
   const name = (e: WireEnd) => (e.kind === "acausal" ? `a ${e.cls}` : e.kind === "input" || e.kind === "output" ? `an ${e.kind}` : `a ${e.cls}`);
   if (from.kind === "expandable" || to.kind === "expandable") return "an expandable connector cannot be wired yet";
   if (from.kind === "acausal" || to.kind === "acausal") {
-    if (from.kind !== to.kind) return `${name(from)} joins only an acausal port, not ${name(to)}`;
+    if (from.kind !== to.kind) {
+      if (from.kind === "output") return "an output joins only an input";
+      if (from.kind === "input") return "an input joins only an output";
+      return `${name(from)} joins only an acausal port, not ${name(to)}`;
+    }
     return family(from.cls) === family(to.cls) ? null : `${name(from)} does not join ${name(to)}`;
   }
   if (from.inside || to.inside) return null;

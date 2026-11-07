@@ -1,0 +1,114 @@
+.react-flow__handle { width: 8px; height: 8px; background: var(--surface-raised); border: 1.5px solid var(--line-ink); }
+.port-step { color: var(--text); font-weight: 500; }
+.port-step .react-flow__handle, .frame-head .step-handle { width: 9px; height: 9px; border-radius: 1px; background: var(--line-ink); border-color: var(--line-ink); }
+.port-image .react-flow__handle { border-style: dashed; }
+/* Wires find their port (#52): a 24px hit area round the 8px dot; while a wire is dragged
+   the port it would join is raised and ringed, ports that can't take it are dimmed. */
+.react-flow__handle::after { content: ""; position: absolute; inset: -8px; }
+.react-flow__handle.wire-dim { opacity: 0.3; }
+.react-flow__handle.wire-target { scale: 1.9; background: var(--signal); border-color: var(--line-ink); box-shadow: 0 0 0 2px var(--surface-panel), 0 0 0 3px var(--line-ink); }
+
+.react-flow__edge-path { stroke: var(--line-ink); stroke-width: 1.2px; }
+.wire-step { stroke-width: 2px !important; }
+.wire-casing { fill: none; stroke: var(--surface-panel); stroke-width: 5px; stroke-linecap: round; pointer-events: none; }
+.react-flow__edge-path, .wire-casing { transition: opacity 0.12s; }
+.react-flow__edge-path.lit { stroke-width: 2.6px !important; }
+.react-flow__edge-path.dim, .wire-casing.dim { opacity: 0.18; }
+.react-flow__edge-path.wire-commented, .wire-casing.wire-commented { opacity: 0.25; }
+.wire-image { stroke-dasharray: 5 3; }
+.react-flow__edge.selected .react-flow__edge-path { stroke-width: 3px !important; }
+.react-flow__edge-path { transition: stroke-width var(--glide); }
+
+/* ---- Compact blocks (#70): a plate with a glyph, the name and value in a caption. ----- */
+.compact-block { position: relative; display: inline-flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text); font-size: var(--size-xs); }
+.plate { position: relative; display: flex; align-items: center; justify-content: center; width: 64px; height: 56px; background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-md); cursor: pointer; }
+.compact-block.selected .plate { outline: var(--select-outline); outline-offset: var(--select-offset); }
+.compact-block.active .plate { border-color: var(--signal); }
+.compact-block.failed .plate { border-color: var(--danger); }
+.plate:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.glyph { width: 30px; height: 30px; fill: none; stroke: var(--text); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
+.glyph .ax { stroke: var(--line-strong); stroke-width: 1; }
+.glyph text { fill: var(--text); stroke: none; font: 500 17px var(--font-mono); }
+/* Sum's signs (#73): beside each input, inside the plate or in the port row. */
+.plate-sign { position: absolute; left: 6px; transform: translateY(-50%); font: 600 var(--size-xs) / 1 var(--font-mono); color: var(--text); pointer-events: none; }
+.port-sign { margin-left: 6px; font: 600 var(--size-xs) var(--font-mono); color: var(--text); }
+.plate-prog { position: absolute; left: 0; bottom: 0; height: 2px; background: var(--signal); border-radius: 0 0 0 4px; }
+.plate-cap { display: flex; gap: 5px; white-space: nowrap; font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+.plate-val { font-family: var(--font-mono); color: var(--text); border-bottom: 1px solid var(--line-strong); }
+.cap-running { color: var(--signal); font-weight: 500; }
+.cap-failed { color: var(--danger); font-weight: 500; }
+/* A port's name, on hover (P1); the handle's wire hit area stays 24px. */
+.port-tip { display: none; position: absolute; top: 50%; transform: translateY(-50%); padding: 0 6px; font: 400 var(--size-2xs) / 18px var(--font-mono); color: var(--text); background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur); border: 1px solid var(--line); border-radius: var(--radius-sm); white-space: nowrap; pointer-events: none; z-index: 5; }
+.port-tip.in { right: 14px; }
+.port-tip.out { left: 14px; }
+.react-flow__handle:hover .port-tip { display: block; }
+.react-flow__handle.t-image { border-style: dashed; }
+/* E1: its params in a popover under the plate; the only glass, like the Station's properties. */
+
+/* ---- Custom block look (#160): view.icon and connector ports ----------------------------- */
+.icon-art { display: block; pointer-events: none; }
+.compact-block .plate:has(.icon-art) { padding: 0; }
+/* Connector ports: shape from the class's handle, size 8 / 10 / 12, filled or hollow by variant. */
+.react-flow__handle.ip { border-radius: 0; background: var(--surface-raised); }
+.react-flow__handle.ip-8 { width: 8px; height: 8px; }
+.react-flow__handle.ip-10 { width: 10px; height: 10px; }
+.react-flow__handle.ip-12 { width: 12px; height: 12px; }
+.react-flow__handle.ip-filled { background: var(--line-ink); }
+.react-flow__handle.ip-circle, .react-flow__handle.ip-ring2 { border-radius: var(--radius-round); }
+.react-flow__handle.ip-ring2 { box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3.5px var(--line-ink); }
+.react-flow__handle.ip-diamond { rotate: 45deg; }
+.react-flow__handle.ip-triangle { background: var(--line-ink); border: 0; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.react-flow__handle.ip-hidden { opacity: 0; pointer-events: none; }
+.ip-count { position: absolute; transform: translate(-50%, -50%); font: 500 var(--size-2xs) / 1 var(--font-mono); color: var(--text-muted); pointer-events: none; background: var(--surface-raised); padding: 0 2px; border-radius: var(--radius-sm); }
+.ip-count.side-left { left: 14px; } .ip-count.side-right { left: calc(100% - 14px); }
+.ip-count.side-top { top: 14px; } .ip-count.side-bottom { top: calc(100% - 14px); }
+.ip-junction { position: absolute; width: 4px; height: 4px; border-radius: var(--radius-round); background: var(--line-ink); transform: translate(-50%, -50%); pointer-events: none; }
+.ip-junction[data-side="left"] { left: -6px; } .ip-junction[data-side="right"] { left: calc(100% + 6px); }
+.ip-junction[data-side="top"] { top: -6px; } .ip-junction[data-side="bottom"] { top: calc(100% + 6px); }
+/* Wires by connector class: 1.2 / 1.8 / 2.0px, thermal dashed grey (never red); a wire to a port that is gone is dashed red. */
+.wire-net-12 { stroke-width: 1.2px; }
+.wire-net-18 { stroke-width: 1.8px; }
+.wire-net-20 { stroke-width: 2px; }
+.wire-net-12d { stroke-width: 1.2px; stroke: var(--line-strong); stroke-dasharray: 5 3; }
+.react-flow__edge-path.wire-missing { stroke: var(--danger); stroke-dasharray: 4 3; }
+
+.menubar { display: flex; gap: 2px; }
+.menu-wrap { position: relative; display: inline-flex; }
+.menu-title { transition: color var(--motion), border-color var(--glide); height: 28px; padding: 0 var(--space-3); border: 1.5px solid transparent; background: none; color: var(--text-muted); font: 400 var(--size-sm) var(--font-sans); }
+.menu-title:hover { color: var(--text); background: color-mix(in srgb, var(--surface-panel) 50%, transparent); border-color: transparent; }
+.menu-title[aria-expanded="true"] { color: var(--text); font-weight: 600; border-color: var(--line-ink); background: none; }
+.menu, .cmd-search { background: var(--surface-panel); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); }
+.menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 260px; padding: var(--space-1); }
+.menu-item { display: flex; justify-content: space-between; align-items: center; gap: var(--space-6); width: 100%; padding: 4px var(--space-3); border: 0; border-radius: var(--radius-sm); background: none; text-align: left; font: 400 var(--size-sm) var(--font-sans); white-space: nowrap; }
+.menu-item:hover:not([aria-disabled="true"]) { background: var(--surface-sunken); }
+.menu-item:focus-visible { outline-offset: -2px; }
+.menu-item[aria-disabled="true"] { color: var(--text-muted); opacity: 0.55; cursor: default; }
+.menu-item.on .menu-label { font-weight: 600; }
+.menu-item.on .menu-label::before { content: "[ "; font-family: var(--font-mono); }
+.menu-item.on .menu-label::after { content: " ]"; font-family: var(--font-mono); }
+.menu-side { display: inline-flex; align-items: center; gap: var(--space-3); }
+.menu-meta, .menu-side kbd { font: 400 var(--size-2xs) var(--font-mono); color: var(--text-muted); }
+.menu-sep { height: 1px; background: var(--line); margin: var(--space-1); }
+.menu-group { padding: var(--space-2) var(--space-3) 2px; font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 var(--space-2); border: 0; background: none; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+.chip i { width: 7px; height: 7px; border-radius: 50%; border: 1px solid var(--line-ink); background: var(--text); }
+.chip.conn-closed i, .chip.conn-connecting i { background: none; }
+.key.small.err { color: var(--danger); border-color: var(--danger); }
+
+.bar { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); min-width: 0; }
+.bar > * { flex: none; }
+.bar > .spacer { flex: 1 1 auto; }
+.wordmark { display: inline-flex; align-items: center; gap: var(--space-2); font: 600 var(--size-md) var(--font-sans); letter-spacing: -0.01em; }
+
+.switch { display: flex; align-items: center; gap: 2px; }
+.switch > .lbl { margin-right: var(--space-2); }
+.switch .opt { border: 0; background: none; padding: 2px 3px; font: 400 var(--size-xs) var(--font-mono); color: var(--text-muted); }
+.switch .opt::before { content: "["; margin-right: 3px; visibility: hidden; }
+.switch .opt::after { content: "]"; margin-left: 3px; visibility: hidden; }
+.switch .opt.on { color: var(--text); font-weight: 500; }
+.switch .opt.on::before, .switch .opt.on::after { visibility: visible; }
+.switch .opt:hover { color: var(--text); }
+.switch .opt { transition: color var(--glide); }
+
+
