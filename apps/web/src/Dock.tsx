@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import type { RunSettings } from "./protocol";
 import { RunOptions } from "./RunOptions";
+import { VarControls } from "./VarControls";
 
 /**
  * The run dock (#78): Run, Cancel, the next run's length and speed, and where the run is. It floats at
@@ -40,6 +41,7 @@ export function Dock({
         ■ Cancel
       </button>
       <RunOptions defaults={defaults} value={settings} onChange={onSettings} />
+      <VarControls flag="dock" />
       {status && <span className={`run-status status-${status}`}>{statusText}</span>}
     </div>
   );

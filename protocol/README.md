@@ -168,13 +168,13 @@ pushes on the object through the block's inputs and reads it through its outputs
  { "name": "kp_theta", "type": "number", "value": 40, "unit": "N/rad" },
  { "name": "kd_theta", "type": "number", "expr": "2 * sqrt(kp_theta * pole_length)" },  // a formula
  { "name": "controller", "type": "enum", "value": "pid", "options": ["pid", "lqr"] },
- { "name": "trail", "type": "boolean", "value": false, "exposed": true }]          // also a Dashboard control
+ { "name": "trail", "type": "boolean", "value": false, "exposed": true, "dock": true }]          // also a Dashboard and a dock control
 ```
 
 `type` is `number`, `boolean`, `enum`, `text` or `file` (as params). Each has a `value`
 of its type or, for a number or boolean, an `expr` over other variables (evaluated in
 dependency order; a loop is an error). `min`, `max` and `whole` constrain a number;
-`note`, `group`, `step` and `exposed` are for the UI. A name is letters, digits and `_`,
+`note`, `group`, `step`, `exposed` (a control in the Dashboard's `controls` tile), `dock` (a control in the run dock) and `tunable` (meant to change during a run) are for the UI. A name is letters, digits and `_`,
 not `t`, `pi`, `e` or a function's name. A backend's defaults come from its descriptor's
 `[[variables]]`; the user's own live with the project (#34). Headless, `--var name=value`
 sets one for a `--run`.
@@ -220,12 +220,13 @@ decides which instruments exist.
     { "kind": "label", "text": "Speed {speed:.1f} m/s", "at": [0, 0], "span": [4, 1], "style": "heading" },
     { "kind": "section", "text": "Stores", "at": [0, 1], "span": [4, 2] },   // a titled frame, takes no cells
     { "kind": "hline", "at": [0, 3], "span": 6 },     // a separator in the gap: span columns (vline: rows)
-    { "kind": "console", "at": [0, 4], "span": [6, 3] }                       // the Console's lines, in a frame
+    { "kind": "console", "at": [0, 4], "span": [6, 3] },                      // the Console's lines, in a frame
+    { "kind": "controls", "at": [0, 7], "span": [4, 3] }                      // a control for each `exposed` variable
   ]
 }
 ```
 
-`label` and `console` take cells like an instrument (default span 2×1 and 4×3); `section`,
+`label` takes cells like an instrument (default span 2×1), as do `console`, `station` and `controls` (4×3); `section`,
 `hline` and `vline` are drawn in the gaps and take none (they are hidden on a screen
 narrower than the layout). Text is a formatted string: `{block}` shows that monitor's latest
 value ("–" before a run), `{block:.2f}` with that many decimals, `{{` and `}}` are braces.

@@ -9,7 +9,7 @@ import { addRecent, ago, buildProject, clearAutosave, loadAutosave, loadRecent, 
 import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from "./projectFiles";
 import { Notice, ProjectLabel, Toast, type NoticeSpec } from "./ProjectUI";
 import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
-import { emptyOf, freeName, inlineRef, loadMine, merged, refersTo, renameInFormula, renameRef, saveMine, toToml, usesOf, type Use } from "./bindings";
+import { emptyOf, freeName, inlineRef, merged, refersTo, renameInFormula, renameRef, toToml, usesOf, type Use } from "./bindings";
 import { ConsoleWindow } from "./Console";
 import { Dashboard } from "./Dashboard";
 import { inlineInText, loadSaved, mapTexts, renameInText, save as saveLayout, textUsing } from "./dashboardLayout";
@@ -124,11 +124,10 @@ export function App() {
   const { fitView, screenToFlowPosition } = useReactFlow();
   const [station, setStation] = useState<Station | null>(null);
   const [runSettings, setRunSettings] = useState<RunSettings>({});
-  // Variables (#36): the backend's defaults, then the user's own (kept in this browser per
-  // backend as the working copy; a project file, #82, saves them). The engine resolves them and says what they come to.
+  // Variables (#36): the backend's defaults, then the user's own (kept in the project, #34). The engine resolves them and says what they come to.
   const [mine, setMine] = useState<Variables | undefined>(undefined);
   const engineKey = state.engine || "default";
-  useEffect(() => setMine(loadMine(engineKey)), [engineKey]);
+  useEffect(() => setMine(undefined), [engineKey]); // another backend: its defaults; a project (or the restored session) brings the user's own
   const variables = useMemo(() => merged(state.variables, mine), [state.variables, mine]);
   // The Dashboard's layout is kept here, so renaming or deleting a variable can rewrite the labels that use it (#86).
   const [dashSaved, setDashSaved] = useState(() => loadSaved(engineKey));
@@ -142,10 +141,7 @@ export function App() {
   const [openVar, setOpenVar] = useState<string | null>(null);
   const [consoleShown, setConsoleShown] = useState(false);
   const varsHistory = useRef<{ past: Variables[]; future: Variables[] }>({ past: [], future: [] });
-  const keepVars = useCallback((next: Variables) => {
-    setMine(next);
-    saveMine(engineKey, next);
-  }, [engineKey]);
+  const keepVars = setMine;
   const setVariables = useCallback(
     (next: Variables) => {
       varsHistory.current = { past: [...varsHistory.current.past.slice(-50), variables], future: [] };
@@ -564,11 +560,7 @@ export function App() {
     setFlowLevel(null);
     editStation(p.station ?? state.station ?? { objects: [] });
     varsHistory.current = { past: [], future: [] };
-    if (p.variables) keepVars(p.variables);
-    else {
-      setMine(undefined);
-      saveMine(engineKey, undefined);
-    }
+    keepVars(p.variables);
     saveDash(p.dashboard);
     setRunSettings(p.run ?? {});
     setProjectTitle(name);

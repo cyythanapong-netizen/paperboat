@@ -609,6 +609,15 @@ function Detail({ v, uses, onChange, onShow }: { v: Variable; uses: Use[]; onCha
           </span>
         </>
       )}
+      <span className="lbl">Controls</span>
+      <span className="wells">
+        <label className="check" title="A control on the Dashboard's Controls tile">
+          <input type="checkbox" checked={!!v.exposed} onChange={(e) => onChange({ ...v, exposed: e.target.checked || undefined })} /> Dashboard
+        </label>
+        <label className="check" title="A control in the run dock">
+          <input type="checkbox" checked={!!v.dock} onChange={(e) => onChange({ ...v, dock: e.target.checked || undefined })} /> Dock
+        </label>
+      </span>
       <span className="lbl">Note</span>
       <span className="wells">
         <input className="well wide" aria-label="Note" value={v.note ?? ""} placeholder="What it's for" onChange={(e) => onChange({ ...v, note: e.target.value || undefined })} />

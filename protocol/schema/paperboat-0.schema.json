@@ -1590,7 +1590,8 @@
                   "vline",
                   "label",
                   "console",
-                  "station"
+                  "station",
+                  "controls"
                 ]
               },
               "text": {
@@ -1998,7 +1999,15 @@
         },
         "exposed": {
           "type": "boolean",
-          "description": "Also a control on the Dashboard, for operators."
+          "description": "Also a control on the Dashboard (a Controls tile), for operators."
+        },
+        "dock": {
+          "type": "boolean",
+          "description": "Also a control in the run dock."
+        },
+        "tunable": {
+          "type": "boolean",
+          "description": "Meant to be changed during a run."
         }
       }
     },
