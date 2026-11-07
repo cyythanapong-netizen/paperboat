@@ -167,6 +167,31 @@ Grouping and Subsystems
   Double-click a subsystem block to navigate into its internal sheet. Use the breadcrumb bar
   at the top or press :kbd:`Escape` (or :kbd:`Alt` + :kbd:`↑`) to pop back up.
 
+Commenting and Annotating Blocks
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+During iterative testing, tuning, and debugging, you can temporarily disable or bypass blocks
+without deleting them, losing parameters, or rewiring ports:
+
+- **Comment Out** (:kbd:`Ctrl` + :kbd:`/` or :menuselection:`Edit --> Comment out`):
+  Select one or more blocks and press :kbd:`Ctrl` + :kbd:`/` (or click **Comment** on the
+  floating selection toolbar). The blocks dim to muted opacity with a ``// commented`` tag,
+  and connected wires dim. Commented-out blocks are excluded from simulation; downstream blocks
+  cleanly receive default unwired values (:code:`0.0`). Feedback loops through commented-out
+  blocks do not produce algebraic loop cycle errors.
+- **Comment Through / Bypass** (:kbd:`Ctrl` + :kbd:`Shift` + :kbd:`Y` or click **Bypass**):
+  Bypasses the block's internal computation and passes signals directly from input ports
+  to matching output ports (e.g. single-input single-output blocks like PID controllers,
+  gains, delays, or filters pass ``in`` directly to ``out``). In Step flows, execution tokens
+  immediately traverse across bypassed step blocks to their ``next`` output.
+- **Block Notes & Documentation**:
+  Click the small **note** button in any block header to open a recessed well where you can
+  record formulas, design notes, or tuning rationale. The notes are saved directly in your
+  :code:`.ppj` project file.
+- **Canvas Annotations** (:code:`base/comment`):
+  Add a freeform note card from the Block Palette (:code:`base/comment`) onto the canvas to
+  document subsystems, test setups, or architecture directly alongside your blocks.
+
 The Board (Instruments & Telemetry)
 -----------------------------------
 
@@ -257,6 +282,12 @@ Keyboard Shortcuts
      - Open Command Search palette
    * - :kbd:`/`
      - Quick add block at cursor (on Flow canvas)
+   * - :kbd:`?`
+     - Show canvas gestures and shortcut cheat sheet (on Flow canvas)
+   * - :kbd:`Ctrl` + :kbd:`/`
+     - Comment out / uncomment selected blocks
+   * - :kbd:`Ctrl` + :kbd:`Shift` + :kbd:`Y`
+     - Comment through / bypass selected blocks
    * - :kbd:`Alt` + :kbd:`M`
      - Cycle View Modes (Navigator → Commander → Lookout)
    * - :kbd:`Alt` + :kbd:`1`

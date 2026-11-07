@@ -180,6 +180,12 @@ export type GraphNode = {
   /** Its place on the Flow canvas; backends ignore it. */
   pos?: [number, number];
   ports?: PortSides;
+  /** Whether the block is commented out or bypassed. */
+  commented?: boolean;
+  /** Comment mode: out (omitted from execution) or through (bypassed). */
+  comment_mode?: "out" | "through";
+  /** User notes or documentation for this block. */
+  comment?: string;
 };
 
 export type GraphEdge = {
@@ -266,6 +272,12 @@ export type GraphGroup = {
   };
   /** Where a subsystem's or story's ports sit on its block (ids are node::port, or in and next). Backends ignore it. */
   ports?: PortSides;
+  /** Ports a subsystem or story shows as a block even where no wire crosses its edge yet, in order. Backends ignore it. */
+  expose?: ({
+    side: "in" | "out";
+    /** [node, port] inside the group: an input for side in, an output for side out. */
+    to: [string, string];
+  })[];
   /** Story outputs that read as unwired after its path leaves. */
   release?: [string, string][];
 };

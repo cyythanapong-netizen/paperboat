@@ -363,6 +363,24 @@ json Run::pass_over(const std::vector<std::string>& order) {
   for (const auto& id : order) {
     auto& node = g_.nodes.at(id);
     const auto call = calling(id);
+    if (node.commented && node.comment_mode == "through") {
+      toolkit::Values in = inputs_of(node);
+      toolkit::Values out;
+      for (const auto& out_p : node.def.outputs) {
+        if (auto it = in.find(out_p.id); it != in.end()) {
+          out[out_p.id] = it->second;
+        } else if (out_p.id == "out" && in.contains("in")) {
+          out["out"] = in.at("in");
+        } else if (node.def.inputs.size() == 1 && node.def.outputs.size() == 1) {
+          if (!in.empty()) {
+            out[out_p.id] = in.begin()->second;
+          }
+        }
+      }
+      outputs_[id] = std::move(out);
+      validate_vector_outputs(node, outputs_[id]);
+      continue;
+    }
     if (node.object) {
       outputs_[id] = node.object->read();
       validate_vector_outputs(node, outputs_[id]);
@@ -395,7 +413,7 @@ json Run::pass_over(const std::vector<std::string>& order) {
   // Blocks without feedthrough take this pass's inputs now that every block has run.
   for (const auto& id : order) {
     auto& node = g_.nodes.at(id);
-    if (!node.block || node.def.feedthrough) continue;
+    if (!node.block || node.def.feedthrough || node.commented) continue;
     const auto call = calling(id);
     node.block->step(ctx_, inputs_of(node));
   }
@@ -419,7 +437,8 @@ std::optional<std::string> Run::advance() {
   for (auto& item : station_) {
     const auto call = calling(item.id);
     auto linked = g_.nodes.find(item.id);
-    item.instance->step(ctx_, linked != g_.nodes.end() && linked->second.object ? inputs_of(linked->second) : toolkit::Values{});
+    const bool passive = linked != g_.nodes.end() && linked->second.commented && linked->second.comment_mode == "out";
+    item.instance->step(ctx_, linked != g_.nodes.end() && linked->second.object && !passive ? inputs_of(linked->second) : toolkit::Values{});
   }
   return state_ ? state_->step(ctx_) : std::nullopt;
 }
@@ -463,7 +482,7 @@ json Run::scene(bool with_blocks) const {
 std::vector<const toolkit::Block*> Run::blocks() const {
   std::vector<const toolkit::Block*> out;
   for (const auto& [id, node] : g_.nodes)
-    if (node.block) out.push_back(node.block.get());
+    if (node.block && !(node.commented && node.comment_mode == "out")) out.push_back(node.block.get());
   return out;
 }
 

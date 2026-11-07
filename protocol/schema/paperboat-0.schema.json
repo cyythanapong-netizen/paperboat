@@ -1494,6 +1494,22 @@
         },
         "ports": {
           "$ref": "#/$defs/PortSides"
+        },
+        "commented": {
+          "type": "boolean",
+          "description": "Whether the block is commented out or bypassed."
+        },
+        "comment_mode": {
+          "type": "string",
+          "enum": [
+            "out",
+            "through"
+          ],
+          "description": "Comment mode: out (omitted from execution) or through (bypassed)."
+        },
+        "comment": {
+          "type": "string",
+          "description": "User notes or documentation for this block."
         }
       },
       "required": [
@@ -1783,6 +1799,29 @@
         "ports": {
           "$ref": "#/$defs/PortSides",
           "description": "Where a subsystem's or story's ports sit on its block (ids are node::port, or in and next). Backends ignore it."
+        },
+        "expose": {
+          "type": "array",
+          "description": "Ports a subsystem or story shows as a block even where no wire crosses its edge yet, in order. Backends ignore it.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["side", "to"],
+            "properties": {
+              "side": {
+                "enum": ["in", "out"]
+              },
+              "to": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 2,
+                "maxItems": 2,
+                "description": "[node, port] inside the group: an input for side in, an output for side out."
+              }
+            }
+          }
         },
         "release": {
           "type": "array",

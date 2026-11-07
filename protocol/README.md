@@ -282,7 +282,10 @@ A graph whose blocks have `step` ports is a Step flow (see `examples/backends/an
 ## Groups
 
 A graph may carry `groups`: `{ id, kind: "visual" | "subsystem" | "story", label?, nodes: [ids],
-collapsed?, pos?, params?: { seconds, reset }, release?: [[node, port], ...] }`. A block is in at most one group.
+collapsed?, pos?, params?: { seconds, reset }, release?: [[node, port], ...],
+expose?: [{ side: "in" | "out", to: [node, port] }, ...] }`. A block is in at most one group.
+Groups nest (`parent`). `expose` lists ports a subsystem or story shows as a block even where no wire
+crosses its edge yet (an input or output of a block inside it); the UI sets it, backends ignore it.
 
 - **visual** tidies the canvas: the backend runs its blocks as if ungrouped. Collapsed,
   the UI draws it as one block whose ports are the wires crossing its edge; the wires

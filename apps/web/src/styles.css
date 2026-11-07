@@ -358,6 +358,13 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .block.failed { border-color: var(--danger); }
 .block.missing { border: 1.5px dashed var(--danger); }
 .block.missing .block-title { color: var(--danger); }
+.block.commented { opacity: 0.45; border-style: dashed; }
+.compact-block.commented .plate { opacity: 0.45; border-style: dashed; }
+.block.comment-through { position: relative; }
+.block.comment-through::after {
+  content: ""; position: absolute; top: 50%; left: 0; right: 0; height: 0;
+  border-top: 1.5px dashed var(--line-strong); pointer-events: none; z-index: 2;
+}
 .block-progress { height: 2px; background: var(--line); }
 .block-progress > div { height: 100%; background: var(--signal); transition: width 0.1s linear; }
 
@@ -389,12 +396,29 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .param .text-param { width: 116px; text-align: left; }
 .param .key-param { cursor: pointer; text-align: center; }
 
+.block-note-btn {
+  background: transparent; border: 0; color: var(--text-muted); cursor: pointer;
+  padding: 0 4px; display: inline-flex; align-items: center; justify-content: center;
+  font: 500 var(--size-2xs) var(--font-mono); line-height: 1; border-radius: var(--radius-sm);
+}
+.block-note-btn:hover { color: var(--text); background: var(--surface-sunken); }
+.block-note-btn.has-note { color: var(--text); }
+.block-note-well {
+  padding: 4px 8px; background: var(--surface-sunken); border-top: 1px solid var(--line);
+}
+.block-note-input {
+  width: 100%; box-sizing: border-box; background: transparent; border: 0;
+  color: var(--text); font: 400 var(--size-2xs) var(--font-mono); line-height: 1.4;
+  resize: vertical; min-height: 38px; padding: 2px 0; outline: none;
+}
+
 .react-flow__edge-path { stroke: var(--line-ink); stroke-width: 1.2px; }
 .wire-step { stroke-width: 2px !important; }
 .wire-casing { fill: none; stroke: var(--surface-panel); stroke-width: 5px; stroke-linecap: round; pointer-events: none; }
 .react-flow__edge-path, .wire-casing { transition: opacity 0.12s; }
 .react-flow__edge-path.lit { stroke-width: 2.6px !important; }
 .react-flow__edge-path.dim, .wire-casing.dim { opacity: 0.18; }
+.react-flow__edge-path.wire-commented, .wire-casing.wire-commented { opacity: 0.25; }
 .wire-image { stroke-dasharray: 5 3; }
 .react-flow__edge.selected .react-flow__edge-path { stroke-width: 3px !important; }
 .react-flow__edge-path { transition: stroke-width var(--glide); }
@@ -655,6 +679,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .selection-dialog { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); white-space: nowrap; }
 .selection-dialog > .lbl:first-child { margin-right: var(--space-2); font-family: var(--font-mono); }
 .selection-dialog .kept { margin: 0 var(--space-2); }
+.expose-menu { position: relative; }
+.expose-menu > summary { list-style: none; cursor: pointer; }
+.expose-menu > summary::-webkit-details-marker { display: none; }
+.expose-list { position: absolute; top: 100%; right: 0; margin-top: var(--space-1); min-width: 150px; max-height: 240px; overflow: auto; padding: var(--space-2); background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: var(--space-1); font-family: var(--font-mono); font-size: 12px; z-index: 5; }
+.expose-row { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; }
 .react-flow__selection { background: transparent; border: 1px dashed var(--line-ink); }
 .react-flow__nodesselection-rect { background: transparent; border: none; }
 .key.add { font-weight: 600; border-color: var(--line-ink); }

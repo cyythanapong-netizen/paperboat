@@ -31,6 +31,9 @@ struct Node {
   // An elementwise block fed a vector runs as lanes (toolkit::make_lanes): how many (0: the
   // length is known only at run time). Unset: it runs as itself, on numbers.
   std::optional<std::size_t> lanes = {};
+  bool commented = false;
+  std::string comment_mode = "out";  // "out" (omitted from execution) or "through" (bypassed)
+  std::string comment = {};          // user notes or documentation
 };
 
 // A fresh instance of a signal block `node` (as it was made: lanes, if it runs as lanes).

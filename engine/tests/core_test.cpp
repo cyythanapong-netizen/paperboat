@@ -1024,3 +1024,74 @@ TEST_CASE("a dashboard Switch runs from its descriptor params and is sampled as 
     CHECK(out.last_signal("sw") == 1.0);
   }
 }
+
+TEST_CASE("commented out blocks are excluded from simulation and do not create cycles") {
+  static const tk::Catalog catalog = tk::load_descriptor("domain = \"test\"\nimport = [\"math\", \"dashboard\"]\n", tk::builtins());
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 0.1, .emit_every = 1, .real_time = false}};
+
+  // Loop a -> b -> a normally causes a cycle error.
+  const json loop_normal = {
+      {"nodes", {{{"id", "a"}, {"type", "gain"}, {"params", {{"k", 2.0}}}},
+                 {{"id", "b"}, {"type", "gain"}, {"params", {{"k", 3.0}}}}}},
+      {"edges", {{{"from", {"a", "y"}}, {"to", {"b", "u"}}},
+                 {{"from", {"b", "y"}}, {"to", {"a", "u"}}}}}};
+  core::Station empty;
+  CHECK_THROWS_WITH(core::prepare_graph(loop_normal, catalog, empty), ContainsSubstring("cycle"));
+
+  // With block 'a' commented out (mode = "out"), no cycle error occurs and b receives default 0.0.
+  const json loop_commented = {
+      {"nodes", {{{"id", "a"}, {"type", "gain"}, {"params", {{"k", 2.0}}}, {"commented", true}, {"comment_mode", "out"}},
+                 {{"id", "b"}, {"type", "gain"}, {"params", {{"k", 3.0}}}},
+                 {{"id", "disp"}, {"type", "display"}}}},
+      {"edges", {{{"from", {"a", "y"}}, {"to", {"b", "u"}}},
+                 {{"from", {"b", "y"}}, {"to", {"a", "u"}}},
+                 {{"from", {"b", "y"}}, {"to", {"disp", "in"}}}}}};
+  const auto g = core::prepare_graph(loop_commented, catalog, empty);
+  CHECK(std::ranges::find(g.order, "a") == g.order.end());
+  CHECK(std::ranges::find(g.order, "b") != g.order.end());
+
+  Collected out;
+  CHECK(core::run("r", loop_commented, nullptr, backend, out.emit(), nullptr, {}) == "done");
+  CHECK(out.last_signal("disp") == 0.0);
+}
+
+TEST_CASE("comment through passes signal values directly through to output ports") {
+  static const tk::Catalog catalog = tk::load_descriptor("domain = \"test\"\nimport = [\"base\", \"math\", \"dashboard\"]\n", tk::builtins());
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 0.1, .emit_every = 1, .real_time = false}};
+
+  // Number 42.0 -> Gain (k = 5, commented through) -> Display
+  const json graph = {
+      {"nodes", {{{"id", "num"}, {"type", "constant"}, {"params", {{"value", 42.0}}}},
+                 {{"id", "g"}, {"type", "gain"}, {"params", {{"k", 5.0}}}, {"commented", true}, {"comment_mode", "through"}},
+                 {{"id", "disp"}, {"type", "display"}}}},
+      {"edges", {{{"from", {"num", "y"}}, {"to", {"g", "u"}}},
+                 {{"from", {"g", "y"}}, {"to", {"disp", "in"}}}}}};
+
+  Collected out;
+  CHECK(core::run("r", graph, nullptr, backend, out.emit(), nullptr, {}) == "done");
+  // Gain is bypassed, so input 42.0 passes straight through instead of 42 * 5 = 210.
+  CHECK(out.last_signal("disp") == 42.0);
+}
+
+TEST_CASE("step block comment through immediately bypasses to next step output") {
+  static const tk::Catalog catalog = tk::load_descriptor("domain = \"test\"\nimport = [\"step\"]\n", tk::builtins());
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.1, .duration = 2.0, .emit_every = 1, .real_time = false}};
+
+  // start -> wait (10s, bypassed) -> stop
+  const json graph = {
+      {"nodes", {{{"id", "start"}, {"type", "start"}},
+                 {{"id", "w"}, {"type", "wait"}, {"params", {{"seconds", 10.0}}}, {"commented", true}, {"comment_mode", "through"}},
+                 {{"id", "stop"}, {"type", "stop"}}}},
+      {"edges", {{{"from", {"start", "next"}}, {"to", {"w", "in"}}},
+                 {{"from", {"w", "next"}}, {"to", {"stop", "in"}}}}}};
+
+  Collected out;
+  CHECK(core::run("r", graph, nullptr, backend, out.emit(), nullptr, {}) == "done");
+  bool stopped_by_stop = false;
+  for (const auto& m : out.messages) {
+    if (m.value("type", "") == "log" && m.value("text", "").find("stopped by stop") != std::string::npos) {
+      stopped_by_stop = true;
+    }
+  }
+  CHECK(stopped_by_stop);
+}
