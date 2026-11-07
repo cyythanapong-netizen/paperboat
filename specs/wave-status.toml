@@ -131,15 +131,67 @@ cli = "agy"
 model = "argon-4"
 effort = "medium"
 wave = 3
-state = "ready"
+state = "review"
 task = "Studio component popover, interface sheet + Look tab, dock (balance, Fix: Ground, Export backend)"
 contracts = ["§8.1", "§8.3", "§3", "§4", "§6"]
 prompt = "specs/prompts/wave3_lane_b.md"
 branch = "epic160/lane-b-w3"
 blocker = ""
-notes = ""
-modified_files = []
-verification = ""
+notes = "Implemented ComponentPopover (NumberField param rows, = inline binding to top-level parameter, + Input / + Probe port actions), InterfaceSheet (Interface tab with Station props, entry pills, linked block preview via CompactBlock + Icon; Look tab with 0..100 5-unit snap grid, §3 primitive keys and Choice token switches, side/at port placement, side-by-side light/dark preview, setIcon save), StudioDock (debounced checkModel balance parse, dangling flow connector detection and domain Fix: Ground / Fix: Fixed, Export backend with 2px --signal progress bar), fake.ts, b-*.test.ts, and light/dark evidence screenshots."
+modified_files = [
+  "apps/studio/src/dock/dock.css",
+  "apps/studio/src/dock/dock.ts",
+  "apps/studio/src/dock/index.tsx",
+  "apps/studio/src/popover/index.tsx",
+  "apps/studio/src/popover/popover.css",
+  "apps/studio/src/popover/popover.ts",
+  "apps/studio/src/sheet/index.tsx",
+  "apps/studio/src/sheet/look.ts",
+  "apps/studio/src/sheet/sheet.css",
+  "apps/studio/test/b-dock.test.ts",
+  "apps/studio/test/b-popover.test.ts",
+  "apps/studio/test/b-sheet-look.test.ts",
+  "apps/studio/test/fake.ts",
+  "specs/evidence/wave3-b/dock-dark.png",
+  "specs/evidence/wave3-b/dock-light.png",
+  "specs/evidence/wave3-b/popover-dark.png",
+  "specs/evidence/wave3-b/popover-light.png",
+  "specs/evidence/wave3-b/sheet-interface-dark.png",
+  "specs/evidence/wave3-b/sheet-interface-light.png",
+  "specs/evidence/wave3-b/sheet-look-dark.png",
+  "specs/evidence/wave3-b/sheet-look-light.png",
+  "specs/wave-status.toml",
+]
+verification = """
+- npm run typecheck: PASS (shared, web, cli, studio all clean)
+- npm run build:studio: PASS (tsc --noEmit && vite build clean)
+- npm test -w @paperboat/studio: PASS (10/10 tests in b-dock.test.ts, b-popover.test.ts, b-sheet-look.test.ts)
+- python3 docs/gen_tokens.py --check && python3 protocol/gen_ts.py --check: PASS
+- git diff --name-only dev...HEAD:
+  apps/studio/src/dock/dock.css
+  apps/studio/src/dock/dock.ts
+  apps/studio/src/dock/index.tsx
+  apps/studio/src/popover/index.tsx
+  apps/studio/src/popover/popover.css
+  apps/studio/src/popover/popover.ts
+  apps/studio/src/sheet/index.tsx
+  apps/studio/src/sheet/look.ts
+  apps/studio/src/sheet/sheet.css
+  apps/studio/test/b-dock.test.ts
+  apps/studio/test/b-popover.test.ts
+  apps/studio/test/b-sheet-look.test.ts
+  apps/studio/test/fake.ts
+  specs/evidence/wave3-b/dock-dark.png
+  specs/evidence/wave3-b/dock-light.png
+  specs/evidence/wave3-b/popover-dark.png
+  specs/evidence/wave3-b/popover-light.png
+  specs/evidence/wave3-b/sheet-interface-dark.png
+  specs/evidence/wave3-b/sheet-interface-light.png
+  specs/evidence/wave3-b/sheet-look-dark.png
+  specs/evidence/wave3-b/sheet-look-light.png
+  specs/wave-status.toml
+- Evidence screenshots rendered with fake.ts in light and dark under specs/evidence/wave3-b/
+"""
 
 # Model routing (contracts rev 2): lane A = Anthropic only, lane B = Google only.
 [routing]
