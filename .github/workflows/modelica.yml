@@ -65,5 +65,8 @@ jobs:
       - name: Test bridge and squero/0
         run: engine/build/tests/paperboat_tests '[modelica],[squero]'
 
+      - name: Python modules for the smoke stage
+        run: pip install websockets jsonschema
+
       - name: The generated dc-drive backend builds and passes check (manifest, catalog, smoke, golden)
         run: engine/build/tools/paperboat check examples/dc-drive-cpp
