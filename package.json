@@ -25,6 +25,7 @@
     "docs": "./scripts/build_docs.sh",
     "publish:dev": "python3 scripts/publish.py",
     "test:python": "npm run build:python --silent && python3 -m pytest -q python/tests",
-    "gen:protocol": "python3 protocol/gen_ts.py"
+    "gen:protocol": "python3 protocol/gen_ts.py",
+    "verify": "./scripts/verify.sh"
   }
 }
