@@ -42,7 +42,10 @@ Dashboard as an instrument).
 Ports have a **type**: ``signal`` (a value), ``step`` (control, in a Step flow), or a shape
 such as ``image``, ``points`` or ``vector`` (an ordered numeric value on one wire; ``numbers``
 remains a compatible name). A vector may declare its length and component labels/units. A
-wire joins compatible ports of one type.
+wire joins compatible ports of one type. **Mux** and **Demux** join numbers into a vector
+and split one back out, and an **elementwise** block (Gain, Sum, Integrator, PID…) works
+on a vector one element at a time, so a whole state is wired, scaled and integrated as one
+line (see :ref:`elementwise`).
 
 Definitions live in **code**, next to what the block does: C++ ``define_block``, Python
 class attributes. The **toolkit** offers built-in packages of them (``base``, ``signal``, ``math``,

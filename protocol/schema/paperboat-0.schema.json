@@ -45,6 +45,10 @@
           },
           "minItems": 1,
           "description": "A vector's ordered component labels and optional per-component units; its length fixes the dimension."
+        },
+        "broadcast": {
+          "type": "boolean",
+          "description": "A signal port of an elementwise block: it also joins a vector port (the block runs element by element). Absent: false."
         }
       },
       "required": [
@@ -229,11 +233,19 @@
         },
         "ports_from": {
           "type": "string",
-          "description": "The id of a text param that decides the inputs: one per sign character in it (+ adds, - or − subtracts; at most 26; none reads as ++), ids a, b, c… of the first input's type. Sum's signs."
+          "description": "The id of a text param that decides the inputs: one per sign character in it (+ adds, - or − subtracts; at most 26; none reads as ++), ids a, b, c… of the first input's type. Sum's signs. A param called names gives one input per name instead (Mux), see outputs_from."
         },
         "inputs_from": {
           "type": "string",
           "description": "The id of a text param whose expression's free names are the inputs: one per identifier in it (other than pi, e and built-in functions, in order of first appearance), of the first input's type. f(t)'s f."
+        },
+        "outputs_from": {
+          "type": "string",
+          "description": "The id of a text param of names (split on spaces and commas: \"x v theta\") that are the outputs, ids in that order; the first vector input gets one component per name, units by position from a `units` param. Demux's names. (ports_from \"names\" does the same for the inputs: Mux.)"
+        },
+        "elementwise": {
+          "type": "boolean",
+          "description": "It works element by element: its signal ports take vectors too (they are marked broadcast), scalars broadcast, and with any vector in, its outputs are vectors of that length, one instance per element. Absent: false."
         },
         "feedthrough": {
           "type": "boolean",
@@ -821,14 +833,14 @@
           "items": {
             "type": "number"
           },
-          "description": "The latest scalar or text sample, or a whole numeric vector on a Display monitor."
+          "description": "The latest scalar or text sample, or a whole numeric vector: on a Display, and on a Graph in a clock run (one trace per component)."
         },
         "components": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/VectorComponent"
           },
-          "description": "Labels and units for a vector Display sample, in vector order."
+          "description": "Labels and units for a vector sample, in vector order."
         }
       },
       "required": [

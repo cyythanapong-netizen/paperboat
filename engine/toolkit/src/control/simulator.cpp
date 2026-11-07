@@ -79,6 +79,7 @@ class Delay : public Block {
 void add_simulator(Registry& registry) {
   auto without_feedthrough = [&](Template t) {
     t.def.feedthrough = false;
+    t.def.elementwise = t.def.type != "delay";  // a vector: one state per element; Delay moves whole values
     registry.add(std::move(t));
   };
   without_feedthrough(make_template(

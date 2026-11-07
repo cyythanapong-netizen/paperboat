@@ -96,7 +96,7 @@ TEST_CASE("units from a descriptor go out in the catalog; bad ones are refused")
   for (const auto& b : msg["blocks"])
     if (b["type"] == "push") push = b;
   REQUIRE(push.is_object());
-  CHECK(push["inputs"][0] == json{{"id", "u"}, {"type", "signal"}, {"unit", "m"}});
+  CHECK(push["inputs"][0] == json{{"id", "u"}, {"type", "signal"}, {"unit", "m"}, {"broadcast", true}});  // elementwise
   CHECK(push["outputs"][0]["unit"] == "N");
   CHECK(push["params"][0]["unit"] == "N/m");
   auto bad = [](const char* units) -> std::string {

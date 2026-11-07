@@ -144,11 +144,21 @@ block is instantiated:
    - `signal` → `signal`
    - `step` → `step`
    - `vector` → `vector` (with matching component lengths)
+   - `vector` → an elementwise block's `signal` port (marked `broadcast`)
 3. **Cycle Detection**: Direct feedthrough cycles (algebraic loops) in Signal flows are
    prohibited. A loop is permitted only if it is broken by a state-holding block (such as an
    explicit `Delay` block, a `Step` flow path boundary, or a Station object's linked block
    which evaluates in two decoupled stages: `read()` before the pass and `step()` after).
-4. **Topological Sort**: The execution sequence is determined via Kahn's algorithm, producing
+4. **Vector Lanes**: An elementwise block (`BlockDef::elementwise`) fed a vector, straight or
+   through other elementwise blocks, runs as N lanes: N instances, each given its element of
+   every vector input and every number input whole, their outputs gathered into vectors of N.
+   N is resolved from the wires alone, iterating to a fixed point (a block's length only grows
+   from "numbers" to a vector of N), so an Integrator in a vector loop knows N before its first
+   step. Two vectors of different lengths into one block fail here, naming the block and port;
+   a length known only at run time into a block without feedthrough fails here too. The block's
+   outputs then become vector ports of N, so a wire from one into a plain `signal` port is
+   refused, and a wire into a vector port of another length is too.
+5. **Topological Sort**: The execution sequence is determined via Kahn's algorithm, producing
    an execution order where every block's inputs are fully resolved before its `step()` method
    is called.
 
@@ -160,6 +170,11 @@ static declarations:
 
 - `ports_from = "signs"`: Used by algebraic summing junctions (`math/sum`). Each character
   in a sign string (e.g., `"+-+ "` generates ports `a`, `b`, `c` with their respective signs).
+- `ports_from = "names"` and `outputs_from = "names"`: Mux's inputs and Demux's outputs, one
+  per name in a space- or comma-separated list (`"x v theta"`), units by position from a
+  `units` param; the vector port on the other side gets one component per name. Bad names fail
+  the run on the block. The UI derives the same ports (`ports.ts`); both are checked against
+  one fixture (`engine/tests/data/ports.json`).
 - `inputs_from = "f"`: Used by free expression function blocks (`signal/function`). The engine
   invokes `Expression::free_names(text)` to scan identifier tokens in appearance order:
 

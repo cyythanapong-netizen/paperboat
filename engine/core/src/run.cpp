@@ -154,7 +154,7 @@ std::string Run::go(const json& graph_given, const json& station_given, const js
           for (const auto& id : *order) {
             auto& node = g_.nodes.at(id);
             const auto call = calling(id);
-            if (node.block) node.block = node.entry->make(node.params, node.text);
+            if (node.block) node.block = make_block(node);
             if (node.monitor) node.monitor = node.entry->make(node.params, node.text);
             outputs_.erase(id);
           }
@@ -325,9 +325,10 @@ json Run::pass_over(const std::vector<std::string>& order) {
     if (const auto* text = toolkit::get_if<std::string>(shown, "in")) {
       samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", *text}});
     } else if (const auto* vector = toolkit::get_vector(shown, "in")) {
-      if (node.def.instrument == "display") {
-        // A Display is a readout: preserve the vector as one value. A Graph keeps its
-        // existing list-as-samples behavior (index is x), useful for point series.
+      if (node.def.instrument == "display" || settings_.mode == RunSettings::Mode::Clock) {
+        // A Display is a readout, and a Graph in a clock run draws one trace per component
+        // over time: the vector is one sample. A Graph in a run-once plots it by index (x is
+        // the index), useful for point series.
         json item = {{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", *vector}};
         if (port != nullptr && !port->components.empty()) {
           json components = json::array();

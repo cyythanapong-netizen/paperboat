@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { inForm, parseInputs, parsePlaceholders, parseSigns, portHint, portLabel, wireMismatch } from "../src/ports.ts";
+import { inForm, parseInputs, parseNames, parsePlaceholders, parseSigns, portHint, portLabel, wireMismatch } from "../src/ports.ts";
 import type { BlockDef, PortDef } from "../src/protocol.ts";
 
 const state: PortDef = {
@@ -94,4 +94,36 @@ test("parseInputs matches the engine's shared inputs_from test vector", () => {
   for (const c of cases) {
     assert.deepEqual(parseInputs(c.f), c.inputs, `for formula: ${c.f}`);
   }
+});
+
+test("an elementwise block's broadcast port takes a vector wire; a plain signal port refuses one (#164)", () => {
+  const vec: PortDef = { id: "y", type: "vector", dimension: 3 };
+  assert.equal(wireMismatch(vec, { id: "u", type: "signal", broadcast: true }), null);
+  assert.equal(wireMismatch({ id: "y", type: "signal", broadcast: true }, { id: "u", type: "vector", dimension: 2 }), null);
+  assert.equal(wireMismatch(vec, { id: "u", type: "signal" }), "joins a vector port to a signal port");
+  assert.equal(wireMismatch({ ...state }, { id: "u", type: "signal", unit: "m", broadcast: true }), "carries vector component 1 in rad into a port in m");
+});
+
+test("names: identifiers split on spaces and commas, each once, none of the other side's ids", () => {
+  assert.deepEqual(parseNames("x, v theta x 1a y", ["y"]), ["x", "v", "theta"]);
+  assert.deepEqual(parseNames(undefined), []);
+});
+
+// The same fixture the engine's vector_test reads: what the catalog sends for a block, and the
+// ports its params give it. The engine checks the def against its catalog, so neither side drifts.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const fixture: { type: string; params: Record<string, string | number>; inputs: string[]; outputs: string[]; def: BlockDef }[] = JSON.parse(
+  fs.readFileSync(path.join(here, "../../../engine/tests/data/ports.json"), "utf8"),
+);
+
+test("dynamic ports match the engine's on the shared fixture", () => {
+  for (const c of fixture) {
+    const def = inForm(c.def, c.params);
+    assert.deepEqual(def.inputs.map((p) => p.id), c.inputs, c.type);
+    assert.deepEqual(def.outputs.map((p) => p.id), c.outputs, c.type);
+  }
+  const mux = inForm(fixture[0].def, fixture[0].params);
+  assert.deepEqual(mux.inputs.map((p) => p.unit), ["m", "m/s", "rad"]);
+  assert.equal(mux.outputs[0].dimension, 3);
+  assert.deepEqual(mux.outputs[0].components?.[2], { id: "theta", unit: "rad" });
 });

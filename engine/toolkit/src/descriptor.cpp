@@ -746,6 +746,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
       json port = {{"id", p.id}, {"type", p.type}};
       if (!p.unit.empty()) port["unit"] = p.unit;
       if (p.dimension) port["dimension"] = *p.dimension;
+      if (p.broadcast) port["broadcast"] = true;
       if (!p.components.empty()) {
         json components = json::array();
         for (const auto& component : p.components) {
@@ -773,11 +774,12 @@ std::string catalog_message(const Catalog& catalog, int indent) {
   json blocks = json::array();
   for (const auto& e : catalog.entries) {
     json params = param_list(e.def.params);
+    const BlockDef shown = with_broadcast(e.def);  // an elementwise block's signal ports take vectors
     json block = {{"type", e.def.type},
                   {"label", e.def.label},
                   {"kind", to_string(e.def.kind)},
-                  {"inputs", ports(e.def.inputs)},
-                  {"outputs", ports(e.def.outputs)},
+                  {"inputs", ports(shown.inputs)},
+                  {"outputs", ports(shown.outputs)},
                   {"params", params}};
     if (!e.group.empty()) block["group"] = e.group;
     if (e.linked) block["linked"] = true;
@@ -786,6 +788,8 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.def.feedthrough) block["feedthrough"] = false;
     if (!e.def.ports_from.empty()) block["ports_from"] = e.def.ports_from;
     if (!e.def.inputs_from.empty()) block["inputs_from"] = e.def.inputs_from;
+    if (!e.def.outputs_from.empty()) block["outputs_from"] = e.def.outputs_from;
+    if (e.def.elementwise) block["elementwise"] = true;
     if (!e.def.view.empty()) {
       json view = json::object();
       if (e.def.view.compact) view["compact"] = *e.def.view.compact;

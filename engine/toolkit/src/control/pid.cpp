@@ -36,11 +36,13 @@ class Pid : public Block {
 }  // namespace
 
 void add_pid(Registry& registry) {
-  registry.add(make_template(
+  auto pid = make_template(
       "control", "pid", "PID", {"e"}, {"u"}, {{"kp", 1.0}, {"ki", 0.0}, {"kd", 0.0}},
       [](const Values& p, const Config&) {
         return std::make_unique<Pid>(get_or(p, "kp"), get_or(p, "ki"), get_or(p, "kd"));
-      }, "Drives an error to zero: proportional, integral and derivative terms."));
+      }, "Drives an error to zero: proportional, integral and derivative terms.");
+  pid.def.elementwise = true;  // a vector error: one controller per element
+  registry.add(std::move(pid));
 }
 
 }  // namespace paperboat::toolkit::control

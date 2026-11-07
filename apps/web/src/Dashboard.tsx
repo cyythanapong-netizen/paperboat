@@ -41,26 +41,39 @@ const MIN_CELL = 96; // px: a screen too narrow for the layout's columns gets fe
 
 const NO_SERIES: Series = { t: [], v: [] };
 
-function Plot({ name, series, idle }: { name: string; series: Series; idle: boolean }) {
+/** A Graph: one trace, or one per component of a vector (a clock run), each with its latest value. */
+function Plot({ name, series, labels, idle }: { name: string; series: Series[]; labels?: string[]; idle: boolean }) {
   const W = 300;
   const H = 100;
-  const tMax = Math.max(...series.t, 1e-9);
-  const vMin = Math.min(...series.v, 0);
-  const vMax = Math.max(...series.v, 0);
+  const ts = series.flatMap((s) => s.t);
+  const vs = series.flatMap((s) => s.v);
+  const tMax = Math.max(...ts, 1e-9);
+  const vMin = Math.min(...vs, 0);
+  const vMax = Math.max(...vs, 0);
   const span = vMax - vMin || 1;
-  const points = series.t.map((t, i) => `${(t / tMax) * W},${H - ((series.v[i] - vMin) / span) * H}`).join(" ");
-  const last = series.v[series.v.length - 1];
+  const points = (s: Series) => s.t.map((t, i) => `${(t / tMax) * W},${H - ((s.v[i] - vMin) / span) * H}`).join(" ");
+  const lasts = series.map((s) => s.v[s.v.length - 1]);
+  const readout =
+    lasts[0] === undefined
+      ? idle ? "graph" : "–"
+      : series.length === 1
+        ? lasts[0].toFixed(3)
+        : lasts.map((v, i) => `${labels?.[i] ?? i} ${v?.toFixed(2)}`).join("  ");
   return (
     <figure className={`instrument graph${idle ? " idle" : ""}`}>
       <div className="screen">
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
           <line className="zero" x1={0} x2={W} y1={H - (-vMin / span) * H} y2={H - (-vMin / span) * H} />
-          <polyline className="trace" points={points} fill="none" vectorEffect="non-scaling-stroke" />
+          {series.map((s, i) => (
+            <polyline key={i} className={`trace trace-${i % 4}`} points={points(s)} fill="none" vectorEffect="non-scaling-stroke">
+              {labels?.[i] && <title>{labels[i]}</title>}
+            </polyline>
+          ))}
         </svg>
       </div>
       <figcaption>
         <span>{name}</span>
-        <output>{last === undefined ? (idle ? "graph" : "–") : last.toFixed(3)}</output>
+        <output>{readout}</output>
       </figcaption>
     </figure>
   );
@@ -187,7 +200,9 @@ function Instrument({ name, kind, state, send, params }: { name: string; kind: s
         </figcaption>
       </figure>
     );
-  return <Plot name={name} series={state.signals[name] ?? NO_SERIES} idle={idle} />;
+  const traces = state.traces[name];
+  if (traces?.length) return <Plot name={name} series={traces} labels={state.vectorComponents[name]?.map((c) => c.id)} idle={idle} />;
+  return <Plot name={name} series={[state.signals[name] ?? NO_SERIES]} idle={idle} />;
 }
 
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };

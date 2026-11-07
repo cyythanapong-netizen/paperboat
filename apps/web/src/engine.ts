@@ -29,9 +29,11 @@ export type EngineState = {
   varError: { text: string; at?: string } | null;
   run: { id: string; progress: number; status: "running" | RunStatus; startedAt?: number; simTime?: number } | null;
   signals: Record<string, Series>;
+  /** A vector monitor's history in a clock run, one series per component (a Graph's traces). */
+  traces: Record<string, Series[]>;
   /** The latest value each monitor sent: what a Display or Image view shows. */
   latest: Record<string, number | string | number[]>;
-  /** Component labels for a vector shown by a Display monitor. */
+  /** Component labels for a vector a monitor shows (a Display's readout, a Graph's legend). */
   vectorComponents: Record<string, VectorComponent[]>;
   /** Blocks whose last `node.state` was running (where a Step flow run is). */
   active: string[];
@@ -60,6 +62,7 @@ export const initial: EngineState = {
   varError: null,
   run: null,
   signals: {},
+  traces: {},
   latest: {},
   vectorComponents: {},
   active: [],
@@ -190,7 +193,7 @@ export function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, entities };
     }
     case "run.started":
-      return { ...s, run: { id: m.run, progress: 0, status: "running", startedAt: Date.now(), simTime: 0 }, signals: {}, latest: {}, vectorComponents: {}, active: [], failed: [], progress: {} };
+      return { ...s, run: { id: m.run, progress: 0, status: "running", startedAt: Date.now(), simTime: 0 }, signals: {}, traces: {}, latest: {}, vectorComponents: {}, active: [], failed: [], progress: {} };
     case "run.progress":
       return s.run?.id === m.run ? { ...s, run: { ...s.run, progress: m.fraction } } : s;
     case "run.finished":
@@ -206,6 +209,11 @@ export function reduce(s: EngineState, m: Action): EngineState {
       const latest = { ...s.latest, [m.node]: m.v };
       const vectorComponents = m.components ? { ...s.vectorComponents, [m.node]: m.components } : s.vectorComponents;
       const run = s.run ? { ...s.run, simTime: Math.max(s.run.simTime ?? 0, m.t) } : s.run;
+      if (Array.isArray(m.v)) {
+        const v = m.v;
+        const prev = s.traces[m.node] ?? [];
+        return { ...s, run, latest, vectorComponents, traces: { ...s.traces, [m.node]: v.map((x, i) => append(prev[i], m.t, x)) } };
+      }
       if (typeof m.v !== "number") return { ...s, run, latest, vectorComponents };
       return { ...s, run, latest, vectorComponents, signals: { ...s.signals, [m.node]: append(s.signals[m.node], m.t, m.v) } };
     }

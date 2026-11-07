@@ -513,6 +513,8 @@ tk::BlockDef block_def(nb::handle cls) {
   def.view = view_from_py(cls, at);
   def.ports_from = text_attr(cls, "ports_from", "");
   def.inputs_from = text_attr(cls, "inputs_from", "");
+  def.outputs_from = text_attr(cls, "outputs_from", "");
+  if (nb::hasattr(cls, "elementwise")) def.elementwise = nb::cast<bool>(cls.attr("elementwise"));
   return def;
 }
 
