@@ -62,7 +62,8 @@ export {
   parseInputs,
   parseNames,
   inForm,
-  checkWireConnection,
+  connectError, signalEnd, iconEnd, placeIconPorts, connectorHint, netWireType,
+  type WireEnd, type PlacedIconPort,
 } from "./ports.ts";
 export {
   type Side as WireSide,
@@ -82,3 +83,4 @@ export {
 export * from "./graphLayout.ts";
 export * from "./undo.ts";
 export * from "./clipboard.ts";
+export * from "./icon.ts";

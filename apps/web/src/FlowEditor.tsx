@@ -31,7 +31,8 @@ import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { ownKeys } from "./commands";
 import { CompactBlock } from "./Compact";
 import { copySelection, pasteClip, type Clip } from "./clipboard";
-import { inForm, signOf, wireMismatch, type PortSides } from "./ports";
+import { connectError, iconEnd, inForm, netWireType, signalEnd, signOf, wireMismatch, type PortSides, type WireEnd } from "./ports";
+import { iconValid, placeIconPorts } from "@paperboat/shared";
 import { usePortLayout } from "./portLayout";
 import { Bindable, draggedVariable, NumberOrFormula, VAR_DRAG, VarsContext } from "./Variables";
 import { isRef } from "./bindings";
@@ -59,7 +60,7 @@ import {
   type GroupData,
   type GroupNode,
 } from "./groups";
-import type { BlockDef, Graph, ObjectDef, ParamDef, ParamValue, PortDef, Station } from "./protocol";
+import type { BlockDef, Connectors, Graph, ObjectDef, ParamDef, ParamValue, PortDef, Station } from "./protocol";
 import { PageIcon } from "./Shell";
 
 /**
@@ -104,6 +105,20 @@ export const portsOf = (n: BlockNode) => inForm(n.data.def, n.data.params);
 
 const portDef = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs") =>
   def?.[side].find((p) => p.id === port);
+/**
+ * The end of a wire at port `port` of `def`: an icon connector (its class from the catalog, either
+ * direction for an acausal one), else a legacy signal port on the `side` the wire runs from.
+ */
+const wireEnd = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs", connectors: Connectors): WireEnd | null => {
+  const ip = iconValid(def?.view?.icon) ? def?.view?.icon?.ports?.find((p) => p.id === port) : undefined;
+  if (ip) return iconEnd(ip, connectors);
+  return portDef(def, port, side) ? signalEnd(side === "inputs" ? "in" : "out") : null;
+};
+
+/** What the canvas knows of icon ports: the catalog's connectors, wires per port, ports whose wires dangle (`if` false). */
+const ConnectorsContext = createContext<Connectors>({});
+const IconWires = createContext<{ count: ReadonlyMap<string, Record<string, number>>; missing: ReadonlySet<string> }>({ count: new Map(), missing: new Set() });
+
 const portType = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs") =>
   portDef(def, port, side)?.type;
 
@@ -116,6 +131,8 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { params, missing, commented, commentMode, comment } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
+  const connectors = useContext(ConnectorsContext);
+  const iconWires = useContext(IconWires);
   const [noteOpen, setNoteOpen] = useState(false);
   // Ports that follow a param come and go: have the canvas measure the handles again.
   const updateInternals = useUpdateNodeInternals();
@@ -131,7 +148,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
     disabled: missing,
     sign: (p, dir) => (dir === "in" ? signOf(def, params, def.inputs.indexOf(p)) : ""),
   });
-  if (def.view?.compact && !expanded && !missing && !hasStepPorts(def)) {
+  if ((def.view?.compact || iconValid(def.view?.icon)) && !expanded && !missing && !hasStepPorts(def)) {
     return (
       <CompactBlock
         id={id}
@@ -142,6 +159,8 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
         word={failed ? "failed" : active ? "running" : undefined}
         progress={progress}
         onExpand={() => setExpanded(true)}
+        connectors={connectors}
+        wires={iconWires.count.get(id)}
         popover={def.params.map((p) => (
           <ParamRow key={p.id} def={p} value={params[p.id]} set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })} />
         ))}
@@ -376,7 +395,8 @@ function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire
   const route = routes?.get(id);
   const commentedOut = useContext(CommentedOutContext);
   const wireCommented = commentedOut.has(geometry.source) || commentedOut.has(geometry.target);
-  const commentedClass = wireCommented ? " wire-commented" : "";
+  const missing = useContext(IconWires).missing;
+  const commentedClass = (wireCommented ? " wire-commented" : "") + (missing.has(`${geometry.source}:${geometry.sourceHandleId}`) || missing.has(`${geometry.target}:${geometry.targetHandleId}`) ? " wire-missing" : "");
 
   let path: string;
   let x: number;
@@ -684,6 +704,8 @@ type Plan =
 
 type Props = {
   blocks: BlockDef[];
+  /** The catalog's connector classes (icon ports, §4). */
+  connectors?: Connectors;
   nodes: FlowNode[];
   edges: Wire[];
   setNodes: Dispatch<SetStateAction<FlowNode[]>>;
@@ -718,8 +740,10 @@ export type FlowControls = {
   can: { copy: boolean; paste: boolean; remove: boolean; group: boolean; frame: boolean; story: boolean; ungroup: boolean; arrange: boolean; comment: boolean };
 };
 
+const NO_CONNECTORS: Connectors = {};
+
 /** Blocks by palette group, groups in catalog order. */
-export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls }: Props) {
+export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls }: Props) {
   const states = useContext(RunStates);
   // The open level, if it is still there (undo or ungroup may have taken it away).
   const level = wanted && isLevel(nodes.find((n) => n.id === wanted)) ? wanted : null;
@@ -743,15 +767,27 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       targetHandle: t ? t[1] : c.targetHandle,
     };
   };
-  const wireType = (c: Connection | Wire) => portType(defOf(c.source), c.sourceHandle, "outputs") ?? "signal";
+  const wireType = (c: Connection | Wire) => {
+    const end = wireEnd(defOf(c.source), c.sourceHandle, "outputs", connectors);
+    return end && end.kind === "acausal" ? netWireType(connectors[end.cls]) : (portType(defOf(c.source), c.sourceHandle, "outputs") ?? "signal");
+  };
 
   // A wire joins ports of one type (signal to signal, step to step; any to anything but a
   // step), in one unit when both ends have one (#4). The engine checks again.
   const isValidConnection: IsValidConnection<Wire> = (shown) => {
     const c = real(shown as Connection);
-    const from = portDef(defOf(c.source), c.sourceHandle, "outputs");
-    const to = portDef(defOf(c.target), c.targetHandle, "inputs");
-    return c.source !== c.target && !!from && !!to && !wireMismatch(from, to);
+    return c.source !== c.target && !refusal(c);
+  };
+  // Why a wire may not join, in words (null if it may): icon connectors by §4, plain ports by type and unit.
+  const refusal = (c: Connection): string | null => {
+    const [a, b] = [defOf(c.source), defOf(c.target)];
+    const [ea, eb] = [wireEnd(a, c.sourceHandle, "outputs", connectors), wireEnd(b, c.targetHandle, "inputs", connectors)];
+    if (!ea || !eb) return "that port is not there";
+    const bad = connectError(ea, eb);
+    if (bad) return bad;
+    const from = portDef(a, c.sourceHandle, "outputs");
+    const to = portDef(b, c.targetHandle, "inputs");
+    return from && to ? wireMismatch(from, to) : null;
   };
 
   const onConnect = (shown: Connection) => {
@@ -978,8 +1014,27 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
         target,
         accepts: (nodeId: string, handleId: string | null, side: "source" | "target") =>
           side !== anchor.type && isValidConnection(connectionOf(anchor, nodeId, handleId)),
+        why: (nodeId: string, handleId: string | null, side: "source" | "target") =>
+          side !== anchor.type && nodeId !== anchor.nodeId ? refusal(real(connectionOf(anchor, nodeId, handleId))) : null,
       }
     : null;
+  // Icon ports: wires per port (3 or more draw a junction dot) and ports hidden by their `if`, whose wires stay as missing.
+  const iconWires = useMemo(() => {
+    const count = new Map<string, Record<string, number>>();
+    for (const w of edges)
+      for (const [node, handle] of [[w.source, w.sourceHandle], [w.target, w.targetHandle]] as const) {
+        if (!handle) continue;
+        const c = count.get(node) ?? {};
+        c[handle] = (c[handle] ?? 0) + 1;
+        count.set(node, c);
+      }
+    const dangling = new Set<string>();
+    for (const n of nodes) {
+      if (!isBlock(n) || !iconValid(n.data.def.view?.icon)) continue;
+      for (const p of placeIconPorts(n.data.def.view!.icon!, n.data.params)) if (p.hidden) dangling.add(`${n.id}:${p.port.id}`);
+    }
+    return { count, missing: new Set([...dangling].filter((k) => edges.some((w) => `${w.source}:${w.sourceHandle}` === k || `${w.target}:${w.targetHandle}` === k))) };
+  }, [nodes, edges]);
   const wrap = useRef<HTMLDivElement>(null);
   const addable = useMemo<Item[]>(() => blocks.filter((b) => !b.linked).map((def) => ({ kind: "block", def })), [blocks]);
   const [quick, setQuick] = useState<{ x: number; y: number } | null>(null);
@@ -1266,6 +1321,8 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
     <Lit.Provider value={lit}>
     <WireRoutes.Provider value={wireRoutes}>
+    <ConnectorsContext.Provider value={connectors}>
+    <IconWires.Provider value={iconWires}>
     <CommentedOutContext.Provider value={commentedOut}>
     <div className="flow">
       <div
@@ -1475,6 +1532,8 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       )}
     </div>
     </CommentedOutContext.Provider>
+    </IconWires.Provider>
+    </ConnectorsContext.Provider>
     </WireRoutes.Provider>
     </Lit.Provider>
     </HotWire.Provider>

@@ -1054,3 +1054,30 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .scope-unit.y2 { right: 8px; top: 24px; }
 .scope-unit.x { right: 5px; bottom: 6px; }
 .instrument.scope .with-readout .scope-unit.x { bottom: 30px; }
+
+/* ---- Custom block look (#160): view.icon and connector ports ----------------------------- */
+.icon-art { display: block; pointer-events: none; }
+.compact-block .plate:has(.icon-art) { padding: 0; }
+/* Connector ports: shape from the class's handle, size 8 / 10 / 12, filled or hollow by variant. */
+.react-flow__handle.ip { border-radius: 0; background: var(--surface-raised); }
+.react-flow__handle.ip-8 { width: 8px; height: 8px; }
+.react-flow__handle.ip-10 { width: 10px; height: 10px; }
+.react-flow__handle.ip-12 { width: 12px; height: 12px; }
+.react-flow__handle.ip-filled { background: var(--line-ink); }
+.react-flow__handle.ip-circle, .react-flow__handle.ip-ring2 { border-radius: var(--radius-round); }
+.react-flow__handle.ip-ring2 { box-shadow: 0 0 0 2px var(--surface-raised), 0 0 0 3.5px var(--line-ink); }
+.react-flow__handle.ip-diamond { rotate: 45deg; }
+.react-flow__handle.ip-triangle { background: var(--line-ink); border: 0; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.react-flow__handle.ip-hidden { opacity: 0; pointer-events: none; }
+.ip-count { position: absolute; transform: translate(-50%, -50%); font: 500 var(--size-2xs) / 1 var(--font-mono); color: var(--text-muted); pointer-events: none; background: var(--surface-raised); padding: 0 2px; border-radius: var(--radius-sm); }
+.ip-count.side-left { left: 14px; } .ip-count.side-right { left: calc(100% - 14px); }
+.ip-count.side-top { top: 14px; } .ip-count.side-bottom { top: calc(100% - 14px); }
+.ip-junction { position: absolute; width: 4px; height: 4px; border-radius: var(--radius-round); background: var(--line-ink); transform: translate(-50%, -50%); pointer-events: none; }
+.ip-junction[data-side="left"] { left: -6px; } .ip-junction[data-side="right"] { left: calc(100% + 6px); }
+.ip-junction[data-side="top"] { top: -6px; } .ip-junction[data-side="bottom"] { top: calc(100% + 6px); }
+/* Wires by connector class: 1.2 / 1.8 / 2.0px, thermal dashed grey (never red); a wire to a port that is gone is dashed red. */
+.wire-net-12 { stroke-width: 1.2px; }
+.wire-net-18 { stroke-width: 1.8px; }
+.wire-net-20 { stroke-width: 2px; }
+.wire-net-12d { stroke-width: 1.2px; stroke: var(--line-strong); stroke-dasharray: 5 3; }
+.react-flow__edge-path.wire-missing { stroke: var(--danger); stroke-dasharray: 4 3; }

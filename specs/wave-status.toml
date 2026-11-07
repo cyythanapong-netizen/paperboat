@@ -49,12 +49,12 @@ cli = "claude"
 model = "sonnet-5.5"
 effort = "medium"
 wave = 2
-state = "ready"
-task = "omc bridge (engine/modelica) + paperboat modelica generate/check (ODE + FMU) + squero-om / paperboat squero wiring"
+state = "review"
+task = "view.icon renderer + first-class ports in @paperboat/shared"
 contracts = ["§0", "§1", "§5", "§6"]
 branch = "epic160/lane-a-w2"
 blocker = ""
-notes = """No specs/prompts task file existed: worked from contracts §5/§6. Uncommitted on branch
+notes = """Wave 2 A: schema $defs at d00e932 (Step 1). Not done: StationGraph does not draw icon blocks (it holds station objects, not blocks), so connectors reach FlowEditor only; npm run smoke not run (needs B's engine output); GUIDELINES.md/ARCHITECTURE.md are untracked in the main tree and were not edited here. Acausal ports carry a source and a target handle in one place so a wire may start at either end. Previous: No specs/prompts task file existed: worked from contracts §5/§6. Uncommitted on branch
 epic160/lane-a-w1 in worktree .claude/worktrees/epic160-lane-a. Allow-list adds getErrorString
 (read-only; how Studio words a failed call). Generated backends default to port 8780; squero to
 8790. paperboat check's smoke stage fails on dev for every backend until the ToolkitStatus
@@ -62,39 +62,22 @@ schema request below lands (verified green with it patched in, then reverted). F
 end to end only via a mirrored omc: this machine's OM install has root-only buildproject/config.*
 (see GUIDELINES Lessons). GUIDELINES.md and ARCHITECTURE.md are gitignored; edited in the main tree."""
 modified_files = [
-  "engine/modelica/CMakeLists.txt",
-  "engine/modelica/include/paperboat/modelica/omc.hpp",
-  "engine/modelica/include/paperboat/modelica/generate.hpp",
-  "engine/modelica/include/paperboat/modelica/squero.hpp",
-  "engine/modelica/src/omc.cpp",
-  "engine/modelica/src/generate.cpp",
-  "engine/modelica/src/squero.cpp",
-  "engine/CMakeLists.txt",
-  "engine/tools/CMakeLists.txt",
-  "engine/tools/paperboat_cli.cpp",
-  "engine/tests/CMakeLists.txt",
-  "engine/tests/modelica_test.cpp",
-  "apps/cli/src/model.ts",
-  "apps/studio/src/omc/omc.ts",
-  "bin/squero-om",
-  "examples/dc-motor-cpp/ (generated + descriptor PID starter + expected.json)",
-  "docs/api/tutorials.rst",
-  "GUIDELINES.md (untracked)",
-  "ARCHITECTURE.md (untracked)",
+  "packages/shared/src/{icon.ts,Icon.tsx,ports.ts,Compact.tsx,wireSnap.tsx,protocol.ts(generated),index.ts,components.ts}",
+  "packages/shared/{package.json,test/**}",
+  "apps/web/src/{FlowEditor.tsx,App.tsx,engine.ts,styles.css}",
+  "protocol/schema/paperboat-0.schema.json, protocol/gen_ts.py, docs/gen_tokens.py, scripts/build_docs.py, docs/api/protocol.rst",
+  "protocol/README.md, apps/web/DESIGN.md",
+  "specs/evidence/wave2-a/*",
 ]
 verification = """
-cmake --build engine/build/dev                      no errors, no warnings (-Wall -Wextra -Wpedantic -Wshadow -Wconversion)
-engine/build/dev/tests/paperboat_tests              All tests passed (1341 assertions in 138 test cases)
-paperboat_tests '[modelica]'                        All tests passed (47 assertions in 5 test cases)
-paperboat modelica generate .../DCMotor.mo          ODE: no events, no torn systems, no external functions
-cmake --build examples/dc-motor-cpp/build           no errors, no warnings
-open-loop step vs omc simulate                      w(10) 1.9999693 = 1.9999693, phi(10) 17.5201202 = 17.5201202, i(1.2) 0.3038288 = 0.3038289
-python3 protocol/golden.py examples/dc-motor-cpp    ok dc-motor-cpp / PASS (PID speed loop: w 1.5, v 0.75)
-paperboat check examples/dc-motor-cpp               manifest ok, catalog ok, smoke ok, golden ok (smoke needs the ToolkitStatus schema fix)
---path fmu (mirrored omc)                           builds, runs: w(10) 1.99985 vs ODE 1.99997
-squero/0 live                                       status pushes, getVersion/loadModel ok, system() rejected, omc kill -9 -> restart + replay
-npm test -w @paperboat/cli                          10 pass
-./scripts/build_docs.sh                             built with -W, no warnings; gen_tokens --check current
+npm run typecheck                         green (shared, web, cli)
+npm run build                             green
+npm test -w @paperboat/web                97 pass, 0 fail
+npm test -w @paperboat/shared             10 pass, 0 fail (tokens, fallback, ports, fixtures; goldens skip until B lands *.icon.json)
+python3 protocol/gen_ts.py --check        current (OUT = packages/shared/src/protocol.ts)
+python3 docs/gen_tokens.py --check        current (source = packages/shared/src/tokens.css)
+npm run docs                              built with -W, no warnings
+screenshots                               specs/evidence/wave2-a/flow-light.png, flow-dark.png (Resistor/Inertia 2x1, Ground 1x1, Tank 1x2, 3-wire Ground node)
 """
 
 [lanes.B]
@@ -147,3 +130,9 @@ from = "A"
 to = "B"
 what = "apps/studio: the top bar chip can use chip(status) from apps/studio/src/omc/omc.ts; the client is OmcClient(url, onStatus). Default server ws://localhost:8790. Optional root package.json script \"studio\": \"./bin/squero-om\"."
 state = "open"
+
+[[requests]]
+from = "A"
+to = "B"
+what = "Schema $defs IconDef, Prim, IconPort, ConnectorDef, Connectors (+ view.icon, catalog.connectors, ToolkitStatus.builtin) are on branch epic160/lane-a-w2 at d00e932; validate engine output against them."
+state = "done"

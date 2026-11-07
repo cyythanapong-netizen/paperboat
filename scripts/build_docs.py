@@ -35,7 +35,7 @@ def check_dependencies() -> None:
 
 
 def sync_tokens() -> None:
-    """Ensure docs/_static/tokens.css is synchronized with apps/web/src/tokens.css."""
+    """Ensure docs/_static/tokens.css is synchronized with packages/shared/src/tokens.css."""
     check_dependencies()
     if not GEN_TOKENS.exists():
         return

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { TraceStore } from "./scope/trace.ts";
-import type { BlockDef, ClientMsg, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
+import type { BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
 
 export type EngineState = {
   connection: "connecting" | "open" | "closed";
@@ -12,6 +12,8 @@ export type EngineState = {
   /** Available optional toolkits and their installation status (from hello and toolkits.status). */
   toolkits: ToolkitStatus[];
   blocks: BlockDef[];
+  /** The catalog's connector classes, for blocks' icon ports (§4). */
+  connectors: Connectors;
   objects: ObjectDef[];
   /** The backend's default Dashboard layout (from catalog), if it shipped one. */
   dashboard?: DashboardLayout;
@@ -52,6 +54,7 @@ export const initial: EngineState = {
   runDefaults: {},
   toolkits: [],
   blocks: [],
+  connectors: {},
   objects: [],
   entities: {},
   view: { mode: "3d" },
@@ -162,7 +165,7 @@ export function reduce(s: EngineState, m: Action): EngineState {
     case "toolkits.status":
       return { ...s, toolkits: m.toolkits };
     case "catalog":
-      return { ...s, blocks: m.blocks, objects: m.objects ?? [], dashboard: m.dashboard };
+      return { ...s, blocks: m.blocks, connectors: m.connectors ?? {}, objects: m.objects ?? [], dashboard: m.dashboard };
     case "scene":
       return { ...s, entities: Object.fromEntries(m.entities.map((e) => [e.id, e])), view: m.view ?? s.view };
     case "graph.load":

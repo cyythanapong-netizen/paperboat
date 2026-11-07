@@ -8,3 +8,4 @@ export * from "./Menus.tsx";
 export * from "./Shell.tsx";
 export * from "./Dock.tsx";
 export * from "./Dashboard.tsx";
+export * from "./Icon.tsx";

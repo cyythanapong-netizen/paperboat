@@ -17,6 +17,8 @@ export type WireDrag = {
   target: { nodeId: string; handleId: string | null } | null;
   /** May this port take the wire? Ports that can't are dimmed. */
   accepts: (nodeId: string, handleId: string | null, side: "source" | "target") => boolean;
+  /** In words, why this port can't take the wire (shown as its hover title while dragging); null if it can or no reason is known. */
+  why?: (nodeId: string, handleId: string | null, side: "source" | "target") => string | null;
 };
 export const WireDragContext = createContext<WireDrag | null>(null);
 
@@ -68,6 +70,7 @@ export function PortHandle({
   id,
   className,
   top,
+  left,
   label,
   title,
 }: {
@@ -77,6 +80,8 @@ export function PortHandle({
   className?: string;
   /** Where on the block's side it sits, when not in a port row (a compact block's dots). */
   top?: string;
+  /** Likewise along a top or bottom side. */
+  left?: string;
   /** Shown on hover and read aloud: for a port with no name row beside it. */
   label?: string;
   title?: string;
@@ -84,8 +89,9 @@ export function PortHandle({
   const nodeId = useNodeId();
   const drag = useContext(WireDragContext);
   const state = !drag || !nodeId ? "" : drag.target?.nodeId === nodeId && drag.target.handleId === id ? "wire-target" : drag.accepts(nodeId, id, type) ? "" : "wire-dim";
+  const why = state === "wire-dim" && drag && nodeId ? drag.why?.(nodeId, id, type) : null;
   return (
-    <Handle type={type} position={position} id={id} className={[className, state].filter(Boolean).join(" ")} style={top ? { top } : undefined} aria-label={label} title={title}>
+    <Handle type={type} position={position} id={id} className={[className, state].filter(Boolean).join(" ")} style={top || left ? { top, left } : undefined} aria-label={label} title={why ?? title}>
       {label && <span className={`port-tip ${type === "target" ? "in" : "out"}`}>{label}</span>}
     </Handle>
   );

@@ -1,8 +1,10 @@
 import { Position } from "@xyflow/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { isRef } from "./bindings.ts";
-import { portHint, portLabel, signOf } from "./ports.ts";
-import type { BlockDef, ParamValue } from "./protocol.ts";
+import { Icon } from "./Icon.tsx";
+import { iconValid, plateSize } from "./icon.ts";
+import { connectorHint, placeIconPorts, portHint, portLabel, signOf } from "./ports.ts";
+import type { BlockDef, Connectors, IconDef, ParamValue } from "./protocol.ts";
 import { PortHandle } from "./wireSnap.tsx";
 
 /** Curves a glyph can name: the block's transfer in a few strokes. Anything else is drawn as text. */
@@ -117,6 +119,8 @@ export function CompactBlock({
   progress,
   onExpand,
   popover,
+  connectors,
+  wires,
 }: {
   id: string;
   def: BlockDef;
@@ -128,6 +132,10 @@ export function CompactBlock({
   onExpand: () => void;
   /** The param rows shown in the popover. */
   popover: ReactNode;
+  /** The catalog's connector classes, for `view.icon.ports`. */
+  connectors?: Connectors;
+  /** How many wires meet at each icon port (3 or more draw a junction dot). */
+  wires?: Record<string, number>;
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -150,6 +158,8 @@ export function CompactBlock({
   const glyphName = def.view?.glyph ? captionValue(def.view.glyph, params) : "const";
   const spread = (n: number, i: number) => `${((i + 1) / (n + 1)) * 100}%`;
   const hasParams = def.params.length > 0;
+  const icon = iconValid(def.view?.icon) ? def.view?.icon : undefined; // else the plain plate
+  const size = icon ? plateSize(icon) : undefined;
   return (
     <div
       ref={root}
@@ -162,6 +172,7 @@ export function CompactBlock({
         tabIndex={0}
         aria-expanded={hasParams ? open : undefined}
         aria-label={`${def.label}${value ? ` ${value}` : ""}`}
+        style={size && { width: size.w, height: size.h }}
         title={hasParams ? "Click for its params; double-click for the full block" : "Double-click for the full block"}
         onClick={() => hasParams && setOpen(!open)}
         onKeyDown={(e) => {
@@ -169,18 +180,24 @@ export function CompactBlock({
           if ((e.key === "Enter" || e.key === " ") && hasParams) setOpen(!open);
         }}
       >
-        <Glyph name={glyphName} />
-        {def.inputs.map((p, i) => (
-          <PortHandle key={p.id} type="target" position={Position.Left} id={p.id} top={spread(def.inputs.length, i)} label={portLabel(p)} title={portHint(p)} className={`t-${p.type}`} />
-        ))}
-        {def.inputs.map((p, i) => signOf(def, params, i) && (
-          <span key={`sign-${p.id}`} className="plate-sign" style={{ top: spread(def.inputs.length, i) }} aria-hidden="true">
-            {signOf(def, params, i)}
-          </span>
-        ))}
-        {def.outputs.map((p, i) => (
-          <PortHandle key={p.id} type="source" position={Position.Right} id={p.id} top={spread(def.outputs.length, i)} label={portLabel(p)} title={portHint(p)} className={`t-${p.type}`} />
-        ))}
+        {icon ? <Icon icon={icon} type={def.type} fill={(t) => captionValue(t, params)} /> : <Glyph name={glyphName} />}
+        {icon ? (
+          <IconPorts icon={icon} params={params} connectors={connectors} wires={wires} />
+        ) : (
+          <>
+            {def.inputs.map((p, i) => (
+              <PortHandle key={p.id} type="target" position={Position.Left} id={p.id} top={spread(def.inputs.length, i)} label={portLabel(p)} title={portHint(p)} className={`t-${p.type}`} />
+            ))}
+            {def.inputs.map((p, i) => signOf(def, params, i) && (
+              <span key={`sign-${p.id}`} className="plate-sign" style={{ top: spread(def.inputs.length, i) }} aria-hidden="true">
+                {signOf(def, params, i)}
+              </span>
+            ))}
+            {def.outputs.map((p, i) => (
+              <PortHandle key={p.id} type="source" position={Position.Right} id={p.id} top={spread(def.outputs.length, i)} label={portLabel(p)} title={portHint(p)} className={`t-${p.type}`} />
+            ))}
+          </>
+        )}
         {word === "running" && progress !== undefined && progress < 1 && <i className="plate-prog" style={{ width: `${progress * 100}%` }} />}
       </div>
       <div className="plate-cap">
@@ -197,5 +214,41 @@ export function CompactBlock({
         </div>
       )}
     </div>
+  );
+}
+
+const SIDE_POSITION = { left: Position.Left, right: Position.Right, top: Position.Top, bottom: Position.Bottom } as const;
+
+/**
+ * An icon's connector ports (§4): a handle per port in the connector's shape and size, at `side`
+ * and `at`. An acausal port has no direction, so it carries a source and a target handle in one
+ * place and a wire starts or ends there either way. A port hidden by its `if` keeps an invisible
+ * handle so its wires stay. 3 or more wires on a port draw a 4px junction dot.
+ */
+function IconPorts({ icon, params, connectors, wires }: { icon: IconDef; params: Record<string, ParamValue>; connectors?: Connectors; wires?: Record<string, number> }) {
+  return (
+    <>
+      {placeIconPorts(icon, params).map(({ port, at, hidden, count }) => {
+        const c = connectors?.[port.class];
+        const along = port.side === "left" || port.side === "right" ? { top: `${at}%` } : { left: `${at}%` };
+        const fill = (port.variant ?? c?.alt) === "filled" ? "filled" : "hollow"; // a port's own variant wins over the class's look
+        const look = `ip ip-${c?.handle ?? "circle"} ip-${c?.size ?? 8} ip-${fill} k-${c?.kind ?? "output"}${hidden ? " ip-hidden" : ""}`;
+        const title = connectorHint(port.id, c);
+        const kinds: ("source" | "target")[] = !c || c.kind === "acausal" ? ["source", "target"] : c.kind === "output" ? ["source"] : ["target"];
+        return (
+          <Fragment key={port.id}>
+            {kinds.map((type) => (
+              <PortHandle key={type} type={type} position={SIDE_POSITION[port.side]} id={port.id} {...along} label={hidden ? undefined : port.id} title={title} className={look} />
+            ))}
+            {count !== undefined && !hidden && (
+              <span className={`ip-count side-${port.side}`} style={along} aria-hidden="true">
+                {count}
+              </span>
+            )}
+            {(wires?.[port.id] ?? 0) >= 3 && <i className="ip-junction" style={along} data-side={port.side} aria-hidden="true" />}
+          </Fragment>
+        );
+      })}
+    </>
   );
 }

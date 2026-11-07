@@ -13,7 +13,7 @@ Default address: `ws://localhost:8765`.
 | `type`         | Fields                                      | Sent                         |
 | -------------- | ------------------------------------------- | ---------------------------- |
 | `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults), `toolkits?: ToolkitStatus[]` | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
-| `catalog`      | `blocks: BlockDef[]`                        | on connect                   |
+| `catalog`      | `blocks: BlockDef[]`, `connectors?: Connectors` (see below), `objects?`, `dashboard?` | on connect                   |
 | `scene`        | `entities: Entity[]`, `view?: View`         | on connect, and on reset     |
 | `graph.load`   | `graph: { nodes, edges }`                   | on connect (starter graph)   |
 | `station.load` | `station: Station`                          | on connect, after `graph.load`, if the catalog has `objects` |
@@ -66,6 +66,7 @@ Default address: `ws://localhost:8765`.
   // block's name and value. glyph: a curve (gain, plus, step, clamp, const) or a few characters
   // drawn as text; value: an expression of the params. Every key is optional.
   "view": { "compact": true, "glyph": "gain", "value": "{k}" },
+  // view.icon (optional, additive): a custom look, drawn instead of the glyph; see "Custom block look"
   "feedthrough": false,            // optional: its outputs don't depend on this step's inputs
                                    // (an integrator, a delay), so a feedback loop may pass through it
   // optional, a magic block: one form per way to use it, each with its own ports. Its enum
@@ -142,6 +143,47 @@ ends declare one, and with matching dimensions when both are fixed: the UI enfor
 dragging, and a backend fails a run whose wires break it. A signal
 input takes one wire; a step output leads to one block. A run may step a clock (simulation: `scene.patch` per frame) or evaluate
 once (parametric: one `scene` at the end); the UI handles both.
+
+## Custom block look: `view.icon` and `connectors`
+
+A block can draw itself instead of a glyph, and put its ports where its picture has them
+(Modelica icons, circuit symbols). Both are additive: a UI or a block without them draws the
+plain plate. The shapes are `IconDef`, `Prim`, `IconPort` and `ConnectorDef` in the schema.
+
+```jsonc
+"view": { "icon": {
+  "w": 2, "h": 1,                       // plate cells: 1x1 (64x56), 2x1 or 1x2; 2x2 is invalid
+  "g": [                                // primitives in a 0..100 box, coordinates multiples of 5
+    { "t": "line", "p": [[0, 50], [20, 50]] },
+    { "t": "rect", "x": 20, "y": 30, "w": 60, "h": 40, "fill": "raised" },
+    { "t": "text", "x": 50, "y": 85, "s": "{R}", "font": "mono" }   // {param} is filled like a caption
+  ],
+  "ports": [                            // handles on the plate's edge
+    { "id": "p", "class": "PositivePin", "side": "left", "at": 50, "variant": "filled" },
+    { "id": "n", "class": "NegativePin", "side": "right", "at": 50 }
+  ]
+} }
+```
+
+- Primitives: `line`, `poly`, `rect` (`corner`), `ellipse`, `arc` (`a0`, `a1`), `text` (`font`,
+  `size`). Every style is a token, never a colour or a path: `stroke` ink / muted / signal,
+  `weight` thin / normal / wire, `dash` solid / axis, `fill` none / ink / raised / sunken. An unknown
+  primitive, token or size, a 2x2 plate or an off-grid coordinate makes the UI draw the plain plate
+  (and warn once in the console).
+- An icon port has `side` and `at` (0..100 along the edge). `class` names an entry of the catalog's
+  `connectors`; `variant` is `hollow` or `filled` (the a/b or p/n side, never state). `array` names
+  the param holding n: the port draws once with a count badge (the vector port). `if` names a param:
+  the port exists while it is true; when false it is hidden, the rest of its side re-spread, and its
+  wires stay, drawn dashed red as missing.
+- `connectors` (in `catalog`, next to `blocks`) maps a class to `{ kind: "acausal" | "input" |
+  "output" | "expandable", handle: "square" | "diamond" | "ring2" | "triangle" | "circle", size:
+  8 | 10 | 12, weight: 1.2 | 1.8 | 2, dash?, alt?, potential?, flow?, stream? }`. Hovering a port
+  shows its id and the potential, flow and stream names with units.
+- Wires: an acausal port joins only an acausal port of the same class family (Pin, PositivePin and
+  NegativePin are one; Flange_a and Flange_b are one); causal ports join output to input, never
+  input to input; the UI refuses a wrong target and says why. Many wires may meet at one port, and
+  three or more draw a 4px junction dot. An acausal port has no direction, so a wire may start at
+  either end.
 
 ## Station objects
 
