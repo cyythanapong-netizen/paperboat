@@ -1,4 +1,13 @@
-<h1 align="center"><img src=".github/readme/logo.svg" width="560" alt="paperboat"></h1>
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/readme/logo-dark.svg">
+    <img src=".github/readme/logo-light.svg" width="300" alt="paperboat">
+  </picture>
+</h1>
+
+<p align="center">A framework for engineering apps: set up a scene, wire a node graph, run it and
+watch the results live. Backends are written in C++ or Python; the web UI builds itself from
+what they send.</p>
 
 | Check | What it runs | `dev` |
 | --- | --- | --- |
@@ -7,7 +16,7 @@
 | Web and console | typecheck, tests and build of `apps/web` and `apps/cli` | [![web](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/web.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/web.yml?query=branch%3Adev) |
 | Docs | the API reference, warnings as errors | [![docs](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
 
-A reusable framework for engineering apps that follow one shape:
+Every app follows one shape:
 
 1. **Setup**: a 2D/3D scene of things, their settings, and how they connect.
 2. **Flow**: a node graph (Grasshopper / DaVinci style) that turns the setup into results.
