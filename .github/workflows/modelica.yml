@@ -52,7 +52,8 @@ jobs:
       - name: Preload Modelica Standard Library
         if: steps.cache-msl.outputs.cache-hit != 'true'
         run: |
-          printf 'loadModel(Modelica);\ngetErrorString();\n' > preload.mos
+          # OpenModelica 1.27 has no apt package for the library; its package manager installs it (the goldens are 4.1.0).
+          printf 'installPackage(Modelica, "4.1.0+maint.om", exactMatch=true);\nloadModel(Modelica);\ngetErrorString();\n' > preload.mos
           omc preload.mos
 
       - name: Configure
