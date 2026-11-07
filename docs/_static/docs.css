@@ -408,3 +408,6 @@ table th {
 .theme-toggle:hover svg {
   color: var(--text) !important;
 }
+
+.toc-title::before { content: "[ "; }
+.toc-title::after { content: " ]"; }
