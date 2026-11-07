@@ -3,7 +3,7 @@
 
 contracts = "specs/issue-160-contracts.md"
 contracts_rev = 3
-current_wave = 3
+current_wave = 4
 omc_version = "1.27.0~dev-5-g5f1d2c5"
 
 [waves.0]
@@ -48,150 +48,55 @@ prompts = ["specs/prompts/wave2_lane_a.md", "specs/prompts/wave2_lane_b.md"]
 gate = "importer tests green on MSL set; icon renderer token test green"
 
 [waves.3]
+state = "done"
+integrated = "merged to dev 2026-11-07: lane A 5e05b3f, lane B 6630b5d; no conflicts; integration fixes 8a19b77"
+verified = """Orchestrator on merged dev: typecheck, build, build:studio green; web 97/97, shared 11/11,
+studio 34/34; gen_ts / gen_tokens current; engine build clean, paperboat_tests 2093/151 pass.
+Live (headless Chromium, squero-om on a DCMotor.mo copy, B's panels on A's real StudioApi):
+top bar `squero studio Om ... omc 1.27.0 · ready`; dock `balanced · 76 / 76`; popover on l shows
+L bound to top-level L = 0.05 H and port + Probe rows; Alt+V sheet shows Station props, entry
+pills (in v, out w, out phi), linked block preview; dock Export backend wrote a full backend
+(`ode · ODE: no events, no torn systems, no external functions`).
+Fixed on dev (8a19b77), found only by the live run:
+  dock re-ran checkModel forever (api identity changes on each status push; effect keyed on api)
+  top-level SI-typed parameters (Modelica.Units.SI.*) drew as canvas parts (store skipped Real only)
+  export folder `dcmotor-cpp` vs generator `dc-motor-cpp` (now mirrors backend_name, test pins it)
+Left for Wave 4 A: popover row `i.start =` shows an empty value (nested modifier read)."""
+
+[waves.4]
 state = "active"
-prompts = ["specs/prompts/wave3_lane_a.md", "specs/prompts/wave3_lane_b.md"]
-scaffold = "apps/studio scaffold + frozen seam src/model/types.ts + B slot stubs committed to dev by orchestrator"
-gate = "both lanes review; merged dev builds studio; live squero-om run shows canvas + B panels on the real StudioApi"
+prompts = ["specs/prompts/wave4_lane_a.md", "specs/prompts/wave4_lane_b.md"]
+gate = "dc-drive-cpp authored in Studio passes check + smoke + golden; docs build clean; CI workflows valid; epic #160 done-whens ticked"
 
 [lanes.A]
 cli = "claude"
 model = "sonnet-5.5"
-effort = "high"
-wave = 3
-state = "review"
-task = "apps/studio: top bar, library tree, acausal canvas + splice, split view + Simulate, StudioApi store, squero/0 ops"
-contracts = ["§8.1", "§8.2", "§1", "§3", "§4", "§5", "§6"]
-prompt = "specs/prompts/wave3_lane_a.md"
-branch = "epic160/lane-a-w3"
+effort = "medium"
+wave = 4
+state = "ready"
+task = "E2E golden probe: DC drive authored in Studio -> examples/dc-drive-cpp, check + smoke + PID/graph golden; retire dc-motor-cpp"
+contracts = ["§1", "§3", "§4", "§6", "§8"]
+prompt = "specs/prompts/wave4_lane_a.md"
+branch = "epic160/lane-a-w4"
 blocker = ""
-notes = """Studio runs end to end on the real StudioApi: squero-om serves apps/studio/dist; library tree, acausal canvas, splice, split view (.mo and dry C++), Simulate, undo via shared undo.ts. Decisions and things B / the orchestrator should know:
-- Server model: `paperboat squero [Model.mo]` opens that file (default ./Untitled.mo, created) through a new `open` op; the store saves (`save` op) after every edit and `generate` reads the saved file, so edits, save and the dry generate all go through one queue (a loadFile in generate would otherwise drop an unsaved edit).
-- squero/0 ops added (squero.hpp): open, save, icon, set_icon, generate (dry, progress), simulate. Allow-list additions: isPartial, getSourceFile, getClassComment, getComponentModifierNames, getNthConnectionAnnotation, getParameterNames, getParameterValue, setParameterValue, setComponentProperties, updateComponent, updateConnection. save, simulate and addClassAnnotation are NOT on the allow-list: they are ops confined to the opened model (the MSL is refused).
-- Bug found and fixed in the Wave 1 server: after a browser tab closed, every later client hung. gdb showed the client mutex owned by a thread that was itself waiting on it in the Close handler (the status push sends under that lock), so the lock is now recursive and the push walks a copy; the hang did not come back in the runs below.
-- set_icon writes `g` and the plate size only (ports are component placements, not the icon); {param} text round-trips but always comes back mono. It round-trips all five Wave 2 goldens (test).
-- For B: StudioApi.setParam("J", v) makes a missing top-level parameter as `Real J = v` (omc 1.27 answers false to setComponentProperties, so it is not yet `parameter`). addEntry works on a port path; on a variable it throws (a variable probe needs `annotation(__paperboat(probe=true))`, which addComponent cannot write); the words say so. `selection` holds part names; connect() returns the word message and never throws for a refused wire. exportBackend calls the non-dry generate on the saved file with the progress pushes.
-- Placement: a part's placement is its plate centre in px on the 20px grid, 2px per Modelica unit, y flipped; rotation 0/90/180/270 and mirror are read and drawn (ports turn with the icon) but there is no rotate gesture yet. Wires are drawn with xyflow's smoothstep unless the .mo has Line(points) bends, which are kept (squared to the ports); Studio does not write bends itself.
-- Shared (frozen) gaps, see [[requests]]: plate / port / wire / menu CSS lives in apps/web styles.css, so Studio copies it; connectError's word for output -> acausal reads "an output joins only an acausal port".
-- Not done: moving a wire's bends, a rotate/mirror gesture, the Look tab / popover / dock bodies (B)."""
-modified_files = [
-  "apps/studio/src/App.tsx",
-  "apps/studio/src/canvas/Canvas.tsx",
-  "apps/studio/src/canvas/QuickAdd.tsx",
-  "apps/studio/src/canvas/geometry.ts",
-  "apps/studio/src/canvas/rotate.ts",
-  "apps/studio/src/library/Library.tsx",
-  "apps/studio/src/library/classes.ts",
-  "apps/studio/src/main.tsx",
-  "apps/studio/src/omc/omc.ts",
-  "apps/studio/src/omc/parse.ts",
-  "apps/studio/src/shell/TopBar.tsx",
-  "apps/studio/src/simulate/Simulate.tsx",
-  "apps/studio/src/split/Split.tsx",
-  "apps/studio/src/store/diff.ts",
-  "apps/studio/src/store/exprs.ts",
-  "apps/studio/src/store/index.tsx",
-  "apps/studio/src/store/looks.ts",
-  "apps/studio/src/store/plans.ts",
-  "apps/studio/src/store/read.ts",
-  "apps/studio/src/store/splice.ts",
-  "apps/studio/src/store/wires.ts",
-  "apps/studio/src/styles.css",
-  "apps/studio/test/a-canvas.test.ts",
-  "apps/studio/test/a-store.test.ts",
-  "apps/studio/vite.config.ts",
-  "docs/api/tutorials.rst",
-  "docs/api/user_manual.rst",
-  "engine/modelica/CMakeLists.txt",
-  "engine/modelica/include/paperboat/modelica/generate.hpp",
-  "engine/modelica/include/paperboat/modelica/import.hpp",
-  "engine/modelica/include/paperboat/modelica/squero.hpp",
-  "engine/modelica/src/generate.cpp",
-  "engine/modelica/src/omc.cpp",
-  "engine/modelica/src/seticon.cpp",
-  "engine/modelica/src/squero.cpp",
-  "engine/tests/modelica_test.cpp",
-  "engine/tools/paperboat_cli.cpp",
-  "specs/evidence/wave3-a/cpp-dark.png",
-  "specs/evidence/wave3-a/cpp-light.png",
-  "specs/evidence/wave3-a/mo-dark.png",
-  "specs/evidence/wave3-a/mo-light.png",
-  "specs/evidence/wave3-a/refused-dark.png",
-  "specs/evidence/wave3-a/refused-light.png",
-  "specs/evidence/wave3-a/studio-dark.png",
-  "specs/evidence/wave3-a/studio-light.png",
-]
-verification = """Lane A re-ran 2026-11-07 in worktree epic160-lane-a-w3 (engine/build/dev):
-engine build: no warnings (touched every modelica source, the tests and the CLI, rebuilt: 0 "warning"); paperboat_tests 2087 assertions / 151 cases pass from the repo root, incl. [squero] 83/4 and [modelica] 677/9 (omc 1.27.0~dev-5-g5f1d2c5 is installed, so the [omc] cases ran, not skipped);
-npm run typecheck, npm run build, npm run build:studio: exit 0; npm test -w @paperboat/web 97/97, -w @paperboat/shared 11/11, -w @paperboat/studio 23/23; npm run docs: build succeeded with -W (no warnings), Studio section in docs/api/user_manual.rst, the ops in tutorials.rst; gen_tokens --check and gen_ts --check current.
-Live check through squero-om (headless Chromium via playwright-core, built dist on :8790, a fresh Untitled.mo each run): dragged SignalVoltage, Resistor, Inductor, Ground and Blocks.Sources.Constant from the library; wired V1.p-R1.p, R1.n-L1.p, L1.n-V1.n, V1.n-G1.p and the signal C1.y -> V1.v (a RealInput) by dragging ports; selected the R1.n-L1.p wire, pressed / and typed Resistor: the line read exactly "Insert R2: R1.n -> p, n -> L1.p", Enter gave connect(R1.n, R2.p) and connect(R2.n, L1.p) in the .mo; the split view showed the .mo and the C++ ("ode - ODE: no events, no torn systems, no external functions", domain/untitled.cpp, nothing written to disk); Simulate plotted L1.i, L1.v, R1.i; Delete of G1 then Ctrl+Z restored it and its wires in one step; an output dragged onto an inductor pin was refused in words ("an output joins only an acausal port, not a NegativePin") and no wire was made. Screenshots in light and dark: specs/evidence/wave3-a/{studio,cpp,mo,refused}-{light,dark}.png.
-Not run: B's popover, sheet and dock (stubs on this branch), so the merged-dev gate (B's panels on the real StudioApi) is the orchestrator's."""
+notes = ""
+modified_files = []
+verification = ""
 
 [lanes.B]
 cli = "agy"
-model = "argon-4"
-effort = "medium"
-wave = 3
-state = "review"
-task = "Studio component popover, interface sheet + Look tab, dock (balance, Fix: Ground, Export backend)"
-contracts = ["§8.1", "§8.3", "§3", "§4", "§6"]
-prompt = "specs/prompts/wave3_lane_b.md"
-branch = "epic160/lane-b-w3"
+model = "flash-3.8"
+effort = "low"
+wave = 4
+state = "ready"
+task = "DESIGN.md (Squero Studio OM, Custom block look), protocol/README.md (view.icon, connectors, squero/0), CI workflows, shared plates.css + connectError wording"
+contracts = ["§1", "§3", "§4", "§5", "§8"]
+prompt = "specs/prompts/wave4_lane_b.md"
+branch = "epic160/lane-b-w4"
 blocker = ""
-notes = "Implemented ComponentPopover (NumberField param rows, = inline binding to top-level parameter, + Input / + Probe port actions), InterfaceSheet (Interface tab with Station props, entry pills, linked block preview via CompactBlock + Icon; Look tab with 0..100 5-unit snap grid, §3 primitive keys and Choice token switches, side/at port placement, side-by-side light/dark preview, setIcon save), StudioDock (debounced checkModel balance parse, dangling flow connector detection and domain Fix: Ground / Fix: Fixed, Export backend with 2px --signal progress bar), fake.ts, b-*.test.ts, and light/dark evidence screenshots."
-modified_files = [
-  "apps/studio/src/dock/dock.css",
-  "apps/studio/src/dock/dock.ts",
-  "apps/studio/src/dock/index.tsx",
-  "apps/studio/src/popover/index.tsx",
-  "apps/studio/src/popover/popover.css",
-  "apps/studio/src/popover/popover.ts",
-  "apps/studio/src/sheet/index.tsx",
-  "apps/studio/src/sheet/look.ts",
-  "apps/studio/src/sheet/sheet.css",
-  "apps/studio/test/b-dock.test.ts",
-  "apps/studio/test/b-popover.test.ts",
-  "apps/studio/test/b-sheet-look.test.ts",
-  "apps/studio/test/fake.ts",
-  "specs/evidence/wave3-b/dock-dark.png",
-  "specs/evidence/wave3-b/dock-light.png",
-  "specs/evidence/wave3-b/popover-dark.png",
-  "specs/evidence/wave3-b/popover-light.png",
-  "specs/evidence/wave3-b/sheet-interface-dark.png",
-  "specs/evidence/wave3-b/sheet-interface-light.png",
-  "specs/evidence/wave3-b/sheet-look-dark.png",
-  "specs/evidence/wave3-b/sheet-look-light.png",
-  "specs/wave-status.toml",
-]
-verification = """
-- npm run typecheck: PASS (shared, web, cli, studio all clean)
-- npm run build:studio: PASS (tsc --noEmit && vite build clean)
-- npm test -w @paperboat/studio: PASS (10/10 tests in b-dock.test.ts, b-popover.test.ts, b-sheet-look.test.ts)
-- python3 docs/gen_tokens.py --check && python3 protocol/gen_ts.py --check: PASS
-- git diff --name-only dev...HEAD:
-  apps/studio/src/dock/dock.css
-  apps/studio/src/dock/dock.ts
-  apps/studio/src/dock/index.tsx
-  apps/studio/src/popover/index.tsx
-  apps/studio/src/popover/popover.css
-  apps/studio/src/popover/popover.ts
-  apps/studio/src/sheet/index.tsx
-  apps/studio/src/sheet/look.ts
-  apps/studio/src/sheet/sheet.css
-  apps/studio/test/b-dock.test.ts
-  apps/studio/test/b-popover.test.ts
-  apps/studio/test/b-sheet-look.test.ts
-  apps/studio/test/fake.ts
-  specs/evidence/wave3-b/dock-dark.png
-  specs/evidence/wave3-b/dock-light.png
-  specs/evidence/wave3-b/popover-dark.png
-  specs/evidence/wave3-b/popover-light.png
-  specs/evidence/wave3-b/sheet-interface-dark.png
-  specs/evidence/wave3-b/sheet-interface-light.png
-  specs/evidence/wave3-b/sheet-look-dark.png
-  specs/evidence/wave3-b/sheet-look-light.png
-  specs/wave-status.toml
-- Evidence screenshots rendered with fake.ts in light and dark under specs/evidence/wave3-b/
-"""
+notes = ""
+modified_files = []
+verification = ""
 
 # Model routing (contracts rev 2): lane A = Anthropic only, lane B = Google only.
 [routing]
@@ -216,7 +121,7 @@ state = "done"
 from = "A"
 to = "B"
 what = "protocol/README.md: note squero/0 (Studio <-> Studio server, separate from paperboat/0): {id, op: omc, expr} -> {id, ok, result|error}; {op: status, state, version} pushes; allow-list in engine/modelica (omc.cpp allowed_calls)."
-state = "accepted"   # Wave 4 lane B (protocol/README.md), with the Wave 3 ops
+state = "accepted"   # Wave 4 lane B step 2
 
 [[requests]]
 from = "A"
@@ -240,10 +145,10 @@ state = "done"
 from = "A"
 to = "orchestrator"
 what = "Move the plate, port, wire and menu rules (.compact-block/.plate/.glyph, .react-flow__handle + .ip-*, .wire-*, .menu*, .chip, .switch, .quick-add) from apps/web/src/styles.css into packages/shared (e.g. plates.css next to tokens.css) and have both apps import it. apps/studio/src/styles.css copies them (marked at its top) because shared components render with classes shared does not ship; delete the copy when this lands."
-state = "open"
+state = "accepted"   # Wave 4 lane B step 4
 
 [[requests]]
 from = "A"
 to = "orchestrator"
 what = "packages/shared/src/ports.ts connectError: for an output wired to an acausal port the message reads an output joins only an acausal port, not a NegativePin; it should say what the output does join (an output joins only an input). Wording only; packages/shared/test/ports.test.ts does not pin this one."
-state = "open"
+state = "accepted"   # Wave 4 lane B step 4
