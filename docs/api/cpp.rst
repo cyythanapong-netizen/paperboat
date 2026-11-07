@@ -396,6 +396,16 @@ What runs
 
       The id of the block (or station object) being called.
 
+   .. cpp:member:: const Values *variables = nullptr
+
+      The run's variables by name: a number, a boolean as 1 or 0, text for the rest. A
+      variable marked ``tunable`` may change between steps (#75); any other is constant for
+      the run.
+
+   .. cpp:function:: const Value *variable(std::string_view name) const
+
+      A variable's value now, or null if there is none of that name.
+
    .. cpp:function:: void log(std::string_view text, std::string_view level = "info") const
 
       Write a line to the Console (``info``, ``warn``, ``error``), tagged with ``node``.
@@ -425,6 +435,19 @@ What runs
    .. cpp:function:: virtual std::vector<Entity> entities() const
 
       What it draws on the Station after a step (a result to show). Default: nothing.
+
+   .. cpp:function:: virtual bool set_param(std::string_view id, double value)
+
+      The number param ``id`` changed during the run (#75): a ``tunable`` variable it is
+      bound to has a new value. Take it and return true. The default returns false: the
+      block reads its params only when made. Keep your state: a PID takes new gains and
+      carries on with its integral.
+
+   .. cpp:function:: virtual bool stateless() const
+
+      True for a block whose outputs depend on its inputs and the clock alone. When
+      ``set_param`` returns false the run then makes it again with the new params. A block
+      that is neither takes the change with the next run (the Console says so, once).
 
 .. cpp:class:: Step
 

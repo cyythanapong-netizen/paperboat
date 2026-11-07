@@ -323,7 +323,7 @@ export type Variable = {
   exposed?: boolean;
   /** Also a control in the run dock. */
   dock?: boolean;
-  /** Meant to be changed during a run. */
+  /** A number or boolean (not a formula) that can change during a run: the blocks bound to it take the new value live if they can. */
   tunable?: boolean;
 };
 

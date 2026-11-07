@@ -236,6 +236,17 @@ struct Context {
   std::string_view node = {};         // the id of the block being stepped ("" outside a block)
   const LogFn* log_fn = nullptr;      // set by the run; null in tests that don't collect logs
   const ProgressFn* progress_fn = nullptr;  // set by the run; null in tests
+  // The run's variables (#36) by name, as the Variable block reads them: a number, a
+  // boolean as 1 / 0, text for the rest. Set by the run; null in tests. A tunable variable
+  // (#75) may change between steps.
+  const Values* variables = nullptr;
+
+  // The variable called `name` now, or null.
+  const Value* variable(std::string_view name) const {
+    if (!variables) return nullptr;
+    const auto it = variables->find(name);
+    return it == variables->end() ? nullptr : &it->second;
+  }
 
   // Write a line to the Console, tagged with the block's id: level "info", "warn" or "error".
   void log(std::string_view text, std::string_view level = "info") const {
@@ -262,6 +273,13 @@ class Block {
   virtual Values outputs() const { return {}; }
   // What it draws on the Station after a step (a result to show); most blocks draw nothing.
   virtual std::vector<Entity> entities() const;
+  // The number param `id` changed during the run (a tunable variable it is bound to, #75):
+  // take it and return true. The default returns false: the block reads its params only
+  // when made, and the change waits for the next run (unless the block is stateless).
+  virtual bool set_param(std::string_view /*id*/, double /*value*/) { return false; }
+  // True for a block with no state of its own: its outputs depend on its inputs and the
+  // clock alone. The run then takes a param change by making it again with the new params.
+  virtual bool stateless() const { return false; }
 };
 
 // One instance of a block on a Step flow's path (a block with step ports). A path is at

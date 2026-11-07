@@ -12,10 +12,13 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <stop_token>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <paperboat/toolkit/variables.hpp>
 
 #include "paperboat/core/run.hpp"
 
@@ -39,7 +42,8 @@ class Calling {
 
 class Run {
  public:
-  Run(std::string id, const Backend& backend, RunSettings settings, Emit emit, KeysNow keys, std::stop_token stop);
+  Run(std::string id, const Backend& backend, RunSettings settings, Emit emit, KeysNow keys, std::stop_token stop,
+      VariablesNow tune = nullptr);
 
   // Makes the station and graph (references to `variables` resolved first, #36), runs them
   // with the backend's executor (or the default) and reports the end. Returns "done",
@@ -84,12 +88,17 @@ class Run {
   std::string finish(const std::string& status);
   void fail(const std::string& node, const std::string& text);
   std::vector<const toolkit::Block*> blocks() const;
+  // Takes a changed variables list (#75): each tunable variable's new value reaches the Variable
+  // blocks and the number params bound to it, between two steps.
+  void tune(const json& list);
+  bool change_param(Node& node, const toolkit::ParamDef& def, double value);
 
   std::string id_;
   const Backend& backend_;
   RunSettings settings_;
   Emit emit_;
   KeysNow keys_now_;
+  VariablesNow tune_now_;
   std::stop_token stop_;
   toolkit::KeySet keys_;
   std::string failed_;  // the block that threw, if one did
@@ -100,6 +109,12 @@ class Run {
   bool run_started_time_set_ = false;
   std::chrono::steady_clock::time_point last_lag_warn_{};
   toolkit::Context ctx_;
+  json graph_given_;               // as the UI sent it, references and all (to resolve again when a variable is tuned)
+  json station_given_;
+  json variables_given_;           // the variables list now: the run's own, with each tunable one's latest value
+  toolkit::Variables vars_;        // ... resolved
+  toolkit::Values live_variables_; // ... for Context::variable
+  std::set<std::string> told_;     // "block.param" the user was told takes a change only with the next run
   Station station_;
   std::unique_ptr<toolkit::DomainState> state_;
   Graph g_;

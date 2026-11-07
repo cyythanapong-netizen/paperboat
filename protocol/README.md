@@ -35,7 +35,7 @@ Default address: `ws://localhost:8765`.
 | ------------ | -------------------------- |
 | `graph.run`  | `graph: { nodes, edges }`, `station?: Station` (the backend's current one if absent), `settings?: RunSettings` (overrides the backend's defaults for this run), `variables?: Variable[]` (the backend's current ones if absent) |
 | `station.set` | `station: Station`: an edit on the Station page; the backend checks it and answers with a `scene` (or a `log` error) |
-| `variables.set` | `variables: Variable[]`: the user's variables changed; the backend checks them, keeps them for the next run and answers with a `scene` (the station they shape), or a `log` error |
+| `variables.set` | `variables: Variable[]`: the user's variables changed; the backend checks them, keeps them for the next run and answers with a `scene` (the station they shape), or a `log` error. During a run it answers with `variables.values` only, and the run takes the `tunable` ones (below) |
 | `run.cancel` | —                          |
 | `input`      | `key: string` (a `KeyboardEvent.code`, e.g. `"Space"`), `down: boolean` |
 | `backend.restart` | — (restarts the backend process with its startup arguments) |
@@ -178,6 +178,16 @@ dependency order; a loop is an error). `min`, `max` and `whole` constrain a numb
 not `t`, `pi`, `e` or a function's name. A backend's defaults come from its descriptor's
 `[[variables]]`; the user's own live with the project (#34). Headless, `--var name=value`
 sets one for a `--run`.
+
+A run keeps the variables it started with, except a `tunable` number or boolean variable
+(not a formula; #75): when the UI sends `variables.set` during a run, the backend keeps the list for
+the next run, answers with `variables.values` (no `scene`: the run owns it), and the run
+gives each tunable variable its new value between two steps. It reaches the `variable` block
+(`name` param, a variable's value on a wire) and every number param bound to it, directly or
+through a formula, on blocks that take a change live: those with no state (`Block::stateless`,
+made again with the new param) and those that implement `Block::set_param` (PID's gains). Any other
+block, and a station object's property, takes the new value with the next run; the Console says so
+once. A value its `min`/`max` refuses is ignored, with a warning.
 
 **Project file** (#82). Everything a user made, as one JSON file (`name.paperboat.json`), written
 and read by the UI; it is not a message, and a backend needs no code for it. It reuses the shapes

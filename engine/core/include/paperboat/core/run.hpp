@@ -11,6 +11,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <stop_token>
 #include <string>
 
@@ -51,6 +52,8 @@ struct Backend {
 
 using Emit = std::function<void(const json& message)>;
 using KeysNow = std::function<toolkit::KeySet()>;  // keys held down in the UI right now
+// The variables list the UI last sent, if it sent one since the last call (#75); read between steps.
+using VariablesNow = std::function<std::optional<json>()>;
 
 // The scene: station objects, the domain state's entities and what blocks show.
 json scene_message(const Station& station, const toolkit::DomainState* state, const json& view,
@@ -59,9 +62,11 @@ json scene_message(const Station& station, const toolkit::DomainState* state, co
 // Emits run.started, then scene, signal, scene.patch, node.state, run.progress and log
 // events, then run.finished. Returns the final status: "done", "failed" or "cancelled".
 // `settings`: graph.run's overrides of the backend's run settings, if any. `variables`:
-// the variables (#36) the graph's and station's references resolve against.
+// the variables (#36) the graph's and station's references resolve against. `tune`: where
+// the run looks for a changed variables list while it runs; a variable the run started with
+// that is marked `tunable` takes its new value from it (#75), the others stay as they were.
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,
                 const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings = nullptr,
-                const json& variables = nullptr);
+                const json& variables = nullptr, const VariablesNow& tune = nullptr);
 
 }  // namespace paperboat::core

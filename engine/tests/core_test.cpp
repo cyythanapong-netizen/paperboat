@@ -870,6 +870,137 @@ TEST_CASE("session reports toolkits in hello and triggers restart handler on bac
   }));
 }
 
+// --- Tunable variables (#75)
+
+namespace {
+
+const tk::Catalog& tune_catalog() {
+  static const tk::Catalog catalog = tk::load_descriptor(R"(domain = "tune"
+import = ["base", "math", "control", "dashboard"]
+[[variables]]
+name = "g"
+value = 2
+max = 10
+tunable = true
+[[variables]]
+name = "h"
+value = 3
+[graph]
+nodes = [
+  { id = "one", type = "constant", params = { value = 1 } },
+  { id = "live", type = "variable", params = { name = "g" } },
+  { id = "held", type = "variable", params = { name = "h" } },
+  { id = "gain", type = "gain", params = { k = { var = "g" } } },
+  { id = "pid", type = "pid", params = { kp = { var = "g" } } },
+  { id = "lag", type = "lag", params = { tau = { var = "g" } } },
+  { id = "see-live", type = "display" }, { id = "see-held", type = "display" },
+  { id = "see-gain", type = "display" }, { id = "see-pid", type = "display" },
+]
+edges = [
+  { from = ["live", "y"], to = ["see-live", "in"] }, { from = ["held", "y"], to = ["see-held", "in"] },
+  { from = ["one", "y"], to = ["gain", "u"] }, { from = ["gain", "y"], to = ["see-gain", "in"] },
+  { from = ["one", "y"], to = ["pid", "e"] }, { from = ["pid", "u"], to = ["see-pid", "in"] },
+  { from = ["one", "y"], to = ["lag", "u"] },
+]
+)", tk::builtins());
+  return catalog;
+}
+
+json tuned_list(double g, double h) {
+  return json::array({{{"name", "g"}, {"type", "number"}, {"value", g}, {"max", 10}, {"tunable", true}},
+                      {{"name", "h"}, {"type", "number"}, {"value", h}}});
+}
+
+}  // namespace
+
+TEST_CASE("a tunable variable reaches the Variable block and bound params during a run; the rest stay") {
+  const auto& catalog = tune_catalog();
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 1, .emit_every = 1, .real_time = false}};
+  const json graph = json::parse(catalog.graph);
+  const json start = json::parse(catalog.variables);
+  int calls = 0;
+  const auto change = [&](json list) {
+    return core::VariablesNow([&calls, list] { return ++calls == 30 ? std::optional<json>(list) : std::nullopt; });
+  };
+  auto warnings = [](const Collected& out) {
+    std::string all;
+    for (const auto& m : out.messages)
+      if (m["type"] == "log" && m["level"] == "warn") all += m["text"].get<std::string>() + "\n";
+    return all;
+  };
+  SECTION("without a change, a variable is constant for the run") {
+    Collected out;
+    CHECK(core::run("r", graph, nullptr, backend, out.emit(), nullptr, {}, nullptr, start) == "done");
+    CHECK(out.last_signal("see-live") == 2.0);
+    CHECK(out.last_signal("see-held") == 3.0);
+    CHECK(out.last_signal("see-gain") == 2.0);
+    CHECK(out.last_signal("see-pid") == 2.0);
+  }
+  SECTION("g is tunable: its Variable block, a stateless block (made again) and a PID (set_param) follow; h does not") {
+    Collected out;
+    CHECK(core::run("r", graph, nullptr, backend, out.emit(), nullptr, {}, nullptr, start, change(tuned_list(5, 9))) == "done");
+    CHECK(out.last_signal("see-live") == 5.0);
+    CHECK(out.last_signal("see-held") == 3.0);
+    CHECK(out.last_signal("see-gain") == 5.0);
+    CHECK(out.last_signal("see-pid") == 5.0);
+    // a Lag has state and takes no live change: told once, and it keeps tau
+    const auto told = warnings(out);
+    CHECK_THAT(told, ContainsSubstring("lag.tau changes with the next run"));
+    CHECK(std::ranges::count(told, '\n') == 1);
+  }
+  SECTION("a value its range refuses is ignored, with a word") {
+    Collected out;
+    CHECK(core::run("r", graph, nullptr, backend, out.emit(), nullptr, {}, nullptr, start, change(tuned_list(50, 3))) == "done");
+    CHECK(out.last_signal("see-live") == 2.0);
+    CHECK_THAT(warnings(out), ContainsSubstring("variable change ignored"));
+  }
+  SECTION("a Variable block naming nothing fails the run, on the block") {
+    json bad = graph;
+    bad["nodes"][1]["params"]["name"] = "nope";
+    Collected out;
+    CHECK(core::run("r", bad, nullptr, backend, out.emit(), nullptr, {}, nullptr, start) == "failed");
+    CHECK(std::ranges::any_of(out.messages, [](const json& m) {
+      return m["type"] == "log" && m["level"] == "error" && m.value("node", "") == "live" &&
+             m["text"].get<std::string>().find("no variable called \"nope\"") != std::string::npos;
+    }));
+  }
+}
+
+TEST_CASE("variables.set during a run goes to the run, not to the scene") {
+  const auto& catalog = tune_catalog();
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 0.6, .emit_every = 1, .real_time = true}};
+  std::vector<json> sent;
+  std::mutex mutex;
+  core::Session session(backend, [&](const std::string& text) {
+    std::lock_guard lock(mutex);
+    sent.push_back(json::parse(text));
+  });
+  session.on_message(R"({"type": "graph.run", "graph": )" + catalog.graph + "}");
+  std::this_thread::sleep_for(std::chrono::milliseconds(150));
+  session.on_message(R"({"type": "variables.set", "variables": )" + tuned_list(7, 9).dump() + "}");
+  for (int i = 0; i < 500; ++i) {
+    {
+      std::lock_guard lock(mutex);
+      if (sent.back()["type"] == "run.finished") break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  std::lock_guard lock(mutex);
+  REQUIRE(sent.back()["type"] == "run.finished");
+  double live = 0, held = 0;
+  int scenes_after_start = 0;
+  bool started = false;
+  for (const auto& m : sent) {
+    if (m["type"] == "run.started") started = true;
+    if (started && m["type"] == "scene") ++scenes_after_start;
+    if (m["type"] == "signal" && m["node"] == "see-live") live = m["v"];
+    if (m["type"] == "signal" && m["node"] == "see-held") held = m["v"];
+  }
+  CHECK(live == 7.0);
+  CHECK(held == 3.0);
+  CHECK(scenes_after_start == 1);  // the run's own; the edit did not show the station again
+}
+
 TEST_CASE("a dashboard Switch runs from its descriptor params and is sampled as a signal") {
   static const tk::Catalog catalog = tk::load_descriptor("domain = \"switches\"\nimport = [\"dashboard\"]\n", tk::builtins());
   const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 0.5, .emit_every = 1, .real_time = false}};

@@ -9,7 +9,7 @@ function VarControl({ v }: { v: Variable }) {
   const [draft, setDraft] = useState<number | null>(null); // a slider mid-drag: one change on release, not one per step
   if (!vars) return null;
   const now = vars.values[v.name] ?? v.value;
-  const off = vars.locked || v.expr !== undefined;
+  const off = (vars.locked && !v.tunable) || v.expr !== undefined; // a run keeps its variables, but a tunable one (#75)
   const set = (value: Variable["value"]) => vars.setList(vars.list.map((x) => (x.name === v.name ? { ...x, value, expr: undefined } : x)));
   const unit = v.unit ? <span className="grey small">{v.unit}</span> : null;
   let control;

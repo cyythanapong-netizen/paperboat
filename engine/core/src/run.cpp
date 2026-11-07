@@ -41,6 +41,18 @@ bool names_node(const json& graph, const json& station, const std::string& id) {
   return !id.empty() && (has(graph, "nodes") || has(station, "objects"));
 }
 
+// What the Variable block reads: a number, a boolean as 1 or 0, the rest as text.
+toolkit::Values variable_values(const toolkit::Variables& vars) {
+  toolkit::Values out;
+  const json all = vars.values();
+  for (const auto& [name, v] : all.items()) {
+    if (v.is_number()) out[name] = v.get<double>();
+    else if (v.is_boolean()) out[name] = v.get<bool>() ? 1.0 : 0.0;
+    else if (v.is_string()) out[name] = v.get<std::string>();
+  }
+  return out;
+}
+
 json entities_json(const std::vector<toolkit::Entity>& list) {
   json out = json::array();
   for (const auto& e : list) out.push_back(entity_json(e));
@@ -68,15 +80,18 @@ Calling::~Calling() {
   ctx_.node = {};
 }
 
-Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit, KeysNow keys, std::stop_token stop)
+Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit, KeysNow keys, std::stop_token stop,
+         VariablesNow tune)
     : id_(std::move(id)),
       backend_(backend),
       settings_(settings),
       emit_(std::move(emit)),
       keys_now_(std::move(keys)),
+      tune_now_(std::move(tune)),
       stop_(std::move(stop)) {
   ctx_.dt = settings_.dt;
   ctx_.keys_down = &keys_;
+  ctx_.variables = &live_variables_;
   log_ = [this](std::string_view node, std::string_view level, std::string_view text) {
     json msg = log_msg(std::string(level), std::string(text));
     if (!node.empty()) msg["node"] = node;
@@ -102,9 +117,13 @@ std::string Run::go(const json& graph_given, const json& station_given, const js
   emit_({{"type", "run.started"}, {"run", id_}});
   json graph_json, station_json;
   try {  // variables first (#36): blocks and objects get the values they stand for
-    const toolkit::Variables vars(variables);
-    graph_json = toolkit::resolve_graph(graph_given, *backend_.catalog, vars);
-    station_json = toolkit::resolve_station(station_given, *backend_.catalog, vars);
+    vars_ = toolkit::Variables(variables);
+    graph_json = toolkit::resolve_graph(graph_given, *backend_.catalog, vars_);
+    station_json = toolkit::resolve_station(station_given, *backend_.catalog, vars_);
+    graph_given_ = graph_given;
+    station_given_ = station_given;
+    variables_given_ = variables;
+    live_variables_ = variable_values(vars_);
   } catch (const toolkit::VariableError& err) {
     fail(names_node(graph_given, station_given, err.where) ? err.where : "", std::string("invalid variables: ") + err.what());
     return finish("failed");
@@ -200,6 +219,84 @@ void Run::node_state(std::string_view node, std::string_view state) {
 void Run::at_time(double t) {
   ctx_.t = t;
   if (keys_now_) keys_ = keys_now_();
+  if (tune_now_)
+    if (const auto list = tune_now_()) tune(*list);
+}
+
+// Tunable variables (#75). Only a variable the run started with, marked `tunable`, and not a
+// formula, changes: it takes its latest value from `list` (a different type, or a value its
+// range refuses, is ignored). Formulas over it follow. Then every number param bound to a
+// variable that came to something else is changed on its block, which says whether it can.
+void Run::tune(const json& list) {
+  if (!list.is_array() || !variables_given_.is_array()) return;
+  json next = variables_given_;
+  for (auto& v : next) {
+    if (!v.value("tunable", false) || v.contains("expr")) continue;
+    const auto sent = std::ranges::find_if(list, [&](const json& x) { return x.value("name", std::string{}) == v.value("name", std::string{}); });
+    if (sent != list.end() && !sent->contains("expr") && sent->contains("value") && sent->value("type", std::string{}) == v.value("type", std::string{}))
+      v["value"] = sent->at("value");
+  }
+  if (next == variables_given_) return;
+  try {
+    const toolkit::Variables now(next);
+    if (const auto* nodes = graph_given_.is_object() && graph_given_.contains("nodes") ? &graph_given_.at("nodes") : nullptr) {
+      for (const auto& n : *nodes) {
+        const auto found = g_.nodes.find(n.value("id", std::string{}));
+        if (found == g_.nodes.end() || !n.contains("params") || !n["params"].is_object()) continue;
+        Node& node = found->second;
+        for (const auto& [param, given] : n["params"].items()) {
+          const auto def = std::ranges::find(node.entry->def.params, param, &toolkit::ParamDef::id);
+          if (!toolkit::is_reference(given) || def == node.entry->def.params.end() || !def->is_number()) continue;
+          const json value = now.value_for(given, *def, node.id);
+          if (value != vars_.value_for(given, *def, node.id)) change_param(node, *def, value.is_boolean() ? (value.get<bool>() ? 1.0 : 0.0) : value.get<double>());
+        }
+      }
+    }
+    if (station_given_.is_object() && station_given_.contains("objects")) {
+      for (const auto& o : station_given_.at("objects")) {
+        const auto* entry = backend_.catalog->find_object(o.value("type", std::string{}));
+        if (!entry || !o.contains("props") || !o["props"].is_object()) continue;
+        const auto id = o.value("id", std::string{});
+        for (const auto& [prop, given] : o["props"].items()) {
+          const auto def = std::ranges::find(entry->def.props, prop, &toolkit::ParamDef::id);
+          if (!toolkit::is_reference(given) || def == entry->def.props.end()) continue;
+          if (now.value_for(given, *def, id) != vars_.value_for(given, *def, id) && told_.insert(id + "." + prop).second)
+            log("warn", id + "." + prop + " changes with the next run: a station object takes its properties when it is made");
+        }
+      }
+    }
+    vars_ = now;
+    variables_given_ = next;
+    live_variables_ = variable_values(vars_);
+  } catch (const toolkit::VariableError& err) {
+    log("warn", std::string("variable change ignored: ") + err.what());
+  }
+}
+
+// One block's number param to `value`: by the block, else (a block with no state) by making it
+// again. Otherwise the user is told once that it waits for the next run.
+bool Run::change_param(Node& node, const toolkit::ParamDef& def, double value) {
+  auto params = node.params;
+  params[def.id] = value;
+  if (node.block) {
+    if (node.block->set_param(def.id, value)) {
+      node.params = std::move(params);
+      return true;
+    }
+    if (node.block->stateless()) {
+      try {
+        node.block = node.entry->make(params, node.text);
+        node.params = std::move(params);
+        return true;
+      } catch (const std::exception& err) {
+        log("warn", node.id + "." + def.id + ": not changed: " + err.what());
+        return false;
+      }
+    }
+  }
+  if (told_.insert(node.id + "." + def.id).second)
+    log("warn", node.id + "." + def.id + " changes with the next run: " + node.def.label + " can't take it during a run");
+  return false;
 }
 
 toolkit::Values Run::inputs_of(const Node& node) {
@@ -393,7 +490,7 @@ json settings_json(const RunSettings& s) {
 
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,
                 const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings,
-                const json& variables) {
+                const json& variables, const VariablesNow& tune) {
   RunSettings s;
   try {
     s = with_overrides(backend.run, settings);
@@ -403,7 +500,7 @@ std::string run(const std::string& id, const json& graph, const json& station, c
     emit({{"type", "run.finished"}, {"run", id}, {"status", "failed"}});
     return "failed";
   }
-  return Run(id, backend, s, emit, keys, stop).go(graph, station, variables);
+  return Run(id, backend, s, emit, keys, stop, tune).go(graph, station, variables);
 }
 
 }  // namespace paperboat::core

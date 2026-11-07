@@ -2007,7 +2007,7 @@
         },
         "tunable": {
           "type": "boolean",
-          "description": "Meant to be changed during a run."
+          "description": "A number or boolean (not a formula) that can change during a run: the blocks bound to it take the new value live if they can."
         }
       }
     },

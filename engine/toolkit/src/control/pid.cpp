@@ -20,6 +20,13 @@ class Pid : public Block {
     return {{"u", kp_ * e + ki_ * integral_ + kd_ * derivative}};
   }
 
+  // Tunable gains (#75): the integral and the previous error carry on.
+  bool set_param(std::string_view id, double value) override {
+    double* gain = id == "kp" ? &kp_ : id == "ki" ? &ki_ : id == "kd" ? &kd_ : nullptr;
+    if (gain) *gain = value;
+    return gain != nullptr;
+  }
+
  private:
   double kp_, ki_, kd_;
   double integral_ = 0.0;
