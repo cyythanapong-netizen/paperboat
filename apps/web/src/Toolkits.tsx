@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { DEFAULT_TOOLKITS, missingRequiredToolkits } from "./engine";
+import { missingRequiredToolkits } from "./engine";
 import type { ToolkitStatus } from "./protocol";
 import { useFocusReturn } from "./ProjectUI";
 import { Spinner } from "./Spinner";
 
-export { DEFAULT_TOOLKITS, missingRequiredToolkits };
+export { missingRequiredToolkits };
 
 export function MissingToolkitsDialog({
   missing,
@@ -137,7 +137,7 @@ export function ToolkitsButton({
   const [open, setOpen] = useState(false);
   const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
   const wrap = useRef<HTMLDivElement | null>(null);
-  const items = toolkits.length > 0 ? toolkits : DEFAULT_TOOLKITS;
+  const items = toolkits;
   const anyBusy = items.some((t) => !!t.busy);
 
   useEffect(() => {

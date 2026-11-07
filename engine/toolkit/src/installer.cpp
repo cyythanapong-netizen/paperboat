@@ -303,6 +303,11 @@ std::vector<ToolkitEntry> parse_toolkits_manifest(std::string_view toml_text) {
     e.description = (*tbl)["description"].value_or(std::string{});
     e.optional = (*tbl)["optional"].value_or(true);
     e.engine = (*tbl)["engine"].value_or(std::string{});
+    if (const auto* blocks = (*tbl)["blocks"].as_array()) {
+      for (const auto& b : *blocks) {
+        if (auto v = b.value<std::string>()) e.blocks.push_back(*v);
+      }
+    }
     if (e.name.empty() || e.repo.empty()) {
       throw DescriptorError("toolkits[" + std::to_string(i) + "]: needs name and repo");
     }
@@ -431,6 +436,7 @@ std::string toolkits_json(const std::vector<ToolkitEntry>& list,
     if (!e.version.empty()) item["version"] = e.version;
     if (!e.versions.empty()) item["versions"] = e.versions;
     if (!e.default_version.empty()) item["default"] = e.default_version;
+    if (!e.blocks.empty()) item["blocks"] = e.blocks;
     if (!busy_name.empty() && busy_name == e.name && !busy_state.empty()) item["busy"] = busy_state;
     arr.push_back(std::move(item));
   }

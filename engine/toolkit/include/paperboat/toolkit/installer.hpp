@@ -26,6 +26,7 @@ struct ToolkitEntry {
   std::string version;
   std::vector<std::string> versions;
   std::string default_version;
+  std::vector<std::string> blocks;  // block types it provides, from toolkits.toml
 };
 
 struct ToolkitInspectBlock {

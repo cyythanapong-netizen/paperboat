@@ -27,7 +27,7 @@ Default address: `ws://localhost:8765`.
 | `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them; any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
 | `node.progress` | `node: string`, `fraction: number` (0–1) | How far a block's long step has got (`Context::progress`), at most ~20 a second per block; the UI shows it on the running block |
 | `log`          | `level: "info" \| "warn" \| "error"`, `text`, `node?: string` | any time. `node`: the block or station object that wrote it, or that failed |
-| `toolkits.status` | `toolkits: ToolkitStatus[]`              | when an optional toolkit's installation or busy state changes |
+| `toolkits.status` | `toolkits: ToolkitStatus[]`              | when an optional toolkit's installation or busy state changes. `ToolkitStatus.blocks` lists the block types a toolkit provides (from `toolkits.toml`), so the UI names the toolkit to install for a missing block |
 | `run.finished` | `run: string`, `status: "done" \| "failed" \| "cancelled"` | when a run ends |
 
 ## UI → Backend
