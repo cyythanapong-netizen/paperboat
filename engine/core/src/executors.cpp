@@ -124,6 +124,7 @@ class Steps final : public Executor {
 
       for (const auto& h : g.hats) {  // a hat restarts its running path only if it says so
         auto& hat = g.nodes.at(h);
+        if (hat.commented && hat.comment_mode == "out") continue;
         const auto call = run.calling(h);
         const auto out = hat.step->tick(ctx, run.inputs_of(hat));
         auto next = g.nexts.find({h, out});
@@ -145,6 +146,26 @@ class Steps final : public Executor {
           auto& node = g.nodes.at(path.at);
           const std::string here = path.at;  // path.at changes when the path moves on
           const auto call = run.calling(here);
+          if (node.commented && node.comment_mode == "out") {
+            ended = true;
+            break;
+          }
+          if (node.commented && node.comment_mode == "through") {
+            std::string step_out = "next";
+            for (const auto& p : node.def.outputs) {
+              if (p.type == "step") {
+                step_out = p.id;
+                break;
+              }
+            }
+            auto next = g.nexts.find({path.at, step_out});
+            if (next == g.nexts.end()) {
+              ended = true;
+              break;
+            }
+            path = {.at = next->second, .entered = false, .hat = path.hat};
+            continue;
+          }
           if (!path.entered) {
             if (!node.step->shared()) {  // a path reaching a block another path is in waits
               if (busy.contains(path.at)) break;

@@ -27,6 +27,9 @@ struct Node {
   std::unique_ptr<toolkit::Block> monitor;    // monitors that convert what they show
   toolkit::Values params = {};                // what it was made with, to make it again
   toolkit::Config text = {};
+  bool commented = false;
+  std::string comment_mode = "out";  // "out" (omitted from execution) or "through" (bypassed)
+  std::string comment = {};          // user notes or documentation
 };
 
 // A story group's step: when a path arrives it runs the story's blocks (`pass`, set by

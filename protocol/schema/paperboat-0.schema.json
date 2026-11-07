@@ -1478,6 +1478,22 @@
         },
         "ports": {
           "$ref": "#/$defs/PortSides"
+        },
+        "commented": {
+          "type": "boolean",
+          "description": "Whether the block is commented out or bypassed."
+        },
+        "comment_mode": {
+          "type": "string",
+          "enum": [
+            "out",
+            "through"
+          ],
+          "description": "Comment mode: out (omitted from execution) or through (bypassed)."
+        },
+        "comment": {
+          "type": "string",
+          "description": "User notes or documentation for this block."
         }
       },
       "required": [
