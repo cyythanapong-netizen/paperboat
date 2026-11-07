@@ -275,13 +275,15 @@ int serve_squero(int port, const fs::path& app, Omc::Options options, const fs::
   ix::initNetSystem();
   Omc omc(std::move(options));
   ix::HttpServer server(port, "127.0.0.1");
-  std::mutex mutex;
+  // Recursive: sending to a client that has just gone away runs its Close handler on this same
+  // thread, which takes the lock again. The send loop walks a copy for the same reason.
+  std::recursive_mutex mutex;
   std::set<ix::WebSocket*> clients;
 
   omc.on_status([&](OmcState state, const std::string& version) {
     const std::string text = status(state, version);
     std::lock_guard lock(mutex);
-    for (auto* ws : clients) ws->sendText(text);
+    for (auto* ws : std::set<ix::WebSocket*>(clients)) ws->sendText(text);
   });
   server.setOnConnectionCallback(
       [&app](const ix::HttpRequestPtr& request, const std::shared_ptr<ix::ConnectionState>&) { return http(app, request); });
