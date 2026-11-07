@@ -36,6 +36,8 @@ import { SceneView } from "./SceneView";
 import { VAR_DRAG, VarsContext } from "./Variables";
 import { RemoveIcon } from "./RemoveIcon";
 import { GlideBrackets } from "./Shell";
+import { instrumentFor, registerInstrument, type InstrumentProps } from "./instruments";
+import "./ImageInstrument";
 
 export type { Monitor } from "./dashboardLayout";
 
@@ -93,8 +95,7 @@ function Plot({ name, channels, idle }: { name: string; channels: readonly Chann
  * run is going or the Dashboard can't send. Toggle mode has a click pill; momentary mode
  * a hold button, so the two never share a press.
  */
-function SwitchInstrument({ name, state, send, params }: { name: string; state: EngineState; send?: (m: ClientMsg) => void; params?: Record<string, ParamValue> }) {
-  const latest = state.latest[name];
+function SwitchInstrument({ name, latest, state, send, params }: InstrumentProps) {
   const momentary = params?.mode === "momentary";
   const initialOn = params?.initial === undefined ? true : !!params.initial;
   const live = !!send && state.run?.status === "running";
@@ -176,40 +177,48 @@ function Instrument({ name, kind, state, send, params }: { name: string; kind: s
         return `${label}: ${v.toFixed(4)}${component?.unit ? ` ${component.unit}` : ""}`;
       }).join(", ")
     : undefined;
-  if (kind === "switch")
-    return <SwitchInstrument name={name} state={state} send={send} params={params} />;
-  if (kind === "image")
-    return (
-      <figure className={`instrument image${idle ? " idle" : ""}`}>
-        <div className="screen">
-          {typeof latest === "string" && latest ? <img src={latest} alt={name} draggable={false} /> : <output>{idle ? "–" : "no image"}</output>}
-        </div>
-        <figcaption>
-          <span>{name}</span>
-          <span>image</span>
-        </figcaption>
-      </figure>
-    );
-  if (kind === "display")
-    return (
-      <figure className={`instrument display${idle ? " idle" : ""}`}>
-        <div className="screen">
-          <output>
-            {typeof latest === "number"
-              ? +latest.toFixed(4)
-              : Array.isArray(latest)
-                ? `[${vector ?? latest.map((v) => +v.toFixed(4)).join(", ")}]`
-                : (latest ?? "–")}
-          </output>
-        </div>
-        <figcaption>
-          <span>{name}</span>
-          <span>display</span>
-        </figcaption>
-      </figure>
-    );
-  return <Plot name={name} channels={state.traces.channels(name)} idle={idle} />;
+  const Renderer = instrumentFor(kind) ?? FallbackInstrument;
+  return <Renderer name={name} kind={kind} latest={latest} idle={idle} vector={vector} state={state} send={send} params={params} />;
 }
+
+function DisplayInstrument({ name, latest, vector, idle }: InstrumentProps) {
+  return (
+    <figure className={`instrument display${idle ? " idle" : ""}`}>
+      <div className="screen">
+        <output>
+          {typeof latest === "number"
+            ? +latest.toFixed(4)
+            : Array.isArray(latest)
+              ? `[${vector ?? latest.map((v) => +v.toFixed(4)).join(", ")}]`
+              : String(latest ?? "–")}
+        </output>
+      </div>
+      <figcaption>
+        <span>{name}</span>
+        <span>display</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+/** A kind nothing registered (e.g. from a toolkit whose UI isn't here): its kind and raw latest value. */
+function FallbackInstrument({ name, kind, latest, idle }: InstrumentProps) {
+  return (
+    <figure className={`instrument display${idle ? " idle" : ""}`}>
+      <div className="screen">
+        <output>{latest === undefined ? "–" : typeof latest === "object" ? JSON.stringify(latest) : String(latest)}</output>
+      </div>
+      <figcaption>
+        <span>{name}</span>
+        <span>{kind}</span>
+      </figcaption>
+    </figure>
+  );
+}
+
+registerInstrument("graph", ({ name, state, idle }) => <Plot name={name} channels={state.traces.channels(name)} idle={idle} />);
+registerInstrument("display", DisplayInstrument);
+registerInstrument("switch", SwitchInstrument);
 
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
