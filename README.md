@@ -113,7 +113,7 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ### Install
 
 ```sh
-npm install -g @paperboat/cli        # Linux x64 (and Windows x64); the native binary comes as an optional dependency
+npm install -g @paperboat/cli        # Linux x64 today; Windows x64 is being brought up. The native binary is an optional dependency
 sudo apt install ./paperboat_<version>_amd64.deb   # Debian / Ubuntu, from the GitHub release
 ```
 
