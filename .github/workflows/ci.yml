@@ -63,6 +63,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test -w @paperboat/web
+      - run: npm test -w @paperboat/cli
       - run: npm run build
 
   docs:

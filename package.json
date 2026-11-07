@@ -6,8 +6,10 @@
   ],
   "scripts": {
     "dev": "npm run dev -w @paperboat/web --",
-    "build": "npm run build -w @paperboat/web",
-    "typecheck": "npm run typecheck -w @paperboat/web",
+    "build": "npm run build -w @paperboat/web && npm run build:cli",
+    "build:cli": "npm run build -w @paperboat/cli",
+    "cli": "./bin/paperboat",
+    "typecheck": "npm run typecheck -w @paperboat/web && npm run typecheck -w @paperboat/cli",
     "backend:mass-spring": "./bin/paperboat run mass-spring",
     "backend:cart-pole": "./bin/paperboat run cart-pole",
     "backend:parametric": "./bin/paperboat run parametric",
