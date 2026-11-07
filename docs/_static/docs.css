@@ -129,10 +129,12 @@
 .sidebar-tree .caption-text {
   font: 600 11px var(--font-mono) !important;
   color: var(--text-muted) !important;
-  text-transform: uppercase !important;
   letter-spacing: 0.05em !important;
   padding: var(--space-3) var(--space-2) var(--space-1) !important;
 }
+
+.sidebar-tree .caption-text::before { content: "[ "; }
+.sidebar-tree .caption-text::after { content: " ]"; }
 
 .sidebar-tree li > a.reference {
   font: 400 13px/1.45 var(--font-sans) !important;
