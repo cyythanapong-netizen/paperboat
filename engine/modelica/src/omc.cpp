@@ -295,7 +295,9 @@ std::string Omc::workdir() const { return impl_->workdir.string(); }
 
 const std::vector<std::string>& allowed_calls() {
   static const std::vector<std::string> calls = {
-      "loadModel", "loadFile", "getClassNames", "getComponents", "getIconAnnotation", "getDiagramAnnotation",
+      "loadModel", "loadFile", "getClassNames", "getComponents", "getComponentAnnotations",
+      "getNthComponentCondition", "getInheritedClasses", "getClassRestriction", "isConnector",
+      "getComponentModifierValue", "getDerivedClassModifierValue", "getIconAnnotation", "getDiagramAnnotation",
       "getConnectionCount", "getNthConnection", "checkModel", "addComponent", "deleteComponent", "addConnection",
       "deleteConnection", "setComponentModifierValue", "list", "dumpXMLDAE", "buildModelFMU", "getVersion",
       "getErrorString"};  // getErrorString: read-only, how a client words a failed call

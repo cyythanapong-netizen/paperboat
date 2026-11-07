@@ -59,6 +59,9 @@ struct Catalog {
   // The optional [dashboard] table: the default layout of the Dashboard's grid, as the
   // protocol's JSON text ("" when absent). Sent in the catalog message.
   std::string dashboard;
+  // The optional top-level [connectors] table (merged with C++-registered connectors):
+  // Modelica connector class definitions (§4), sent in the catalog message when non-empty.
+  nlohmann::json connectors = nullptr;
   // The optional [[variables]]: the backend's default variables (#36), as the protocol's
   // JSON text (a list; "" when absent). Sent in variables.load; the starters may use them.
   std::string variables;

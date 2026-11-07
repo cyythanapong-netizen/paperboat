@@ -17,6 +17,17 @@ void Registry::add(StationTemplate t) {
   objects_.push_back(std::move(t));
 }
 
+void Registry::add_connector(std::string package, std::string name, nlohmann::json def) {
+  if (!def.is_object()) throw std::invalid_argument("connector \"" + name + "\" must be a JSON object");
+  for (auto& c : connectors_) {
+    if (c.package == package && c.name == name) {
+      c.def = std::move(def);
+      return;
+    }
+  }
+  connectors_.push_back({.package = std::move(package), .name = std::move(name), .def = std::move(def)});
+}
+
 const StationTemplate* Registry::find_object(std::string_view name) const {
   auto it = std::ranges::find(objects_, name, &StationTemplate::name);
   return it == objects_.end() ? nullptr : &*it;
@@ -32,6 +43,14 @@ std::vector<const StationTemplate*> Registry::objects(std::string_view package) 
   std::vector<const StationTemplate*> out;
   for (const auto& t : objects_) {
     if (in_package(t.name, package)) out.push_back(&t);
+  }
+  return out;
+}
+
+std::vector<const ConnectorEntry*> Registry::connectors(std::string_view package) const {
+  std::vector<const ConnectorEntry*> out;
+  for (const auto& c : connectors_) {
+    if (c.package == package) out.push_back(&c);
   }
   return out;
 }
@@ -64,6 +83,9 @@ std::vector<std::string> Registry::packages() const {
   };
   for (const auto& t : templates_) note(t.name);
   for (const auto& t : objects_) note(t.name);
+  for (const auto& c : connectors_) {
+    if (std::ranges::find(out, c.package) == out.end()) out.push_back(c.package);
+  }
   std::ranges::sort(out);
   return out;
 }

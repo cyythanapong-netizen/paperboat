@@ -9,7 +9,7 @@ if(NOT PAPERBOAT_OMC)
   return()
 endif()
 
-add_library(paperboat_modelica src/omc.cpp src/generate.cpp src/squero.cpp)
+add_library(paperboat_modelica src/omc.cpp src/connectors.cpp src/icon.cpp src/generate.cpp src/squero.cpp)
 add_library(paperboat::modelica ALIAS paperboat_modelica)
 target_include_directories(paperboat_modelica PUBLIC include)
 target_link_libraries(paperboat_modelica

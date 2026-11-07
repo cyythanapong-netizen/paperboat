@@ -634,3 +634,49 @@ objects = [
   REQUIRE(station["objects"].size() == 1);
   CHECK(station["objects"][0]["id"] == "obj-1");
 }
+
+TEST_CASE("view.icon and top-level connectors pass through C++ registry and TOML to catalog") {
+  tk::Registry reg = test_registry();
+  reg.add_connector("test", "RealInput", nlohmann::json{
+      {"kind", "input"}, {"handle", "triangle"}, {"size", 8}, {"weight", 1.2}});
+
+  const std::string toml = R"toml(
+domain = "test"
+import = ["math"]
+
+[connectors.Pin]
+kind = "acausal"
+handle = "square"
+size = 8
+weight = 1.2
+potential = [{ id = "v", unit = "V" }]
+flow = [{ id = "i", unit = "A" }]
+
+[[blocks]]
+use = "math/gain"
+type = "resistor_gain"
+view = { compact = true, icon = { g = [{ t = "rect", x = 15, y = 35, w = 70, h = 30, stroke = "ink", fill = "raised" }], ports = [{ id = "u", class = "RealInput", side = "left", at = 50 }] } }
+)toml";
+
+  const auto cat = tk::load_descriptor(toml, reg);
+  const auto msg = nlohmann::json::parse(tk::catalog_message(cat));
+
+  REQUIRE(msg.contains("connectors"));
+  CHECK(msg["connectors"]["RealInput"]["handle"] == "triangle");
+  CHECK(msg["connectors"]["Pin"]["handle"] == "square");
+  CHECK(msg["connectors"]["Pin"]["flow"][0]["id"] == "i");
+
+  nlohmann::json found;
+  for (const auto& b : msg["blocks"]) {
+    if (b["type"] == "resistor_gain") found = b;
+  }
+  REQUIRE_FALSE(found.is_null());
+  CHECK(found["view"]["compact"] == true);
+  CHECK(found["view"]["glyph"] == "gain");  // inherited from math/gain via overridden_by
+  CHECK(found["view"]["icon"]["g"][0]["t"] == "rect");
+  CHECK(found["view"]["icon"]["ports"][0]["class"] == "RealInput");
+
+  CHECK_THROWS_WITH(
+      tk::load_descriptor(descriptor("[[blocks]]\nuse = \"math/gain\"\nview = { icon = \"svg\" }\n"), reg),
+      ContainsSubstring("icon must be a table"));
+}

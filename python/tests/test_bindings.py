@@ -500,3 +500,88 @@ def test_solve_helper_functions():
     s_disc.step(0.1)
     assert abs(s_disc.x[0] - 0.5) < 1e-12
 
+
+ICON_BACKEND = '''
+import paperboat
+from paperboat import Linked
+
+class Shunt(paperboat.Block):
+    type, label = "shunt", "Shunt"
+    inputs, outputs = ["u"], ["y"]
+    view = {
+        "compact": True,
+        "icon": {
+            "g": [{"t": "rect", "x": 15, "y": 35, "w": 70, "h": 30, "stroke": "ink", "fill": "raised"}],
+            "ports": [
+                {"id": "u", "class": "RealInput", "side": "left", "at": 50},
+                {"id": "y", "class": "RealOutput", "side": "right", "at": 50},
+            ],
+        },
+    }
+    def step(self, ctx, inputs):
+        return {"y": inputs.get("u", 0.0)}
+
+class RigLoad(paperboat.StationObject):
+    type, label = "rig-load", "Rig Load"
+    block = Linked(
+        outputs=["w"],
+        view={"compact": True, "icon": {"g": [{"t": "ellipse", "cx": 50, "cy": 50, "rx": 30, "ry": 30}]}},
+    )
+    def read(self):
+        return {"w": 1.0}
+
+paperboat.serve(paperboat.Backend(
+    engine="icon-test",
+    descriptor="descriptor.toml",
+    blocks=[Shunt],
+    objects=[RigLoad],
+    connectors={
+        "RealInput": {"kind": "input", "handle": "triangle", "size": 8, "weight": 1.2},
+    },
+    mode="once",
+))
+'''
+
+ICON_DESCRIPTOR = '''
+domain = "icons"
+import = ["dashboard"]
+
+[connectors.RealOutput]
+kind = "output"
+handle = "circle"
+size = 8
+weight = 1.2
+
+[station]
+objects = [{ id = "load-1", type = "rig-load" }]
+
+[graph]
+nodes = [{ id = "s1", type = "shunt" }, { id = "show", type = "display" }]
+edges = [{ from = ["s1", "y"], to = ["show", "in"] }]
+'''
+
+
+def test_view_icon_and_connectors_passthrough(tmp_path: Path) -> None:
+    msgs = run_backend(tmp_path, backend=ICON_BACKEND, descriptor=ICON_DESCRIPTOR)
+    assert msgs[-1]["status"] == "done"
+
+    inspect_script = ICON_BACKEND.replace(
+        "paperboat.serve(",
+        "import json; b = (",
+    ) + "\nh = paperboat._engine.make(b.engine, str((__import__('pathlib').Path(__file__).parent / b.descriptor)), b.blocks, b.objects, b.state, b.mode, b.dt, b.duration, b.emit_every, b.view, b.speed, b.solver, b.connectors)\nprint(h.catalog_json())\n"
+    (tmp_path / "inspect_catalog.py").write_text(textwrap.dedent(inspect_script))
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
+    proc = subprocess.run([sys.executable, "inspect_catalog.py"], cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60)
+    assert proc.returncode == 0, proc.stderr
+    catalog = json.loads(proc.stdout.strip())
+    assert "connectors" in catalog
+    assert catalog["connectors"]["RealInput"]["handle"] == "triangle"
+    assert catalog["connectors"]["RealOutput"]["kind"] == "output"
+
+    blocks = {b["type"]: b for b in catalog["blocks"]}
+    assert blocks["shunt"]["view"]["compact"] is True
+    assert blocks["shunt"]["view"]["icon"]["g"][0]["t"] == "rect"
+    assert blocks["shunt"]["view"]["icon"]["ports"][0]["class"] == "RealInput"
+    assert blocks["rig-load"]["view"]["icon"]["g"][0]["t"] == "ellipse"
+
+
