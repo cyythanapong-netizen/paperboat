@@ -14,6 +14,7 @@ import { InterfaceSheet } from "./sheet/index.tsx";
 import { TopBar } from "./shell/TopBar.tsx";
 import { Simulate } from "./simulate/Simulate.tsx";
 import { Split, type View } from "./split/Split.tsx";
+import { freeSpot } from "./store/plans.ts";
 import { useStudioStore } from "./store/index.tsx";
 
 type Theme = "auto" | "light" | "dark";
@@ -83,7 +84,7 @@ function Studio({ omc, status }: { omc: OmcClient; status: OmcStatus }) {
         <TopBar status={status} model={model?.name} commands={commands} />
         {api && model ? (
           <>
-            <Library omc={omc} model={model.name} onPlace={(cls) => void actions.place(cls, { x: 200, y: 160, rotation: 0 })} />
+            <Library omc={omc} model={model.name} onPlace={(cls) => void actions.place(cls, freeSpot(model))} />
             <Canvas api={api} actions={actions} classes={classes} onOpen={setPopover} />
             {side && (
               <aside className="side">

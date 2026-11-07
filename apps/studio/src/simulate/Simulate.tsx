@@ -86,7 +86,7 @@ export function Simulate({ actions, theme }: { actions: Actions; theme: string }
           <Plot run={run} picks={picks} theme={theme} />
           <div className="vars" role="group" aria-label="Variables">
             {run.names.map((n) => (
-              <button key={n} className={`chip-pick${picks.includes(n) ? " on" : ""}`} aria-pressed={picks.includes(n)} onClick={() => setPicks((p) => (p.includes(n) ? p.filter((x) => x !== n) : [...p, n]))}>
+              <button key={n} className={`chip-pick${picks.includes(n) ? " on" : ""}`} style={picks.includes(n) ? ({ "--trace": `var(--trace-${(picks.indexOf(n) % 8) + 1})` } as React.CSSProperties) : undefined} aria-pressed={picks.includes(n)} onClick={() => setPicks((p) => (p.includes(n) ? p.filter((x) => x !== n) : [...p, n]))}>
                 {n}
               </button>
             ))}

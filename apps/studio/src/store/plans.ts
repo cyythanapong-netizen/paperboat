@@ -51,3 +51,14 @@ export function removeExprs(model: StudioModel, names: string[], wires: Connecti
   }
   return [...out, ...names.map((n) => x.deleteComponent(model.name, n))];
 }
+
+/** The nearest free grid spot at or after `from` (a drop, the view's centre): parts never land on one another. */
+export function freeSpot(model: StudioModel, from: { x: number; y: number } = { x: 200, y: 160 }): { x: number; y: number; rotation: 0 } {
+  const taken = (p: { x: number; y: number }) => model.components.some((c) => Math.abs(c.placement.x - p.x) < 100 && Math.abs(c.placement.y - p.y) < 80);
+  const start = { x: x.snap(from.x), y: x.snap(from.y) };
+  for (let i = 0; i < 200; i++) {
+    const p = { x: start.x + (i % 6) * 140, y: start.y + Math.floor(i / 6) * 120 };
+    if (!taken(p)) return { ...p, rotation: 0 };
+  }
+  return { ...start, rotation: 0 };
+}

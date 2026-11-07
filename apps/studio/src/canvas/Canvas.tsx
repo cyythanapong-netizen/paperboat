@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { DRAG_TYPE } from "../library/Library.tsx";
 import type { ComponentInst, Connection, StudioApi } from "../model/types.ts";
 import { snap } from "../store/exprs.ts";
+import { freeSpot } from "../store/plans.ts";
 import type { Actions } from "../store/index.tsx";
 import { endOf, pathOf, split, wireError } from "../store/wires.ts";
 import { centreFor, placedIcon, squareUp, topLeft } from "./geometry.ts";
@@ -125,7 +126,7 @@ export function Canvas({ api, actions, classes, onOpen }: Props) {
     const p = flow.screenToFlowPosition({ x: (rect?.left ?? 0) + (rect?.width ?? 0) / 2, y: (rect?.top ?? 0) + (rect?.height ?? 0) / 2 });
     return { x: snap(p.x), y: snap(p.y), rotation: 0 as const };
   };
-  const place = (cls: string, at = centre()) => void actions.place(cls, at).then((name) => api.select([name]));
+  const place = (cls: string, at = freeSpot(model, centre())) => void actions.place(cls, at).then((name) => api.select([name]));
 
   const onDrop = (e: DragEvent) => {
     const cls = e.dataTransfer.getData(DRAG_TYPE);
@@ -171,7 +172,11 @@ export function Canvas({ api, actions, classes, onOpen }: Props) {
   }, []);
 
   const selectedWire = wire ? `${wire.a} - ${wire.b}` : undefined;
-  const plan = useCallback((cls: string) => actions.planSplice(wire!, cls), [actions, wire]);
+  const latest = useRef(actions);
+  latest.current = actions;
+  const wireKey = wire ? `${wire.a}|${wire.b}` : "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const plan = useCallback((cls: string) => latest.current.planSplice(wire!, cls), [wireKey]);
 
   return (
     <div ref={root} className="canvas" tabIndex={0} onDragOver={(e) => e.dataTransfer.types.includes(DRAG_TYPE) && e.preventDefault()} onDrop={onDrop} data-testid="canvas">

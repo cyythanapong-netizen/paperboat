@@ -489,3 +489,22 @@ Squero Studio OM, the Modelica editor, talks to the same omc through ``paperboat
 (or ``bin/squero-om``), a WebSocket server speaking ``squero/0``:
 ``{"id", "op": "omc", "expr"}`` answered by ``{"id", "ok", "result" | "error"}``, plus
 ``{"op": "status", "state", "version"}`` pushes. Only an allow-list of omc calls passes.
+
+``paperboat squero [Model.mo]`` (or ``bin/squero-om``) also serves the built Studio app
+(``apps/studio/dist``) on the same port and opens ``Model.mo``, default ``./Untitled.mo``. Beyond ``omc``
+it has six ops of its own, written in C++ and confined to the opened model, each answered by
+``{"id", "ok": true, "result": {…}}`` or ``{"id", "ok": false, "error"}``:
+
+- ``open`` ``{}`` gives ``{file, model}``, the model the server was started on.
+- ``save`` ``{model}`` saves it to its own ``.mo`` (never the Standard Library).
+- ``icon`` ``{class}`` gives ``{icon, connectors, notice}``, the imported look of a class
+  (what ``paperboat modelica icon`` prints).
+- ``set_icon`` ``{model, icon}`` writes an ``IconDef``'s graphics back as the model's ``Icon``
+  annotation, the inverse of the importer: the same tokens round-trip.
+- ``generate`` ``{source, model, out, dry?, path?}`` is ``paperboat modelica generate``. It first
+  pushes ``{"op": "progress", "id", "stage", "fraction"}`` (stage ``check``, ``flatten``,
+  ``generate`` or ``build``), then answers ``{model, path, reason, out, notices, files?}``. With
+  ``dry`` nothing is written; ``files`` maps each relative path to its text (none on the FMU path).
+- ``simulate`` ``{model, stop, vars?}`` runs the model for 500 intervals and answers
+  ``{t, series, names}``: ``series`` holds the ``vars`` asked for (every variable when omitted) and
+  ``names`` every variable in the result.

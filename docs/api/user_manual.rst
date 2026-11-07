@@ -272,6 +272,51 @@ with the extension :code:`.ppj` (JSON inside).
 - **Session Restoration**: If your browser accidentally closes or refreshes during a run,
   reopening the app presents an option to restore your unsaved session state.
 
+Squero Studio: OpenModelica
+---------------------------
+
+Squero Studio OM is a separate app for building the equipment a Paperboat flow runs: you draw
+a Modelica model, and Paperboat opens the backend generated from it. It is not a page of the
+app above. Start it with ``bin/squero-om [Model.mo]`` (the same as ``paperboat squero``) and open
+``http://localhost:8790``; with no file it opens ``./Untitled.mo``, creating it if it isn't there. It needs
+OpenModelica (``omc``) on the path.
+
+The bar reads ``squero studio [ OM ]``, then the menus (Edit, View), the model's name and, at
+the right, the compiler's state: ``omc 1.27.0 · ready``, ``checking`` while it works, ``failed``
+when it has stopped. Studio has no modal dialogs; a refusal is a sentence at the foot of the canvas.
+
+**The library** (left) lists the Modelica Standard Library one package at a time (click a package
+to open it) and, under *This project*, other classes the server has loaded. Each part shows its
+icon. Drag a part onto the canvas, or double-click it, to place it. The filter box searches every
+part by name, then by path.
+
+**The canvas** is the model's diagram. Every edit is a call to omc (``addComponent``,
+``addConnection``, ``setComponentModifierValue``…) followed by reading the model back, and the file
+is saved after each one, so the ``.mo`` stays a normal Modelica file that OMEdit opens.
+
+- *Wiring*: drag from a port to another. A physical (acausal) wire has no direction and may start at
+  either end; a signal (causal) wire runs from an output to an input and is drawn with an arrow.
+  A wire the rules refuse is not drawn: the reason is written at the foot of the canvas
+  (``a PositivePin does not join a Flange_a``, ``an input does not join an input``). Three or more
+  wires on a port draw a junction dot. A wire's stored bends (``Line(points)``) are kept on the 20px grid.
+- *Moving and deleting*: drag a part to move it; :kbd:`Delete` removes the selected parts or wire.
+- *Quick add*: press :kbd:`/`, type a part name and press :kbd:`Enter` to place it. With a wire
+  selected the part is *spliced in*: the line above the list says exactly what will happen,
+  for example ``Insert R2: R1.n -> p, n -> L1.p``, and :kbd:`Enter` does it as one step.
+- *Undo*: :kbd:`Ctrl` + :kbd:`Z` and :kbd:`Ctrl` + :kbd:`Shift` + :kbd:`Z` step through your edits; a splice is one step.
+- A part with an ``if`` connector shows it only while its parameter is on; an array connector is
+  one port with a count.
+
+**The split view** (right) shows the model beside the canvas. ``[ .mo ]`` is the Modelica text
+(read-only for now). ``[ causal ODE c++ ]`` is the backend Studio would generate, from a dry run:
+nothing is written. Above the code it says which way the model goes, ``ode`` (a plain C++ model)
+or ``fmu`` (omc's compiled model behind an adapter), and why; an FMU model shows no code, since
+omc builds it. The dock's *Export backend* writes the real thing.
+
+**Simulate** is a check, not a second Flow page: set a stop time, press *Simulate*, and omc runs
+the model and plots chosen variables. Switch variables on and off with the chips under the plot.
+Nothing leaves Studio: no block, board or backend is involved; put the model in a flow by exporting it.
+
 Keyboard Shortcuts
 ------------------
 
@@ -289,6 +334,10 @@ Keyboard Shortcuts
      - Quick add block at cursor (on Flow canvas)
    * - :kbd:`?`
      - Show canvas gestures and shortcut cheat sheet (on Flow canvas)
+   * - :kbd:`/` in Squero Studio
+     - Add a part to the Modelica diagram, or splice it into the selected wire
+   * - :kbd:`Alt` + :kbd:`V` in Squero Studio
+     - Open or close the interface sheet
    * - :kbd:`Ctrl` + :kbd:`/`
      - Comment out / uncomment selected blocks
    * - :kbd:`Ctrl` + :kbd:`Shift` + :kbd:`Y`

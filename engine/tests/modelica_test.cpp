@@ -552,3 +552,18 @@ end Decay;
 
   fs::remove_all(dir);
 }
+
+TEST_CASE("the allow-list has what the canvas reads and edits, and nothing that writes elsewhere", "[squero]") {
+  CHECK(mo::allowed(R"(getComponentModifierNames(M, "R1"))"));
+  CHECK(mo::allowed("getNthConnectionAnnotation(M, 1)"));
+  CHECK(mo::allowed("getClassRestriction(Modelica.Electrical.Analog.Basic.Resistor)"));
+  CHECK(mo::allowed("setComponentModifierValue(M, R1.R, $Code(=10))"));
+  CHECK(mo::allowed("updateComponent(R1, A.B, M, annotate=Placement(visible=true, transformation=transformation(origin={1, 2}, "
+                    "extent={{-10, -10}, {10, 10}}, rotation=90)))"));
+  CHECK(mo::allowed("setParameterValue(M, k, 3)"));
+  // saving, simulating and the icon annotation are squero/0 ops of their own, confined to the user's model
+  CHECK_FALSE(mo::allowed("save(M)"));
+  CHECK_FALSE(mo::allowed("simulate(M, stopTime=1)"));
+  CHECK_FALSE(mo::allowed("addClassAnnotation(M, annotate=Icon())"));
+  CHECK_FALSE(mo::allowed("writeFile(\"/tmp/x\", \"y\")"));
+}

@@ -136,7 +136,7 @@ export function useStudioStore(omc: OmcClient, status: OmcStatus): { api: Studio
       void edit(restoreExprs(m.name, asGraph(m), then)).catch(() => undefined);
     });
   }, [edit]);
-  const { undo, redo, canUndo, canRedo } = useUndo<PartNode, WireEdge>(
+  const history = useUndo<PartNode, WireEdge>(
     nodes,
     edges,
     (v) => {
@@ -149,6 +149,12 @@ export function useStudioStore(omc: OmcClient, status: OmcStatus): { api: Studio
     },
     model?.name,
   );
+  // useUndo hands out new functions every render; the actions keep one pair
+  const steps = useRef(history);
+  steps.current = history;
+  const undo = useCallback(() => steps.current.undo(), []);
+  const redo = useCallback(() => steps.current.redo(), []);
+  const { canUndo, canRedo } = history;
 
   // --- the StudioApi ---
   const api = useMemo<StudioApi | null>(() => {

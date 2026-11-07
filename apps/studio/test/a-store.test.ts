@@ -10,7 +10,7 @@ import { chip } from "../src/omc/omc.ts";
 import { parseValue } from "../src/omc/parse.ts";
 import { restoreExprs, type Graph } from "../src/store/diff.ts";
 import * as x from "../src/store/exprs.ts";
-import { connectExprs, entryExprs, removeEntryExprs, removeExprs, setParamExprs } from "../src/store/plans.ts";
+import { connectExprs, entryExprs, freeSpot, removeEntryExprs, removeExprs, setParamExprs } from "../src/store/plans.ts";
 import { bendsOf, placementOf, readModel } from "../src/store/read.ts";
 import { freshName, splicePlan, throughPorts } from "../src/store/splice.ts";
 import { wireError } from "../src/store/wires.ts";
@@ -228,4 +228,11 @@ test("the top bar's chip says the omc version and state", () => {
   assert.equal(chip({ state: "ready", version: "OpenModelica 1.27.0~dev-5-g5f1d2c5" }), "omc 1.27.0 · ready");
   assert.equal(chip({ state: "checking", version: "" }), "omc · checking");
   assert.equal(chip({ state: "failed", version: "OpenModelica 1.27.0" }), "omc 1.27.0 · failed");
+});
+
+test("a part dropped on another goes to the next free spot, on the grid", () => {
+  const m = model(); // R1 at 200,0
+  assert.deepEqual(freeSpot(m, { x: 1000, y: 1000 }), { x: 1000, y: 1000, rotation: 0 });
+  assert.deepEqual(freeSpot(m, { x: 203, y: 4 }), { x: 620, y: 0, rotation: 0 }); // R1 and L1 are in the way, so along
+  assert.equal(freeSpot(m).x % 20, 0);
 });
