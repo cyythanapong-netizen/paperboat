@@ -46,6 +46,14 @@ ToolkitResult install_app(std::string_view name, std::string_view version = {},
 ToolkitResult uninstall_app(std::string_view name, const std::filesystem::path& repo_root = {},
                             const ToolkitLog& log = {});
 
+// Run an app's `build` steps from apps.toml in `dir` (a checkout of it) and check its output folder.
+ToolkitResult build_app(std::string_view name, const std::filesystem::path& dir,
+                        const std::filesystem::path& repo_root = {}, const ToolkitLog& log = {});
+
+// An installed app is outdated when a newer release exists, or (a "dev" install) main moved on.
+// Offline or unknown: false.
+bool app_outdated(std::string_view name, const std::filesystem::path& repo_root = {});
+
 // An installed app's output folder (its own folder when it declares none), or empty.
 std::filesystem::path app_output(std::string_view name);
 

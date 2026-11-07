@@ -96,6 +96,19 @@ const AppEntry* find(const std::vector<AppEntry>& list, std::string_view name) {
   return it == list.end() ? nullptr : &*it;
 }
 
+// An app's build steps in `dir`, then a check that its output folder exists. Failure text has the step's output tail.
+ToolkitResult run_build(const AppEntry& e, const fs::path& dir, const ToolkitLog& log) {
+  for (const auto& step : e.build) {
+    if (log) log("info", "$ " + step);
+    std::string output, last;
+    if (run_command(words(step), dir, {}, &last, &output) != 0)
+      return {false, "\"" + step + "\" failed in " + dir.string() + ":\n" + trimmed(tail(output))};
+  }
+  if (!e.output.empty() && !fs::is_directory(dir / e.output))
+    return {false, "the build of \"" + e.name + "\" made no " + e.output + "/"};
+  return {true, "built"};
+}
+
 bool installed(std::string_view name) { return fs::is_regular_file(apps_dir() / std::string(name) / kMarker); }
 
 }  // namespace
@@ -213,17 +226,9 @@ ToolkitResult install_app(std::string_view name, std::string_view requested, con
   std::string commit;
   run_command({"git", "-C", dir.string(), "rev-parse", "HEAD"}, {}, {}, nullptr, &commit);
 
-  for (const auto& step : e->build) {
-    if (log) log("info", "$ " + step);
-    std::string output;
-    if (run_command(words(step), dir, {}, &last, &output) != 0) {
-      restore();
-      return {false, "\"" + step + "\" failed in " + dir.string() + ":\n" + trimmed(tail(output))};
-    }
-  }
-  if (!e->output.empty() && !fs::is_directory(dir / e->output)) {
+  if (auto built = run_build(*e, dir, log); !built.ok) {
     restore();
-    return {false, "the build of \"" + e->name + "\" made no " + e->output + "/"};
+    return built;
   }
 
   fs::remove_all(prev, ec);
@@ -248,6 +253,31 @@ ToolkitResult uninstall_app(std::string_view name, const fs::path& repo_root, co
   if (ec) return {false, "cannot remove " + (apps_dir() / std::string(name)).string() + ": " + ec.message()};
   if (log) log("info", "uninstalled \"" + std::string(name) + "\"");
   return {true, "uninstalled"};
+}
+
+ToolkitResult build_app(std::string_view name, const fs::path& dir, const fs::path& repo_root, const ToolkitLog& log) {
+  std::string error;
+  const auto list = load(repo_root, error);
+  if (!error.empty()) return {false, error};
+  const AppEntry* e = find(list, name);
+  if (!e) return {false, "unknown app \"" + std::string(name) + "\""};
+  return run_build(*e, dir, log);
+}
+
+bool app_outdated(std::string_view name, const fs::path& repo_root) {
+  std::string error;
+  const auto list = load(repo_root, error);
+  const AppEntry* e = find(list, name);
+  const json m = read_marker(apps_dir() / std::string(name));
+  if (!e || m.empty()) return false;
+  const std::string version = m.value("version", "");
+  if (version != "dev") {
+    const auto tags = list_app_versions(name, repo_root);
+    return !tags.empty() && tags.front() != version;
+  }
+  std::string out;  // a dev install tracks main: outdated when the remote's main moved on
+  if (run_command({"git", "ls-remote", repo_url(*e), "main"}, {}, {}, nullptr, &out) != 0) return false;
+  return !out.empty() && out.rfind(m.value("commit", ""), 0) != 0;
 }
 
 fs::path app_output(std::string_view name) {

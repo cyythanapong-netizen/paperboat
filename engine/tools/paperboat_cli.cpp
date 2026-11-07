@@ -20,6 +20,7 @@
 #include "paperboat/core/process.hpp"
 #include "paperboat/toolkit/apps.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
+#include "paperboat/toolkit/update.hpp"
 #include "paperboat/toolkit/installer.hpp"
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
@@ -118,6 +119,12 @@ Modelica (Squero Studio OM, needs OpenModelica):
                              Squero Studio OM: the squero/0 server and the app (squero-studio-om,
                              fetched on first use; default port 8790); opens Model.mo
                              (default ./Untitled.mo, created if missing)
+
+Updating:
+  update [--check] [--no-build]
+                             Pull this repository (fast-forward only), rebuild the engine and console
+                             when it changed, pull the sibling checkouts of the apps in apps.toml and
+                             rebuild them, and refresh installed apps. --check only reports.
 
 Packages (apps from other repositories, see apps.toml):
   pkg list [--json]          The apps, installed or not
@@ -704,6 +711,125 @@ int cmd_pkg(const std::vector<std::string_view>& args) {
   return res.ok ? 0 : 1;
 }
 
+// The build directory of the running binary (engine/build/dev, engine/build, ...).
+fs::path running_build_dir(const fs::path& root) {
+  std::error_code ec;
+  fs::path p = fs::read_symlink("/proc/self/exe", ec);
+  for (p = p.parent_path(); !ec && p != p.root_path() && p.has_parent_path(); p = p.parent_path())
+    if (fs::is_regular_file(p / "CMakeCache.txt")) return p;
+  return root / "engine" / "build";
+}
+
+// paperboat update [--check] [--no-build]: pull this repository (fast-forward only), the sibling
+// checkouts of the apps in apps.toml, and rebuild what changed; then refresh the apps `pkg` installed.
+int cmd_update(const std::vector<std::string_view>& args) {
+  bool check_only = false;
+  bool build = true;
+  for (const auto a : args) {
+    if (a == "--check") check_only = true;
+    else if (a == "--no-build") build = false;
+    else {
+      std::cerr << "usage: paperboat update [--check] [--no-build]\n";
+      return 2;
+    }
+  }
+  const fs::path root = tk::find_repo_root();
+  if (root.empty()) {
+    std::cerr << "paperboat update: needs a git checkout of paperboat (no toolkits.toml found from here)\n";
+    return 1;
+  }
+  const auto log = [](std::string_view level, std::string_view text) {
+    (level == "error" ? std::cerr : std::cout) << "  " << text << '\n';
+  };
+  const auto say = [](const std::string& name, const std::string& text) {
+    std::cout << std::left << std::setw(20) << name << text << '\n';
+  };
+  int failed = 0;
+  bool pulled = false;
+
+  // Fetch one checkout and fast-forward it; `changed` gets the paths the pull touched.
+  const auto sync = [&](const std::string& name, const fs::path& dir, std::vector<std::string>& changed) {
+    const auto st = tk::check_checkout(dir);
+    if (!st.error.empty()) {
+      say(name, "skipped: " + st.error);
+      ++failed;
+    } else if (st.behind == 0) {
+      say(name, "up to date (" + st.upstream + ")");
+    } else {
+      say(name, std::to_string(st.behind) + " commit(s) behind " + st.upstream);
+      for (const auto& subject : st.incoming) std::cout << "    " << subject << '\n';
+      if (check_only) return;
+      if (const auto r = tk::pull_checkout(dir, &changed); !r.ok) {
+        say(name, "not updated: " + r.message);
+        ++failed;
+      } else {
+        pulled = true;
+      }
+    }
+  };
+  // A build step with its output kept quiet; the tail of it is shown when it fails.
+  const auto step = [&](const std::string& label, const std::vector<std::string>& cmd, const fs::path& cwd) {
+    std::cout << "  $ " << label << '\n';
+    std::string out;
+    if (tk::run_command(cmd, cwd, {}, nullptr, &out) == 0) return;
+    ++failed;
+    std::size_t from = out.size();
+    for (int lines = 0; from > 0 && lines < 12; ++lines) from = out.rfind('\n', from - 1) == std::string::npos ? 0 : out.rfind('\n', from - 1);
+    std::cerr << "  \"" << label << "\" failed:\n" << out.substr(from) << '\n';
+  };
+  const auto touched = [](const std::vector<std::string>& paths, std::string_view prefix, std::string_view suffix = {}) {
+    return std::ranges::any_of(paths, [&](const std::string& p) {
+      return p.starts_with(prefix) && (suffix.empty() || p.ends_with(suffix));
+    });
+  };
+
+  // 1. this repository, then what it builds on
+  std::vector<std::string> changed;
+  sync("paperboat", root, changed);
+  for (const auto& app : tk::list_apps(root)) {  // after the pull, so a new apps.toml counts
+    const fs::path dir = root.parent_path() / app.name;
+    if (!fs::exists(dir / ".git")) continue;  // not checked out here: `pkg` handles the installed copy
+    std::vector<std::string> app_changed;
+    sync(app.name, dir, app_changed);
+    if (build && !app_changed.empty() && !app.build.empty()) {
+      std::cout << "  building " << app.name << '\n';
+      if (const auto r = tk::build_app(app.name, dir, root, log); !r.ok) {
+        std::cerr << r.message << '\n';
+        ++failed;
+      }
+    }
+  }
+
+  // 2. rebuild this repository's own binaries and console
+  if (build && !changed.empty()) {
+    const bool deps = touched(changed, "package", ".json") || touched(changed, "apps/", "package.json") ||
+                      touched(changed, "apps/", "package-lock.json");
+    if (deps) step("npm ci", {"npm", "ci"}, root);
+    if (deps || touched(changed, "apps/cli/")) step("npm run build:cli", {"npm", "run", "build:cli"}, root);
+    step("cmake --build", {"cmake", "--build", running_build_dir(root).string(), "--parallel"}, root);
+  }
+
+  // 3. apps installed by `paperboat pkg`
+  for (const auto& app : tk::list_apps(root)) {
+    if (!app.installed) continue;
+    if (!tk::app_outdated(app.name, root)) {
+      say(app.name, "installed " + app.version + ", up to date");
+      continue;
+    }
+    say(app.name, "installed " + app.version + ", newer available");
+    if (check_only) continue;
+    if (const auto r = tk::install_app(app.name, {}, root, log); !r.ok) {
+      std::cerr << "paperboat update: " << r.message << '\n';
+      ++failed;
+    } else {
+      pulled = true;
+    }
+  }
+
+  if (pulled) std::cout << "updated; restart running backends and servers to use it\n";
+  return failed ? 1 : 0;
+}
+
 json step_json(const core::CheckStep& s) {
   return {{"name", s.name}, {"ok", s.ok}, {"skipped", s.skipped}, {"message", s.message}, {"duration", s.duration_seconds}};
 }
@@ -1074,6 +1200,7 @@ const std::vector<CommandSpec>& command_table() {
        {"--model", "--out", "--path", "--class"}, "file"},
       {"squero", cmd_squero, "Run Squero Studio OM (server and app)", {"studio"}, {"start", "run"},
        {"--port", "--app", "--version"}, "file"},
+      {"update", cmd_update, "Pull this repository and its app checkouts, rebuild", {}, {}, {"--check", "--no-build"}},
       {"pkg", cmd_pkg, "Apps from other repositories (package manager)", {},
        {"list", "install", "update", "uninstall", "versions", "path"}, {"--json", "--all", "--version"}},
       {"top", cmd_top, "Process dashboard (console)"},
@@ -1163,6 +1290,7 @@ void print_interactive_help() {
                            Manage optional toolkits (e.g. `toolkit install opencv`)
   pkg <list|install|update|uninstall|versions|path>
                            Apps from other repositories (e.g. `pkg install squero-studio-om`)
+  update [--check]         Pull this repository and its app checkouts, rebuild
   check [backend] [--fast] 4-stage backend verification (manifest, catalog, smoke, golden)
   pack [folder] [--out <pkg>]
                            Package backend into .ppk archive
