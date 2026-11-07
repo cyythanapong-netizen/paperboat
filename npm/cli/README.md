@@ -1,0 +1,18 @@
+# @paperboat/cli
+
+The [Paperboat](https://github.com/cyythanapong-netizen/paperboat) command line.
+
+```sh
+npm install -g @paperboat/cli
+paperboat --version
+paperboat squero            # Squero Studio OM; fetches the app on first run
+paperboat pkg list          # apps from other repositories
+paperboat update --check    # is a newer paperboat on npm?
+```
+
+This package is a small launcher. The native binary comes from the platform package npm picks for
+your machine (`@paperboat/cli-linux-x64`, `@paperboat/cli-win32-x64`, ...), installed as an
+optional dependency, so install without `--omit=optional`.
+
+A package install carries the CLI only. Building C++ backends and installing toolkits (they compile
+into the engine) need paperboat built from source.
