@@ -167,3 +167,18 @@
 @media (prefers-reduced-motion: reduce) {
   .logo-idle .logo-water .w, .logo-live .logo-water .w, .logo-live.logo { animation: none !important; }
 }
+
+/* Scope channel colours (#37): made for the black screen, which is black in both themes, so
+   one list serves both. Fixed order, never cycled; slot 1 is the signal colour. No red (it
+   means failed). Channels 5–8 are also dashed and 9–16 dotted, so traces that cross never
+   rely on colour alone (DESIGN.md: the one exception to one colour, one meaning). */
+:root {
+  --trace-1: var(--signal);
+  --trace-2: #05a5b3;
+  --trace-3: #606cdd;
+  --trace-4: #b23e88;
+  --trace-5: #b08e05;
+  --trace-6: #a376e9;
+  --trace-7: #24ae56;
+  --trace-8: #d861aa;
+}

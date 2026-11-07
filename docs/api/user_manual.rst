@@ -180,6 +180,14 @@ Available Instrument Types
 - **Numeric Displays** (:code:`display`): High-legibility digital readouts in black display wells,
   ideal for setpoints, current velocities, errors, or cycle counts.
 - **Image Displays** (:code:`image`): Real-time visual streams, camera feeds, or generated plots.
+- **Scope** (:code:`scope`): The instrument to study signals with: several channels (a vector
+  wire is one channel per component), an axis per unit, zoom and pan, cursors, a trigger, xy
+  and fft modes, CSV and PNG export. Drag to pan (this freezes it), :kbd:`Ctrl` + wheel to
+  zoom time, :kbd:`Shift` + :kbd:`Ctrl` + wheel to zoom values, :kbd:`Ctrl`-drag to zoom to a
+  box, double-click to autoscale and follow the run again. With the Scope focused:
+  :kbd:`F` freeze or follow, :kbd:`C` cursors, :kbd:`T` trigger, :kbd:`A` autoscale.
+  **+ tap** wires any output into it. Its mode, window, trigger, draw style and hidden
+  channels save with the project.
 
 Arranging the Board
 ~~~~~~~~~~~~~~~~~~~

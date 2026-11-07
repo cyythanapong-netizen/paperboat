@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
+import { TraceStore } from "./scope/trace.ts";
 import type { BlockDef, ClientMsg, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
-
-export type Series = { t: number[]; v: number[] };
 
 export type EngineState = {
   connection: "connecting" | "open" | "closed";
@@ -28,9 +27,10 @@ export type EngineState = {
   varValues: Record<string, number | boolean | string>;
   varError: { text: string; at?: string } | null;
   run: { id: string; progress: number; status: "running" | RunStatus; startedAt?: number; simTime?: number } | null;
-  signals: Record<string, Series>;
-  /** A vector monitor's history in a clock run, one series per component (a Graph's traces). */
-  traces: Record<string, Series[]>;
+  /** Every monitor's plotted history (scope/trace.ts), kept outside React state. */
+  traces: TraceStore;
+  /** Ticks when `traces` changed, at most once per animation frame: what plots re-render on. */
+  traceVersion: number;
   /** The latest value each monitor sent: what a Display or Image view shows. */
   latest: Record<string, number | string | number[]>;
   /** Component labels for a vector a monitor shows (a Display's readout, a Graph's legend). */
@@ -61,8 +61,8 @@ export const initial: EngineState = {
   varValues: {},
   varError: null,
   run: null,
-  signals: {},
-  traces: {},
+  traces: new TraceStore(),
+  traceVersion: 0,
   latest: {},
   vectorComponents: {},
   active: [],
@@ -71,10 +71,8 @@ export const initial: EngineState = {
   logs: [],
 };
 
-export type Action = ServerMsg | { type: "reset" } | { type: "connection"; value: EngineState["connection"] };
-
-/** Samples kept per plotted signal: past this, the history is thinned, not cut. */
-export const MAX_POINTS = 20000;
+export type SignalMsg = Extract<ServerMsg, { type: "signal" }>;
+export type Action = ServerMsg | { type: "signals"; list: SignalMsg[] } | { type: "reset" } | { type: "connection"; value: EngineState["connection"] };
 
 /** Max Console lines kept in memory. */
 export const MAX_LOGS = 200;
@@ -131,23 +129,11 @@ function pushLog(logs: EngineState["logs"], entry: EngineState["logs"][number]):
   return [...logs.slice(-(MAX_LOGS - 1)), entry];
 }
 
-/**
- * A series with one more sample. A long run keeps its whole history: once a series has
- * MAX_POINTS samples, every other one is dropped, so the plot still spans the run at half
- * the resolution (memory and the cost of an update stay bounded).
- */
-export function append(prev: Series | undefined, t: number, v: number): Series {
-  const series = { t: [...(prev?.t ?? []), t], v: [...(prev?.v ?? []), v] };
-  if (series.t.length <= MAX_POINTS) return series;
-  const keep = (_: number, i: number) => i % 2 === 0 || i === series.t.length - 1; // always the latest
-  return { t: series.t.filter(keep), v: series.v.filter(keep) };
-}
-
 export function reduce(s: EngineState, m: Action): EngineState {
   switch (m.type) {
     case "reset":
       // A new URL may be a different backend: drop everything the old one sent, keeping Console logs.
-      return { ...initial, logs: s.logs };
+      return { ...initial, logs: s.logs, traces: s.traces, traceVersion: s.traceVersion + 1 };
     case "connection": {
       if (m.value !== "closed") return { ...s, connection: m.value };
       if (s.connection === "open") {
@@ -193,7 +179,7 @@ export function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, entities };
     }
     case "run.started":
-      return { ...s, run: { id: m.run, progress: 0, status: "running", startedAt: Date.now(), simTime: 0 }, signals: {}, traces: {}, latest: {}, vectorComponents: {}, active: [], failed: [], progress: {} };
+      return { ...s, run: { id: m.run, progress: 0, status: "running", startedAt: Date.now(), simTime: 0 }, traceVersion: s.traceVersion + 1, latest: {}, vectorComponents: {}, active: [], failed: [], progress: {} };
     case "run.progress":
       return s.run?.id === m.run ? { ...s, run: { ...s.run, progress: m.fraction } } : s;
     case "run.finished":
@@ -206,16 +192,17 @@ export function reduce(s: EngineState, m: Action): EngineState {
     case "node.progress":
       return { ...s, progress: { ...s.progress, [m.node]: m.fraction } };
     case "signal": {
+      // Its history is in `traces` already (useEngine adds it as it arrives); here only the
+      // latest value, for readouts.
       const latest = { ...s.latest, [m.node]: m.v };
       const vectorComponents = m.components ? { ...s.vectorComponents, [m.node]: m.components } : s.vectorComponents;
       const run = s.run ? { ...s.run, simTime: Math.max(s.run.simTime ?? 0, m.t) } : s.run;
-      if (Array.isArray(m.v)) {
-        const v = m.v;
-        const prev = s.traces[m.node] ?? [];
-        return { ...s, run, latest, vectorComponents, traces: { ...s.traces, [m.node]: v.map((x, i) => append(prev[i], m.t, x)) } };
-      }
-      if (typeof m.v !== "number") return { ...s, run, latest, vectorComponents };
-      return { ...s, run, latest, vectorComponents, signals: { ...s.signals, [m.node]: append(s.signals[m.node], m.t, m.v) } };
+      return { ...s, run, latest, vectorComponents };
+    }
+    case "signals": {
+      let out = s;
+      for (const one of m.list) out = reduce(out, one);
+      return { ...out, traceVersion: s.traceVersion + 1 };
     }
     case "log":
       return { ...s, logs: pushLog(s.logs, { level: m.level, text: m.text, node: m.node }) };
@@ -233,7 +220,9 @@ const RETRY_MS = 1000;
  * goes away; on reconnect the backend resends catalog, scene and starter graph.
  */
 export function useEngine(url: string) {
-  const [state, dispatch] = useReducer(reduce, initial);
+  // Each engine has its own trace store; the reducer only carries it along.
+  const [state, dispatch] = useReducer(reduce, initial, (i) => ({ ...i, traces: new TraceStore() }));
+  const traces = state.traces;
   const socket = useRef<WebSocket | null>(null);
   // Who else hears every message as it arrives (a web station relays them to its page).
   const listeners = useRef(new Set<(m: ServerMsg) => void>());
@@ -242,6 +231,16 @@ export function useEngine(url: string) {
     // Sockets from an earlier URL can still fire events after cleanup; `stopped` mutes them.
     let stopped = false;
     let retry: number | undefined;
+    let pending: SignalMsg[] = [];
+    let frame: number | undefined;
+    const flush = () => {
+      if (frame !== undefined) cancelAnimationFrame(frame);
+      frame = undefined;
+      if (!pending.length) return;
+      const list = pending;
+      pending = [];
+      dispatch({ type: "signals", list });
+    };
     const connect = () => {
       const ws = new WebSocket(url);
       socket.current = ws;
@@ -251,7 +250,16 @@ export function useEngine(url: string) {
         if (stopped) return;
         try {
           const msg = JSON.parse(e.data) as ServerMsg;
-          dispatch(msg);
+          if (msg.type === "signal") {
+            // Plots read the store; React hears of a frame's samples once (#37).
+            traces.add(msg);
+            pending.push(msg);
+            frame ??= requestAnimationFrame(flush);
+          } else {
+            flush();
+            if (msg.type === "run.started") traces.clear();
+            dispatch(msg);
+          }
           for (const listen of listeners.current) listen(msg);
         } catch (err) {
           dispatch({ type: "log", level: "error", text: `bad message from backend: ${err instanceof Error ? err.message : String(err)}` });
@@ -267,10 +275,11 @@ export function useEngine(url: string) {
     connect();
     return () => {
       stopped = true;
+      if (frame !== undefined) cancelAnimationFrame(frame);
       window.clearTimeout(retry);
       socket.current?.close();
     };
-  }, [url]);
+  }, [url, traces]);
 
   const send = useCallback((m: ClientMsg) => {
     if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify(m));

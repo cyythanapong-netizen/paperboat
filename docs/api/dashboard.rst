@@ -6,7 +6,7 @@ Instruments
 
 A **monitor** block (kind ``monitor``) shows a value on the Dashboard; its definition's
 ``instrument`` says how: ``graph`` (a plot over time, or over list index in a run-once),
-``display`` (the latest number or text) or ``image`` (a picture). The engine samples each
+``display`` (the latest number or text), ``image`` (a picture) or ``scope`` (see below). The engine samples each
 monitor once per pass and sends ``signal`` messages (``v`` is a number, or text for a
 display or an image's data URL). A monitor that must turn its input into something showable
 returns it as output ``value`` (``opencv/view`` turns an image into a data URL); otherwise its
@@ -14,6 +14,35 @@ input ``in`` is shown.
 
 Define one in C++ with ``kind = Kind::Monitor`` and ``instrument``, or in Python by
 subclassing :py:class:`paperboat.Monitor`.
+
+Graph and Scope
+~~~~~~~~~~~~~~~
+
+``graph`` is the glance: one signal's shape and its latest number. A vector into it is one
+trace per component in a clock run (by index in a run-once).
+
+``scope`` (``dashboard/scope``, #37) is the instrument to study signals with. It has several
+inputs (``a``, ``b``… set by its ``inputs`` param, 2 to 26); the engine sends one ``signal``
+per wired input with ``port`` naming it, and a vector stays one sample with its
+``components``, so **one vector wire (a Mux's output, a state) is one channel per
+component**. The legend names each channel by the output wired in (``plant.θ``), with its
+unit; each unit gets a y axis. It has three modes (``time``, ``xy``: the first channel
+against the others, ``fft``: dB magnitude of the visible window, Hann, with each channel's
+peak frequency), two cursors with Δt, 1/Δt and a Δ per channel, an edge trigger (source,
+level, position in the window, auto or single), log y, four draw styles, and CSV/PNG export.
+``+ tap`` wires any output in (to the next free input, adding one), as one undo step.
+
+How a Scope draws is the Board layout's, not a block param, so it changes during a run and
+saves with the project: an instrument's ``scope`` table (``mode``, ``window`` in seconds,
+``ylog``, ``hidden`` channel ids, ``draw``, ``trigger`` = ``{ edge, source, level, position,
+single }``). A backend may ship one:
+
+.. code-block:: toml
+
+   [dashboard]
+   instruments = [
+     { block = "scope1", size = "xlarge", scope = { window = 2, trigger = { source = "a", level = 0 } } },
+   ]
 
 Layout
 ------

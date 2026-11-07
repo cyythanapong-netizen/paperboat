@@ -92,6 +92,13 @@ void add_instruments(Registry& registry) {
   registry.add(monitor("graph", "Graph", "graph", "Plots its input over time on the Dashboard."));
   registry.add(monitor("display", "Display", "display", "Shows its latest value on the Dashboard."));
   registry.add(switch_template());
+  // A Scope (#37): several inputs (a, b… by its `inputs` count), each a channel; a vector
+  // input is one channel per component. How it draws is the Board layout's, not params.
+  auto scope = monitor("scope", "Scope", "scope", "Plots several signals over time to study: axes, zoom, cursors, triggers.");
+  scope.def.inputs = {{"a", "any"}, {"b", "any"}};
+  scope.def.params = {{.id = "inputs", .default_value = 2.0}};
+  scope.def.ports_from = "inputs";
+  registry.add(std::move(scope));
 }
 
 }  // namespace paperboat::toolkit::dashboard

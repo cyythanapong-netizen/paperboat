@@ -80,7 +80,7 @@ Backend → UI
 ``scene.patch``    ``entities`` (changed fields). During a run
 ``run.started``    ``run``
 ``run.progress``   ``run``, ``fraction`` (0–1)
-``signal``         ``node``, ``t``, ``v`` (number, or text). A monitor's sample
+``signal``         ``node``, ``t``, ``v`` (number, text or vector), ``components?``, ``port?`` (a Scope's input). A monitor's sample
 ``node.state``     ``node``, ``state``: ``running``, ``done``, ``failed``
 ``log``            ``level``, ``text``, ``node?``
 ``run.finished``   ``run``, ``status``: ``done``, ``failed``, ``cancelled``

@@ -983,3 +983,45 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .var-control .var-value { width: 6ch; }
 .var-control select.var-value { width: auto; }
 .dock .var-controls-group { display: contents; }
+
+/* ---- Scope (#37): the screen shows, the grey caption controls ---- */
+.instrument.scope { outline: none; }
+.instrument.scope:focus-visible .screen { box-shadow: 0 0 0 2px var(--line-ink); }
+.instrument.scope .screen { display: flex; flex-direction: column; padding: 6px 4px 2px; overflow: hidden; }
+.scope-legend { display: flex; flex-wrap: wrap; gap: 2px 14px; padding: 0 8px 2px 44px; font: var(--size-2xs) var(--font-mono); color: var(--text-on-screen); }
+.instrument.scope.small .scope-legend { flex-wrap: nowrap; overflow: hidden; padding-left: 36px; }
+.scope-entry { all: unset; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; color: var(--text-on-screen); }
+.scope-entry b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.scope-entry i { font-style: normal; color: var(--text-on-screen-muted); }
+.scope-entry.off { opacity: 0.4; text-decoration: line-through; }
+.scope-entry:focus-visible { outline: 1px solid var(--text-on-screen); }
+.scope-plot { flex: 1; min-height: 0; position: relative; touch-action: none; cursor: grab; }
+.scope-plot:active { cursor: grabbing; }
+.scope-plot .uplot, .scope-plot .u-wrap { position: absolute; inset: 0; }
+.scope-plot .u-select { background: rgb(255 255 255 / 0.08); box-shadow: inset 0 0 0 1px var(--text-on-screen-muted); }
+.scope-placeholder { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--space-3); text-align: center; font: var(--size-2xs) var(--font-mono); color: var(--text-on-screen-muted); border: 1px dashed var(--text-on-screen-muted); border-radius: var(--radius-md); margin: var(--space-2); }
+.scope-readout { display: flex; flex-wrap: wrap; gap: 2px 18px; padding: 4px 10px; border-top: 1px solid rgb(255 255 255 / 0.12); font: var(--size-2xs) var(--font-mono); color: var(--text-on-screen); font-variant-numeric: tabular-nums; }
+.instrument.scope figcaption { position: relative; align-items: center; justify-content: flex-start; }
+.scope-status { font-family: var(--font-mono); color: var(--text); }
+.scope-status.live, .scope-status.armed, .scope-status.triggered { color: var(--signal); }
+.scope-status.idle { color: var(--text-muted); }
+.scope-keys { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.scope-modes { display: inline-flex; gap: 2px; margin-right: 8px; }
+.scope-modes button { all: unset; cursor: pointer; padding: 0 4px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: pre; }
+.scope-modes button.on { color: var(--text); font-weight: 600; }
+.scope-modes button:focus-visible { outline: 1px solid var(--line-ink); }
+.scope-pop { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; min-width: 220px; max-width: 320px; display: flex; flex-direction: column; gap: 6px; padding: var(--space-2); background: var(--surface-float); backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); color: var(--text); font: var(--size-2xs) var(--font-sans); }
+.scope-pop hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 2px 0; }
+.scope-pop .opt { all: unset; cursor: pointer; padding: 2px 4px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: pre; }
+.scope-pop .opt.on { color: var(--text); font-weight: 600; }
+.scope-pop .opt:hover:not(:disabled) { color: var(--text); }
+.scope-pop .opt:disabled { opacity: 0.4; cursor: default; }
+.scope-pop .opt i { font-style: normal; color: var(--text-muted); }
+.scope-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.scope-row input.well, .scope-row select.well, .scope-pop > input.well { height: 24px; padding: 0 6px; border: 0; font: var(--size-2xs) var(--font-mono); min-width: 0; flex: 1; }
+.scope-taps { display: flex; flex-direction: column; max-height: 220px; overflow: auto; }
+.scope-unit { position: absolute; font: 10px var(--font-mono); color: var(--text-on-screen-muted); pointer-events: none; }
+.scope-unit.y { left: 10px; top: 24px; }
+.scope-unit.y2 { right: 8px; top: 24px; }
+.scope-unit.x { right: 5px; bottom: 6px; }
+.instrument.scope .with-readout .scope-unit.x { bottom: 30px; }

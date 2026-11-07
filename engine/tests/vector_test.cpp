@@ -2,6 +2,7 @@
 // the lane count resolved from the wires, a Graph's traces, a vector into a linked block.
 
 #include <fstream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -244,4 +245,25 @@ TEST_CASE("dynamic ports: the engine and the UI agree on the shared fixture") {
     CHECK(ins == c["inputs"].get<std::vector<std::string>>());
     CHECK(outs == c["outputs"].get<std::vector<std::string>>());
   }
+}
+
+TEST_CASE("a Scope sends one sample per wired input, tagged with it; a vector stays whole") {
+  const json g = {{"nodes", {node("one", "constant", {{"value", 1}}), node("m", "mux", {{"names", "p q"}}),
+                             node("sc", "scope", {{"inputs", 3}})}},
+                  {"edges", {wire("one", "y", "sc", "a"), wire("m", "y", "sc", "c")}}};
+  for (const auto mode : {core::RunSettings::Mode::Once, core::RunSettings::Mode::Clock}) {
+    Out out;
+    REQUIRE(run(g, out, mode, 0.05) == "done");
+    std::map<std::string, json> by_port;
+    for (const auto& m : out.messages)
+      if (m["type"] == "signal" && m["node"] == "sc") by_port[m.at("port").get<std::string>()] = m;
+    REQUIRE(by_port.size() == 2);  // b is unwired: nothing
+    CHECK(by_port["a"]["v"] == 1.0);
+    CHECK(by_port["c"]["v"].is_array());
+    CHECK(by_port["c"]["components"][1]["id"] == "q");
+  }
+  // A backend's default layout may carry its settings; a typo is refused.
+  CHECK_NOTHROW(tk::load_descriptor("import = [\"dashboard\"]\n[dashboard]\ninstruments = [{ block = \"sc\", scope = { mode = \"xy\", window = 2 } }]\n"));
+  CHECK_THROWS_WITH(tk::load_descriptor("import = [\"dashboard\"]\n[dashboard]\ninstruments = [{ block = \"sc\", scope = { modes = \"xy\" } }]\n"),
+                    ContainsSubstring("modes"));
 }

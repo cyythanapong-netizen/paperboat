@@ -189,6 +189,30 @@ export type GraphEdge = {
   to: [string, string];
 };
 
+/** How a Scope instrument draws (#37): presentation, kept in the Board layout (it changes during a run without a graph edit and saves with the project). Zoom, cursors and freeze are not saved. Every key is optional. */
+export type ScopeSettings = {
+  /** time: channels over time (default); xy: the first channel on x, the others on y; fft: dB magnitude of the visible window. */
+  mode?: "time" | "xy" | "fft";
+  /** Seconds of time shown while following the run. Absent: the whole run. */
+  window?: number;
+  /** A log y axis (time mode). */
+  ylog?: boolean;
+  /** Channels not drawn, by id (an input, or input.component for a vector). */
+  hidden?: string[];
+  /** line: straight lines between samples (default); line+points: also a ring on each sample; points: samples only; smooth: a monotone cubic that never overshoots. */
+  draw?: "line" | "line+points" | "points" | "smooth";
+  trigger?: {
+    edge?: "rising" | "falling";
+    /** The channel it watches. */
+    source: string;
+    level: number;
+    /** Where the trigger point sits, % of the window. Absent: 10. */
+    position?: number;
+    /** Freeze on the first trigger (single); absent: keep re-triggering (auto). */
+    single?: boolean;
+  };
+};
+
 /** The Dashboard's grid: where each monitor block's instrument sits and how big it is, plus decorations (sections, separators, labels) and tabs. A backend ships one as its default (the descriptor's [dashboard]); an instrument not listed falls in where the automatic order puts it, and a block that does not exist is ignored. Decorations and tabs belong to the layout, not the flow: the Flow canvas still decides which instruments exist. */
 export type DashboardLayout = {
   /** Grid columns; the UI fits fewer on a narrow screen. */
@@ -202,6 +226,7 @@ export type DashboardLayout = {
     at?: [number, number];
     /** The tab it is on (one of `tabs`); absent: the first. */
     tab?: string;
+    scope?: ScopeSettings;
   })[];
   /** Pages of the Dashboard, each with its own grid. A tab strip shows when there are two or more. Absent: one page. */
   tabs?: string[];
@@ -428,6 +453,8 @@ export type ServerMsg =
     v: number | string | number[];
     /** Labels and units for a vector sample, in vector order. */
     components?: VectorComponent[];
+    /** The monitor's input this sample came in by, for one with several (a Scope's a, b…). Absent: in. */
+    port?: string;
   }
   | {
     type: "node.state";

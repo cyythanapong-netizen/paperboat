@@ -32,7 +32,7 @@ Package Quick Reference
      - ``pid``, ``rate_limiter``, ``deadband``, ``hysteresis``, ``lowpass``, ``integrator``
      - Dynamic feedback controllers, signal filters, and rate-of-change limiters.
    * - :ref:`pkg-dashboard`
-     - ``graph``, ``display``, ``image``
+     - ``graph``, ``display``, ``scope``, ``image``
      - Telemetry instruments piping signals to real-time oscilloscopes, digital readouts, and visual frames.
    * - :ref:`pkg-step`
      - ``start``, ``when``, ``wait``, ``if``, ``repeat``, ``while``, ``say``, ``join``, ``stop``
@@ -215,7 +215,9 @@ dashboard
 ---------
 
 Monitors: ``graph`` (plots ``in`` over time; a vector in a clock run as one trace per
-component, in a run-once by index) and ``display`` (its latest number, text or vector).
+component, in a run-once by index), ``display`` (its latest number, text or vector) and
+``scope`` (inputs ``a``, ``b``… by its ``inputs`` param, 2–26, each a channel, a vector one per
+component; see :doc:`dashboard`).
 Control: ``switch`` (output ``y``, 0 or 1), a Board switch the user flips during a run. Param
 ``mode`` is ``toggle`` (a click flips it) or ``momentary`` (on while held); ``initial`` is its
 state at the start of a run; ``key`` also binds a keyboard key. A Monitor that declares outputs,

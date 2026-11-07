@@ -261,7 +261,7 @@ void load_dashboard(const json& doc, Catalog& catalog) {
   for (std::size_t i = 0; i < list.size(); ++i) {
     const auto& e = list[i];
     const auto at = "dashboard.instruments[" + std::to_string(i) + "]";
-    only_fields(e, {"block", "size", "at", "tab"}, at);
+    only_fields(e, {"block", "size", "at", "tab", "scope"}, at);
     if (!e.contains("block") || !e["block"].is_string()) throw DescriptorError(at + ": needs \"block\", a monitor block's id");
     if (!seen.insert(e["block"].get<std::string>()).second)
       throw DescriptorError(at + ": block \"" + e["block"].get<std::string>() + "\" is placed twice");
@@ -278,6 +278,11 @@ void load_dashboard(const json& doc, Catalog& catalog) {
     }
     check_tab(e, at);
     if (e.contains("tab")) item["tab"] = e["tab"];
+    if (e.contains("scope")) {  // a Scope's settings (#37): the UI's to read; only its shape is checked here
+      if (!e["scope"].is_object()) throw DescriptorError(at + ": scope must be a table of settings (mode, window, trigger…)");
+      only_fields(e["scope"], {"mode", "window", "ylog", "hidden", "draw", "trigger"}, at + ".scope");
+      item["scope"] = e["scope"];
+    }
     instruments.push_back(std::move(item));
   }
   out["instruments"] = std::move(instruments);
