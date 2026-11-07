@@ -651,6 +651,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .selection-dialog { display: flex; align-items: center; gap: var(--space-1); padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: 0 8px 22px rgb(0 0 0 / 0.16); white-space: nowrap; }
 .selection-dialog > .lbl:first-child { margin-right: var(--space-2); font-family: var(--font-mono); }
 .selection-dialog .kept { margin: 0 var(--space-2); }
+.expose-menu { position: relative; }
+.expose-menu > summary { list-style: none; cursor: pointer; }
+.expose-menu > summary::-webkit-details-marker { display: none; }
+.expose-list { position: absolute; top: 100%; right: 0; margin-top: var(--space-1); min-width: 150px; max-height: 240px; overflow: auto; padding: var(--space-2); background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: var(--space-1); font-family: var(--font-mono); font-size: 12px; z-index: 5; }
+.expose-row { display: flex; align-items: center; gap: var(--space-2); cursor: pointer; }
 .react-flow__selection { background: transparent; border: 1px dashed var(--line-ink); }
 .react-flow__nodesselection-rect { background: transparent; border: none; }
 .key.add { font-weight: 600; border-color: var(--line-ink); }

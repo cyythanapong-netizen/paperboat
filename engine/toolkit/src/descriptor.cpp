@@ -395,7 +395,7 @@ void load_starters(const json& doc, Catalog& catalog) {
   for (std::size_t i = 0; i < groups.size(); ++i) {
     const auto& g = groups[i];
     const auto at = "graph.groups[" + std::to_string(i) + "]";
-    only_fields(g, {"id", "kind", "label", "nodes", "parent", "collapsed", "pos", "params", "ports", "release"}, at);
+    only_fields(g, {"id", "kind", "label", "nodes", "parent", "collapsed", "pos", "params", "ports", "release", "expose"}, at);
     if (g.contains("ports")) only_fields(g["ports"], {"left", "right", "top", "bottom"}, at + ".ports");
     if (!g.contains("id") || !g.contains("nodes")) throw DescriptorError(at + ": needs an id and nodes");
     const auto kind = g.value("kind", std::string{"visual"});
@@ -403,6 +403,17 @@ void load_starters(const json& doc, Catalog& catalog) {
     if (!ids.insert(g["id"].get<std::string>()).second) throw DescriptorError(at + ": duplicate id");
     for (const auto& n : g["nodes"])
       if (!ids.contains(n.get<std::string>())) throw DescriptorError(at + ": no node \"" + n.get<std::string>() + "\"");
+    // Ports the group shows as a block even with no wire: { side: "in" | "out", to: [node, port] }.
+    for (const auto& x : g.value("expose", json::array())) {
+      if (kind == "visual") throw DescriptorError(at + ": only a subsystem or story exposes ports");
+      only_fields(x, {"side", "to"}, at + ".expose");
+      const auto side = x.value("side", std::string{});
+      if (side != "in" && side != "out") throw DescriptorError(at + ".expose: side must be in or out");
+      if (!x.contains("to") || !x["to"].is_array() || x["to"].size() != 2 || !x["to"][0].is_string() || !x["to"][1].is_string())
+        throw DescriptorError(at + ".expose: to is [node, port]");
+      if (!ids.contains(x["to"][0].get<std::string>()))
+        throw DescriptorError(at + ".expose: no node \"" + x["to"][0].get<std::string>() + "\"");
+    }
     // A story's outputs that drop when it ends: [node, port], each a block of the story.
     for (const auto& r : g.value("release", json::array())) {
       if (kind != "story") throw DescriptorError(at + ": only a story releases outputs");

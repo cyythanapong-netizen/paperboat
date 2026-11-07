@@ -55,6 +55,7 @@ import {
   STORY_DEF,
   toGroups,
   withoutFrame,
+  type Expose,
   type GroupData,
   type GroupNode,
 } from "./groups";
@@ -480,6 +481,7 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
       release: g.release,
       pos: g.pos,
       sides: g.ports,
+      expose: g.expose?.map((x) => ({ side: x.side, to: [x.to[0], x.to[1]] as [string, string] })),
     });
     if (g.kind === "story") byId.set(g.id, STORY_DEF);
     const moved = new Map(children.map((c) => [c.id, c]));
@@ -901,6 +903,9 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   const pickedNodes = shown.nodes.filter((n) => n.selected && !n.hidden);
   const pickedWires = shown.edges.filter((w) => w.selected);
   const pickedFrames = pickedNodes.filter(isFrame);
+  // One block picked inside an open subsystem or story: its ports can be exposed on the group.
+  const levelGroup = level ? nodes.find((n): n is GroupNode => n.id === level && isFrame(n)) : undefined;
+  const pickedBlock = pickedNodes.length === 1 && isBlock(pickedNodes[0]) ? pickedNodes[0] : undefined;
   const kept = pickedNodes.filter((n) => isBlock(n) && n.data.def.linked).length; // linked blocks aren't deleted
   const many = pickedNodes.length > 0; // a block or group, with or without wires (wires alone have ×)
   // The dialog floats above the selection, or below it when the selection is at the top of
@@ -1254,6 +1259,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
             >
               Ungroup
             </button>
+            {levelGroup && pickedBlock && <ExposeMenu block={pickedBlock} group={levelGroup} set={(expose) => actions.update(levelGroup.id, { expose })} />}
             {kept > 0 && (
               <span className="lbl kept" title="Linked blocks come from the backend's own graph">
                 {kept} linked {kept === 1 ? "block stays" : "blocks stay"}
@@ -1360,3 +1366,32 @@ function CanvasHelp() {
 }
 
 const hasStepPorts = (def: BlockDef) => [...def.inputs, ...def.outputs].some((p) => p.type === "step");
+
+/**
+ * A block's ports as checkboxes: a ticked one is a port of the open group (shown on its block
+ * from outside) even with no wire yet. Ports with a wire across the group's edge show anyway.
+ */
+function ExposeMenu({ block, group, set }: { block: BlockNode; group: GroupNode; set: (expose: Expose[]) => void }) {
+  const def = portsOf(block);
+  const list = group.data.expose ?? [];
+  const is = (side: Expose["side"], port: string) => list.some((x) => x.side === side && x.to[0] === block.id && x.to[1] === port);
+  const toggle = (side: Expose["side"], port: string) =>
+    set(is(side, port) ? list.filter((x) => !(x.side === side && x.to[0] === block.id && x.to[1] === port)) : [...list, { side, to: [block.id, port] }]);
+  const rows = [...def.inputs.map((p) => ({ side: "in" as const, id: p.id })), ...def.outputs.map((p) => ({ side: "out" as const, id: p.id }))];
+  if (rows.length === 0) return null;
+  return (
+    <details className="expose-menu">
+      <summary className="key small" title="Show a port of this block on the group, even with no wire yet">
+        Expose port
+      </summary>
+      <div className="expose-list">
+        {rows.map((r) => (
+          <label key={`${r.side}:${r.id}`} className="expose-row">
+            <input type="checkbox" checked={is(r.side, r.id)} onChange={() => toggle(r.side, r.id)} />
+            <span className="lbl">{r.side === "in" ? "in" : "out"}</span> {r.id}
+          </label>
+        ))}
+      </div>
+    </details>
+  );
+}
