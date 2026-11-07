@@ -346,7 +346,7 @@ function Hud({columns, frame, now}: {columns: number; frame: number; now: number
                 <Text dimColor>{`:${e.port}   `}</Text>
               </Text>
             ))}
-            {!services.length && !S.external.length && <Text color="gray">no backends running</Text>}
+            {!services.length && !S.external.length && <Text color="gray">nothing running</Text>}
           </Text>
         </Box>
         <Box flexShrink={0}>

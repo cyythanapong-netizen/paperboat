@@ -1,0 +1,151 @@
+# Release packages: .deb and .tar.gz (Linux), npm packages (@paperboat/cli + one per platform), a GitHub release.
+# A tag v<version> publishes; pull requests and manual runs only build and check the packages.
+# The version is engine/CMakeLists.txt's project(paperboat VERSION ...); the tag must match it.
+# Publishing to npm needs the NPM_TOKEN secret (an automation token for the @paperboat scope); without it
+# the release is made and npm is skipped.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "npm/**"
+      - "scripts/build_release.sh"
+      - "scripts/pack_npm.py"
+      - "engine/CMakeLists.txt"
+      - "engine/core/**"
+      - "engine/toolkit/**"
+      - "engine/tools/**"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (.deb, .tar.gz, npm)
+    runs-on: ubuntu-22.04  # glibc 2.35: the binary runs on Debian 12, Ubuntu 22.04+, Fedora, ...
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Version
+        id: version
+        run: |
+          v=$(sed -nE 's/^project\(paperboat VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' engine/CMakeLists.txt)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "v$v" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match the CMake version $v"; exit 1
+          fi
+      - run: sudo apt-get update && sudo apt-get install -y g++-12 ninja-build dpkg-dev file
+      - name: Build, test, package (.deb, .tar.gz)
+        run: CC=gcc-12 CXX=g++-12 scripts/build_release.sh dist
+      - name: npm packages
+        run: |
+          v=${{ steps.version.outputs.version }}
+          python3 scripts/pack_npm.py --version "$v" --out dist/npm --target linux-x64 --binary engine/build/tools/paperboat
+          python3 scripts/pack_npm.py --version "$v" --out dist/npm --main
+      - name: The .deb installs on a clean Debian 12 and runs
+        run: |
+          docker run --rm -v "$PWD/dist:/dist:ro" debian:bookworm sh -c '
+            apt-get update -qq && apt-get install -y -qq /dist/*.deb >/dev/null &&
+            paperboat --version && paperboat pkg list && paperboat commands | grep -q squero'
+      - name: The npm packages install on a clean Node and run
+        run: |
+          prefix=$(mktemp -d)
+          npm install -g --prefix "$prefix" dist/npm/paperboat-cli-linux-x64-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz
+          "$prefix/bin/paperboat" --version
+          "$prefix/bin/paperboat" pkg list
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/
+
+  windows:
+    name: Windows (.zip, npm)
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Version
+        id: version
+        run: |
+          v=$(sed -nE 's/^project\(paperboat VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' engine/CMakeLists.txt)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      # The CLI, the core and the toolkit; engine/modelica (omc) is POSIX-only for now (pb#178), and of the
+      # tests only the process layer's run here (engine/tests/process_test.cpp).
+      - name: Build
+        run: |
+          cmake -S engine -B engine/build -G "Visual Studio 17 2022" -A x64 \
+            -DPAPERBOAT_STATIC_RUNTIME=ON -DPAPERBOAT_BUILD_TESTS=ON -DPAPERBOAT_BUILD_MODELICA=OFF
+          cmake --build engine/build --config Release --parallel
+      - name: The process layer works (CreateProcess, pipes, job objects, kill)
+        run: ctest --test-dir engine/build -C Release --output-on-failure
+      - name: The binary runs
+        run: |
+          exe=engine/build/tools/Release/paperboat.exe
+          "$exe" --version
+          "$exe" commands | grep -q pkg
+          "$exe" pkg versions squero-studio-om || true   # git over the pipe layer
+          "$exe" < /dev/null                              # the prompt: its banner runs git through the process layer
+      - name: Package (.zip, npm)
+        run: |
+          v=${{ steps.version.outputs.version }}
+          (cd engine/build && cpack -G ZIP -C Release -B "$GITHUB_WORKSPACE/dist")
+          python scripts/pack_npm.py --version "$v" --out dist/npm --target win32-x64 --binary engine/build/tools/Release/paperboat.exe
+          python scripts/pack_npm.py --version "$v" --out dist/npm --main
+      - name: The npm packages install and run through the launcher
+        run: |
+          prefix=$(mktemp -d)
+          npm install -g --prefix "$prefix" dist/npm/paperboat-cli-win32-x64-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz
+          node "$prefix/node_modules/@paperboat/cli/bin/paperboat.js" --version
+          node "$prefix/node_modules/@paperboat/cli/bin/paperboat.js" pkg list
+          rm dist/npm/paperboat-cli-[0-9]*.tgz   # the launcher is published from the Linux job
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/
+
+  publish:
+    name: Publish (tags only)
+    needs: [linux, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      id-token: write  # npm provenance
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes \
+            dist/*.deb dist/*.tar.gz dist/*.zip dist/npm/*.tgz
+      - name: npm (platform packages first, the launcher last)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::notice::NPM_TOKEN is not set; skipping npm"; exit 0; fi
+          for f in dist/npm/paperboat-cli-*-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz; do
+            npm publish "$f" --access public --provenance
+          done

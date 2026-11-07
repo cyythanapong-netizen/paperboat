@@ -46,13 +46,15 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/openmodelica-keyring.gpg] https://build.openmodelica.org/apt $(lsb_release -cs) stable" | \
             sudo tee /etc/apt/sources.list.d/openmodelica.list
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends openmodelica omlib-modelica-4.0.0 omc
+          sudo apt-get install -y --no-install-recommends openmodelica omc
           omc --version
 
       - name: Preload Modelica Standard Library
         if: steps.cache-msl.outputs.cache-hit != 'true'
         run: |
-          omc -e 'loadModel(Modelica); getErrorString();'
+          # OpenModelica 1.27 has no apt package for the library; its package manager installs it (the goldens are 4.1.0).
+          printf 'installPackage(Modelica, "4.1.0+maint.om", exactMatch=true);\nloadModel(Modelica);\ngetErrorString();\n' > preload.mos
+          omc preload.mos
 
       - name: Configure
         run: cmake -S engine -B engine/build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPAPERBOAT_BUILD_TESTS=ON -DPAPERBOAT_BUILD_MODELICA=ON
@@ -63,10 +65,8 @@ jobs:
       - name: Test bridge and squero/0
         run: engine/build/tests/paperboat_tests '[modelica],[squero]'
 
-      - name: Run dc-drive golden
-        run: |
-          if [ -d "examples/dc-drive-cpp" ]; then
-            python3 protocol/golden.py examples/dc-drive-cpp
-          else
-            echo "examples/dc-drive-cpp not present yet (pending Lane A); skipping golden"
-          fi
+      - name: Python modules for the smoke stage
+        run: pip install websockets jsonschema
+
+      - name: The generated dc-drive backend builds and passes check (manifest, catalog, smoke, golden)
+        run: engine/build/tools/paperboat check examples/dc-drive-cpp

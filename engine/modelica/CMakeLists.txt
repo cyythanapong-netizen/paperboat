@@ -4,7 +4,7 @@
 # engine/core and engine/toolkit never depend on it.
 
 find_program(PAPERBOAT_OMC omc)
-if(NOT PAPERBOAT_OMC)
+if(NOT PAPERBOAT_OMC AND NOT PAPERBOAT_MODELICA_WITHOUT_OMC)
   message(NOTICE "paperboat: omc (OpenModelica) not found; skipping engine/modelica")
   return()
 endif()

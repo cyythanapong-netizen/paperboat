@@ -10,6 +10,8 @@ set(PAPERBOAT_TOOLKIT_CORE_SOURCES
   src/variables.cpp
   src/installer.cpp
   src/apps.cpp
+  src/platform.cpp
+  src/update.cpp
   # For domain code: solvers, Model (a station object of ODEs), scene builders.
   src/solve.cpp
   src/model.cpp

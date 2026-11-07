@@ -96,6 +96,18 @@ export interface External {
   name: string;
   port: number;
   pid: number;
+  /** A backend, or an app (the web app, squero-studio-om). */
+  kind: 'backend' | 'app';
+}
+
+/** An app from apps.toml (`pkg list --json`): a program can be started, a library only builds. */
+export interface Program {
+  name: string;
+  kind: 'program' | 'library';
+  launch: string;
+  port: number;
+  installed: boolean;
+  description: string;
 }
 
 export interface Backend {
@@ -136,6 +148,7 @@ export const S = {
   tasks: [] as Task[],
   external: [] as External[],
   backends: [] as Backend[],
+  programs: [] as Program[],
   toolkits: [] as Toolkit[],
   commands: OWN as CommandSpec[],
   picker: {query: '', i: 0},
@@ -214,7 +227,10 @@ export function sources(): Sources {
     commands: S.commands,
     listDir,
     args: {
-      backend: S.backends.map(x => ({value: x.name, detail: `${x.language} · :${x.port} · ${x.description}`})),
+      backend: [
+        ...S.backends.map(x => ({value: x.name, detail: `backend · ${x.language} · :${x.port} · ${x.description}`})),
+        ...S.programs.filter(p => p.kind === 'program').map(p => ({value: p.name, detail: `program · :${p.port} · ${p.description}`})),
+      ],
       toolkit: S.toolkits.map(x => ({value: x.name, detail: x.builtin ? 'built-in' : x.installed ? 'installed' : 'available'})),
       target: [
         ...liveServices.map(j => ({value: j.name, detail: `job ${j.id} · :${j.port}`})),
@@ -269,11 +285,23 @@ interface Running {
   port: number;
   pid: number;
   domain: string;
+  kind?: 'backend' | 'app';
+  name?: string;
 }
 
 export async function refreshBackends(): Promise<void> {
   S.backends = (await pb.json<Backend[]>(['backends', '--json'])) ?? S.backends;
   changed();
+}
+
+export async function refreshPrograms(): Promise<void> {
+  S.programs = (await pb.json<Program[]>(['pkg', 'list', '--json'])) ?? S.programs;
+  changed();
+}
+
+/** squero-studio-om, or its command (squero): something `start` runs that is not a backend. */
+export function programNamed(target: string): Program | undefined {
+  return S.programs.find(p => p.kind === 'program' && (p.name === target || (p.launch !== '' && p.launch === target)));
 }
 
 export async function refreshToolkits(): Promise<void> {
@@ -285,16 +313,17 @@ async function poll(): Promise<void> {
   const list = await pb.json<Running[]>(['list', '--json']);
   if (list) {
     for (const job of S.jobs) {
-      if (job.kind !== 'backend' || job.state !== 'building') continue;
+      if (job.kind === 'build' || job.state !== 'building') continue;
       const rec = job.port ? list.find(r => r.port === job.port && r.pid !== job.stale) : undefined;
       if (rec) ready(job, rec.pid);
     }
     S.external = list
       .filter(r => !S.jobs.some(j => alive(j) && j.port === r.port))
       .map(r => ({
-        name: r.domain && r.domain !== 'unknown' ? r.domain : (S.backends.find(x => x.port === r.port)?.name ?? `:${r.port}`),
+        name: r.kind === 'app' && r.name ? r.name : r.domain && r.domain !== 'unknown' ? r.domain : (S.backends.find(x => x.port === r.port)?.name ?? `:${r.port}`),
         port: r.port,
         pid: r.pid,
+        kind: r.kind ?? 'backend',
       }));
     changed();
   }
@@ -324,7 +353,7 @@ export async function init(): Promise<void> {
   ]);
   S.git = branch && hash ? `${branch} @ ${hash}` : hash;
   S.version = ver.out[0]?.replace(/^paperboat\s+/, '') ?? '';
-  await Promise.all([refreshBackends(), refreshToolkits()]);
+  await Promise.all([refreshBackends(), refreshToolkits(), refreshPrograms()]);
 }
 
 /* ---------- banner ---------- */
@@ -711,16 +740,16 @@ function table(header: string, rows: Out[]): void {
 function ps(): void {
   const live = S.jobs.filter(j => alive(j) && j.kind !== 'build');
   if (!live.length && !S.external.length) {
-    say([mu('nothing running · run <backend> starts one')]);
+    say([mu('nothing running · start runs the web app, start <backend|program> the rest')]);
     return;
   }
-  table(`  ${'STATE'.padEnd(12)}${'NAME'.padEnd(20)}${'PORT'.padEnd(7)}${'PID'.padEnd(9)}FROM`, [
+  table(`  ${'STATE'.padEnd(12)}${'KIND'.padEnd(9)}${'NAME'.padEnd(20)}${'PORT'.padEnd(7)}${'PID'.padEnd(9)}FROM`, [
     ...live.map(j => [
-      s('  '), j.state === 'running' ? sg('● running   ') : sg('◌ building  '),
+      s('  '), j.state === 'running' ? sg('● running   ') : sg('◌ building  '), mu((j.kind === 'backend' ? 'backend' : 'app').padEnd(9)),
       s(j.name.padEnd(20)), s(String(j.port).padEnd(7)), s(String(j.pid).padEnd(9)), mu('console'),
     ]),
     ...S.external.map(e => [
-      s('  '), mu('● running   '), s(e.name.padEnd(20)), s(String(e.port).padEnd(7)), s(String(e.pid).padEnd(9)), mu('outside'),
+      s('  '), mu('● running   '), mu(e.kind.padEnd(9)), s(e.name.padEnd(20)), s(String(e.port).padEnd(7)), s(String(e.pid).padEnd(9)), mu('outside'),
     ]),
   ]);
 }
@@ -738,6 +767,26 @@ export async function exitNow(): Promise<void> {
   await Promise.all(live.map(j => stopJob(j, true)));
   S.quit = true;
   changed();
+}
+
+/** The web app: `start`, `stop` and `restart` without a target, and `app <verb>`. */
+function appCommand(verb: string, rest: string[]): void {
+  const web = S.jobs.find(j => j.kind === 'web' && j.name === 'web' && alive(j));
+  const port = Number(flag(rest, '--port')) || 3047;
+  if (verb === 'start') {
+    if (web) return void say([mu(`web is already running on :${web.port} · restart restarts it`)]);
+    startJob('web', 'web', ['app', 'start', ...rest], port);
+  } else if (verb === 'stop') {
+    if (web) void stopJob(web);
+    else void plain(['app', 'stop', ...rest]);
+  } else if (verb === 'restart') {
+    if (web) void restartJob(web);
+    else startJob('web', 'web', ['app', 'start', ...rest], port);
+  } else if (verb === 'build') {
+    startJob('web-build', 'build', ['app', 'build'], 0);
+  } else {
+    say([mu('start | stop | restart (the web app) · app build')]);
+  }
 }
 
 /** Run one line typed at the prompt. */
@@ -770,6 +819,18 @@ export function exec(raw: string): void {
     case 'run':
       if (!pos[0]) return openPicker();
       return runBackend(pos[0], args);
+    case 'start': {
+      if (!pos[0]) return appCommand('start', args);  // no target: the web app
+      const program = programNamed(pos[0]);
+      if (!program) return runBackend(pos[0], args);
+      if (program.installed === false) say([mu(`${program.name} is not installed yet · it is fetched and built first`)]);
+      const port = Number(flag(args, '--port')) || program.port;
+      if (S.external.some(e => e.port === port) || S.jobs.some(j => alive(j) && j.port === port)) {
+        return void say([mu(`${program.name} is already running on :${port} · stop ${program.name} first`)]);
+      }
+      startJob(program.name, 'web', ['start', program.name, ...args.filter(a => a !== pos[0])], port);
+      return;
+    }
     case 'build':
     case 'rebuild': {
       const target = pos[0] ?? '.';
@@ -796,31 +857,13 @@ export function exec(raw: string): void {
         void plain(['stop', '--all']);
         return;
       }
-      if (!pos[0]) return void say([dg('stop what?'), mu(' · stop <name|port>, or stop --all')]);
+      if (!pos[0]) return appCommand('stop', args);
       return stopTarget(pos[0]);
     case 'restart':
-      if (!pos[0]) return void say([dg('restart what?'), mu(' · restart <name|port>')]);
+      if (!pos[0]) return appCommand('restart', args);
       return restartTarget(pos[0]);
-    case 'app': {
-      const web = S.jobs.find(j => j.kind === 'web' && alive(j));
-      const port = Number(flag(args, '--port')) || 3047;
-      const rest = args.filter(a => a !== pos[0]);
-      if (pos[0] === 'start') {
-        if (web) return void say([mu(`web is already running on :${web.port} · app restart restarts it`)]);
-        startJob('web', 'web', ['app', 'start', ...rest], port);
-      } else if (pos[0] === 'stop') {
-        if (web) void stopJob(web);
-        else void plain(['app', 'stop', ...rest]);
-      } else if (pos[0] === 'restart') {
-        if (web) void restartJob(web);
-        else startJob('web', 'web', ['app', 'start', ...rest], port);
-      } else if (pos[0] === 'build') {
-        startJob('web-build', 'build', ['app', 'build'], 0);
-      } else {
-        say([mu('app start | stop | restart | build')]);
-      }
-      return;
-    }
+    case 'app':
+      return appCommand(pos[0] ?? '', args.filter(x => x !== pos[0]));
     case 'toolkit': {
       if (!pos[0]) return openToolkits();
       if (['install', 'add', 'update', 'uninstall', 'remove'].includes(pos[0]) && !args.includes('--version')) {

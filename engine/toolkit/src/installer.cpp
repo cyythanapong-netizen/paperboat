@@ -14,6 +14,7 @@
 #include <toml++/toml.hpp>
 
 #include "paperboat/toolkit/descriptor.hpp"
+#include "paperboat/toolkit/platform.hpp"
 
 namespace paperboat::toolkit {
 namespace {
@@ -37,6 +38,22 @@ fs::path walk_up(fs::path p) {
   return {};
 }
 
+#ifdef _WIN32
+// cmd.exe: double quotes, a quote inside as \".
+std::string shell_quote(std::string_view arg) {
+  std::string out = "\"";
+  for (char c : arg) {
+    if (c == '"') out += "\\\"";
+    else out += c;
+  }
+  out += "\"";
+  return out;
+}
+FILE* open_pipe(const std::string& cmd) { return _popen(("\"" + cmd + "\"").c_str(), "r"); }  // cmd /c drops one outer pair of quotes
+int close_pipe(FILE* f) { return _pclose(f); }
+constexpr const char* kCommandPrefix = "";
+constexpr const char* kCd = "cd /d ";
+#else
 std::string shell_quote(std::string_view arg) {
   std::string out = "'";
   for (char c : arg) {
@@ -46,6 +63,11 @@ std::string shell_quote(std::string_view arg) {
   out += "'";
   return out;
 }
+FILE* open_pipe(const std::string& cmd) { return popen(cmd.c_str(), "r"); }
+int close_pipe(FILE* f) { return pclose(f); }
+constexpr const char* kCommandPrefix = "TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp ";
+constexpr const char* kCd = "cd ";
+#endif
 
 std::string trim_line(std::string s) {
   while (!s.empty() && (s.back() == '\n' || s.back() == '\r' || s.back() == ' ' || s.back() == '\t')) s.pop_back();
@@ -59,15 +81,15 @@ int run_cmd(const std::vector<std::string>& args,
             const ToolkitLog& log,
             std::string* last_line = nullptr,
             std::string* all_output = nullptr) {
-  std::string cmd = "TMPDIR=/tmp XDG_RUNTIME_DIR=/tmp ";
-  if (!cwd.empty()) cmd += "cd " + shell_quote(cwd.string()) + " && ";
+  std::string cmd = kCommandPrefix;
+  if (!cwd.empty()) cmd += kCd + shell_quote(cwd.string()) + " && ";
   for (std::size_t i = 0; i < args.size(); ++i) {
     if (i > 0) cmd += ' ';
     cmd += shell_quote(args[i]);
   }
   cmd += " 2>&1";
 
-  FILE* pipe = popen(cmd.c_str(), "r");
+  FILE* pipe = open_pipe(cmd);
   if (!pipe) {
     if (last_line) *last_line = "cannot start command";
     return -1;
@@ -82,7 +104,7 @@ int run_cmd(const std::vector<std::string>& args,
       if (log) log("info", line);
     }
   }
-  const int status = pclose(pipe);
+  const int status = close_pipe(pipe);
   return status;
 }
 
@@ -240,6 +262,14 @@ std::vector<std::string> list_releases(const ToolkitEntry& entry, const ToolkitL
   return parse_release_tags(out);
 }
 
+// An installed package: <prefix>/bin/paperboat with the registries in <prefix>/share/paperboat.
+fs::path install_root() {
+  const fs::path exe = platform::exe_path();
+  if (exe.empty()) return {};
+  const fs::path share = exe.parent_path().parent_path() / "share" / "paperboat";
+  return fs::is_regular_file(share / "toolkits.toml") ? share : fs::path{};
+}
+
 fs::path find_repo_root(const fs::path& hint) {
   if (const char* env = std::getenv("PAPERBOAT_ROOT"); env && *env) {
     if (auto p = walk_up(env); !p.empty()) return p;
@@ -251,7 +281,7 @@ fs::path find_repo_root(const fs::path& hint) {
 #ifdef PAPERBOAT_SOURCE_DIR
   if (auto p = walk_up(fs::path(PAPERBOAT_SOURCE_DIR)); !p.empty()) return p;
 #endif
-  return {};
+  return install_root();
 }
 
 std::vector<ToolkitEntry> parse_toolkits_manifest(std::string_view toml_text) {
@@ -423,6 +453,8 @@ ToolkitResult install_toolkit(std::string_view name,
   const ToolkitEntry* entry = find_entry(entries, name);
   if (!entry) return {false, "unknown toolkit \"" + std::string(name) + "\""};
   if (entry->builtin) return {false, "cannot install built-in toolkit"};
+  if (!host.skip_rebuild && host.source_dir.empty() && !fs::is_regular_file(root / "engine" / "CMakeLists.txt"))
+    return {false, "toolkits are compiled into the engine: build paperboat from source to install one"};
 
   const std::string url = resolve_repo_url(*entry);
 
@@ -559,13 +591,11 @@ std::vector<std::string> list_toolkit_versions(std::string_view name,
   if (repo_url.empty()) return {};
 
   std::vector<std::string> versions;
-  std::string cmd = "git ls-remote --tags " + shell_quote(repo_url) + " 2>/dev/null";
-  FILE* pipe = popen(cmd.c_str(), "r");
-  if (!pipe) return {};
-
-  std::array<char, 512> buf{};
-  while (fgets(buf.data(), static_cast<int>(buf.size()), pipe)) {
-    std::string line = trim_line(buf.data());
+  std::string out;
+  if (run_cmd({"git", "ls-remote", "--tags", repo_url}, {}, {}, nullptr, &out) != 0) return {};
+  std::istringstream lines(out);
+  for (std::string raw; std::getline(lines, raw);) {
+    const std::string line = trim_line(raw);
     const std::string marker = "refs/tags/";
     auto pos = line.find(marker);
     if (pos == std::string::npos) continue;
@@ -575,7 +605,6 @@ std::vector<std::string> list_toolkit_versions(std::string_view name,
       versions.push_back(std::move(tag));
     }
   }
-  pclose(pipe);
   std::ranges::sort(versions);
   return versions;
 }

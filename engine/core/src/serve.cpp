@@ -15,6 +15,7 @@
 #include <ixwebsocket/IXHttpServer.h>
 #include <ixwebsocket/IXNetSystem.h>
 
+#include "paperboat/toolkit/platform.hpp"
 #include "paperboat/core/backend.hpp"
 #include "paperboat/core/backend_manager.hpp"
 
@@ -127,7 +128,7 @@ std::string Server::start() {
   const auto* cat = state_->backend.catalog;
   RunningBackend rb;
   rb.port = state_->port;
-  rb.pid = getpid();
+  rb.pid = platform::current_pid();
   rb.engine = state_->backend.engine;
   rb.domain = cat ? cat->domain : "";
   rb.cwd = std::filesystem::current_path();

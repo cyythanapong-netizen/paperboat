@@ -10,15 +10,20 @@
 #include <string>
 #include <string_view>
 #include <thread>
-#include <unistd.h>
 #include <vector>
 
 #include "paperboat/core/backend_manager.hpp"
 #include "paperboat/core/process.hpp"
+#include "paperboat/toolkit/platform.hpp"
 
 namespace paperboat::tui {
 
 namespace fs = std::filesystem;
+
+#ifndef PAPERBOAT_VERSION  // set by engine/tools/CMakeLists.txt from the project version
+#define PAPERBOAT_VERSION "0.0.0-dev"
+#endif
+inline constexpr const char* kVersion = PAPERBOAT_VERSION;
 
 inline std::string get_git_info() {
   auto res = core::ProcessRunner::run_sync({"git", "rev-parse", "--abbrev-ref", "HEAD"});
@@ -43,13 +48,13 @@ inline std::string get_git_info() {
   if (!hash.empty()) {
     return hash;
   }
-  return "release 0.1.0";
+  return std::string("release ") + kVersion;
 }
 
 inline std::string get_compact_cwd() {
   std::string cwd = fs::current_path().string();
-  const char* home = std::getenv("HOME");
-  if (home && *home) {
+  const std::string home = platform::home_dir().string();
+  if (!home.empty()) {
     std::string home_str(home);
     if (cwd.starts_with(home_str)) {
       cwd = "~" + cwd.substr(home_str.size());
@@ -59,7 +64,7 @@ inline std::string get_compact_cwd() {
 }
 
 inline void render_banner(bool animated = true) {
-  const bool is_tty = isatty(STDOUT_FILENO) && isatty(STDIN_FILENO);
+  const bool is_tty = platform::is_tty(1) && platform::is_tty(0);
 
   const std::string W = is_tty ? "\033[38;2;233;233;228m" : "";
   const std::string S = is_tty ? "\033[38;2;163;163;157m" : "";
@@ -83,7 +88,7 @@ inline void render_banner(bool animated = true) {
   };
 
   const std::vector<std::string> text_lines = {
-      BLUE + "Paperboat CLI 0.1.0" + RST,
+      BLUE + "Paperboat CLI " + kVersion + RST,
       GRAY + git_info + RST,
       GRAY + "C++20 core · protocol paperboat/0" + RST,
       GRAY + cwd_info + RST,
@@ -147,7 +152,7 @@ class WaveSpinner {
 
   void start(std::string msg = "") {
     if (!msg.empty()) message_ = std::move(msg);
-    if (running_ || !isatty(STDOUT_FILENO)) return;
+    if (running_ || !platform::is_tty(1)) return;
     running_ = true;
     thread_ = std::thread([this]() {
       int step = 0;
@@ -176,7 +181,7 @@ class WaveSpinner {
     if (!running_) return;
     running_ = false;
     if (thread_.joinable()) thread_.join();
-    if (isatty(STDOUT_FILENO)) {
+    if (platform::is_tty(1)) {
       std::cout << "\r\033[2K";
       if (!final_msg.empty()) {
         std::cout << (ok ? "  \033[32m✓\033[0m " : "  \033[31m✗\033[0m ") << final_msg << '\n';

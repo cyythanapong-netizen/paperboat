@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "paperboat/toolkit/apps.hpp"
+#include "paperboat/toolkit/update.hpp"
 
 namespace fs = std::filesystem;
 namespace tk = paperboat::toolkit;
@@ -27,6 +28,31 @@ output = "dist"
   CHECK(apps[1].build.size() == 2);
   CHECK(apps[1].output == "dist");
   CHECK_THROWS(tk::parse_apps_manifest("[[apps]]\nname = \"x\"\n"));
+}
+
+TEST_CASE("an app is a program or a library, and a program says how it launches and where it listens") {
+  const auto apps = tk::parse_apps_manifest(R"(
+[[apps]]
+name = "tool"
+repo = "https://example.com/tool.git"
+kind = "program"
+launch = "tool-cmd"
+port = 8123
+[[apps]]
+name = "kit"
+repo = "https://example.com/kit.git"
+kind = "library"
+[[apps]]
+name = "plain"
+repo = "https://example.com/plain.git"
+)");
+  REQUIRE(apps.size() == 3);
+  CHECK(apps[0].kind == "program");
+  CHECK(apps[0].launch == "tool-cmd");
+  CHECK(apps[0].port == 8123);
+  CHECK(apps[1].kind == "library");
+  CHECK(apps[2].kind == "program");  // the default
+  CHECK_THROWS(tk::parse_apps_manifest("[[apps]]\nname = \"x\"\nrepo = \"r\"\nkind = \"service\"\n"));
 }
 
 TEST_CASE("pkg lifecycle: deps first, versions from tags, update, uninstall guard") {
@@ -71,5 +97,54 @@ TEST_CASE("pkg lifecycle: deps first, versions from tags, update, uninstall guar
   CHECK_FALSE(tk::install_app("nope", {}, root).ok);
 
   unsetenv("PAPERBOAT_HOME");
+  fs::remove_all(tmp, ec);
+}
+
+TEST_CASE("update: a checkout is fast-forwarded, and refused when dirty or diverged") {
+  const fs::path tmp = fs::temp_directory_path() / "paperboat_update_test";
+  std::error_code ec;
+  fs::remove_all(tmp, ec);
+  fs::create_directories(tmp / "origin");
+  const auto sh = [](const std::string& c) { return std::system(c.c_str()) == 0; };
+  const auto git = [](const fs::path& d) { return "git -C '" + d.string() + "' "; };
+  const auto commit = [&](const fs::path& d, const std::string& file, const std::string& msg) {
+    std::ofstream(d / file) << msg;
+    return sh(git(d) + "add -A && " + git(d) + "-c user.email=t@e.com -c user.name=t commit -qm " + msg);
+  };
+  REQUIRE(sh(git(tmp / "origin") + "init -q -b main"));
+  REQUIRE(commit(tmp / "origin", "a.txt", "one"));
+  REQUIRE(sh("git clone -q '" + (tmp / "origin").string() + "' '" + (tmp / "work").string() + "'"));
+  const fs::path work = tmp / "work";
+
+  CHECK(tk::check_checkout(tmp).error == "not a git checkout");
+  auto st = tk::check_checkout(work);
+  CHECK(st.error.empty());
+  CHECK(st.branch == "main");
+  CHECK(st.behind == 0);
+  CHECK(tk::pull_checkout(work).message == "up to date");
+
+  REQUIRE(commit(tmp / "origin", "b.txt", "two"));
+  st = tk::check_checkout(work);
+  CHECK(st.behind == 1);
+  REQUIRE(st.incoming.size() == 1);
+  CHECK(st.incoming[0] == "two");
+
+  std::ofstream(work / "a.txt") << "edited";  // a tracked file with changes: no pull
+  CHECK(tk::check_checkout(work).dirty);
+  CHECK_FALSE(tk::pull_checkout(work).ok);
+  REQUIRE(sh(git(work) + "checkout -q a.txt"));
+
+  std::vector<std::string> changed;
+  CHECK(tk::pull_checkout(work, &changed).ok);
+  CHECK(changed == std::vector<std::string>{"b.txt"});
+  CHECK(fs::is_regular_file(work / "b.txt"));
+  CHECK(tk::check_checkout(work).behind == 0);
+
+  REQUIRE(commit(tmp / "origin", "c.txt", "three"));  // both sides moved: diverged
+  REQUIRE(commit(work, "d.txt", "local"));
+  const auto r = tk::pull_checkout(work);
+  CHECK_FALSE(r.ok);
+  CHECK(r.message.starts_with("diverged"));
+
   fs::remove_all(tmp, ec);
 }

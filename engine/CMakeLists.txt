@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(paperboat LANGUAGES CXX)
+project(paperboat VERSION 0.1.0 LANGUAGES CXX)  # the one version: --version, packages, and the v<version> release tag
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -10,6 +10,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(PAPERBOAT_BUILD_TESTS "Build the Catch2 tests" ${PROJECT_IS_TOP_LEVEL})
 option(PAPERBOAT_BUILD_TOOLS "Build paperboat-catalog" ${PROJECT_IS_TOP_LEVEL})
 option(PAPERBOAT_BUILD_MODELICA "Build engine/modelica when omc is installed" ${PROJECT_IS_TOP_LEVEL})
+option(PAPERBOAT_MODELICA_WITHOUT_OMC "Build engine/modelica even when omc is not installed (release packages: omc is only needed at run time)" OFF)
+option(PAPERBOAT_STATIC_RUNTIME "Link libstdc++ and libgcc statically, so a release binary needs only glibc" OFF)
+
+if(MSVC AND PAPERBOAT_STATIC_RUNTIME)  # no vcruntime DLL to install next to the .exe; set before the dependencies are fetched
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 # Dependencies: use an installed copy if there is one, otherwise fetch a pinned release.
 include(FetchContent)
@@ -31,9 +37,9 @@ endif()
 # WebSocket for engine/core's server.
 set(USE_TLS OFF CACHE BOOL "" FORCE)
 set(USE_ZLIB OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(ixwebsocket
-  URL https://github.com/machinezone/IXWebSocket/archive/refs/tags/v12.1.0.tar.gz
-  SYSTEM)
+set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)  # keep its headers and library out of our packages
+FetchContent_Declare(ixwebsocket SYSTEM  # SYSTEM goes right after the name: CMake 3.25 reads it at the end as a URL
+  URL https://github.com/machinezone/IXWebSocket/archive/refs/tags/v12.1.0.tar.gz)
 FetchContent_MakeAvailable(ixwebsocket)
 
 add_subdirectory(toolkit)
@@ -58,6 +64,25 @@ if(PAPERBOAT_BUILD_TOOLS)
 endif()
 # Backends (examples/backends/*-cpp) are projects of their own that use the engine; the
 # engine never builds or reads them.
+
+# Packages (cpack -G DEB / TGZ / ZIP): the paperboat binary and the registries it reads (see tools/).
+if(PROJECT_IS_TOP_LEVEL)
+  set(CPACK_PACKAGE_NAME paperboat)
+  set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Paperboat: a framework for engineering apps (scene, node graph, live results)")
+  set(CPACK_PACKAGE_CONTACT "paperboat <noreply@github.com>")
+  set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/cyythanapong-netizen/paperboat")
+  set(CPACK_PACKAGE_FILE_NAME "paperboat-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+  set(CPACK_GENERATOR TGZ)
+  if(WIN32)
+    set(CPACK_GENERATOR ZIP)
+  endif()
+  set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+  set(CPACK_DEBIAN_PACKAGE_SECTION science)
+  set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+  set(CPACK_DEBIAN_PACKAGE_SUGGESTS "git, nodejs, npm, openmodelica")
+  include(CPack)
+endif()
 
 if(PAPERBOAT_BUILD_TESTS)
   enable_testing()

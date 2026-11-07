@@ -20,6 +20,9 @@ struct AppEntry {
   std::vector<std::string> deps;   // apps that must sit next to this one when it builds
   std::vector<std::string> build;  // commands run in the app's folder after the clone
   std::string output;              // folder the build makes (what `paperboat squero` serves)
+  std::string kind = "program";    // "program" runs (start/stop it); "library" only builds
+  std::string launch;              // the paperboat command that runs a program (`squero`)
+  int port = 0;                    // where a running program listens (`stop` and `list` find it there)
   bool installed = false;
   std::string version;             // installed: a release ("0.1.0") or "dev" (main)
 };
@@ -45,6 +48,14 @@ ToolkitResult install_app(std::string_view name, std::string_view version = {},
 // Refused while another installed app lists it as a dep.
 ToolkitResult uninstall_app(std::string_view name, const std::filesystem::path& repo_root = {},
                             const ToolkitLog& log = {});
+
+// Run an app's `build` steps from apps.toml in `dir` (a checkout of it) and check its output folder.
+ToolkitResult build_app(std::string_view name, const std::filesystem::path& dir,
+                        const std::filesystem::path& repo_root = {}, const ToolkitLog& log = {});
+
+// An installed app is outdated when a newer release exists, or (a "dev" install) main moved on.
+// Offline or unknown: false.
+bool app_outdated(std::string_view name, const std::filesystem::path& repo_root = {});
 
 // An installed app's output folder (its own folder when it declares none), or empty.
 std::filesystem::path app_output(std::string_view name);

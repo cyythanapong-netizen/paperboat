@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <csignal>
 #include <filesystem>
 #include <functional>
 #include <string>
@@ -8,6 +9,10 @@
 #include <stop_token>
 #include <utility>
 #include <vector>
+
+#ifndef SIGKILL  // Windows has no SIGKILL; the number keeps the API the same
+#define SIGKILL 9
+#endif
 
 namespace paperboat::core {
 

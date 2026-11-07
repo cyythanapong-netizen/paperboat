@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install test tools
-        run: pip install pytest jsonschema
+        run: pip install pytest jsonschema numpy
       - name: Build the extension (paperboat._engine)
         run: cmake -S python -B python/build -DCMAKE_BUILD_TYPE=Release -DPython_EXECUTABLE="$(which python)" && cmake --build python/build -j 4
       - name: Test the bindings

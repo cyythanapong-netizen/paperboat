@@ -6,16 +6,26 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
-#include <dirent.h>
-#include <fcntl.h>
 #include <fstream>
 #include <iostream>
-#include <netinet/in.h>
 #include <sstream>
+#include <thread>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
+#include <windows.h>
+#else
+#include <dirent.h>
+#include <fcntl.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <thread>
 #include <unistd.h>
+#endif
 
 #include <nlohmann/json.hpp>
 #include <toml++/toml.hpp>
@@ -23,10 +33,39 @@
 #include "paperboat/core/process.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
 #include "paperboat/toolkit/installer.hpp"
+#include "paperboat/toolkit/platform.hpp"
 #include "paperboat/toolkit/solve.hpp"
 
 namespace paperboat::core {
 namespace {
+
+// Sockets, the same calls on POSIX and Winsock.
+#ifdef _WIN32
+using sock_t = SOCKET;
+using sock_len = int;
+constexpr sock_t kNoSock = INVALID_SOCKET;
+void net_init() {
+  static const bool once = [] {
+    WSADATA data;
+    return WSAStartup(MAKEWORD(2, 2), &data) == 0;
+  }();
+  (void)once;
+}
+void close_sock(sock_t s) { closesocket(s); }
+void set_nonblocking(sock_t s) {
+  u_long on = 1;
+  ioctlsocket(s, FIONBIO, &on);
+}
+bool connect_pending() { return WSAGetLastError() == WSAEWOULDBLOCK; }
+#else
+using sock_t = int;
+using sock_len = socklen_t;
+constexpr sock_t kNoSock = -1;
+void net_init() {}
+void close_sock(sock_t s) { close(s); }
+void set_nonblocking(sock_t s) { fcntl(s, F_SETFL, O_NONBLOCK); }
+bool connect_pending() { return errno == EINPROGRESS; }
+#endif
 
 using nlohmann::json;
 namespace fs = std::filesystem;
@@ -91,11 +130,12 @@ const std::string& output_of(const ProcessResult& r) {
 
 bool BackendManager::is_port_listening(int port) {
   if (port <= 0 || port > 65535) return false;
-  int sock = socket(AF_INET, SOCK_STREAM, 0);
-  if (sock < 0) return false;
+  net_init();
+  sock_t sock = socket(AF_INET, SOCK_STREAM, 0);
+  if (sock == kNoSock) return false;
 
   // Set non-blocking for quick check
-  fcntl(sock, F_SETFL, O_NONBLOCK);
+  set_nonblocking(sock);
 
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
@@ -104,30 +144,41 @@ bool BackendManager::is_port_listening(int port) {
 
   int res = connect(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
   if (res == 0) {
-    close(sock);
+    close_sock(sock);
     return true;
   }
 
-  if (errno == EINPROGRESS) {
+  if (connect_pending()) {
     fd_set fds;
     FD_ZERO(&fds);
     FD_SET(sock, &fds);
     timeval tv{.tv_sec = 0, .tv_usec = 30000};  // 30 ms
-    if (select(sock + 1, nullptr, &fds, nullptr, &tv) > 0) {
+    if (select(static_cast<int>(sock) + 1, nullptr, &fds, nullptr, &tv) > 0) {
       int err = 0;
-      socklen_t len = sizeof(err);
-      getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &len);
-      close(sock);
+      sock_len len = sizeof(err);
+      getsockopt(sock, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&err), &len);
+      close_sock(sock);
       return err == 0;
     }
   }
 
-  close(sock);
+  close_sock(sock);
   return false;
 }
 
 int BackendManager::find_pid_by_port(int port) {
   if (port <= 0) return 0;
+
+#ifdef _WIN32
+  ULONG size = 0;
+  GetExtendedTcpTable(nullptr, &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0);
+  std::vector<char> buf(size);
+  if (GetExtendedTcpTable(buf.data(), &size, FALSE, AF_INET, TCP_TABLE_OWNER_PID_LISTENER, 0) != NO_ERROR) return 0;
+  const auto* table = reinterpret_cast<const MIB_TCPTABLE_OWNER_PID*>(buf.data());
+  for (DWORD i = 0; i < table->dwNumEntries; ++i)
+    if (ntohs(static_cast<u_short>(table->table[i].dwLocalPort)) == port) return static_cast<int>(table->table[i].dwOwningPid);
+  return 0;
+#else
 
   // Search socket inode in /proc/net/tcp and /proc/net/tcp6
   std::string hex_port;
@@ -200,6 +251,7 @@ int BackendManager::find_pid_by_port(int port) {
   }
 
   return 0;
+#endif
 }
 
 bool BackendManager::stop_user_service(const std::string& unit_name) {
@@ -241,7 +293,7 @@ bool BackendManager::free_port(int port, int timeout_ms) {
 }
 
 fs::path BackendManager::runtime_dir() {
-  return fs::path("/tmp/paperboat-runtime");
+  return platform::shared_tmp_dir() / "paperboat-runtime";
 }
 
 fs::path BackendManager::runtime_record_path(int port) {
@@ -551,9 +603,8 @@ BackendKind BackendManager::detect_backend_kind(const fs::path& path) {
 }
 
 fs::path BackendManager::user_backends_dir() {
-  const char* home = std::getenv("HOME");
-  if (home && *home) {
-    return fs::path(home) / ".paperboat" / "backends";
+  if (const fs::path home = platform::home_dir(); !home.empty()) {
+    return home / ".paperboat" / "backends";
   }
   return fs::temp_directory_path() / "paperboat" / "backends";
 }
@@ -922,7 +973,7 @@ bool BackendManager::start_examples(const fs::path& examples_dir) {
       continue;
     }
 
-    const fs::path log_path = fs::path("/tmp") / ("backend-" + std::to_string(ex.port) + ".log");
+    const fs::path log_path = platform::shared_tmp_dir() / ("backend-" + std::to_string(ex.port) + ".log");
     if (ex.type == "cpp") {
       std::cout << "==> Building " << ex.name << "…\n";
       std::string err;
@@ -981,7 +1032,7 @@ bool BackendManager::start_app(int port, const std::string& host, bool daemon) {
   std::vector<std::string> args = {"npm", "run", "dev", "--", "--host", host, "--port", std::to_string(port)};
 
   if (daemon) {
-    fs::path log_path = "/tmp/paperboat-web.log";
+    fs::path log_path = platform::shared_tmp_dir() / "paperboat-web.log";
     int pid = ProcessRunner::run_detached(args, root, {}, log_path);
     if (pid > 0) {
       std::cout << "Web application started in background (PID " << pid << ", log: " << log_path << ")\n";
@@ -1127,22 +1178,25 @@ BackendManifest BackendManager::load_manifest(const fs::path& backend_dir, std::
 }
 
 int BackendManager::find_free_port(int start_port, int end_port) {
+  net_init();
   for (int p = start_port; p <= end_port; ++p) {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0) continue;
+    sock_t sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock == kNoSock) continue;
+#ifndef _WIN32  // on Windows SO_REUSEADDR would let bind succeed on a port that is in use
     int opt = 1;
     setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#endif
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(static_cast<uint16_t>(p));
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     if (bind(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0) {
-      close(sock);
+      close_sock(sock);
       if (!is_port_listening(p)) {
         return p;
       }
     } else {
-      close(sock);
+      close_sock(sock);
     }
   }
   return 0;
@@ -1518,8 +1572,12 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
     int port;
     ~BackendCleaner() {
       if (pid > 0) {
+#ifdef _WIN32
+        ProcessRunner::kill_pgid(pid, SIGTERM, 300);
+#else
         kill(-pid, SIGTERM);
         kill(pid, SIGTERM);
+#endif
         BackendManager::free_port(port, 1000);
         BackendManager::unregister_running_backend(port);
       }
