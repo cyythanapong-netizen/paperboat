@@ -201,7 +201,7 @@ export type DashboardLayout = {
   tabs?: string[];
   /** Things that are not instruments. section: a titled frame round a group of cells (takes no cells; `at` and `span` [w, h]). hline / vline: a separator on a grid line, in the gap, along `span` columns (hline, from the top of `at`'s row) or rows (vline, down the left of `at`'s column); takes no cells. label: text that takes cells like an instrument (`span` [w, h], default [2, 1]); a section's title and a label's text may hold `{block}` or `{block:.2f}`, which show that monitor's latest value (`{{` and `}}` are braces). console: the Console's lines, in a frame that takes cells (`span` [w, h], default [4, 3]); it has no text. station: a read-only view of the Station (the 3D scene), in a frame that takes cells (`span` [w, h], default [4, 3]); it has no text and no editing. */
   decorations?: ({
-    kind: "section" | "hline" | "vline" | "label" | "console" | "station";
+    kind: "section" | "hline" | "vline" | "label" | "console" | "station" | "controls";
     /** A section's title, or a label's text. `{name}` shows the monitor block's latest value (else the variable's value), `{block:.2f}` with that many decimals; `{{` and `}}` are literal braces. */
     text?: string;
     /** Top-left cell: [column, row]. */
@@ -319,8 +319,12 @@ export type Variable = {
   note?: string;
   /** Where it's listed (Cart-pole, Controller…). */
   group?: string;
-  /** Also a control on the Dashboard, for operators. */
+  /** Also a control on the Dashboard (a Controls tile), for operators. */
   exposed?: boolean;
+  /** Also a control in the run dock. */
+  dock?: boolean;
+  /** A number or boolean (not a formula) that can change during a run: the blocks bound to it take the new value live if they can. */
+  tunable?: boolean;
 };
 
 /** The variables of a backend (its defaults) or the user's. */

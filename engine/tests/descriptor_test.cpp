@@ -310,12 +310,14 @@ decorations = [
   { kind = "vline", at = [3, 0], span = 2, tab = "Tuning" },
   { kind = "label", text = "Notes", at = [0, 4] },
   { kind = "console", at = [0, 5], span = [6, 3] },
+  { kind = "controls", at = [0, 8], span = [4, 3] },
 ]
 )", test_registry());
   const auto d = nlohmann::json::parse(tk::catalog_message(catalog))["dashboard"];
   CHECK(d["tabs"] == nlohmann::json::array({"Run", "Tuning"}));
   CHECK(d["instruments"][0]["tab"] == "Run");
-  CHECK(d["decorations"].size() == 6);
+  CHECK(d["decorations"].size() == 7);
+  CHECK(d["decorations"][6] == nlohmann::json{{"kind", "controls"}, {"at", {0, 8}}, {"span", {4, 3}}});
   CHECK(d["decorations"][5] == nlohmann::json{{"kind", "console"}, {"at", {0, 5}}, {"span", {6, 3}}});
   CHECK(d["decorations"][0] == nlohmann::json{{"kind", "label"}, {"at", {0, 0}}, {"span", {3, 1}}, {"text", "Pendulum"}, {"style", "heading"}});
   CHECK(d["decorations"][2] == nlohmann::json{{"kind", "hline"}, {"at", {0, 3}}, {"span", 6}});
@@ -330,7 +332,7 @@ decorations = [
     CHECK_THROWS_WITH(tk::load_descriptor("domain = \"test\"\n[dashboard]\ncolumns = 6\ntabs = [\"Run\"]\n" + dashboard, test_registry()),
                       ContainsSubstring(text));
   };
-  fails_with("decorations = [{ kind = \"frame\", at = [0, 0] }]", "kind must be section, hline, vline, label, console or station");
+  fails_with("decorations = [{ kind = \"frame\", at = [0, 0] }]", "kind must be section, hline, vline, label, console, station or controls");
   fails_with("decorations = [{ kind = \"label\", text = \"x\" }]", "needs \"at\"");
   fails_with("decorations = [{ kind = \"label\", at = [0, 0] }]", "a label needs its text");
   fails_with("decorations = [{ kind = \"label\", text = \"x\", at = [6, 0] }]", "past the last of 6");
@@ -342,6 +344,7 @@ decorations = [
   fails_with("decorations = [{ kind = \"hline\", at = [0, 0], span = 2, text = \"x\" }]", "has no text");
   fails_with("decorations = [{ kind = \"section\", at = [0, 0], span = [2, 2], style = \"note\" }]", "only a label has a style");
   fails_with("decorations = [{ kind = \"console\", at = [0, 0], text = \"x\" }]", "the console has no text");
+  fails_with("decorations = [{ kind = \"controls\", at = [0, 0], text = \"x\" }]", "the controls tile has no text");
   fails_with("decorations = [{ kind = \"console\", at = [0, 0], span = 3 }]", "[columns, rows]");
   fails_with("decorations = [{ kind = \"station\", at = [0, 0], text = \"x\" }]", "the station has no text");
   fails_with("decorations = [{ kind = \"station\", at = [0, 0], span = 3 }]", "[columns, rows]");

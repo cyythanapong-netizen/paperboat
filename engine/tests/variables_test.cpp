@@ -129,6 +129,9 @@ expr = "2 * k"
 [[variables]]
 name = "verbose"
 value = false
+exposed = true
+dock = true
+tunable = true
 
 [graph]
 nodes = [{ id = "gain-1", type = "gain", params = { k = { var = "twice" } } }]
@@ -139,6 +142,7 @@ edges = []
   CHECK(list[0]["type"] == "number");
   CHECK(list[1]["type"] == "number");  // a formula is a number
   CHECK(list[2]["type"] == "boolean");
+  CHECK((list[2]["exposed"] == true && list[2]["dock"] == true && list[2]["tunable"] == true));  // for the UI; the descriptor keeps them
   const json graph = tk::resolve_graph(json::parse(catalog.graph), catalog, tk::Variables(list));
   CHECK(graph["nodes"][0]["params"]["k"] == 4.0);
 

@@ -1,6 +1,7 @@
 // Values of each datatype, set on the block: Number (a float), Text (a string) and Boolean
 // (true or false, on the wire as 1 or 0). Every domain needs these.
 
+#include <stdexcept>
 #include <string>
 
 #include "common.hpp"
@@ -17,6 +18,21 @@ class TextValue final : public Block {
   std::string text_;
 };
 
+// A variable's value on a wire (#75). It reads the run's variables each step, so a tunable one
+// moves it during the run; any other is constant for the run.
+class VariableValue final : public Block {
+ public:
+  explicit VariableValue(std::string name) : name_(std::move(name)) {}
+  Values step(const Context& ctx, const Values&) override {
+    const Value* v = ctx.variable(name_);
+    if (!v) throw std::runtime_error(name_.empty() ? "pick a variable: its name is empty" : "no variable called \"" + name_ + "\"");
+    return {{"y", *v}};
+  }
+
+ private:
+  std::string name_;
+};
+
 }  // namespace
 
 void add_values(Registry& registry) {
@@ -27,6 +43,14 @@ void add_values(Registry& registry) {
         return std::make_unique<Stateless>([=](const Context&, const Values&) { return Values{{"y", value}}; });
       }, "A number you set.", {.compact = true, .glyph = "const", .value = "{value}"});
   registry.add(std::move(number));
+
+  registry.add(make_template(
+      "base", "variable", "Variable", {}, {"y"}, {{.id = "name", .type = "text"}},
+      [](const Values&, const Config& text) {
+        const auto it = text.find("name");
+        return std::make_unique<VariableValue>(it == text.end() ? "" : it->second);
+      },
+      "A variable's value: constant for the run, or live if the variable is tunable.", {.compact = true, .glyph = "const", .value = "{name}"}));
 
   Template text;
   text.name = "base/text";

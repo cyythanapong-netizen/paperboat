@@ -1,6 +1,8 @@
+#include <atomic>
 #include <chrono>
 #include <fstream>
 #include <mutex>
+#include <optional>
 #include <thread>
 
 #include "paperboat/core/backend.hpp"
@@ -25,7 +27,9 @@ struct Session::State {
   toolkit::KeySet pressed;  // pressed since the run last read the keys: a short tap still shows for one pass
   json station;
   json variables;  // the list (#36): the backend's defaults until the UI sets its own
+  std::optional<json> tuned;  // the list the UI sent during a run (#75), until the run takes it
   int runs = 0;
+  std::atomic<int> live_run{0};  // the number of the run that is going, else 0
   std::mutex toolkit_mutex;
   std::string busy_toolkit;
   std::string busy_action;
@@ -125,8 +129,15 @@ void Session::on_message(const std::string& text) {
       station = s.station;
       variables = s.variables;
       s.pressed.clear();  // presses from before this run don't count
+      s.tuned.reset();    // nor changes to the variables from before it
     }
-    const std::string id = "run-" + std::to_string(++s.runs);
+    const int number = ++s.runs;
+    const std::string id = "run-" + std::to_string(number);
+    auto tune_now = [&s]() -> std::optional<json> {
+      std::lock_guard lock(s.mutex);
+      return std::exchange(s.tuned, std::nullopt);
+    };
+    s.live_run = number;
     auto keys_now = [&s] {
       std::lock_guard lock(s.mutex);
       auto down = s.keys;
@@ -135,9 +146,16 @@ void Session::on_message(const std::string& text) {
       return down;
     };
     // Assigning a new jthread stops and joins the previous run first.
-    s.run = std::jthread([&s, id, graph = msg.value("graph", json::object()), station, variables, keys_now,
+    s.run = std::jthread([&s, id, number, graph = msg.value("graph", json::object()), station, variables, keys_now, tune_now,
                           settings = msg.value("settings", json())](std::stop_token stop) {
-      core::run(id, graph, station, s.backend, [&s](const json& m) { s.emit(m); }, keys_now, stop, settings, variables);
+      auto emit = [&s, number](const json& m) {
+        if (m.value("type", "") == "run.finished") {  // before the UI hears it: its next edit is not a tuning
+          int mine = number;
+          s.live_run.compare_exchange_strong(mine, 0);  // not if a newer run has started meanwhile
+        }
+        s.emit(m);
+      };
+      core::run(id, graph, station, s.backend, emit, keys_now, stop, settings, variables, tune_now);
     });
   } else if (type == "station.set") {
     // An edit on the Station page: check it, keep it, and show it.
@@ -158,6 +176,15 @@ void Session::on_message(const std::string& text) {
     // The variables changed (#36): check them, keep them, and show the station they shape.
     try {
       const json variables = msg.at("variables");
+      if (s.live_run != 0) {
+        // During a run (#75): the run owns the scene, so it isn't shown again. Keep the list for
+        // the next run and hand it to this one, which takes the tunable variables' values.
+        s.emit({{"type", "variables.values"}, {"values", toolkit::Variables(variables).values()}});
+        std::lock_guard lock(s.mutex);
+        s.variables = variables;
+        s.tuned = variables;
+        return;
+      }
       json station;
       {
         std::lock_guard lock(s.mutex);

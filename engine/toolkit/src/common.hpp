@@ -18,6 +18,7 @@ class Stateless : public Block {
   using Fn = std::function<Values(const Context&, const Values&)>;
   explicit Stateless(Fn fn) : fn_(std::move(fn)) {}
   Values step(const Context& ctx, const Values& in) override { return fn_(ctx, in); }
+  bool stateless() const override { return true; }
 
  private:
   Fn fn_;

@@ -3,7 +3,6 @@
 // resolves and checks them (variables.values); nothing here evaluates a formula.
 
 import type { ParamDef, ParamValue, Station, Variable, Variables } from "./protocol";
-import { readStored, writeStored } from "./storage.ts";
 
 export type Ref = { var: string } | { expr: string };
 export const isRef = (v: unknown): v is Ref => typeof v === "object" && v !== null && ("var" in v || "expr" in v);
@@ -127,13 +126,9 @@ export function toToml(list: Variables): string {
       for (const k of ["unit", "note", "group"] as const) if (v[k]) lines.push(`${k} = ${tomlString(v[k]!)}`);
       for (const k of ["min", "max", "step"] as const) if (v[k] !== undefined) lines.push(`${k} = ${v[k]}`);
       if (v.whole) lines.push("whole = true");
+      for (const k of ["exposed", "dock", "tunable"] as const) if (v[k]) lines.push(`${k} = true`);
       if (v.options) lines.push(`options = [${v.options.map(tomlString).join(", ")}]`);
       return lines.join("\n");
     })
     .join("\n\n");
 }
-
-/** The user's variables for a backend, kept in this browser as the working copy: a project file (#82) saves and restores them. */
-export const loadMine = (engine: string): Variables | undefined =>
-  readStored(`paperboat.variables:${engine}`, (v): v is Variables => Array.isArray(v));
-export const saveMine = (engine: string, list: Variables | undefined) => writeStored(`paperboat.variables:${engine}`, list);

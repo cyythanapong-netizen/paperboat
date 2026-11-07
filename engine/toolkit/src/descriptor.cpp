@@ -294,8 +294,8 @@ void load_dashboard(const json& doc, Catalog& catalog) {
       only_fields(e, {"kind", "text", "at", "span", "style", "tab"}, at);
       const std::string kind = e.contains("kind") && e["kind"].is_string() ? e["kind"].get<std::string>() : "";
       if (kind != "section" && kind != "hline" && kind != "vline" && kind != "label" &&
-          kind != "console" && kind != "station")
-        throw DescriptorError(at + ": kind must be section, hline, vline, label, console or station");
+          kind != "console" && kind != "station" && kind != "controls")
+        throw DescriptorError(at + ": kind must be section, hline, vline, label, console, station or controls");
       if (!e.contains("at")) throw DescriptorError(at + ": needs \"at\": [column, row]");
       check_at(e["at"], at);
       if (e["at"][0].get<int>() >= columns)
@@ -321,8 +321,8 @@ void load_dashboard(const json& doc, Catalog& catalog) {
         throw DescriptorError(at + ": a separator needs a span: how many cells it runs");
       }
       if (e.contains("text")) {
-        if (line || kind == "console" || kind == "station" || !e["text"].is_string())
-          throw DescriptorError(at + (line ? ": a separator has no text" : kind == "console" ? ": the console has no text" : kind == "station" ? ": the station has no text" : ": text must be text"));
+        if (line || kind == "console" || kind == "station" || kind == "controls" || !e["text"].is_string())
+          throw DescriptorError(at + (line ? ": a separator has no text" : kind == "console" ? ": the console has no text" : kind == "station" ? ": the station has no text" : kind == "controls" ? ": the controls tile has no text" : ": text must be text"));
         item["text"] = e["text"];
       } else if (kind == "label") {
         throw DescriptorError(at + ": a label needs its text");
@@ -352,7 +352,7 @@ void load_variables(const json& doc, Catalog& catalog) {
   for (std::size_t i = 0; i < list.size(); ++i) {
     json v = list[i];
     const auto at = "variables[" + std::to_string(i) + "]";
-    only_fields(v, {"name", "type", "value", "expr", "unit", "min", "max", "step", "whole", "options", "note", "group", "exposed"}, at);
+    only_fields(v, {"name", "type", "value", "expr", "unit", "min", "max", "step", "whole", "options", "note", "group", "exposed", "dock", "tunable"}, at);
     if (!v.contains("type")) {
       const json& value = v.value("value", json());
       v["type"] = v.contains("expr") || value.is_number() ? "number" : value.is_boolean() ? "boolean" : "text";

@@ -25,6 +25,7 @@ import {
 } from "./dashboardLayout";
 import type { Monitor, PlacedDeco } from "./dashboardLayout";
 import type { ClientMsg, DashboardLayout, ParamValue, ServerMsg } from "./protocol";
+import { VarControls } from "./VarControls";
 import { Console } from "./Console";
 import { WebStation } from "./WebStation";
 import { SceneView } from "./SceneView";
@@ -512,6 +513,7 @@ export function Dashboard({
                 ["label", "Label", "A heading or a note; {block} in it shows that block's value"],
                 ["console", "Console", "What the backend logged, in a frame"],
                 ["station", "Station", "A read-only view of the Station"],
+                ["controls", "Controls", "A control for each variable marked for the Dashboard"],
                 ["hline", "Separator —", "A horizontal rule between rows"],
                 ["vline", "Separator |", "A vertical rule between columns"],
               ] as const
@@ -672,6 +674,11 @@ export function Dashboard({
                 {d.kind === "console" && (
                   <div className="deco-console">
                     <Console logs={state.logs} onBlock={onBlock} />
+                  </div>
+                )}
+                {d.kind === "controls" && (
+                  <div className="deco-controls">
+                    <VarControls flag="exposed" empty="No variable is marked for the Dashboard: tick “Dashboard” in its details in the Variables sheet." />
                   </div>
                 )}
                 {d.kind === "station" && (

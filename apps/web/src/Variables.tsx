@@ -103,7 +103,7 @@ function Bound({ def, value, set, disabled }: { def: ParamDef; value: Ref; set: 
                 <div className="row">
                   <code>{v.name}</code>
                   <span className="grey">=</span>
-                  {v.expr !== undefined && v.type !== "number" ? <output>{show(now)}</output> : <ValueField v={v} onChange={(x) => vars.setList(vars.list.map((y) => (y.name === v.name ? x : y)))} disabled={vars.locked} />}
+                  {v.expr !== undefined && v.type !== "number" ? <output>{show(now)}</output> : <ValueField v={v} onChange={(x) => vars.setList(vars.list.map((y) => (y.name === v.name ? x : y)))} disabled={vars.locked && !v.tunable} />}
                   {v.unit && <span className="grey mono">{v.unit}</span>}
                 </div>
                 <span className="grey small">
@@ -468,7 +468,7 @@ export function VariablesSheet({
         ))}
       </div>
       <footer className="vars-foot">
-        <span>{vars.locked ? "Locked while running" : "Changes apply to the next run"}</span>
+        <span>{vars.locked ? "Locked while running (tunable variables still change)" : "Changes apply to the next run"}</span>
         <button className="link" onClick={copy} disabled={vars.list.length === 0} title="Copy them as a descriptor's [[variables]]: paste there to make them the backend's defaults">
           {copied ? "Copied" : "Copy as TOML"}
         </button>
@@ -505,7 +505,7 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
         {v.name}
       </span>
       <span className="var-type">{formula && v.type !== "number" ? "ƒ formula" : v.type}</span>
-      {formula && v.type !== "number" ? <output className="var-value out">{show(vars.values[v.name])}</output> : <ValueField v={v} onChange={onChange} disabled={vars.locked} />}
+      {formula && v.type !== "number" ? <output className="var-value out">{show(vars.values[v.name])}</output> : <ValueField v={v} onChange={onChange} disabled={vars.locked && !v.tunable} />}
       <span className="var-unit">{v.unit ?? ""}</span>
       <button className={`var-uses${uses.length ? "" : " none"}`} onClick={onOpen} tabIndex={-1}>
         {uses.length ? count(uses.length, "use") : "unused"}
@@ -573,7 +573,7 @@ function Detail({ v, uses, onChange, onShow }: { v: Variable; uses: Use[]; onCha
         <>
           <span className="lbl">Value</span>
           <span className="wells">
-            <ValueField v={v} onChange={onChange} disabled={vars.locked} wide />
+            <ValueField v={v} onChange={onChange} disabled={vars.locked && !v.tunable} wide />
           </span>
         </>
       )}
@@ -609,6 +609,20 @@ function Detail({ v, uses, onChange, onShow }: { v: Variable; uses: Use[]; onCha
           </span>
         </>
       )}
+      <span className="lbl">Controls</span>
+      <span className="wells">
+        <label className="check" title="A control on the Dashboard's Controls tile">
+          <input type="checkbox" checked={!!v.exposed} onChange={(e) => onChange({ ...v, exposed: e.target.checked || undefined })} /> Dashboard
+        </label>
+        <label className="check" title="A control in the run dock">
+          <input type="checkbox" checked={!!v.dock} onChange={(e) => onChange({ ...v, dock: e.target.checked || undefined })} /> Dock
+        </label>
+        {(v.type === "number" || v.type === "boolean") && !formula && (
+          <label className="check" title="Changes during a run reach the Variable block and the blocks that take a param change live (others wait for the next run)">
+            <input type="checkbox" disabled={vars.locked} checked={!!v.tunable} onChange={(e) => onChange({ ...v, tunable: e.target.checked || undefined })} /> Tunable
+          </label>
+        )}
+      </span>
       <span className="lbl">Note</span>
       <span className="wells">
         <input className="well wide" aria-label="Note" value={v.note ?? ""} placeholder="What it's for" onChange={(e) => onChange({ ...v, note: e.target.value || undefined })} />

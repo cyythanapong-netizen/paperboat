@@ -1590,7 +1590,8 @@
                   "vline",
                   "label",
                   "console",
-                  "station"
+                  "station",
+                  "controls"
                 ]
               },
               "text": {
@@ -1998,7 +1999,15 @@
         },
         "exposed": {
           "type": "boolean",
-          "description": "Also a control on the Dashboard, for operators."
+          "description": "Also a control on the Dashboard (a Controls tile), for operators."
+        },
+        "dock": {
+          "type": "boolean",
+          "description": "Also a control in the run dock."
+        },
+        "tunable": {
+          "type": "boolean",
+          "description": "A number or boolean (not a formula) that can change during a run: the blocks bound to it take the new value live if they can."
         }
       }
     },
