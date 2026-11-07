@@ -113,8 +113,9 @@ Modelica (Squero Studio OM, needs OpenModelica):
                              omc's checkModel on it
   modelica icon <Model.mo | Q.Name> [--class <Name>]
                              Import a Modelica class's icon and connectors as JSON
-  squero [--port <N>] [--app <dir>]
-                             Squero Studio OM's server, squero/0 (default port 8790)
+  squero [Model.mo] [--port <N>] [--app <dir>]
+                             Squero Studio OM's server, squero/0 (default port 8790);
+                             opens Model.mo (default ./Untitled.mo, created if missing)
 
 Console:
   (no command)               Open the interactive console (apps/cli) on a terminal;
@@ -891,7 +892,7 @@ int cmd_modelica(const std::vector<std::string_view>& args) {
 #endif
 }
 
-// paperboat squero [--port N] [--app dir]: Squero Studio OM's server (squero/0), serving
+// paperboat squero [Model.mo] [--port N] [--app dir]: Squero Studio OM's server (squero/0), serving
 // the built Studio app (apps/studio/dist) on the same port when there is one.
 int cmd_squero(const std::vector<std::string_view>& args) {
 #ifndef PAPERBOAT_HAS_MODELICA
@@ -901,9 +902,11 @@ int cmd_squero(const std::vector<std::string_view>& args) {
 #else
   int port = 8790;
   fs::path app;
-  for (std::size_t i = 0; i + 1 < args.size(); ++i) {
-    if (args[i] == "--port") port = std::stoi(std::string(args[++i]));
-    else if (args[i] == "--app") app = std::string(args[++i]);
+  fs::path file;
+  for (std::size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == "--port" && i + 1 < args.size()) port = std::stoi(std::string(args[++i]));
+    else if (args[i] == "--app" && i + 1 < args.size()) app = std::string(args[++i]);
+    else if (!args[i].starts_with("--")) file = std::string(args[i]);
   }
   if (app.empty()) {
     const fs::path root = tk::find_repo_root();
@@ -912,7 +915,7 @@ int cmd_squero(const std::vector<std::string_view>& args) {
     else
       std::cerr << "note: Studio isn't built (apps/studio/dist); serving squero/0 only\n";
   }
-  return mo::serve_squero(port, app);
+  return mo::serve_squero(port, app, {}, file);
 #endif
 }
 

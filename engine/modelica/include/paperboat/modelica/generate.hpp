@@ -16,6 +16,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -34,6 +35,11 @@ struct GenerateOptions {
   std::string model = {};        // its qualified class; "" = the one class the file has
   std::filesystem::path out = {};  // "" = ./<model>-cpp
   std::string path = "auto";     // "auto", "ode" or "fmu"
+  // Studio's preview (squero/0 `generate` with dry): nothing touches the disk. The files that
+  // would be written come back in GenerateResult::files; the fmu path builds nothing, so no files.
+  bool dry = false;
+  // Called as the stages go by: "check", "flatten", "generate", "build", fraction 0..1.
+  std::function<void(std::string_view stage, double fraction)> progress = {};
 };
 
 struct GenerateResult {
@@ -44,6 +50,8 @@ struct GenerateResult {
   std::string reason;  // why that path
   std::vector<std::string> notices;  // what was simplified or assumed
   std::vector<std::filesystem::path> written;
+  std::map<std::string, std::string> files;  // dry only: relative path → text
+  bool dry = false;
 };
 
 GenerateResult generate(Omc& omc, const GenerateOptions& options);
