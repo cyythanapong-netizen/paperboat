@@ -164,6 +164,8 @@ class DCMotor final : public paperboat::Model {
 }  // namespace
 
 void register_dc_motor(paperboat::Registry& registry) {
+  registry.add_connector("dc-motor", "RealInput", nlohmann::json::parse("{\"handle\":\"triangle\",\"kind\":\"input\",\"size\":8,\"weight\":1.2}"));
+  registry.add_connector("dc-motor", "RealOutput", nlohmann::json::parse("{\"alt\":\"filled\",\"handle\":\"circle\",\"kind\":\"output\",\"size\":8,\"weight\":1.2}"));
   registry.add(paperboat::define_object<DCMotor>(
       "dc-motor",
       {.type = "dc-motor",
@@ -190,7 +192,8 @@ void register_dc_motor(paperboat::Registry& registry) {
                                     .inputs = {{"v", "signal", "V"}},
                                     .outputs = {{"w", "signal", "rad/s"}, {"phi", "signal", "rad"}, {"i", "signal", "A"}},
                                     .params = {},
-                                    .feedthrough = false},
+                                    .feedthrough = false,
+                                    .view = {.icon = nlohmann::json::parse("{\"g\":[],\"ports\":[{\"at\":50,\"class\":\"RealInput\",\"id\":\"v\",\"side\":\"left\"},{\"at\":25,\"class\":\"RealOutput\",\"id\":\"w\",\"side\":\"right\"},{\"at\":50,\"class\":\"RealOutput\",\"id\":\"phi\",\"side\":\"right\"},{\"at\":75,\"class\":\"RealOutput\",\"id\":\"i\",\"side\":\"right\"}]}")}},
        .description = "DC motor driving an inertia through a spring-damper"}));
 }
 

@@ -94,9 +94,9 @@ std::vector<ParamDef> new_params(const json& obj, const std::string& at) {
   return out;
 }
 
-// A `view` table: compact, glyph, value (all optional).
+// A `view` table: compact, glyph, value, icon (all optional).
 View view_from(const json& v, const std::string& at) {
-  only_fields(v, {"compact", "glyph", "value"}, at);
+  only_fields(v, {"compact", "glyph", "value", "icon"}, at);
   View out;
   if (v.contains("compact")) {
     if (!v["compact"].is_boolean()) throw DescriptorError(at + ".compact must be true or false");
@@ -106,6 +106,10 @@ View view_from(const json& v, const std::string& at) {
     if (!v.contains(key)) continue;
     if (!v[key].is_string()) throw DescriptorError(at + "." + key + " must be text");
     (std::string(key) == "glyph" ? out.glyph : out.value) = v[key].get<std::string>();
+  }
+  if (v.contains("icon")) {
+    if (!v["icon"].is_object()) throw DescriptorError(at + ".icon must be a table");
+    out.icon = nlohmann::json::parse(v["icon"].dump());
   }
   return out;
 }
@@ -201,7 +205,7 @@ CatalogEntry linked_entry(const ObjectDef& def, const std::string& group) {
 }
 
 ObjectEntry object_from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "description", "defaults", "units"}, at);
+  only_fields(e, {"use", "type", "label", "description", "defaults", "units", "view"}, at);
   const auto name = e.at("use").get<std::string>();
   const StationTemplate* t = registry.find_object(name);
   if (!t) throw DescriptorError(at + ": no station template \"" + name + "\"");
@@ -209,6 +213,10 @@ ObjectEntry object_from_template(const json& e, const std::string& at, const Reg
   entry.def.type = e.value("type", t->def.type);
   entry.def.label = e.value("label", t->def.label);
   entry.def.description = e.value("description", t->def.description);
+  if (e.contains("view")) {
+    if (!entry.def.block) throw DescriptorError(at + ": " + name + " has no linked block for view");
+    entry.def.block->view = entry.def.block->view.overridden_by(view_from(e.at("view"), at + ".view"));
+  }
   const json defaults = e.value("defaults", json::object());
   for (const auto& [id, value] : defaults.items()) {
     auto p = std::ranges::find(entry.def.props, id, &ParamDef::id);
@@ -580,7 +588,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
   } catch (const toml::parse_error& err) {
     throw DescriptorError("not valid TOML: " + at_line(err.source()) + ": " + std::string(err.description()));
   }
-  only_fields(doc, {"domain", "import", "toolkit", "toolkits", "blocks", "objects", "graph", "station", "dashboard", "variables"}, "descriptor");
+  only_fields(doc, {"domain", "import", "toolkit", "toolkits", "blocks", "objects", "graph", "station", "dashboard", "variables", "connectors"}, "descriptor");
 
   Catalog catalog;
   catalog.domain = doc.value("domain", std::string{});
@@ -631,7 +639,9 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
   // without being listed.
   std::vector<std::string> group_order{catalog.domain};
   std::vector<std::string> imports;
-  if (!catalog.domain.empty() && (!registry.package(catalog.domain).empty() || !registry.objects(catalog.domain).empty()))
+  if (!catalog.domain.empty() &&
+      (!registry.package(catalog.domain).empty() || !registry.objects(catalog.domain).empty() ||
+       !registry.connectors(catalog.domain).empty()))
     imports.push_back(catalog.domain);
 
   auto add_import_name = [&](const std::string& name) {
@@ -665,7 +675,8 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
   for (const auto& package : imports) {
     const auto templates = registry.package(package);
     const auto station = registry.objects(package);
-    if (templates.empty() && station.empty()) {
+    const auto conns = registry.connectors(package);
+    if (templates.empty() && station.empty() && conns.empty()) {
       if (std::ranges::find(options.optional_imports, package) != options.optional_imports.end()) {
         catalog.missing_imports.push_back(package);
         continue;
@@ -682,6 +693,19 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
     for (const StationTemplate* t : station) {
       if (catalog.find_object(t->def.type)) continue;
       add_object({.def = t->def, .from = t, .group = package}, "import " + package);
+    }
+    for (const ConnectorEntry* c : conns) {
+      if (!catalog.connectors.is_object()) catalog.connectors = nlohmann::json::object();
+      catalog.connectors[c->name] = c->def;
+    }
+  }
+  if (doc.contains("connectors")) {
+    const json& ctable = doc.at("connectors");
+    if (!ctable.is_object()) throw DescriptorError("connectors must be a table");
+    if (!catalog.connectors.is_object()) catalog.connectors = nlohmann::json::object();
+    for (const auto& [name, def] : ctable.items()) {
+      if (!def.is_object()) throw DescriptorError("connectors." + name + " must be a table");
+      catalog.connectors[name] = nlohmann::json::parse(def.dump());
     }
   }
   // Palette order: the domain's own blocks, then each imported package in import order
@@ -811,6 +835,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
       if (e.def.view.compact) view["compact"] = *e.def.view.compact;
       if (!e.def.view.glyph.empty()) view["glyph"] = e.def.view.glyph;
       if (!e.def.view.value.empty()) view["value"] = e.def.view.value;
+      if (!e.def.view.icon.is_null()) view["icon"] = json::parse(e.def.view.icon.dump());
       block["view"] = std::move(view);
     }
     if (!e.def.forms.empty()) {
@@ -823,6 +848,8 @@ std::string catalog_message(const Catalog& catalog, int indent) {
   }
   json msg = {{"type", "catalog"}, {"blocks", blocks}};
   if (!catalog.missing_imports.empty()) msg["missing_imports"] = catalog.missing_imports;
+  if (catalog.connectors.is_object() && !catalog.connectors.empty())
+    msg["connectors"] = json::parse(catalog.connectors.dump());
   if (!catalog.dashboard.empty()) msg["dashboard"] = json::parse(catalog.dashboard);
   if (!catalog.objects.empty()) {
     json objects = json::array();

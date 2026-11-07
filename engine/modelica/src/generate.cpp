@@ -1,5 +1,7 @@
 #include "paperboat/modelica/generate.hpp"
 
+#include "paperboat/modelica/import.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <charconv>
@@ -509,6 +511,8 @@ struct Spec {
   std::vector<std::string> output_exprs;
   std::vector<std::string> notices;
   std::optional<std::string> ode_blocker;  // why this can't be an ODE
+  nlohmann::json icon = nlohmann::json::object();
+  std::map<std::string, ConnectorDef> connectors;
 };
 
 bool top_level(const Var& v) { return v.name.find('.') == std::string::npos && v.name.find('$') == std::string::npos; }
@@ -748,7 +752,17 @@ std::string ports_cpp(const std::vector<Port>& ports) {
 std::string register_cpp(const Spec& s, bool with_solver) {
   Spec t = s;
   if (!with_solver) std::erase_if(t.props, [](const Prop& p) { return p.id == "solver"; });
-  return "void register_" + s.id + "(paperboat::Registry& registry) {\n"
+  std::string conns;
+  for (const auto& [cname, cdef] : s.connectors) {
+    conns += "  registry.add_connector(" + cpp_string(s.name) + ", " + cpp_string(cname) +
+             ", nlohmann::json::parse(" + cpp_string(to_json(cdef).dump()) + "));\n";
+  }
+  const std::string view_line =
+      (!s.icon.is_null() && !s.icon.empty())
+          ? ",\n                                    .view = {.icon = nlohmann::json::parse(" +
+                cpp_string(s.icon.dump()) + ")}"
+          : "";
+  return "void register_" + s.id + "(paperboat::Registry& registry) {\n" + conns +
          "  registry.add(paperboat::define_object<" + s.cls + ">(\n"
          "      " + cpp_string(s.name) + ",\n"
          "      {.type = " + cpp_string(s.name) + ",\n"
@@ -761,7 +775,7 @@ std::string register_cpp(const Spec& s, bool with_solver) {
          "                                    .inputs = {" + ports_cpp(s.inputs) + "},\n"
          "                                    .outputs = {" + ports_cpp(s.outputs) + "},\n"
          "                                    .params = {},\n"
-         "                                    .feedthrough = false},\n"
+         "                                    .feedthrough = false" + view_line + "},\n"
          "       .description = " + cpp_string(s.description.empty() ? "Generated from the Modelica model " + s.model : s.description) +
          "}));\n}\n";
 }
@@ -1069,6 +1083,35 @@ std::string hpp(const Spec& s) {
          "(paperboat::Registry& registry);\n\n}  // namespace " + s.id + "\n";
 }
 
+std::string connectors_toml(const Spec& s) {
+  if (s.connectors.empty()) return {};
+  std::string out;
+  for (const auto& [cname, cdef] : s.connectors) {
+    const nlohmann::json cj = to_json(cdef);
+    out += "[connectors." + cname + "]\n";
+    out += "kind = " + toml_string(cdef.kind) + "\n";
+    out += "handle = " + toml_string(cdef.handle) + "\n";
+    if (!cdef.alt.empty()) out += "alt = " + toml_string(cdef.alt) + "\n";
+    out += "size = " + std::to_string(cdef.size) + "\n";
+    out += "weight = " + cj.at("weight").dump() + "\n";
+    if (!cdef.dash.empty() && cdef.dash != "solid") out += "dash = " + toml_string(cdef.dash) + "\n";
+    auto vars_line = [&](const char* key, const std::vector<VarUnit>& list) {
+      if (list.empty()) return;
+      out += std::string(key) + " = [";
+      for (std::size_t i = 0; i < list.size(); ++i) {
+        out += std::string(i ? ", " : "") + "{ id = " + toml_string(list[i].id) +
+               ", unit = " + toml_string(list[i].unit) + " }";
+      }
+      out += "]\n";
+    };
+    vars_line("potential", cdef.potential);
+    vars_line("flow", cdef.flow);
+    vars_line("stream", cdef.stream);
+    out += "\n";
+  }
+  return out;
+}
+
 std::string descriptor(const Spec& s) {
   std::string nodes = "  { id = " + toml_string(s.name + "-1") + ", type = " + toml_string(s.name) + ", pos = [260, 0] },\n";
   std::string edges;
@@ -1090,7 +1133,8 @@ std::string descriptor(const Spec& s) {
          "# modelica/" + s.label + ".mo. Written once: edit it freely, generate leaves it alone.\n"
          "# The " + s.label + " station object is domain/" + s.id + ".cpp (its props: the model's\n"
          "# parameters and fixed starts); each one spawns a linked block on the Flow page.\n"
-         "domain = " + toml_string(s.name) + "\nimport = [\"signal\", \"math\", \"control\", \"dashboard\"]\n\n"
+         "domain = " + toml_string(s.name) + "\nimport = [\"signal\", \"math\", \"control\", \"dashboard\"]\n\n" +
+         connectors_toml(s) +
          "# A model has no geometry of its own: the Station shows its objects as a graph.\n"
          "[station]\nview = \"graph\"\nobjects = [\n  { id = " + toml_string(s.name + "-1") + ", type = " + toml_string(s.name) + " },\n]\n\n"
          "# Starter: a step on each input, a graph on each output.\n[graph]\nnodes = [\n" + nodes + "]\nedges = [\n" +
@@ -1237,6 +1281,59 @@ GenerateResult generate(Omc& omc, const GenerateOptions& o) {
   Spec spec = build(dae, r.model, components, probed);
   const OmValue description = parse_value(omc.call("getClassComment(" + r.model + ")"));
   spec.description = trim(description.atom);
+
+  // Import the top-level model's Icon and causal connector ports (§3, §4, §6).
+  {
+    const ImportedModel imp = import_class(omc, r.model);
+    std::map<std::string, const RawPort*> by_id;
+    for (const auto& rp : imp.raw_ports) by_id[rp.id] = &rp;
+
+    std::vector<RawPort> causal_raw;
+    for (const auto& p : spec.inputs) {
+      if (const auto it = by_id.find(p.id); it != by_id.end() && it->second->kind == "input") {
+        causal_raw.push_back(*it->second);
+        if (const auto cit = imp.connectors.find(it->second->class_name); cit != imp.connectors.end())
+          spec.connectors[cit->first] = cit->second;
+      } else {
+        causal_raw.push_back(
+            {.id = p.id, .class_name = "RealInput", .full_class = "Modelica.Blocks.Interfaces.RealInput", .kind = "input"});
+        spec.connectors.try_emplace("RealInput",
+                                    ConnectorDef{.kind = "input", .handle = "triangle", .size = 8, .weight = 1.2});
+      }
+    }
+    for (const auto& p : spec.outputs) {
+      if (const auto it = by_id.find(p.id); it != by_id.end() && it->second->kind == "output") {
+        causal_raw.push_back(*it->second);
+        if (const auto cit = imp.connectors.find(it->second->class_name); cit != imp.connectors.end())
+          spec.connectors[cit->first] = cit->second;
+      } else {
+        causal_raw.push_back({.id = p.id,
+                              .class_name = "RealOutput",
+                              .full_class = "Modelica.Blocks.Interfaces.RealOutput",
+                              .kind = "output"});
+        spec.connectors.try_emplace(
+            "RealOutput", ConnectorDef{.kind = "output", .handle = "circle", .alt = "filled", .size = 8, .weight = 1.2});
+      }
+    }
+
+    ImportNotice port_notice;
+    const std::vector<IconPort> causal_ports = quantise_ports(causal_raw, port_notice, imp.extent);
+    spec.icon = imp.icon;
+    spec.icon.erase("ports");
+    if (!causal_ports.empty()) {
+      nlohmann::json p_arr = nlohmann::json::array();
+      for (const auto& p : causal_ports) p_arr.push_back(to_json(p));
+      spec.icon["ports"] = std::move(p_arr);
+    }
+
+    if (imp.notice.simplified > 0 || !imp.notice.dropped.empty() || !port_notice.moved.empty()) {
+      std::string note = "icon:";
+      if (imp.notice.simplified > 0) note += " simplified " + std::to_string(imp.notice.simplified);
+      if (!imp.notice.dropped.empty()) note += " dropped " + std::to_string(imp.notice.dropped.size());
+      if (!port_notice.moved.empty()) note += " spread " + std::to_string(port_notice.moved.size()) + " colliding port(s)";
+      spec.notices.push_back(std::move(note));
+    }
+  }
 
   r.name = spec.name;
   r.out = o.out.empty() ? fs::path(spec.name + "-cpp") : o.out;

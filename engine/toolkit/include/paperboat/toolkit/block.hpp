@@ -14,6 +14,8 @@
 #include <variant>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 namespace paperboat::toolkit {
 
 // A vector component's optional label and unit. Components are ordered; labels are for
@@ -100,14 +102,17 @@ struct View {
   std::string glyph = {};
   // The caption's value, an expression of the params: "{k}", "{min}…{max}".
   std::string value = {};
+  // Additive custom icon definition (§3, opaque JSON object: {w?, h?, g, ports?}); null when absent.
+  nlohmann::json icon = nullptr;
 
-  bool empty() const { return !compact && glyph.empty() && value.empty(); }
+  bool empty() const { return !compact && glyph.empty() && value.empty() && icon.is_null(); }
   // This view with `over`'s keys on top.
   View overridden_by(const View& over) const {
     View out = *this;
     if (over.compact) out.compact = over.compact;
     if (!over.glyph.empty()) out.glyph = over.glyph;
     if (!over.value.empty()) out.value = over.value;
+    if (!over.icon.is_null()) out.icon = over.icon;
     return out;
   }
 };

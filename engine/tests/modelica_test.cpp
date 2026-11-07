@@ -3,16 +3,26 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <nlohmann/json.hpp>
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <set>
+#include <string>
+#include <vector>
 
 #include "paperboat/modelica/generate.hpp"
+#include "paperboat/modelica/import.hpp"
 #include "paperboat/modelica/omc.hpp"
 #include "paperboat/modelica/squero.hpp"
+#include "paperboat/toolkit/descriptor.hpp"
 
 namespace mo = paperboat::modelica;
+namespace tk = paperboat::toolkit;
 namespace fs = std::filesystem;
+using nlohmann::json;
 
 TEST_CASE("omc answers parse into lists, strings and atoms", "[modelica]") {
   const auto v = mo::parse_value(R"({{Real, x, "a \"q\"", {}}, (true, "/tmp/f.xml"), Placement(true, -1)})");
@@ -106,11 +116,322 @@ end Bounce;
   CHECK(domain.find(R"({.id = "k", .default_value = 2.0, .unit = "1/s"})") != std::string::npos);
   CHECK(domain.find(R"({.id = "x_start", .default_value = 1.0, .unit = "m"})") != std::string::npos);
   CHECK(domain.find(R"(.outputs = {{"y", "signal", "m"}, {"rate", "signal", ""}})") != std::string::npos);
+  CHECK(domain.find(".view = {.icon = nlohmann::json::parse(") != std::string::npos);
+  CHECK(domain.find("registry.add_connector(\"decay\", \"RealInput\"") != std::string::npos);
+  CHECK(domain.find("registry.add_connector(\"decay\", \"RealOutput\"") != std::string::npos);
   CHECK(fs::is_regular_file(dir / "decay-cpp" / "descriptor.toml"));
   CHECK(fs::is_regular_file(dir / "decay-cpp" / "modelica" / "Decay.mo"));
+  tk::Registry decay_reg = tk::builtins();
+  decay_reg.add(tk::StationTemplate{
+      .name = "decay/decay",
+      .def = {.type = "decay",
+              .label = "Decay",
+              .block = tk::BlockDef{.type = "decay", .inputs = {{"u"}}, .outputs = {{"y"}, {"rate"}}}},
+      .make = {},
+  });
+  const auto generated_cat = tk::load_descriptor_file(dir / "decay-cpp" / "descriptor.toml", decay_reg);
+  REQUIRE(generated_cat.connectors.is_object());
+  CHECK(generated_cat.connectors.contains("RealInput"));
+  CHECK(generated_cat.connectors.contains("RealOutput"));
+  CHECK(generated_cat.connectors["RealInput"]["handle"] == "triangle");
+  CHECK(generated_cat.connectors["RealInput"]["kind"] == "input");
+  CHECK(generated_cat.connectors["RealOutput"]["handle"] == "circle");
+  CHECK(generated_cat.connectors["RealOutput"]["kind"] == "output");
 
   CHECK_THROWS_WITH(mo::generate(omc, {.source = dir / "Bounce.mo", .out = dir / "bounce-cpp", .path = "ode"}),
                     Catch::Matchers::ContainsSubstring("events"));
   CHECK(mo::check(omc, dir / "Bounce.mo", "Bounce").ok);
   fs::remove_all(dir);
+}
+
+namespace {
+
+bool on_grid(const json& v) {
+  return v.is_number_integer() && v.get<int>() >= 0 && v.get<int>() <= 100 && (v.get<int>() % 5) == 0;
+}
+
+void check_contract_tokens(const json& doc) {
+  const std::string raw = doc.dump();
+  CHECK(raw.find('#') == std::string::npos);
+  CHECK(raw.find("rgb(") == std::string::npos);
+  CHECK(raw.find("\"d\":") == std::string::npos);
+
+  REQUIRE(doc.contains("icon"));
+  REQUIRE(doc.contains("connectors"));
+  REQUIRE(doc.contains("notice"));
+
+  const json& icon = doc.at("icon");
+  const int w = icon.value("w", 1);
+  const int h = icon.value("h", 1);
+  CHECK((w == 1 || w == 2));
+  CHECK((h == 1 || h == 2));
+  CHECK_FALSE((w == 2 && h == 2));
+
+  static const std::set<std::string> kStrokes = {"ink", "muted"};  // importer never emits "signal"
+  static const std::set<std::string> kWeights = {"thin", "normal", "wire"};
+  static const std::set<std::string> kDashes = {"solid", "axis"};
+  static const std::set<std::string> kFills = {"none", "ink", "raised", "sunken"};
+  static const std::set<std::string> kCorners = {"0", "sm", "md"};
+  static const std::set<std::string> kFonts = {"sans", "mono"};
+  static const std::set<double> kSizes = {12.0, 12.5, 13.0, 15.0, 30.0};
+  static const std::set<std::string> kSides = {"left", "right", "top", "bottom"};
+  static const std::set<std::string> kVariants = {"hollow", "filled"};
+  static const std::set<std::string> kKinds = {"acausal", "input", "output", "expandable"};
+  static const std::set<std::string> kHandles = {"square", "diamond", "ring2", "triangle", "circle"};
+  static const std::set<int> kConnSizes = {8, 10, 12};
+
+  REQUIRE(icon.at("g").is_array());
+  for (const auto& p : icon.at("g")) {
+    if (p.contains("stroke")) CHECK(kStrokes.contains(p.at("stroke").get<std::string>()));
+    if (p.contains("weight")) CHECK(kWeights.contains(p.at("weight").get<std::string>()));
+    if (p.contains("dash")) CHECK(kDashes.contains(p.at("dash").get<std::string>()));
+    if (p.contains("fill")) CHECK(kFills.contains(p.at("fill").get<std::string>()));
+    const std::string t = p.at("t").get<std::string>();
+    if (t == "line" || t == "poly") {
+      REQUIRE(p.at("p").is_array());
+      CHECK(p.at("p").size() >= 2);
+      for (const auto& pt : p.at("p")) {
+        REQUIRE(pt.size() == 2);
+        CHECK(on_grid(pt[0]));
+        CHECK(on_grid(pt[1]));
+      }
+    } else if (t == "rect") {
+      CHECK(on_grid(p.at("x")));
+      CHECK(on_grid(p.at("y")));
+      CHECK(on_grid(p.at("w")));
+      CHECK(on_grid(p.at("h")));
+      if (p.contains("corner")) CHECK(kCorners.contains(p.at("corner").get<std::string>()));
+    } else if (t == "ellipse" || t == "arc") {
+      CHECK(on_grid(p.at("x")));
+      CHECK(on_grid(p.at("y")));
+      CHECK(on_grid(p.at("w")));
+      CHECK(on_grid(p.at("h")));
+      if (t == "arc") {
+        CHECK(p.at("a0").is_number());
+        CHECK(p.at("a1").is_number());
+      }
+    } else if (t == "text") {
+      CHECK(on_grid(p.at("x")));
+      CHECK(on_grid(p.at("y")));
+      CHECK(p.at("s").is_string());
+      if (p.contains("font")) CHECK(kFonts.contains(p.at("font").get<std::string>()));
+      if (p.contains("size")) CHECK(kSizes.contains(p.at("size").get<double>()));
+    } else {
+      FAIL("unexpected primitive type: " + t);
+    }
+  }
+
+  if (icon.contains("ports")) {
+    for (const auto& port : icon.at("ports")) {
+      CHECK_FALSE(port.at("id").get<std::string>().empty());
+      CHECK(doc.at("connectors").contains(port.at("class").get<std::string>()));
+      CHECK(kSides.contains(port.at("side").get<std::string>()));
+      CHECK(on_grid(port.at("at")));
+      if (port.contains("variant")) CHECK(kVariants.contains(port.at("variant").get<std::string>()));
+    }
+  }
+
+  for (const auto& [name, c] : doc.at("connectors").items()) {
+    CHECK_FALSE(name.empty());
+    CHECK(kKinds.contains(c.at("kind").get<std::string>()));
+    CHECK(kHandles.contains(c.at("handle").get<std::string>()));
+    CHECK(kConnSizes.contains(c.at("size").get<int>()));
+    const double wt = c.at("weight").get<double>();
+    CHECK((std::abs(wt - 1.2) < 1e-9 || std::abs(wt - 1.8) < 1e-9 || std::abs(wt - 2.0) < 1e-9));
+    if (c.contains("alt")) CHECK(kVariants.contains(c.at("alt").get<std::string>()));
+    if (c.contains("dash")) CHECK((c.at("dash") == "solid" || c.at("dash") == "dashed"));
+  }
+}
+
+json read_golden(const std::string& stem) {
+  const fs::path p = fs::path(PAPERBOAT_TEST_DATA) / "modelica" / (stem + ".icon.json");
+  std::ifstream in(p);
+  REQUIRE(in.good());
+  json doc;
+  in >> doc;
+  return doc;
+}
+
+}  // namespace
+
+TEST_CASE("checked-in MSL icon goldens obey contract §3 and §4 token tables", "[modelica]") {
+  for (const std::string stem : {"Resistor", "Inductor", "Capacitor", "Ground", "Inertia"}) {
+    INFO(stem);
+    check_contract_tokens(read_golden(stem));
+  }
+
+  const json resistor = read_golden("Resistor");
+  const auto& rports = resistor["icon"]["ports"];
+  REQUIRE(rports.size() == 3);
+  CHECK(rports[0] == json{{"id", "p"}, {"class", "PositivePin"}, {"side", "left"}, {"at", 50}, {"variant", "filled"}});
+  CHECK(rports[1] == json{{"id", "n"}, {"class", "NegativePin"}, {"side", "right"}, {"at", 50}, {"variant", "hollow"}});
+  CHECK(rports[2] == json{{"id", "heatPort"}, {"class", "HeatPort_a"}, {"side", "bottom"}, {"at", 50},
+                          {"variant", "filled"}, {"if", "useHeatPort"}});
+  CHECK(resistor["connectors"]["PositivePin"]["potential"][0] == json{{"id", "v"}, {"unit", "V"}});
+  CHECK(resistor["connectors"]["PositivePin"]["flow"][0] == json{{"id", "i"}, {"unit", "A"}});
+  CHECK(resistor["connectors"]["HeatPort_a"]["dash"] == "dashed");
+
+  const json ground = read_golden("Ground");
+  REQUIRE(ground["icon"]["ports"].size() == 1);
+  CHECK(ground["icon"]["ports"][0] == json{{"id", "p"}, {"class", "Pin"}, {"side", "top"}, {"at", 50}});
+
+  const json inertia = read_golden("Inertia");
+  const auto& iports = inertia["icon"]["ports"];
+  REQUIRE(iports.size() == 2);
+  CHECK(iports[0] == json{{"id", "flange_a"}, {"class", "Flange_a"}, {"side", "left"}, {"at", 50}, {"variant", "filled"}});
+  CHECK(iports[1] == json{{"id", "flange_b"}, {"class", "Flange_b"}, {"side", "right"}, {"at", 50}, {"variant", "hollow"}});
+  CHECK(inertia["connectors"]["Flange_a"]["size"] == 10);
+  CHECK(inertia["connectors"]["Flange_a"]["weight"] == 1.8);
+  CHECK(inertia["notice"]["simplified"] == 3);
+
+  const json inductor = read_golden("Inductor");
+  CHECK(inductor["notice"]["simplified"] == 4);
+}
+
+TEST_CASE("iconTransformation quantises edge slots, snaps rotation, and spreads collisions", "[modelica]") {
+  // Prefer iconTransformation over diagram transformation.
+  mo::RawPort placed{.id = "p", .class_name = "Pin"};
+  const auto annos = mo::parse_value(
+      "{Placement(transformation(extent={{90,-10},{110,10}}), "
+      "iconTransformation(origin={0,20}, extent={{-110,-10},{-90,10}}, rotation=12))}");
+  REQUIRE(mo::parse_placement(annos, placed));
+  CHECK(placed.has_placement);
+  CHECK(placed.origin_y == 20.0);
+  CHECK(placed.x1 == -110.0);
+
+  // Rotation snaps to 90° (85° -> 90° anticlockwise turns (-100, 0) into (0, -100) -> bottom 50);
+  // mirrored extent (x1 > x2) keeps its centre.
+  mo::RawPort rot_port{.id = "q", .class_name = "Pin", .has_placement = true,
+                       .x1 = -110, .y1 = -10, .x2 = -90, .y2 = 10, .rotation = 85.0};
+  mo::RawPort mir_port{.id = "m", .class_name = "Pin", .has_placement = true,
+                       .x1 = 110, .y1 = -10, .x2 = 90, .y2 = 10, .rotation = 0.0};
+
+  // Three ports colliding on left @ 50 spread across free 5-unit slots and record moved distances.
+  mo::RawPort c1{.id = "a", .class_name = "Pin", .has_placement = true, .x1 = -110, .y1 = -2, .x2 = -90, .y2 = 2};
+  mo::RawPort c2{.id = "b", .class_name = "Pin", .has_placement = true, .x1 = -110, .y1 = -1, .x2 = -90, .y2 = 1};
+  mo::RawPort c3{.id = "c", .class_name = "Pin", .has_placement = true, .x1 = -110, .y1 = 0, .x2 = -90, .y2 = 2};
+
+  mo::ImportNotice notice;
+  const auto ports = mo::quantise_ports({rot_port, mir_port, c1, c2, c3}, notice);
+  REQUIRE(ports.size() == 5);
+  CHECK(ports[0].side == "bottom");
+  CHECK(ports[0].at == 50);
+  CHECK(ports[1].side == "right");
+  CHECK(ports[1].at == 50);
+
+  std::set<int> left_slots;
+  for (std::size_t i = 2; i < 5; ++i) {
+    CHECK(ports[i].side == "left");
+    CHECK(ports[i].at % 5 == 0);
+    CHECK(ports[i].at >= 0);
+    CHECK(ports[i].at <= 100);
+    CHECK(left_slots.insert(ports[i].at).second);
+  }
+  CHECK(ports[2].at < ports[3].at);
+  CHECK(ports[3].at < ports[4].at);
+  CHECK(notice.moved.size() >= 2);
+  for (const auto& m : notice.moved) {
+    CHECK(m.distance > 0);
+    CHECK(m.distance % 5 == 0);
+  }
+}
+
+TEST_CASE("Icon(graphics) quantiser maps primitives, drops Bitmap/DynamicSelect, and bounds plates", "[modelica]") {
+  // Wide aspect (>= 1.75:1) -> 2x1; 2x2 is never emitted even for large square extents.
+  const auto wide = mo::parse_value(
+      "{-175.0,-100.0,175.0,100.0,true,-,-,,{"
+      "DynamicSelect(Rectangle(true,{0,0},0,{0,0,0},{255,255,255},LinePattern.Dash,FillPattern.HorizontalCylinder,0.5,"
+      "BorderPattern.None,{{-100,50},{100,-50}},18.0), Rectangle(extent={{0,0},{10,10}})),"
+      "Ellipse(true,{0,0},0,{160,160,160},{0,0,0},LinePattern.Solid,FillPattern.None,0.1,{{-40,40},{40,-40}},30.0,210.0),"
+      "Polygon(true,{0,0},0,{0,0,0},{0,0,0},LinePattern.Solid,FillPattern.Solid,0.25,{{-20,10},{20,0},{-20,-10}},Smooth.None),"
+      "Bitmap(extent={{-10,-10},{10,10}}, fileName=\"modelica://Pkg/img.png\"),"
+      "Text(true,{0,0},0,{0,0,0},{0,0,0},LinePattern.Solid,FillPattern.None,0.25,{{-100,-60},{100,-90}},\"k=%k\",0.0,{-1,-1,-1},\"\",{},TextAlignment.Center)"
+      "}}");
+  mo::ImportNotice notice;
+  const json icon = mo::quantise_icon({wide}, {}, notice);
+  CHECK(icon.value("w", 1) == 2);
+  CHECK(icon.value("h", 1) == 1);
+  REQUIRE(icon["g"].size() == 4);
+  CHECK(icon["g"][0]["t"] == "rect");
+  CHECK(icon["g"][0]["dash"] == "axis");
+  CHECK(icon["g"][0]["weight"] == "wire");
+  CHECK(icon["g"][0]["fill"] == "raised");
+  CHECK(icon["g"][0]["corner"] == "md");
+  CHECK(icon["g"][1]["t"] == "arc");
+  CHECK(icon["g"][1]["stroke"] == "muted");
+  CHECK(icon["g"][1]["weight"] == "thin");
+  CHECK(icon["g"][2]["t"] == "poly");
+  CHECK(icon["g"][2]["fill"] == "ink");
+  CHECK(icon["g"][3]["t"] == "text");
+  CHECK(icon["g"][3]["s"] == "k={k}");
+  CHECK(icon["g"][3]["font"] == "mono");
+
+  CHECK(std::ranges::find(notice.dropped, "DynamicSelect") != notice.dropped.end());
+  CHECK(std::ranges::find(notice.dropped, "Bitmap") != notice.dropped.end());
+  CHECK(notice.simplified >= 3);
+
+  // Large square box stays 1x1, never 2x2.
+  mo::ImportNotice sq_notice;
+  const json sq = mo::quantise_icon({mo::parse_value("{-400.0,-400.0,400.0,400.0,true,-,-,,{}}")}, {}, sq_notice);
+  CHECK_FALSE(sq.contains("w"));
+  CHECK_FALSE(sq.contains("h"));
+}
+
+TEST_CASE("live omc importer matches MSL goldens and resolves array, if, and fallback connectors", "[modelica][omc]") {
+  if (std::system("command -v omc >/dev/null 2>&1") != 0) SKIP("omc not installed");
+  mo::Omc omc;
+
+  const std::pair<const char*, const char*> msl_cases[] = {
+      {"Resistor", "Modelica.Electrical.Analog.Basic.Resistor"},
+      {"Inductor", "Modelica.Electrical.Analog.Basic.Inductor"},
+      {"Capacitor", "Modelica.Electrical.Analog.Basic.Capacitor"},
+      {"Ground", "Modelica.Electrical.Analog.Basic.Ground"},
+      {"Inertia", "Modelica.Mechanics.Rotational.Components.Inertia"},
+  };
+  for (const auto& [stem, cls] : msl_cases) {
+    INFO(cls);
+    const json live = mo::import_class(omc, cls).to_json();
+    CHECK(live == read_golden(stem));
+  }
+
+  // Local fixture with Pin p[n] and `if useHeatPort`.
+  const fs::path bus_mo = fs::path(PAPERBOAT_TEST_DATA) / "modelica" / "BusNode.mo";
+  const auto bus = mo::import_model(omc, bus_mo);
+  check_contract_tokens(bus.to_json());
+  REQUIRE(bus.icon["ports"].size() == 3);
+  CHECK(bus.icon["ports"][0]["id"] == "p");
+  CHECK(bus.icon["ports"][0]["array"] == "n");
+  CHECK(bus.icon["ports"][2]["id"] == "heatPort");
+  CHECK(bus.icon["ports"][2]["if"] == "useHeatPort");
+
+  // Unknown user-defined connector falls back to nearest domain handle and increments simplified.
+  const fs::path tmp = fs::temp_directory_path() / "paperboat-modelica-custom-conn";
+  fs::remove_all(tmp);
+  fs::create_directories(tmp);
+  std::ofstream(tmp / "CustomThermal.mo") << R"(package CustomThermal
+  connector MyHeatNode
+    Real T(unit = "K");
+    flow Real Q_flow(unit = "W");
+  end MyHeatNode;
+
+  partial model BaseShell
+    MyHeatNode port_a annotation(Placement(iconTransformation(extent = {{-110, -10}, {-90, 10}})));
+  end BaseShell;
+
+  model Wall
+    extends BaseShell;
+    MyHeatNode port_b annotation(Placement(iconTransformation(extent = {{90, -10}, {110, 10}})));
+  end Wall;
+end CustomThermal;
+)";
+  const auto wall = mo::import_model(omc, tmp / "CustomThermal.mo", "CustomThermal.Wall");
+  check_contract_tokens(wall.to_json());
+  REQUIRE(wall.connectors.contains("MyHeatNode"));
+  CHECK(wall.connectors.at("MyHeatNode").handle == "diamond");
+  CHECK(wall.connectors.at("MyHeatNode").dash == "dashed");
+  CHECK(wall.notice.simplified >= 1);
+  REQUIRE(wall.icon["ports"].size() == 2);
+  CHECK(wall.icon["ports"][0]["id"] == "port_a");
+  CHECK(wall.icon["ports"][1]["id"] == "port_b");
+  fs::remove_all(tmp);
 }

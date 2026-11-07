@@ -489,19 +489,25 @@ tk::Kind kind_from(const std::string& s, const std::string& at) {
   throw std::runtime_error(at + ": kind must be source, probe, function or monitor, not \"" + s + "\"");
 }
 
-// A block class's `view` dict: {"compact": True, "glyph": "gain", "value": "{k}"}, all optional.
+// A block class's `view` dict: {"compact": True, "glyph": "gain", "value": "{k}", "icon": {...}}, all optional.
 tk::View view_from_py(nb::handle cls, const std::string& at) {
   tk::View view;
   if (!nb::hasattr(cls, "view")) return view;
   nb::object v = cls.attr("view");
   if (v.is_none()) return view;
-  if (!nb::isinstance<nb::dict>(v)) throw std::runtime_error(at + ": view must be a dict (compact, glyph, value)");
+  if (!nb::isinstance<nb::dict>(v)) throw std::runtime_error(at + ": view must be a dict (compact, glyph, value, icon)");
   for (auto [k, val] : nb::cast<nb::dict>(v)) {
     const auto key = nb::cast<std::string>(k);
     if (key == "compact") view.compact = nb::cast<bool>(val);
     else if (key == "glyph") view.glyph = nb::cast<std::string>(val);
     else if (key == "value") view.value = nb::cast<std::string>(val);
-    else throw std::runtime_error(at + ": view has no key \"" + key + "\" (compact, glyph, value)");
+    else if (key == "icon") {
+      if (!val.is_none()) {
+        json icon = json_from_py(val);
+        if (!icon.is_object()) throw std::runtime_error(at + ": view.icon must be a dict");
+        view.icon = std::move(icon);
+      }
+    } else throw std::runtime_error(at + ": view has no key \"" + key + "\" (compact, glyph, value, icon)");
   }
   return view;
 }
@@ -542,7 +548,8 @@ tk::ObjectDef object_def(nb::handle cls) {
                              .label = text_attr(linked, "label", def.label),
                              .kind = kind_from(text_attr(linked, "kind", "probe"), at + ".block"),
                              .inputs = ports_from_py(linked.attr("inputs"), at + ".block"),
-                             .outputs = ports_from_py(linked.attr("outputs"), at + ".block")};
+                             .outputs = ports_from_py(linked.attr("outputs"), at + ".block"),
+                             .view = view_from_py(linked, at + ".block")};
   }
   def.description = text_attr(cls, "description", "");
   return def;
@@ -603,7 +610,7 @@ std::string read_file(const std::string& path) {
 // the built-in toolkit; then the descriptor loads against that registry.
 std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descriptor, nb::list blocks, nb::list objects,
                              nb::object state, const std::string& mode, double dt, double duration, int emit_every,
-                             nb::object view, double speed, const std::string& solver) {
+                             nb::object view, double speed, const std::string& solver, nb::object connectors) {
   auto h = std::make_unique<Hosted>();
   h->registry = tk::builtins();
   const std::string domain = tk::descriptor_domain(read_file(descriptor));
@@ -661,6 +668,16 @@ std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descr
     }
     h->registry.add(std::move(t));
   }
+  if (!connectors.is_none()) {
+    if (!nb::isinstance<nb::dict>(connectors)) throw std::runtime_error("connectors must be a dict");
+    if (domain.empty()) throw std::runtime_error(descriptor + ": needs a `domain` when registering connectors");
+    for (auto [k, val] : nb::cast<nb::dict>(connectors)) {
+      const auto name = nb::cast<std::string>(k);
+      json def = json_from_py(val);
+      if (!def.is_object()) throw std::runtime_error("connectors." + name + " must be a dict");
+      h->registry.add_connector(domain, name, std::move(def));
+    }
+  }
   h->classes = keep;
   h->catalog = tk::load_descriptor_file(descriptor, h->registry);
   h->state = state;
@@ -714,11 +731,14 @@ NB_MODULE(_engine, m) {
       .def("run_starter", &Hosted::run_starter, nb::arg("vars") = std::vector<std::pair<std::string, std::string>>{},
            nb::arg("duration").none() = nb::none(),
            "Run the starter graph on the starter station once, headless; print each message as a JSON line.")
+      .def("catalog_json", [](const Hosted& h) { return tk::catalog_message(h.catalog); },
+           "Return the protocol catalog JSON message for this backend.")
       .def("stop", &Hosted::stop);
 
   m.def("make", &make, nb::arg("engine"), nb::arg("descriptor"), nb::arg("blocks"), nb::arg("objects"),
         nb::arg("state").none(), nb::arg("mode"), nb::arg("dt"), nb::arg("duration"), nb::arg("emit_every"),
         nb::arg("view").none(), nb::arg("speed") = 1.0, nb::arg("solver") = "rk4",
+        nb::arg("connectors").none() = nb::none(),
         "Register the domain's classes and load the descriptor.");
 
   // --- Domain code's tools: the scene builders and solvers, bound from the toolkit ---

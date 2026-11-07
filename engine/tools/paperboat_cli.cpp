@@ -26,6 +26,7 @@
 #include "paperboat_tui.hpp"
 #ifdef PAPERBOAT_HAS_MODELICA
 #include "paperboat/modelica/generate.hpp"
+#include "paperboat/modelica/import.hpp"
 #include "paperboat/modelica/squero.hpp"
 #endif
 
@@ -110,6 +111,8 @@ Modelica (Squero Studio OM, needs OpenModelica):
                              Make a backend from a Modelica model (ODE when it can, else FMU)
   modelica check <Model.mo> [--model <Q.Name>]
                              omc's checkModel on it
+  modelica icon <Model.mo | Q.Name> [--class <Name>]
+                             Import a Modelica class's icon and connectors as JSON
   squero [--port <N>] [--app <dir>]
                              Squero Studio OM's server, squero/0 (default port 8790)
 
@@ -808,16 +811,49 @@ constexpr const char* kNoModelica =
 
 // paperboat modelica generate <Model.mo> [--model Q.Name] [--out dir] [--path fmu|ode|auto]
 // paperboat modelica check <Model.mo> [--model Q.Name]
+// paperboat modelica icon <Model.mo|Qualified.Name> [--class X]
 int cmd_modelica(const std::vector<std::string_view>& args) {
 #ifndef PAPERBOAT_HAS_MODELICA
   (void)args;
   std::cerr << kNoModelica;
   return 1;
 #else
-  if (args.size() < 2 || (args[0] != "generate" && args[0] != "check")) {
+  if (args.size() < 2 || (args[0] != "generate" && args[0] != "check" && args[0] != "icon")) {
     std::cerr << "usage: paperboat modelica generate <Model.mo> [--model <Qualified.Name>] [--out <model>-cpp/] "
-                 "[--path fmu|ode|auto]\n       paperboat modelica check <Model.mo> [--model <Qualified.Name>]\n";
+                 "[--path fmu|ode|auto]\n"
+                 "       paperboat modelica check <Model.mo> [--model <Qualified.Name>]\n"
+                 "       paperboat modelica icon <Model.mo|Qualified.Name> [--class <Name>]\n";
     return 2;
+  }
+  if (args[0] == "icon") {
+    const std::string_view target = args[1];
+    std::string cls;
+    for (std::size_t i = 2; i < args.size(); ++i) {
+      const auto flag = args[i];
+      if (flag == "--json") continue;
+      if (i + 1 >= args.size()) {
+        std::cerr << "error: " << flag << " needs a value\n";
+        return 2;
+      }
+      const std::string value(args[++i]);
+      if (flag == "--class" || flag == "--model") cls = value;
+      else {
+        std::cerr << "error: unknown option " << flag << '\n';
+        return 2;
+      }
+    }
+    try {
+      mo::Omc omc;
+      const bool is_file = fs::is_regular_file(target) || target.ends_with(".mo") ||
+                           target.find('/') != std::string_view::npos || target.find('\\') != std::string_view::npos;
+      const mo::ImportedModel imp = is_file ? mo::import_model(omc, fs::path(target), cls)
+                                            : mo::import_model(omc, {}, cls.empty() ? target : std::string_view(cls));
+      std::cout << imp.to_json().dump(2) << '\n';
+      return 0;
+    } catch (const std::exception& e) {
+      std::cerr << "error: " << e.what() << '\n';
+      return 1;
+    }
   }
   mo::GenerateOptions o{.source = std::string(args[1])};
   for (std::size_t i = 2; i < args.size(); ++i) {
@@ -919,8 +955,8 @@ const std::vector<CommandSpec>& command_table() {
        {"--fast", "--json", "--json-stream"}, "backend"},
       {"pack", cmd_pack, "Package a backend as .ppk", {}, {}, {"--out", "--json-stream"}, "backend"},
       {"unpack", cmd_unpack, "Unpack and verify a .ppk", {}, {}, {"--dir", "--json-stream"}, "ppk"},
-      {"modelica", cmd_modelica, "Make a backend from a Modelica model", {}, {"generate", "check"},
-       {"--model", "--out", "--path"}, "file"},
+      {"modelica", cmd_modelica, "Make a backend from a Modelica model", {}, {"generate", "check", "icon"},
+       {"--model", "--out", "--path", "--class"}, "file"},
       {"squero", cmd_squero, "Run Squero Studio OM's server", {"studio"}, {}, {"--port", "--app"}},
       {"top", cmd_top, "Process dashboard (console)"},
       {"commands", cmd_commands, "The command table", {}, {}, {"--json"}},

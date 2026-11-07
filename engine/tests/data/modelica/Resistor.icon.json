@@ -1,0 +1,135 @@
+{
+  "connectors": {
+    "HeatPort_a": {
+      "alt": "filled",
+      "dash": "dashed",
+      "flow": [
+        {
+          "id": "Q_flow",
+          "unit": "W"
+        }
+      ],
+      "handle": "diamond",
+      "kind": "acausal",
+      "potential": [
+        {
+          "id": "T",
+          "unit": "K"
+        }
+      ],
+      "size": 8,
+      "weight": 1.2
+    },
+    "NegativePin": {
+      "flow": [
+        {
+          "id": "i",
+          "unit": "A"
+        }
+      ],
+      "handle": "square",
+      "kind": "acausal",
+      "potential": [
+        {
+          "id": "v",
+          "unit": "V"
+        }
+      ],
+      "size": 8,
+      "weight": 1.2
+    },
+    "PositivePin": {
+      "alt": "filled",
+      "flow": [
+        {
+          "id": "i",
+          "unit": "A"
+        }
+      ],
+      "handle": "square",
+      "kind": "acausal",
+      "potential": [
+        {
+          "id": "v",
+          "unit": "V"
+        }
+      ],
+      "size": 8,
+      "weight": 1.2
+    }
+  },
+  "icon": {
+    "g": [
+      {
+        "fill": "raised",
+        "h": 30,
+        "t": "rect",
+        "w": 70,
+        "x": 15,
+        "y": 35
+      },
+      {
+        "p": [
+          [
+            5,
+            50
+          ],
+          [
+            15,
+            50
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "p": [
+          [
+            85,
+            50
+          ],
+          [
+            95,
+            50
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "font": "mono",
+        "s": "R={R}",
+        "t": "text",
+        "x": 50,
+        "y": 80
+      }
+    ],
+    "ports": [
+      {
+        "at": 50,
+        "class": "PositivePin",
+        "id": "p",
+        "side": "left",
+        "variant": "filled"
+      },
+      {
+        "at": 50,
+        "class": "NegativePin",
+        "id": "n",
+        "side": "right",
+        "variant": "hollow"
+      },
+      {
+        "at": 50,
+        "class": "HeatPort_a",
+        "id": "heatPort",
+        "if": "useHeatPort",
+        "side": "bottom",
+        "variant": "filled"
+      }
+    ]
+  },
+  "notice": {
+    "dropped": [],
+    "moved": [],
+    "simplified": 0
+  }
+}

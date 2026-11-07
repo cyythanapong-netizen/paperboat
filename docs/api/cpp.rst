@@ -232,9 +232,11 @@ initializers may leave any out.
       How the UI draws the block: a hint, so a block without it is the normal card.
       ``compact`` draws a small plate with a ``glyph`` (a curve name such as ``"gain"`` or a
       few characters) and a caption with the name and ``value`` (an expression of the
-      params, ``"{k}"``). Every key is optional: a definition inherits its parent's ``view``
-      and overrides single keys. The built-in simple maths and logic templates have one;
-      a descriptor may set ``view``.
+      params, ``"{k}"``); ``icon`` (an opaque ``nlohmann::json`` object, ``null`` when
+      absent) supplies a token-quantised vector icon (``{w, h, g, ports}``) rendered on the
+      plate without raw colours or SVG path strings. Every key is optional: a definition
+      inherits its parent's ``view`` and overrides single keys (:cpp:func:`View::overridden_by`).
+      The built-in simple maths and logic templates have one; a descriptor may set ``view``.
 
    .. cpp:member:: bool feedthrough = true
 
@@ -881,6 +883,12 @@ Registering
 
    .. cpp:function:: void add(StationTemplate t)
 
+   .. cpp:function:: void add_connector(std::string package, std::string name, nlohmann::json def)
+
+      Registers a Modelica connector definition (such as ``"RealInput"`` or ``"Pin"``) under
+      ``package`` so descriptors importing ``package`` (or whose ``domain`` is ``package``)
+      carry it in ``catalog.connectors``.
+
    .. cpp:function:: const Template *find(std::string_view name) const
 
    .. cpp:function:: std::vector<std::string> packages() const
@@ -897,7 +905,8 @@ Loading
 .. cpp:struct:: Catalog
 
    A descriptor loaded against a registry: the app's blocks and station objects, its
-   starters (``graph``, ``station``, as protocol JSON text) and its Station view
+   top-level ``connectors`` table (passed unchanged into ``catalog``), its starters
+   (``graph``, ``station``, as protocol JSON text) and its Station view
    (``station_view``, ``station_page``). Its entries point into the registry, which must
    outlive it.
 
@@ -1082,3 +1091,67 @@ always.
           return "done";
         }
       };
+
+.. cpp:namespace:: paperboat::modelica
+
+Modelica importer
+-----------------
+
+``<paperboat/modelica/import.hpp>`` (built when ``omc`` is found at configure time; optional
+target ``paperboat::modelica``). Resolves connectors across ``extends``, quantises
+``Placement(iconTransformation)`` onto 5-unit edge slots with collision spreading, and
+quantises ``Icon(graphics)`` onto Paperboat's design-token primitive set (``view.icon``).
+
+.. cpp:struct:: ImportedModel
+
+   Result of importing one Modelica class: ``icon`` (token-only ``IconDef`` JSON),
+   ``connectors`` (short class name → :cpp:struct:`ConnectorDef`), and ``notice``
+   (:cpp:struct:`ImportNotice` counting simplified items, dropped items such as ``Bitmap`` or
+   ``DynamicSelect``, and ports moved during edge-slot collision spreading). ``to_json()``
+   returns ``{"icon", "connectors", "notice"}``.
+
+.. cpp:struct:: ConnectorDef
+
+   A resolved Modelica connector class: ``kind`` (``"acausal"``, ``"input"``, ``"output"``,
+   ``"expandable"``), ``handle`` (``"square"``, ``"diamond"``, ``"ring2"``, ``"triangle"``,
+   ``"circle"``), ``alt``, ``size``, ``weight``, ``dash``, and variable/unit lists
+   (``potential``, ``flow``, ``stream``).
+
+.. cpp:struct:: IconPort
+
+   One connector port placed on an icon plate's edge: ``id``, ``class_name``, ``side``
+   (``"left"``, ``"right"``, ``"top"``, ``"bottom"``), ``at`` (``0..100`` in steps of 5),
+   plus optional ``variant``, ``array`` (vector count parameter), and ``condition``
+   (serialised as ``"if"``).
+
+.. cpp:struct:: ImportNotice
+
+   Simplification report: ``simplified`` count, ``dropped`` record names, and ``moved``
+   ports with their shift distance along the edge.
+
+.. cpp:function:: ImportedModel import_model(Omc &omc, const std::filesystem::path &source, std::string_view class_name = {})
+
+   Imports a ``.mo`` file (optional ``class_name`` selects among classes in the file) or, when
+   ``source`` is empty, a loaded or MSL qualified class name. Powers
+   ``paperboat modelica icon``.
+
+.. cpp:function:: ImportedModel import_class(Omc &omc, std::string_view class_name)
+
+   Imports a loaded or Modelica Standard Library class (loading ``Modelica`` automatically when
+   ``class_name`` starts with ``Modelica.``).
+
+.. cpp:function:: void resolve_connectors(Omc &omc, std::string_view class_name, std::vector<RawPort> &out_ports, std::map<std::string, ConnectorDef> &out_connectors, ImportNotice &notice)
+
+   Walks ``class_name`` and its ``extends`` bases to collect public non-``outer`` connector
+   instances and map their connector classes to the built-in handle table.
+
+.. cpp:function:: std::vector<IconPort> quantise_ports(const std::vector<RawPort> &raw, ImportNotice &notice, IconExtent extent = {})
+
+   Snaps raw ``iconTransformation`` placements onto ``{side, at}`` (multiples of 5 in
+   ``0..100``, rotation snapped to 90°, mirroring kept) and spreads collisions across free
+   slots on the same side.
+
+.. cpp:function:: nlohmann::json quantise_icon(const std::vector<OmValue> &icon_annotations, const std::vector<IconPort> &ports, ImportNotice &notice, IconExtent *out_extent = nullptr)
+
+   Quantises ``getIconAnnotation`` records (``Line``, ``Polygon``, ``Rectangle``, ``Ellipse``,
+   ``Text``) onto the ``0..100`` 5-unit grid and design-token stroke/fill/weight/font tables.

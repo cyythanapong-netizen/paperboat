@@ -43,14 +43,24 @@ struct StationTemplate {
   std::function<std::unique_ptr<StationObject>(const Values& props)> make;
 };
 
+// A Modelica connector class definition registered by a package or domain (§4).
+struct ConnectorEntry {
+  std::string package = {};
+  std::string name = {};         // Modelica class short name, e.g. "Pin" or "RealInput"
+  nlohmann::json def = nullptr;  // ConnectorDef JSON object
+};
+
 class Registry {
  public:
   void add(Template t);  // throws std::invalid_argument on a duplicate name
   void add(StationTemplate t);
+  void add_connector(std::string package, std::string name, nlohmann::json def);
   const Template* find(std::string_view name) const;
   const StationTemplate* find_object(std::string_view name) const;
   // The station templates of one package, in the order they were added.
   std::vector<const StationTemplate*> objects(std::string_view package) const;
+  // The connector definitions of one package, in the order they were added.
+  std::vector<const ConnectorEntry*> connectors(std::string_view package) const;
   std::vector<const Template*> all() const;  // sorted by name
   // The templates of one package ("base"), in the order they were added.
   std::vector<const Template*> package(std::string_view name) const;
@@ -59,6 +69,7 @@ class Registry {
  private:
   std::vector<Template> templates_;
   std::vector<StationTemplate> objects_;
+  std::vector<ConnectorEntry> connectors_;
 };
 
 // Defining a block or station object in code: a domain's own, or a package's. `B` derives

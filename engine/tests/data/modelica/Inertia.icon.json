@@ -1,0 +1,223 @@
+{
+  "connectors": {
+    "Flange_a": {
+      "alt": "filled",
+      "flow": [
+        {
+          "id": "tau",
+          "unit": "N.m"
+        }
+      ],
+      "handle": "square",
+      "kind": "acausal",
+      "potential": [
+        {
+          "id": "phi",
+          "unit": "rad"
+        }
+      ],
+      "size": 10,
+      "weight": 1.8
+    },
+    "Flange_b": {
+      "flow": [
+        {
+          "id": "tau",
+          "unit": "N.m"
+        }
+      ],
+      "handle": "square",
+      "kind": "acausal",
+      "potential": [
+        {
+          "id": "phi",
+          "unit": "rad"
+        }
+      ],
+      "size": 10,
+      "weight": 1.8
+    }
+  },
+  "icon": {
+    "g": [
+      {
+        "fill": "sunken",
+        "h": 10,
+        "t": "rect",
+        "w": 25,
+        "x": 0,
+        "y": 45
+      },
+      {
+        "fill": "sunken",
+        "h": 10,
+        "t": "rect",
+        "w": 25,
+        "x": 75,
+        "y": 45
+      },
+      {
+        "p": [
+          [
+            10,
+            65
+          ],
+          [
+            20,
+            65
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "p": [
+          [
+            80,
+            65
+          ],
+          [
+            90,
+            65
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "p": [
+          [
+            15,
+            65
+          ],
+          [
+            15,
+            85
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "p": [
+          [
+            85,
+            65
+          ],
+          [
+            85,
+            85
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "p": [
+          [
+            10,
+            40
+          ],
+          [
+            20,
+            40
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "p": [
+          [
+            80,
+            40
+          ],
+          [
+            90,
+            40
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "p": [
+          [
+            15,
+            30
+          ],
+          [
+            15,
+            40
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "p": [
+          [
+            85,
+            30
+          ],
+          [
+            85,
+            40
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "p": [
+          [
+            15,
+            85
+          ],
+          [
+            85,
+            85
+          ]
+        ],
+        "t": "line"
+      },
+      {
+        "corner": "md",
+        "fill": "raised",
+        "h": 50,
+        "t": "rect",
+        "w": 50,
+        "x": 25,
+        "y": 25
+      },
+      {
+        "font": "mono",
+        "s": "J={J}",
+        "t": "text",
+        "x": 50,
+        "y": 100
+      },
+      {
+        "corner": "md",
+        "h": 50,
+        "t": "rect",
+        "w": 50,
+        "x": 25,
+        "y": 25
+      }
+    ],
+    "ports": [
+      {
+        "at": 50,
+        "class": "Flange_a",
+        "id": "flange_a",
+        "side": "left",
+        "variant": "filled"
+      },
+      {
+        "at": 50,
+        "class": "Flange_b",
+        "id": "flange_b",
+        "side": "right",
+        "variant": "hollow"
+      }
+    ]
+  },
+  "notice": {
+    "dropped": [],
+    "moved": [],
+    "simplified": 3
+  }
+}

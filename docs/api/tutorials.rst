@@ -449,8 +449,16 @@ OpenModelica installed (``omc`` on ``PATH``, which also builds ``engine/modelica
 .. code-block:: bash
 
    paperboat modelica check DCMotor.mo
+   paperboat modelica icon DCMotor.mo
+   paperboat modelica icon Modelica.Electrical.Analog.Basic.Resistor
    paperboat modelica generate DCMotor.mo --out dc-motor-cpp/
    paperboat build dc-motor-cpp && paperboat run dc-motor-cpp
+
+``paperboat modelica icon <Model.mo | Qualified.Name> [--class <Name>]`` inspects a local
+``.mo`` file or a Modelica Standard Library class and prints ``{icon, connectors, notice}`` as
+JSON: inherited connectors resolved through ``extends``, ``iconTransformation`` placements
+snapped onto 5-unit edge slots, and ``Icon(graphics)`` primitives quantised onto Paperboat's
+design tokens.
 
 ``generate`` asks omc for the model's backend DAE (``dumpXMLDAE``) and picks a path, printing
 which and why (``--path ode|fmu|auto``, default ``auto``):
@@ -467,7 +475,9 @@ What becomes what:
   the ``start`` of each state with ``fixed = true`` (as ``<state>_start``), with units;
 - its **linked block** (no feedthrough) takes the top-level ``RealInput``\ s and gives the
   top-level ``RealOutput``\ s plus every variable marked
-  ``annotation(__paperboat(probe = true))``;
+  ``annotation(__paperboat(probe = true))``, carrying ``view.icon`` (from the model's ``Icon``
+  and causal connector ``ports``) and registering ``connectors`` in both C++ and
+  ``descriptor.toml``;
 - everything else stays inside the compiled model.
 
 ``CMakeLists.txt``, ``main.cpp`` and ``domain/`` are rewritten on every generate;

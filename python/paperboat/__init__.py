@@ -217,6 +217,7 @@ class Linked(NamedTuple):
     outputs: tuple = ()
     kind: str = "probe"
     label: str = ""
+    view: dict | None = None
 
 
 class StationObject:
@@ -408,6 +409,7 @@ class Backend:
     emit_every: int = 4                          # send signals and scene patches every N steps
     speed: float = 1.0                           # times real time (0: as fast as it can); the UI may change it per run
     view: dict | None = None                     # the scene's camera hint, e.g. {"mode": "2d", …}
+    connectors: dict | None = None               # Modelica connector definitions (§4), keyed by short name
     port: int = 8765
     solver: str = "rk4"                          # default solver: rk4 | rk45 | rk2 | euler | discrete
 
@@ -436,7 +438,8 @@ def serve(backend: Backend) -> None:
             except Exception:
                 pass
     hosted = make(backend.engine, str(backend.descriptor), list(backend.blocks), list(backend.objects), backend.state,
-                  backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view, backend.speed, solver)
+                  backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view, backend.speed, solver,
+                  backend.connectors)
     if run:
         try:
             status = hosted.run_starter(variables, duration)
