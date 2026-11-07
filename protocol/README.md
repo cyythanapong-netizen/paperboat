@@ -189,7 +189,7 @@ made again with the new param) and those that implement `Block::set_param` (PID'
 block, and a station object's property, takes the new value with the next run; the Console says so
 once. A value its `min`/`max` refuses is ignored, with a warning.
 
-**Project file** (#82). Everything a user made, as one JSON file (`name.paperboat.json`), written
+**Project file** (#82). Everything a user made, as one JSON file (`name.ppj`), written
 and read by the UI; it is not a message, and a backend needs no code for it. It reuses the shapes
 above: `flow` (a `Graph`, every node with its `pos`), `station`, `variables`, `dashboard` and
 `run` (only what differs from the backend's defaults), plus `paperboat` (the format version, `0`;

@@ -101,6 +101,8 @@ test("a file name is made safe and ends in the project extension", () => {
 });
 
 test("a project's name is its file's without the extension", () => {
+  assert.equal(projectName("balance.ppj"), "balance");
+  assert.equal(projectName("Balance.PPJ"), "Balance");
   assert.equal(projectName("balance.paperboat.json"), "balance");
   assert.equal(projectName("Balance.PAPERBOAT.JSON"), "Balance");
   assert.equal(projectName("notes.json"), "notes");
