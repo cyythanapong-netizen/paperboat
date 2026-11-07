@@ -23,6 +23,8 @@ import { ownKeys, SEARCH_CHORD, useShortcuts, type Command } from "./commands";
 import { missingRequiredToolkits, MissingToolkitsDialog, ToolkitsButton } from "./Toolkits";
 import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
+import { isArrangeLocked, isModeAllowed, isPageAllowed, type LockConfig } from "./lock";
+import { LockDialog } from "./LockDialog";
 
 const DEFAULT_URL =
   new URLSearchParams(location.search).get("backend") ??
@@ -79,6 +81,11 @@ function useDrawer(key: string, open: boolean, size: number, side: Drawer["side"
 }
 
 const PAGE_IDS = PAGES.map((p) => p.id);
+const MODE_OPTIONS: { value: Mode; label: string; hint: string }[] = [
+  { value: "navigator", label: "navigator", hint: "One page at a time (Alt+M)" },
+  { value: "commander", label: "commander", hint: "Station and Flow, the Board under them (Alt+M)" },
+  { value: "lookout", label: "lookout", hint: "The Board, Station and Flow at its sides (Alt+M)" },
+];
 
 /** "1 object", "2 objects". */
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -113,6 +120,33 @@ export function App() {
   const [page, setPage] = remembered<Page>("paperboat.page", "flow", PAGE_IDS);
   const [themeChoice, setThemeChoice] = remembered<Theme>("paperboat.theme", "auto", ["auto", "light", "dark"]);
   const theme = useTheme(themeChoice);
+  // UI Lock (#104): restrict Board Arrange and available views behind an optional passcode.
+  const [projectLock, setProjectLock] = useState<LockConfig | null>(null);
+  const [unlocked, setUnlocked] = useState(true);
+  const [lockModalOpen, setLockModalOpen] = useState(false);
+  const locked = !!projectLock && !unlocked;
+  const lockedArrange = isArrangeLocked(projectLock, unlocked);
+  const allowedPages = projectLock && !unlocked && projectLock.pages && projectLock.pages.length > 0 ? projectLock.pages : PAGE_IDS;
+  const allowedModes: Mode[] =
+    projectLock && !unlocked && projectLock.modes && projectLock.modes.length > 0
+      ? (projectLock.modes as Mode[])
+      : MODES;
+
+  useEffect(() => {
+    if (lockedArrange && arrange) setArrange(false);
+  }, [lockedArrange, arrange]);
+
+  useEffect(() => {
+    if (locked) {
+      if (allowedPages.length > 0 && !allowedPages.includes(page)) {
+        setPage(allowedPages[0] as Page);
+      }
+      if (allowedModes.length > 0 && !allowedModes.includes(mode)) {
+        setMode(allowedModes[0] as Mode);
+      }
+    }
+  }, [locked, allowedPages, allowedModes, page, mode, setPage, setMode]);
+
   const [url, setUrl] = useState(DEFAULT_URL);
   const [searchOpen, setSearchOpen] = useState(false); // the command search (Ctrl+K)
   const [backendOpen, setBackendOpen] = useState(false); // File > Backend…
@@ -563,7 +597,16 @@ export function App() {
   const [restoreChecked, setRestoreChecked] = useState(false);
   const [baseline, setBaseline] = useState<string | null>(null);
   const [projectKey, setProjectKey] = useState("");
-  const snapshot = (): Project => buildProject({ backend: state.engine, flow: toFlow(nodes, edges), station, variables, dashboard: dashSaved, run: runSettings });
+  const snapshot = (): Project =>
+    buildProject({
+      backend: state.engine,
+      flow: toFlow(nodes, edges),
+      station,
+      variables,
+      dashboard: dashSaved,
+      run: runSettings,
+      ui: projectLock ? { lock: projectLock } : undefined,
+    });
   const latestProject = useRef<Project | null>(null);
   const dirty = baseline !== null && projectKey !== "" && projectKey !== baseline;
   const live = useRef({ snapshot, projectTitle, baseline, dirty, state });
@@ -577,7 +620,7 @@ export function App() {
       setProjectKey(JSON.stringify(p));
     }, 250);
     return () => window.clearTimeout(t);
-  }, [nodes, edges, station, variables, dashSaved, runSettings, state.engine]); // eslint-disable-line react-hooks/exhaustive-deps -- `snapshot` reads exactly these
+  }, [nodes, edges, station, variables, dashSaved, runSettings, projectLock, state.engine]); // eslint-disable-line react-hooks/exhaustive-deps -- `snapshot` reads exactly these
   // Another backend: a new, unnamed project.
   useEffect(() => {
     setProjectTitle("Untitled");
@@ -612,6 +655,18 @@ export function App() {
     setRunSettings(p.run ?? {});
     setProjectTitle(name);
     setBaseline(rebase);
+    const lock = p.ui?.lock ?? null;
+    setProjectLock(lock);
+    setUnlocked(!lock);
+    if (lock) {
+      if (lock.arrange) setArrange(false);
+      if (lock.pages && lock.pages.length > 0 && !lock.pages.includes(page)) {
+        setPage(lock.pages[0] as Page);
+      }
+      if (lock.modes && lock.modes.length > 0 && !lock.modes.includes(mode)) {
+        setMode(lock.modes[0] as Mode);
+      }
+    }
     requestAnimationFrame(() => fitView());
   };
   // The backend can send an initial project on connect (#126).
@@ -858,6 +913,7 @@ export function App() {
     { id: "file.save", label: "Save", menu: "file", group: "project", shortcut: "Ctrl+S", chord: { key: "s", ctrl: true }, enabled: !!state.engine, why: "Not connected to a backend yet", run: () => void saveProject(false) },
     { id: "file.saveAs", label: "Save as…", menu: "file", group: "project", shortcut: "Ctrl+Shift+S", chord: { key: "s", ctrl: true, shift: true }, enabled: !!state.engine, why: "Not connected to a backend yet", run: () => void saveProject(true) },
     { id: "file.restore", label: "Restore last session", menu: "file", group: "session", enabled: !!lastSession, why: "No unsaved session to restore", run: () => lastSession && restore(lastSession) },
+    { id: "file.lock", label: locked ? "Unlock UI…" : projectLock ? "UI Lock Settings…" : "Lock UI…", menu: "file", group: "session", run: () => setLockModalOpen(true) },
     ...recent.map((s): Command => ({ id: `file.recent.${s.name}`, label: s.name, menu: "file", group: "recent", meta: ago(s.savedAt, Date.now()), enabled: state.connection === "open", why: "Not connected to a backend", run: () => openProject(s.project, s.name) })),
     { id: "file.backend", label: "Backend…", menu: "file", group: "backend", run: () => setBackendOpen(true) },
     { id: "file.restartBackend", label: "Restart backend", menu: "file", group: "backend", enabled: state.connection === "open", why: "Not connected to a backend", run: restartBackend },
@@ -887,20 +943,25 @@ export function App() {
     { id: "edit.variables", label: "Variables…", menu: "edit", group: "panels", shortcut: "Alt+V", chord: { key: "v", alt: true }, meta: String(variables.length), run: () => setVarsShown(varsShown === "open" ? "closed" : "open") },
 
     { id: "view.search", label: "Command search…", menu: "view", group: "search", shortcut: "Ctrl+K", chord: SEARCH_CHORD, quiet: true, run: () => setSearchOpen(true) },
-    ...PAGES.map((p, i): Command => ({
-      id: `view.page.${p.id}`,
-      label: p.label,
-      menu: "view",
-      group: "pages",
-      shortcut: `Alt+${i + 1}`,
-      chord: { key: String(i + 1), alt: true },
-      checked: mode === "navigator" && page === p.id,
-      run: () => open(p.id),
-    })),
-    { id: "view.mode.navigator", label: "Navigator", menu: "view", group: "mode", checked: mode === "navigator", run: () => setMode("navigator") },
-    { id: "view.mode.commander", label: "Commander", menu: "view", group: "mode", checked: mode === "commander", run: () => setMode("commander") },
-    { id: "view.mode.lookout", label: "Lookout", menu: "view", group: "mode", checked: mode === "lookout", run: () => setMode("lookout") },
-    { id: "view.mode.switch", label: "Switch view mode", menu: "view", group: "mode", shortcut: "Alt+M", chord: { key: "m", alt: true }, run: () => setMode(MODES[(MODES.indexOf(mode) + 1) % MODES.length]) },
+    ...PAGES.map((p, i): Command => {
+      const allowed = isPageAllowed(p.id, projectLock, unlocked);
+      return {
+        id: `view.page.${p.id}`,
+        label: p.label,
+        menu: "view",
+        group: "pages",
+        shortcut: `Alt+${i + 1}`,
+        chord: { key: String(i + 1), alt: true },
+        checked: mode === "navigator" && page === p.id,
+        enabled: allowed,
+        why: allowed ? undefined : "Locked by the project",
+        run: () => { if (allowed) open(p.id); },
+      };
+    }),
+    { id: "view.mode.navigator", label: "Navigator", menu: "view", group: "mode", checked: mode === "navigator", enabled: isModeAllowed("navigator", projectLock, unlocked), why: isModeAllowed("navigator", projectLock, unlocked) ? undefined : "Locked by the project", run: () => setMode("navigator") },
+    { id: "view.mode.commander", label: "Commander", menu: "view", group: "mode", checked: mode === "commander", enabled: isModeAllowed("commander", projectLock, unlocked), why: isModeAllowed("commander", projectLock, unlocked) ? undefined : "Locked by the project", run: () => setMode("commander") },
+    { id: "view.mode.lookout", label: "Lookout", menu: "view", group: "mode", checked: mode === "lookout", enabled: isModeAllowed("lookout", projectLock, unlocked), why: isModeAllowed("lookout", projectLock, unlocked) ? undefined : "Locked by the project", run: () => setMode("lookout") },
+    { id: "view.mode.switch", label: "Switch view mode", menu: "view", group: "mode", shortcut: "Alt+M", chord: { key: "m", alt: true }, enabled: allowedModes.length > 1, why: allowedModes.length <= 1 ? "Locked to a single mode by the project" : undefined, run: () => { if (allowedModes.length > 1) { const nextIdx = (allowedModes.indexOf(mode) + 1) % allowedModes.length; setMode(allowedModes[nextIdx] as Mode); } } },
     { id: "view.theme.auto", label: "Auto", menu: "view", group: "theme", checked: themeChoice === "auto", run: () => setThemeChoice("auto") },
     { id: "view.theme.light", label: "Light", menu: "view", group: "theme", checked: themeChoice === "light", run: () => setThemeChoice("light") },
     { id: "view.theme.dark", label: "Dark", menu: "view", group: "theme", checked: themeChoice === "dark", run: () => setThemeChoice("dark") },
@@ -930,7 +991,10 @@ export function App() {
       menu: "view",
       group: "windows",
       checked: arrange,
+      enabled: !lockedArrange,
+      why: lockedArrange ? "Locked by the project" : undefined,
       run: () => {
+        if (lockedArrange) return;
         if (!arrange && mode === "navigator") setPage("dashboard");
         setArrange(!arrange);
       },
@@ -964,22 +1028,29 @@ export function App() {
         >
           {errors > 0 ? count(errors, "error") : "Console"}
         </button>
-        <Switch
-          label="View"
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: "navigator", label: "navigator", hint: "One page at a time (Alt+M)" },
-            { value: "commander", label: "commander", hint: "Station and Flow, the Board under them (Alt+M)" },
-            { value: "lookout", label: "lookout", hint: "The Board, Station and Flow at its sides (Alt+M)" },
-          ]}
-        />
+        {allowedModes.length > 1 && (
+          <Switch
+            label="View"
+            value={mode}
+            onChange={setMode}
+            options={MODE_OPTIONS.filter((o) => allowedModes.includes(o.value))}
+          />
+        )}
+        {projectLock && (
+          <button
+            className={`chip${locked ? " on" : ""}`}
+            title={locked ? "UI is locked by project (click to unlock)" : "UI lock configured (unlocked)"}
+            onClick={() => setLockModalOpen(true)}
+          >
+            {locked ? "🔒 Locked" : "🔓 Lock"}
+          </button>
+        )}
         <button className={`chip conn-${state.connection}`} title="Which backend: File > Backend…" onClick={() => setBackendOpen(true)}>
           <i aria-hidden="true" />
           {state.connection === "open" ? state.engine : state.connection}
         </button>
       </header>
-      <Rail page={page} onPage={setPage} hidden={mode !== "navigator"} />
+      <Rail page={page} onPage={setPage} hidden={mode !== "navigator"} allowedPages={allowedPages} />
       <VarsContext.Provider value={varsApi}>
       <main className="pages">
         <div className="page-stack">
@@ -1047,9 +1118,11 @@ export function App() {
         <Panel
           {...panel("dashboard")}
           actions={
-            <button className={`key small${arrange ? " on" : ""}`} aria-pressed={arrange} title="Move instruments and pick their sizes" onClick={() => setArrange(!arrange)}>
-              {arrange ? "Done" : "Arrange"}
-            </button>
+            !lockedArrange ? (
+              <button className={`key small${arrange ? " on" : ""}`} aria-pressed={arrange} title="Move instruments and pick their sizes" onClick={() => setArrange(!arrange)}>
+                {arrange ? "Done" : "Arrange"}
+              </button>
+            ) : undefined
           }
           info={count(Object.keys(monitors).length, "instrument")}
         >
@@ -1112,6 +1185,21 @@ export function App() {
           place="station"
           onAdd={(it) => addObject(it)}
           onClose={() => setBrowser(null)}
+        />
+      )}
+      {lockModalOpen && (
+        <LockDialog
+          lock={projectLock}
+          unlocked={unlocked}
+          onUnlock={() => {
+            setUnlocked(true);
+            setLockModalOpen(false);
+          }}
+          onSave={(cfg) => {
+            setProjectLock(cfg);
+            setUnlocked(false);
+          }}
+          onClose={() => setLockModalOpen(false)}
         />
       )}
     </div>

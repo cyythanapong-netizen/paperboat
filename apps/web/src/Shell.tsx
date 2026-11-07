@@ -186,10 +186,11 @@ const PAD = 8;
  * placed from the key's face (icon and name) plus room, so they never touch the name.
  * ↑/↓ and the wheel over the rail move between pages.
  */
-export function Rail({ page, onPage, hidden }: { page: Page; onPage: (p: Page) => void; hidden?: boolean }) {
+export function Rail({ page, onPage, hidden, allowedPages }: { page: Page; onPage: (p: Page) => void; hidden?: boolean; allowedPages?: string[] }) {
   const rail = useRef<HTMLElement>(null);
   const brackets = useRef<HTMLSpanElement[]>([]);
-  const at = index(page);
+  const visiblePages = allowedPages && allowedPages.length > 0 ? PAGES.filter((p) => allowedPages.includes(p.id)) : PAGES;
+  const at = Math.max(0, visiblePages.findIndex((p) => p.id === page));
   const was = useRef(-1);
   const onPageRef = useRef(onPage);
   onPageRef.current = onPage;
@@ -244,19 +245,19 @@ export function Rail({ page, onPage, hidden }: { page: Page; onPage: (p: Page) =
       const now = performance.now();
       if (now - last < 450 || Math.abs(e.deltaY) < 4) return;
       last = now;
-      const next = Math.max(0, Math.min(PAGES.length - 1, atRef.current + Math.sign(e.deltaY)));
-      if (next !== atRef.current) onPageRef.current(PAGES[next].id);
+      const next = Math.max(0, Math.min(visiblePages.length - 1, atRef.current + Math.sign(e.deltaY)));
+      if (next !== atRef.current) onPageRef.current(visiblePages[next].id);
     };
     r.addEventListener("wheel", onWheel, { passive: false });
     return () => r.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [visiblePages]);
 
   const onKey = (e: KeyboardEvent) => {
     const d = e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : 0;
     if (!d) return;
     e.preventDefault();
-    const next = Math.max(0, Math.min(PAGES.length - 1, at + d));
-    onPage(PAGES[next].id);
+    const next = Math.max(0, Math.min(visiblePages.length - 1, at + d));
+    onPage(visiblePages[next].id);
     rail.current?.querySelectorAll<HTMLElement>(".rail-item")[next]?.focus();
   };
 
@@ -264,7 +265,7 @@ export function Rail({ page, onPage, hidden }: { page: Page; onPage: (p: Page) =
     <nav ref={rail} className="rail" aria-label="Pages" onKeyDown={onKey} inert={hidden}>
       <span ref={(el) => void (el && (brackets.current[0] = el))} className="rail-bracket open" aria-hidden="true" />
       <span ref={(el) => void (el && (brackets.current[1] = el))} className="rail-bracket close" aria-hidden="true" />
-      {PAGES.map((p, i) => (
+      {visiblePages.map((p, i) => (
         <button
           key={p.id}
           className={`rail-item${p.id === page ? " current" : ""}`}
