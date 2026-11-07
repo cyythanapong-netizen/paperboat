@@ -1,0 +1,30 @@
+# The web app and the console: typecheck, tests, build. One workflow per check, so each has its own README badge.
+name: web
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Web app (typecheck and build)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: The protocol types are generated from the schema, and current
+        run: python3 protocol/gen_ts.py --check
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test -w @paperboat/web
+      - run: npm test -w @paperboat/cli
+      - run: npm run build
+

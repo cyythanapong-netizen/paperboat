@@ -1,0 +1,25 @@
+# The API reference: Sphinx, warnings as errors. One workflow per check, so each has its own README badge.
+name: docs
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    name: API reference (Sphinx, warnings as errors)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: The docs' tokens are generated from the app's, and current
+        run: python3 docs/gen_tokens.py --check
+      - run: pip install sphinx furo
+      - run: sphinx-build -W -b html docs/api docs/api/_build

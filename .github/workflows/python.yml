@@ -1,0 +1,33 @@
+# The Python bindings and the protocol schema. One workflow per check, so each has its own README badge.
+name: python
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python bindings and protocol schema
+    runs-on: ubuntu-24.04
+    env:
+      CXX: g++-14
+      CC: gcc-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test tools
+        run: pip install pytest jsonschema
+      - name: Build the extension (paperboat._engine)
+        run: cmake -S python -B python/build -DCMAKE_BUILD_TYPE=Release -DPython_EXECUTABLE="$(which python)" && cmake --build python/build -j 4
+      - name: Test the bindings
+        run: python -m pytest -q python/tests
+      - name: Check the protocol schema is a valid JSON Schema
+        run: python -c "import json, jsonschema; jsonschema.Draft202012Validator.check_schema(json.load(open('protocol/schema/paperboat-0.schema.json')))"
+
