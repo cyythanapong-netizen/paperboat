@@ -240,6 +240,15 @@ std::vector<std::string> list_releases(const ToolkitEntry& entry, const ToolkitL
   return parse_release_tags(out);
 }
 
+// An installed package: <prefix>/bin/paperboat with the registries in <prefix>/share/paperboat.
+fs::path install_root() {
+  std::error_code ec;
+  const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+  if (ec) return {};
+  const fs::path share = exe.parent_path().parent_path() / "share" / "paperboat";
+  return fs::is_regular_file(share / "toolkits.toml") ? share : fs::path{};
+}
+
 fs::path find_repo_root(const fs::path& hint) {
   if (const char* env = std::getenv("PAPERBOAT_ROOT"); env && *env) {
     if (auto p = walk_up(env); !p.empty()) return p;
@@ -251,7 +260,7 @@ fs::path find_repo_root(const fs::path& hint) {
 #ifdef PAPERBOAT_SOURCE_DIR
   if (auto p = walk_up(fs::path(PAPERBOAT_SOURCE_DIR)); !p.empty()) return p;
 #endif
-  return {};
+  return install_root();
 }
 
 std::vector<ToolkitEntry> parse_toolkits_manifest(std::string_view toml_text) {
@@ -423,6 +432,8 @@ ToolkitResult install_toolkit(std::string_view name,
   const ToolkitEntry* entry = find_entry(entries, name);
   if (!entry) return {false, "unknown toolkit \"" + std::string(name) + "\""};
   if (entry->builtin) return {false, "cannot install built-in toolkit"};
+  if (!host.skip_rebuild && host.source_dir.empty() && !fs::is_regular_file(root / "engine" / "CMakeLists.txt"))
+    return {false, "toolkits are compiled into the engine: build paperboat from source to install one"};
 
   const std::string url = resolve_repo_url(*entry);
 

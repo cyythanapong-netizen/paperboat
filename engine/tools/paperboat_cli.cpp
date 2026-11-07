@@ -785,10 +785,30 @@ int cmd_update(const std::vector<std::string_view>& args) {
 
   // 1. this repository, then what it builds on
   std::vector<std::string> changed;
-  sync("paperboat", root, changed);
+  const bool checkout = fs::exists(root / ".git");
+  if (checkout) {
+    sync("paperboat", root, changed);
+  } else {  // an installed package: there is no repository to pull
+    std::error_code ec;
+    const bool npm = fs::read_symlink("/proc/self/exe", ec).string().find("node_modules") != std::string::npos;
+    if (!npm) {
+      say("paperboat", std::string(tui::kVersion) + ", installed from a package: update it with your package manager");
+    } else {
+      std::string latest;
+      if (tk::run_command({"npm", "view", "@paperboat/cli", "version"}, {}, {}, &latest) != 0) {
+        say("paperboat", std::string(tui::kVersion) + ", cannot reach the npm registry");
+        ++failed;
+      } else if (latest == tui::kVersion) {
+        say("paperboat", std::string(tui::kVersion) + ", up to date (npm)");
+      } else {
+        say("paperboat", std::string(tui::kVersion) + ", " + latest + " is available (npm)");
+        if (!check_only) step("npm install -g @paperboat/cli@latest", {"npm", "install", "-g", "@paperboat/cli@latest"}, root);
+      }
+    }
+  }
   for (const auto& app : tk::list_apps(root)) {  // after the pull, so a new apps.toml counts
     const fs::path dir = root.parent_path() / app.name;
-    if (!fs::exists(dir / ".git")) continue;  // not checked out here: `pkg` handles the installed copy
+    if (!checkout || !fs::exists(dir / ".git")) continue;  // not checked out here: `pkg` handles the installed copy
     std::vector<std::string> app_changed;
     sync(app.name, dir, app_changed);
     if (build && !app_changed.empty() && !app.build.empty()) {
@@ -1376,7 +1396,7 @@ int main(int argc, char** argv) {
     return 0;
   }
   if (cmd == "--version" || cmd == "-v" || cmd == "version") {
-    std::cout << "paperboat 0.1.0\n";
+    std::cout << "paperboat " << tui::kVersion << "\n";
     return 0;
   }
 
