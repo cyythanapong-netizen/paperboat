@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -90,6 +91,11 @@ struct CheckResult {
   bool golden_ok = false;
 };
 
+// Called when a check stage starts (`done` false) and when it ends (`done` true).
+using CheckProgress = std::function<void(const CheckStep& step, bool done)>;
+// Called per file packed or extracted: files done, files in all, bytes so far.
+using PackProgress = std::function<void(int files, int total, uint64_t bytes)>;
+
 struct PackResult {
   bool ok = false;
   std::filesystem::path package_path;
@@ -169,15 +175,18 @@ class BackendManager {
   // Verification & checking
   static BackendManifest load_manifest(const std::filesystem::path& backend_dir, std::string* error_msg = nullptr);
   static int find_free_port(int start_port = 18765, int end_port = 18999);
-  static CheckResult check_backend(const std::filesystem::path& path = {}, bool fast = false);
+  static CheckResult check_backend(const std::filesystem::path& path = {}, bool fast = false,
+                                   const CheckProgress& progress = {});
 
   // Packaging & unpack
   static PackResult pack_backend(const std::filesystem::path& path = {},
                                  const std::filesystem::path& out_path = {},
-                                 bool fast = true);
+                                 bool fast = true,
+                                 const PackProgress& progress = {});
   static UnpackResult unpack_backend(const std::filesystem::path& archive_path,
                                      const std::filesystem::path& dest_dir = {},
-                                     bool verify = true);
+                                     bool verify = true,
+                                     const PackProgress& progress = {});
 };
 
 }  // namespace paperboat::core

@@ -271,6 +271,8 @@ int ProcessRunner::run_stream(
   sigaction(SIGINT, &sa_int, &old_int);
   sigaction(SIGTERM, &sa_term, &old_term);
 
+  int status = 0;
+  bool reaped = false;
   std::array<std::string, 2> line_bufs;  // stdout, stderr: the part after the last newline
   constexpr std::array<std::string_view, 2> names{"stdout", "stderr"};
   pump(
@@ -288,8 +290,9 @@ int ProcessRunner::run_stream(
         process_buffer_lines(line_bufs[at], names[at], on_output);
       },
       [&] {
-        int status = 0;
-        return waitpid(pid, &status, WNOHANG) != pid;
+        if (waitpid(pid, &status, WNOHANG) != pid) return true;
+        reaped = true;  // keep its status: a second waitpid would find no child
+        return false;
       });
 
   // Drain remaining buffers
@@ -300,9 +303,8 @@ int ProcessRunner::run_stream(
   // Clean termination of process group
   kill_pgid(pid, SIGTERM, 1000);
 
-  int exit_code = -1;
-  int status = 0;
-  if (waitpid(pid, &status, 0) == pid) exit_code = exit_code_of(status, exit_code);
+  if (!reaped) reaped = waitpid(pid, &status, 0) == pid;
+  const int exit_code = reaped ? exit_code_of(status, -1) : -1;
 
   g_active_child_pgid.store(0);
   sigaction(SIGINT, &old_int, nullptr);

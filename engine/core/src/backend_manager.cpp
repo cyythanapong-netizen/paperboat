@@ -1131,7 +1131,7 @@ int BackendManager::find_free_port(int start_port, int end_port) {
   return 0;
 }
 
-CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
+CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const CheckProgress& progress) {
   CheckResult res;
   fs::path target = fix_pkk_typo(path.empty() ? fs::current_path() : path);
 
@@ -1167,12 +1167,21 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
 
   const fs::path repo_root = toolkit::find_repo_root(dir);
 
+  // Each stage reports when it starts and when it ends (`paperboat check --json-stream`).
+  const auto begin = [&progress](const CheckStep& step) {
+    if (progress) progress(step, false);
+  };
+  const auto finish = [&res, &progress](const CheckStep& step) {
+    res.steps.push_back(step);
+    if (progress) progress(step, true);
+  };
+
   // A stage that fails ends the check: it is the last step, its message the last error.
-  const auto fail = [&res](CheckStep& step, std::string message) {
+  const auto fail = [&res, &finish](CheckStep& step, std::string message) {
     step.message = std::move(message);
     step.ok = false;
     res.errors.push_back(step.message);
-    res.steps.push_back(step);
+    finish(step);
     return res;
   };
 
@@ -1180,6 +1189,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   // Stage 1: Manifest & Folder Layout
   // -------------------------------------------------------------
   CheckStep step_manifest{"manifest", false, false, "", 0.0};
+  begin(step_manifest);
   auto t_start = std::chrono::steady_clock::now();
 
   std::string manifest_err;
@@ -1266,13 +1276,14 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   step_manifest.duration_seconds = seconds_since(t_start);
   step_manifest.ok = true;
   step_manifest.message = "format 0, " + manifest.descriptor + ", " + manifest.language;
-  res.steps.push_back(step_manifest);
+  finish(step_manifest);
   res.manifest_ok = true;
 
   // -------------------------------------------------------------
   // Stage 2: Catalog & Block Completeness
   // -------------------------------------------------------------
   CheckStep step_catalog{"catalog", false, false, "", 0.0};
+  begin(step_catalog);
   t_start = std::chrono::steady_clock::now();
 
   bool catalog_success = false;
@@ -1346,14 +1357,14 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
 
   if (!catalog_success) {
     step_catalog.ok = false;
-    res.steps.push_back(step_catalog);
+    finish(step_catalog);
     return res;
   }
 
   step_catalog.ok = true;
   step_catalog.message = std::to_string(res.block_count) + " blocks, " +
                          std::to_string(res.object_count) + " station objects";
-  res.steps.push_back(step_catalog);
+  finish(step_catalog);
   res.catalog_ok = true;
 
   // -------------------------------------------------------------
@@ -1361,9 +1372,9 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   // -------------------------------------------------------------
   if (fast) {
     CheckStep step_smoke{"smoke", false, true, "skipped (--fast)", 0.0};
-    res.steps.push_back(step_smoke);
+    finish(step_smoke);
     CheckStep step_golden{"golden", false, true, "skipped (--fast)", 0.0};
-    res.steps.push_back(step_golden);
+    finish(step_golden);
     res.ok = res.errors.empty();
     return res;
   }
@@ -1372,6 +1383,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   // Stage 3: Live Protocol Smoke Test
   // -------------------------------------------------------------
   CheckStep step_smoke{"smoke", false, false, "", 0.0};
+  begin(step_smoke);
   t_start = std::chrono::steady_clock::now();
 
   auto py_env = prepare_python_env(repo_root, dir);
@@ -1468,20 +1480,21 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
 
   step_smoke.ok = true;
   step_smoke.message = "protocol smoke test passed on port " + std::to_string(smoke_port);
-  res.steps.push_back(step_smoke);
+  finish(step_smoke);
   res.smoke_ok = true;
 
   // -------------------------------------------------------------
   // Stage 4: Golden Headless Comparison
   // -------------------------------------------------------------
   CheckStep step_golden{"golden", false, false, "", 0.0};
+  begin(step_golden);
   t_start = std::chrono::steady_clock::now();
 
   if (manifest.golden.empty()) {
     step_golden.skipped = true;
     step_golden.ok = true;
     step_golden.message = "no golden test declared";
-    res.steps.push_back(step_golden);
+    finish(step_golden);
     res.golden_ok = true;
   } else {
     fs::path golden_script = repo_root / "protocol" / "golden.py";
@@ -1499,7 +1512,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
 
     step_golden.ok = true;
     step_golden.message = manifest.golden + " matched";
-    res.steps.push_back(step_golden);
+    finish(step_golden);
     res.golden_ok = true;
   }
 
@@ -1507,7 +1520,34 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast) {
   return res;
 }
 
-PackResult BackendManager::pack_backend(const fs::path& path, const fs::path& out_path, bool /*fast*/) {
+namespace {
+
+// Run scripts/package_backend.py. With `progress`, its stderr progress lines are forwarded as
+// they come; without, it runs as before (captured, 30 s timeout).
+ProcessResult run_packer(const std::vector<std::string>& args, const fs::path& cwd,
+                         const std::vector<std::pair<std::string, std::string>>& env,
+                         const PackProgress& progress) {
+  if (!progress) return ProcessRunner::run_sync(args, cwd, env, std::chrono::milliseconds(30000));
+  ProcessResult r;
+  r.exit_code = ProcessRunner::run_stream(args, cwd, env, [&](std::string_view stream, std::string_view line) {
+    std::string& text = stream == "stdout" ? r.stdout_text : r.stderr_text;
+    if (stream == "stderr") {
+      try {
+        const auto j = json::parse(line);
+        progress(j.at("files").get<int>(), j.at("total").get<int>(), j.at("bytes").get<uint64_t>());
+        return;
+      } catch (const std::exception&) {}  // not a progress line: keep it as error text
+    }
+    text.append(line);
+    text += '\n';
+  });
+  return r;
+}
+
+}  // namespace
+
+PackResult BackendManager::pack_backend(const fs::path& path, const fs::path& out_path, bool /*fast*/,
+                                        const PackProgress& progress) {
   PackResult res;
   const fs::path dir = resolve_backend_dir(path);
   if (!fs::is_directory(dir)) {
@@ -1527,7 +1567,7 @@ PackResult BackendManager::pack_backend(const fs::path& path, const fs::path& ou
   res.name = manifest.name.empty() ? dir.filename().string() : manifest.name;
   res.version = manifest.version.empty() ? "0.1.0" : manifest.version;
 
-  fs::path package_out = out_path;
+  fs::path package_out = out_path.empty() ? out_path : fs::absolute(out_path);  // the packer runs in the repo root
   if (package_out.empty()) {
     package_out = fs::current_path() / (res.name + "-" + res.version + ".ppk");
   }
@@ -1536,9 +1576,9 @@ PackResult BackendManager::pack_backend(const fs::path& path, const fs::path& ou
   auto py_env = prepare_python_env(repo_root, dir);
   fs::path script = repo_root / "scripts" / "package_backend.py";
 
-  auto pack_proc = ProcessRunner::run_sync(
+  auto pack_proc = run_packer(
       {py_env.python_bin.string(), script.string(), "pack", "--dir", dir.string(), "--out", package_out.string()},
-      repo_root, py_env.env, std::chrono::milliseconds(30000));
+      repo_root, py_env.env, progress);
 
   if (!pack_proc.ok()) {
     res.errors.push_back("packing script failed: " + output_of(pack_proc));
@@ -1566,8 +1606,10 @@ PackResult BackendManager::pack_backend(const fs::path& path, const fs::path& ou
   return res;
 }
 
-UnpackResult BackendManager::unpack_backend(const fs::path& archive_path, const fs::path& dest_dir, bool verify) {
+UnpackResult BackendManager::unpack_backend(const fs::path& archive_in, const fs::path& dest_dir, bool verify,
+                                            const PackProgress& progress) {
   UnpackResult res;
+  const fs::path archive_path = fs::absolute(archive_in);  // the packer runs in the repo root
   if (!fs::is_regular_file(archive_path)) {
     res.errors.push_back("package archive not found: " + archive_path.string());
     return res;
@@ -1577,7 +1619,7 @@ UnpackResult BackendManager::unpack_backend(const fs::path& archive_path, const 
   auto py_env = prepare_python_env(repo_root);
   fs::path script = repo_root / "scripts" / "package_backend.py";
 
-  fs::path target_dir = dest_dir;
+  fs::path target_dir = dest_dir.empty() ? dest_dir : fs::absolute(dest_dir);
   if (target_dir.empty()) {
     std::string stem = archive_path.stem().string();
     target_dir = fs::current_path() / stem;
@@ -1589,7 +1631,7 @@ UnpackResult BackendManager::unpack_backend(const fs::path& archive_path, const 
   };
   if (verify) args.push_back("--verify");
 
-  auto unpack_proc = ProcessRunner::run_sync(args, repo_root, py_env.env, std::chrono::milliseconds(30000));
+  auto unpack_proc = run_packer(args, repo_root, py_env.env, progress);
   if (!unpack_proc.ok()) {
     res.errors.push_back("unpack failed: " + output_of(unpack_proc));
     return res;

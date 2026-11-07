@@ -74,6 +74,11 @@ def is_ignored(rel_path: str, patterns: list[str]) -> bool:
     return False
 
 
+def progress(done: int, total: int, nbytes: int) -> None:
+    """One NDJSON progress line on stderr; `paperboat pack|unpack --json-stream` forwards it."""
+    print(json.dumps({"files": done, "total": total, "bytes": nbytes}), file=sys.stderr, flush=True)
+
+
 def sha256_file(path: Path) -> str:
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -152,8 +157,11 @@ def cmd_pack(backend_dir: Path, out_path: Path) -> dict:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("PACKAGE.json", json.dumps(pkg_meta, indent=2))
-        for rel in files_to_pack:
+        written = 0
+        for i, rel in enumerate(files_to_pack, 1):
             zf.write(backend_dir / rel, arcname=rel)
+            written += (backend_dir / rel).stat().st_size
+            progress(i, len(files_to_pack), written)
 
     archive_digest = sha256_file(out_path)
     return {
@@ -197,10 +205,12 @@ def cmd_unpack(pkg_path: Path, dest_dir: Path, verify: bool) -> dict:
         dest_dir.mkdir(parents=True, exist_ok=True)
 
         # Extract files
-        for member in namelist:
-            if member == "PACKAGE.json":
-                continue
+        members = [m for m in zf.infolist() if m.filename != "PACKAGE.json"]
+        extracted = 0
+        for i, member in enumerate(members, 1):
             zf.extract(member, path=dest_dir)
+            extracted += member.file_size
+            progress(i, len(members), extracted)
 
         if verify and "files" in pkg_meta:
             for item in pkg_meta["files"]:
