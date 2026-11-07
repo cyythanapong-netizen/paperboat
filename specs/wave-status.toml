@@ -88,15 +88,58 @@ cli = "agy"
 model = "flash-3.8"
 effort = "low"
 wave = 4
-state = "ready"
+state = "review"
 task = "DESIGN.md (Squero Studio OM, Custom block look), protocol/README.md (view.icon, connectors, squero/0), CI workflows, shared plates.css + connectError wording"
 contracts = ["§1", "§3", "§4", "§5", "§8"]
 prompt = "specs/prompts/wave4_lane_b.md"
 branch = "epic160/lane-b-w4"
 blocker = ""
-notes = ""
-modified_files = []
-verification = ""
+notes = """Docs, CI, and shared CSS/ports fixes completed.
+- GitHub Actions cannot be run locally; all workflows validated via python3 yaml.safe_load.
+- CI workflows updated: web.yml now runs shared/studio tests, build:studio, and docs/gen_tokens.py check; new modelica.yml configures OpenModelica from build.openmodelica.org/apt, preloads MSL, runs modelica/squero tests and conditionally runs dc-drive golden.
+- apps/web built CSS bundle is rule-set equivalent (799 rules, byte size 114,381 B identical to baseline) with differences solely due to @import hoisting placement of plates.css before other rules.
+- connectError wording updated and pinned with unit test."""
+modified_files = [
+  ".github/workflows/modelica.yml",
+  ".github/workflows/web.yml",
+  "apps/studio/src/styles.css",
+  "apps/web/DESIGN.md",
+  "apps/web/src/styles.css",
+  "packages/shared/package.json",
+  "packages/shared/src/plates.css",
+  "packages/shared/src/ports.ts",
+  "packages/shared/test/ports.test.ts",
+  "protocol/README.md",
+]
+verification = """Lane B verification in worktree epic160/lane-b-w4:
+- npm run typecheck: passes for @paperboat/shared, @paperboat/web, @paperboat/cli, @paperboat/studio (exit 0).
+- npm run build: passes for web and cli (exit 0).
+- npm run build:studio: passes (exit 0).
+- Tests pass:
+  * web: 97/97 pass
+  * shared: 11/11 pass (including connectError wording test)
+  * studio: 34/34 pass
+- Sync checks:
+  * python3 protocol/gen_ts.py --check (current)
+  * python3 docs/gen_tokens.py --check (current)
+  * npm run docs: Sphinx build succeeded with -W (0 warnings)
+- Workflow validation:
+  * python3 yaml.safe_load on all 5 workflows (.github/workflows/{web,engine,python,docs,modelica}.yml) succeeded
+- CSS sha1 / rule equivalence:
+  * Baseline apps/web index-DFC22ZcZ.css: 114381 B (sha1 a27f0a1d0ce1f381cce1151fe570dfb0df61df84)
+  * After shared plates.css extraction index-B3cJlMn2.css: 114381 B (sha1 690d3618b13023cc053ab612645e4acb86cb495f)
+  * Identical byte length (114381 B); exact 799/799 CSS rule set equality between baseline and post-extraction bundles.
+- git diff --name-only dev...HEAD:
+.github/workflows/modelica.yml
+.github/workflows/web.yml
+apps/studio/src/styles.css
+apps/web/DESIGN.md
+apps/web/src/styles.css
+packages/shared/package.json
+packages/shared/src/plates.css
+packages/shared/src/ports.ts
+packages/shared/test/ports.test.ts
+protocol/README.md"""
 
 # Model routing (contracts rev 2): lane A = Anthropic only, lane B = Google only.
 [routing]
