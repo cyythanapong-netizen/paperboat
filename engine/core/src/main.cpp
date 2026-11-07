@@ -81,6 +81,8 @@ Options parse_options(int argc, char** argv, int default_port) {
     const std::string arg = argv[i];
     if (arg == "--run") {
       options.run = true;
+    } else if (arg == "--catalog") {
+      options.catalog = true;
     } else if (arg == "--port" && i + 1 < argc) {
       options.port = std::stoi(argv[++i]);
     } else if (arg == "--var" && i + 1 < argc) {
@@ -93,7 +95,7 @@ Options parse_options(int argc, char** argv, int default_port) {
     } else if (arg == "--project" && i + 1 < argc) {
       options.project = argv[++i];
     } else {
-      throw std::invalid_argument("unknown option " + arg + " (use --port N, --run, --duration S, --project P, --var name=value)");
+      throw std::invalid_argument("unknown option " + arg + " (use --port N, --run, --catalog, --duration S, --project P, --var name=value)");
     }
   }
   return options;
@@ -181,6 +183,14 @@ int main(const Backend& backend, int argc, char** argv, int default_port) {
       std::cerr << "error: cannot load project file " << options.project << ": " << err.what() << '\n';
       return 1;
     }
+  }
+  if (options.catalog) {
+    // What the backend really offers, with the blocks and station objects its code registered
+    json blocks = json::array(), objects = json::array();
+    for (const auto& e : b.catalog->entries) blocks.push_back(e.def.type);
+    for (const auto& o : b.catalog->objects) objects.push_back(o.def.type);
+    std::cout << json{{"blocks", blocks}, {"objects", objects}}.dump() << '\n';
+    return 0;
   }
   if (options.run) {
     try {

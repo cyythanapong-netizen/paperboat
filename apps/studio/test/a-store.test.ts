@@ -10,7 +10,7 @@ import { chip } from "../src/omc/omc.ts";
 import { parseValue } from "../src/omc/parse.ts";
 import { restoreExprs, type Graph } from "../src/store/diff.ts";
 import * as x from "../src/store/exprs.ts";
-import { connectExprs, entryExprs, freeSpot, removeEntryExprs, removeExprs, setParamExprs } from "../src/store/plans.ts";
+import { connectExprs, entryExprs, freeSpot, iconPortExprs, removeEntryExprs, removeExprs, setParamExprs } from "../src/store/plans.ts";
 import { bendsOf, placementOf, readModel } from "../src/store/read.ts";
 import { freshName, splicePlan, throughPorts } from "../src/store/splice.ts";
 import { wireError } from "../src/store/wires.ts";
@@ -100,6 +100,9 @@ test("+ Input and + Probe: a RealInput or RealOutput wired to the port; refused 
   assert.match(probe[0], /^addComponent\(y, Modelica\.Blocks\.Interfaces\.RealOutput, Circuit/);
   assert.equal(probe[1], "addConnection(S1.y, y, Circuit)");
   assert.throws(() => entryExprs(m, "output", "R1"), /needs a port/);
+  // a probe is named for its port; a second one on the same port name gets a number, never a duplicate
+  m.components.push(part("y", "Modelica.Blocks.Interfaces.RealOutput", ROUT, 300));
+  assert.match(entryExprs(m, "output", "S1.y")[0], /^addComponent\(y1, /);
   m.connections.push({ a: "u", b: "V1.u" });
   assert.deepEqual(removeEntryExprs(m, "u"), ["deleteConnection(u, V1.u, Circuit)", "deleteComponent(u, Circuit)"]);
 });
@@ -235,4 +238,15 @@ test("a part dropped on another goes to the next free spot, on the grid", () => 
   assert.deepEqual(freeSpot(m, { x: 1000, y: 1000 }), { x: 1000, y: 1000, rotation: 0 });
   assert.deepEqual(freeSpot(m, { x: 203, y: 4 }), { x: 620, y: 0, rotation: 0 }); // R1 and L1 are in the way, so along
   assert.equal(freeSpot(m).x % 20, 0);
+});
+
+test("Look port placement is written as each entry's iconTransformation", () => {
+  const m = model();
+  m.components.push(part("v", "Modelica.Blocks.Interfaces.RealInput", RIN, -100, 100));
+  m.entries.push({ name: "v", kind: "input", target: "V1.u" });
+  const icon = { w: 2 as const, g: [], ports: [{ id: "v", class: "RealInput", side: "left" as const, at: 25 }, { id: "gone", class: "RealInput", side: "top" as const, at: 50 }] };
+  const [one, ...rest] = iconPortExprs(m, icon);
+  assert.deepEqual(rest, []); // "gone" is not an entry
+  assert.match(one, /^updateComponent\(v, Modelica\.Blocks\.Interfaces\.RealInput, Circuit, annotate=Placement\(visible=true, transformation=transformation\(origin=\{-50, -50\}/);
+  assert.match(one, /iconTransformation=iconTransformation\(extent=\{\{-210, 40\}, \{-190, 60\}\}\)\)\)$/); // x = -200, y = 100 - 25% of 200
 });

@@ -440,19 +440,19 @@ In descriptor TOML:
      { from = ["split", "theta"], to = ["angle", "in"] },
    ]
 
-Tutorial 7: A Backend from a Modelica Model
--------------------------------------------
+Tutorial 7: From Modelica to a Paperboat backend
+------------------------------------------------
 
 A Modelica model can become a backend without writing its equations again. With
 OpenModelica installed (``omc`` on ``PATH``, which also builds ``engine/modelica``):
 
 .. code-block:: bash
 
-   paperboat modelica check DCMotor.mo
-   paperboat modelica icon DCMotor.mo
+   paperboat modelica check DCDrive.mo
+   paperboat modelica icon DCDrive.mo
    paperboat modelica icon Modelica.Electrical.Analog.Basic.Resistor
-   paperboat modelica generate DCMotor.mo --out dc-motor-cpp/
-   paperboat build dc-motor-cpp && paperboat run dc-motor-cpp
+   paperboat modelica generate DCDrive.mo --out dc-drive-cpp/
+   paperboat build dc-drive-cpp && paperboat run dc-drive-cpp
 
 ``paperboat modelica icon <Model.mo | Qualified.Name> [--class <Name>]`` inspects a local
 ``.mo`` file or a Modelica Standard Library class and prints ``{icon, connectors, notice}`` as
@@ -482,8 +482,42 @@ What becomes what:
 
 ``CMakeLists.txt``, ``main.cpp`` and ``domain/`` are rewritten on every generate;
 ``descriptor.toml`` (a step on each input, a graph on each output), ``backend.toml`` and
-``README.md`` are written once and then yours. ``examples/dc-motor-cpp`` is one such backend,
+``README.md`` are written once and then yours. ``examples/dc-drive-cpp`` is one such backend,
 its descriptor edited into a PID speed loop.
+
+The same backend, drawn instead of typed
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``examples/dc-drive-cpp`` was authored in Squero Studio OM, with no ``.mo`` written by hand
+except where noted. Start the server from ``examples/`` so the dock's default export folder
+(``dc-drive-cpp``) lands next to the model, then open http://localhost:8790:
+
+.. code-block:: bash
+
+   cd examples && ../bin/squero-om dc-drive-cpp/modelica/DCDrive.mo
+
+1. **Place parts.** Filter the library and double-click: ``SignalVoltage``, ``Resistor``,
+   ``Inductor``, ``RotationalEMF``, ``Ground``, two ``Inertia`` (rotor, load),
+   ``SpringDamper``, ``SpeedSensor``, ``AngleSensor``. Each lands on the canvas and into the
+   ``.mo`` through omc.
+2. **Wire them.** Drag from port to port: the supply loop ``V1.p – R1.p``, ``R1.n – L1.p``,
+   ``L1.n – R2.p``, ``R2.n – V1.n`` and ``V1.n – G1.p``; the shaft ``R2.flange – I1.flange_a``,
+   ``I1.flange_b – S1.flange_a``, ``S1.flange_b – I2.flange_a``; both sensors on
+   ``I2.flange_b``. A wire the connector rules refuse says why in words.
+3. **Expose the interface.** Click a part and press ``+ Input`` on ``V1.v``, ``+ Probe`` on
+   ``S2.w`` and ``A1.phi``: they become the top-level ``RealInput v`` and ``RealOutput`` ``w``
+   and ``phi``, named for their ports. The dock reads ``balanced · 76 / 76``.
+4. **Draw the look.** ``Alt+V``, the *look* tab, plate ``2x1``: ``+ ellipse`` (rotor),
+   ``+ line`` (shaft), ``+ ellipse`` (load), ``+ text`` (``M``), each dragged on the 5-unit
+   grid. Port placement puts ``v`` on the left and ``w``, ``phi`` on the right. *Save* writes
+   the model's ``Icon`` and each port's ``iconTransformation``.
+5. **Export.** The dock's *Export backend* writes ``dc-drive-cpp/``. Paperboat shows the
+   drawn plate on the Flow page with its ``v``, ``w`` and ``phi`` ports.
+
+Today the popover lists only parameters a part already modifies, and Studio cannot probe a
+variable that is not a port: the parameter bindings (``R1(R = R)``, ``L1(L = L, i(start = 0,
+fixed = true))``, ...), the top-level ``parameter`` declarations and the armature current
+``Real i = L1.i annotation(__paperboat(probe = true))`` were typed into the ``.mo``.
 
 Squero Studio OM, the Modelica editor, talks to the same omc through ``paperboat squero``
 (or ``bin/squero-om``), a WebSocket server speaking ``squero/0``:

@@ -1359,7 +1359,20 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
       }
 
       if (is_domain_block) {
-        res.warnings.push_back("domain block/station template provided by runtime: " + msg);
+        // The domain's blocks and station objects are registered in C++ (or Python), which a
+        // static load cannot see: ask the built backend what it offers.
+        bool counted = false;
+        if (manifest.language == "cpp" && ensure_built(dir, false, false, nullptr) && fs::is_regular_file(dir / manifest.run)) {
+          const auto probe = ProcessRunner::run_sync({(dir / manifest.run).string(), "--catalog"}, dir);
+          try {
+            const auto got = nlohmann::json::parse(probe.stdout_text);
+            res.block_count = static_cast<int>(got.at("blocks").size());
+            res.object_count = static_cast<int>(got.at("objects").size());
+            counted = probe.ok();
+          } catch (const std::exception&) {
+          }
+        }
+        if (!counted) res.warnings.push_back("domain block/station template provided by runtime (counts need a built backend): " + msg);
         catalog_success = true;
       } else {
         step_catalog.message = msg;
