@@ -28,7 +28,12 @@ export interface Choice {
 export interface Sources {
   commands: CommandSpec[];
   args: Record<string, Choice[]>;
+  /** Entries of a folder, for a word that is a path; names only, folders ending in `/`. */
+  listDir?: (dir: string) => Choice[];
 }
+
+/** A word that names a path rather than a backend: has a `/`, or starts with `.` or `~`. */
+export const isPath = (word: string) => /\/|^[.~]/.test(word);
 
 export const FLAG_HELP: Record<string, string> = {
   '--port': 'listen port',
@@ -116,7 +121,25 @@ export function complete(line: string, sources: Sources): {candidates: Candidate
     if (!cmd) return {candidates: [], from, word};
     if (word.startsWith('-')) pool = cmd.flags.map(f => ({value: f, detail: FLAG_HELP[f] ?? ''}));
     else if (cmd.subcommands.length && index === 1) pool = cmd.subcommands.map(s => ({value: s, detail: ''}));
-    else if (cmd.arg) pool = sources.args[cmd.arg] ?? [];
+    else if ((cmd.arg === 'backend' || cmd.arg === 'ppk') && isPath(word) && sources.listDir) {
+      // Complete the last segment; the candidate is the whole path so far.
+      const cut = word.lastIndexOf('/') + 1;
+      const dir = word.slice(0, cut);
+      const rest = word.slice(cut);
+      const pool2 = sources.listDir(dir || '.');
+      return {
+        candidates: pool2
+          .flatMap(p => {
+            const m = fuzzy(rest, p.value);
+            return m && (!rest || p.value.toLowerCase().startsWith(rest.toLowerCase()))
+              ? [{value: dir + p.value, detail: p.detail, match: m.match.map(i => i + dir.length)}]
+              : [];
+          })
+          .sort((a, b) => a.value.localeCompare(b.value)),
+        from,
+        word,
+      };
+    } else if (cmd.arg) pool = sources.args[cmd.arg] ?? [];
   }
   const candidates = pool
     .map(p => ({p, m: fuzzy(word, p.value)}))
@@ -206,4 +229,12 @@ export function edit(line: Line, key: EditKey): Line | null {
   const typed = key.input.replace(/[\t\r\n]+/g, ' ').replace(/[\x00-\x1f\x7f]/g, '');
   if (typed) return {text: text.slice(0, cursor) + typed + text.slice(cursor), cursor: cursor + typed.length};
   return null;
+}
+
+/** A job's name for a target: a known backend's name, else the folder or package it names
+ * (`../x/cart-pole-cpp/` → `cart-pole`, `parts-0.1.0.ppk` → `parts-0.1.0`). */
+export function targetName(target: string): string {
+  const base = target.replace(/\/+$/, '').split('/').pop() || target;
+  if (base === '.' || base === '') return 'backend';
+  return base.replace(/\.ppk$/, '').replace(/-(cpp|python)$/, '');
 }

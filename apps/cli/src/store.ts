@@ -11,6 +11,7 @@ import {useSyncExternalStore} from 'react';
 
 import {
   type Candidate,
+  type Choice,
   type CommandSpec,
   type Line,
   type Sources,
@@ -19,6 +20,7 @@ import {
   pushLine,
   remember,
   splitWords,
+  targetName,
 } from './model.ts';
 import * as pb from './paperboat.ts';
 
@@ -189,6 +191,7 @@ export function sources(): Sources {
   }
   return {
     commands: S.commands,
+    listDir,
     args: {
       backend: S.backends.map(x => ({value: x.name, detail: `${x.language} · :${x.port} · ${x.description}`})),
       toolkit: S.toolkits.map(x => ({value: x.name, detail: x.installed ? 'installed' : 'available'})),
@@ -200,6 +203,18 @@ export function sources(): Sources {
       ppk: ppk.map(f => ({value: f, detail: 'in this folder'})),
     },
   };
+}
+
+/** Folders and .ppk files in `dir`, for completing a path (`run ../examples/ca`). */
+function listDir(dir: string): Choice[] {
+  try {
+    const at = dir.replace(/^~(?=\/|$)/, homedir()) || '.';
+    return readdirSync(at, {withFileTypes: true})
+      .filter(e => !e.name.startsWith('.') && (e.isDirectory() || e.name.endsWith('.ppk')))
+      .map(e => ({value: e.isDirectory() ? `${e.name}/` : e.name, detail: e.isDirectory() ? 'folder' : 'package'}));
+  } catch {
+    return [];
+  }
 }
 
 /* ---------- history file ---------- */
@@ -246,7 +261,7 @@ async function poll(): Promise<void> {
   if (list) {
     for (const job of S.jobs) {
       if (job.kind !== 'backend' || job.state !== 'building') continue;
-      const rec = list.find(r => r.port === job.port && r.pid !== job.stale);
+      const rec = job.port ? list.find(r => r.port === job.port && r.pid !== job.stale) : undefined;
       if (rec) ready(job, rec.pid);
     }
     S.external = list
@@ -347,6 +362,9 @@ function spawnJob(job: Job): void {
     job.args,
     line => {
       pushLine(job.log, line);
+      // `paperboat run` names the port it chose (descriptor, manifest or --port).
+      const port = /^paperboat running .* on ws:\/\/[^:]+:(\d+)/.exec(line);
+      if (port && job.kind === 'backend') job.port = Number(port[1]);
       if (job.kind === 'web' && job.state === 'building' && /ready in|Local:/.test(line)) ready(job, job.pid);
       changed();
     },
@@ -591,15 +609,17 @@ export function openLogs(job: Job, back: Mode): void {
   S.logs = {job: job.id, back};
 }
 
-export function runBackend(name: string, args: string[] = []): void {
-  const backend = S.backends.find(x => x.name === name);
-  const port = Number(flag(args, '--port')) || backend?.port || 8765;
-  const running = serviceBy(name) ?? serviceBy(String(port));
+export function runBackend(target: string, args: string[] = []): void {
+  const backend = S.backends.find(x => x.name === target);
+  const name = backend ? backend.name : targetName(target);
+  // A path's port isn't known until `paperboat run` says it (see spawnJob); 0 till then.
+  const port = Number(flag(args, '--port')) || backend?.port || 0;
+  const running = serviceBy(name) ?? (port ? serviceBy(String(port)) : undefined);
   if (running) {
     say([mu(`${running.name} is already running on :${running.port} · restart ${running.name} to rebuild it`)]);
     return;
   }
-  startJob(name, 'backend', ['run', name, ...args.filter(a => a !== name)], port);
+  startJob(name, 'backend', ['run', target, ...args.filter(a => a !== target)], port);
 }
 
 export function stopTarget(target: string): void {

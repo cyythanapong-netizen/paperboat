@@ -133,7 +133,8 @@ function tab(dir: number): void {
   const candidates = prefixed.length ? prefixed : all.candidates;
   if (!candidates.length) return;
   const one = candidates.length === 1;
-  const text = before.slice(0, from) + candidates[0].value + (one ? ' ' : '');
+  // A single match ends the word, unless it's a folder: then you go on typing inside it.
+  const text = before.slice(0, from) + candidates[0].value + (one && !candidates[0].value.endsWith('/') ? ' ' : '');
   S.line = {text: text + S.line.text.slice(S.line.cursor), cursor: text.length};
   if (!one) S.menu = {candidates, from, i: 0};
 }

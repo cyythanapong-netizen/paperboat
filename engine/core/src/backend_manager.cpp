@@ -573,9 +573,9 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
 
   const fs::path p_check = fix_pkk_typo(path_or_domain);
 
+  // Absolute: callers run tools from other folders (the packer runs in the repo root).
   if (fs::exists(p_check)) {
-    if (is_valid_backend_dir(p_check)) return p_check;
-    if (fs::is_regular_file(p_check)) return p_check;
+    if (is_valid_backend_dir(p_check) || fs::is_regular_file(p_check)) return fs::absolute(p_check);
   }
 
   // Look in paperboat-examples, examples/backends, user backends, or sibling directory

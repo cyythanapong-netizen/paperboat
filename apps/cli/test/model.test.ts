@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {complete, edit, fuzzy, ghost, remember, searchHistory, splitWords, type Sources} from '../src/model.ts';
+import {complete, edit, fuzzy, ghost, isPath, remember, searchHistory, splitWords, targetName, type Sources} from '../src/model.ts';
 
 const sources: Sources = {
   commands: [
@@ -69,4 +69,19 @@ test('edit moves, inserts and deletes around the cursor', () => {
   assert.deepEqual(l, {text: 'check ', cursor: 6});
   assert.equal(edit(l, {input: '\x1b'}), null);
   assert.deepEqual(edit({text: '', cursor: 0}, {input: 'a\tb\n'}), {text: 'a b ', cursor: 4});
+});
+
+test('run takes a path: completion lists folders and packages, the job is named for it', () => {
+  const dirs: Record<string, Array<{value: string; detail: string}>> = {
+    '.': [{value: 'examples/', detail: 'folder'}, {value: 'parts-0.1.0.ppk', detail: 'package'}],
+    'examples/': [{value: 'cart-pole-cpp/', detail: 'folder'}, {value: 'chain-python/', detail: 'folder'}],
+  };
+  const withFs = {...sources, listDir: (d: string) => dirs[d] ?? []};
+  assert.ok(isPath('./x') && isPath('a/b') && isPath('~') && !isPath('cart-pole'));
+  assert.deepEqual(complete('run examples/c', withFs).candidates.map(c => c.value), ['examples/cart-pole-cpp/', 'examples/chain-python/']);
+  assert.deepEqual(complete('run ./', {...withFs, listDir: () => dirs['.']}).candidates.map(c => c.value), ['./examples/', './parts-0.1.0.ppk']);
+  assert.equal(ghost('run examples/ca', [], withFs), 'rt-pole-cpp/');
+  assert.equal(targetName('../x/cart-pole-cpp/'), 'cart-pole');
+  assert.equal(targetName('parts-0.1.0.ppk'), 'parts-0.1.0');
+  assert.equal(targetName('/srv/my-backend'), 'my-backend');
 });

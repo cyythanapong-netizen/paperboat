@@ -330,3 +330,13 @@ TEST_CASE("check_backend reports each stage as it starts and ends") {
                                            "smoke:skipped", "golden:skipped"});
   fs::remove_all(dir);
 }
+
+TEST_CASE("resolve_backend_dir makes a relative backend path absolute") {
+  const fs::path rel = "pb_rel_backend";
+  fs::create_directories(rel);
+  std::ofstream(rel / "server.py") << "\n";
+  const auto dir = core::BackendManager::resolve_backend_dir(rel);
+  CHECK(dir.is_absolute());
+  CHECK(fs::equivalent(dir, rel));
+  fs::remove_all(rel);
+}
