@@ -26,14 +26,14 @@ import {
   type Viewport,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { createContext, Fragment, useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type MutableRefObject, type SetStateAction } from "react";
+import { createContext, Fragment, useContext, useEffect, useId, useMemo, useRef, useState, type Dispatch, type DragEvent, type MutableRefObject, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { ownKeys } from "./commands";
 import { CompactBlock } from "./Compact";
 import { copySelection, pasteClip, type Clip } from "./clipboard";
 import { inForm, signOf, wireMismatch, type PortSides } from "./ports";
 import { usePortLayout } from "./portLayout";
-import { Bindable, NumberOrFormula } from "./Variables";
+import { Bindable, draggedVariable, NumberOrFormula, VAR_DRAG, VarsContext } from "./Variables";
 import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
 import { connectionOf, nearestAccepting, SNAP, WireDragContext, type Anchor } from "./wireSnap";
@@ -305,6 +305,7 @@ function Field({
       />
     );
   }
+  if (def.type === "variable") return <VariableName value={String(value)} set={set} disabled={disabled} />;
   if (def.type === "key") {
     return (
       <input
@@ -323,6 +324,38 @@ function Field({
   }
   return (
     <NumberOrFormula def={def} value={Number(value)} set={set} disabled={disabled} />
+  );
+}
+
+/** A `variable` param: the name of a project variable, typed or picked from the list. A variable dragged from the sheet can be dropped on it. */
+function VariableName({ value, set, disabled }: { value: string; set: (v: ParamValue) => void; disabled?: boolean }) {
+  const vars = useContext(VarsContext);
+  const list = useId();
+  const unknown = !!value && !!vars && !vars.list.some((v) => v.name === value);
+  return (
+    <>
+      <input
+        className="nodrag text-param"
+        list={list}
+        disabled={disabled}
+        value={value}
+        title={unknown ? `No variable called "${value}"` : "A project variable"}
+        aria-invalid={unknown}
+        onChange={(e) => set(e.target.value)}
+        onDragOver={(e) => e.dataTransfer.types.includes(VAR_DRAG) && !disabled && e.preventDefault()}
+        onDrop={(e) => {
+          const name = draggedVariable();
+          if (!name || disabled) return;
+          e.preventDefault();
+          set(name);
+        }}
+      />
+      <datalist id={list}>
+        {vars?.list.map((v) => (
+          <option key={v.name} value={v.name} />
+        ))}
+      </datalist>
+    </>
   );
 }
 

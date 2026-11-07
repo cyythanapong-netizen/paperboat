@@ -35,7 +35,7 @@ export type ParamDef = {
   default: boolean;
 } | {
   id: string;
-  type: "text" | "key" | "file";
+  type: "text" | "key" | "file" | "variable";
   default: string;
 } | {
   id: string;
@@ -442,6 +442,11 @@ export type ServerMsg =
     values: Record<string, number | boolean | string>;
     error?: string;
     at?: string;
+  }
+  | {
+    type: "variables.patch";
+    /** The variables that changed, by name, with their new values. */
+    values: Record<string, number | boolean | string>;
   }
   | {
     type: "run.started";

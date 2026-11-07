@@ -146,6 +146,11 @@ Click a block to focus it. Parameters appear as recessed wells directly on the b
 in the inspector:
 
 - **Numeric fields**: Type values or use arrow keys to nudge.
+- **Variable fields**: A parameter that names a project variable (the **Variable** block's
+  ``name``, or the target of a tuner block) is a picker: type a name, choose one from the
+  list, or drop a variable from the Variables drawer on it. A block that sets that variable
+  during a run (an autotuner, a calibration) updates it live, and the new value stays in the
+  project when the run ends.
 - **Function Expressions** (:code:`f(t)`): In expression blocks (like `signal/function`), you
   can type arbitrary formulas such as:
 

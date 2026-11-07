@@ -200,7 +200,16 @@ struct BlockContext {
   std::string node;  // the block's id
   const tk::LogFn* log_fn = nullptr;  // the run's; valid while the run lasts
   const tk::ProgressFn* progress_fn = nullptr;
+  const tk::Values* variables = nullptr;
+  const tk::SetVariableFn* set_variable_fn = nullptr;
 
+  nb::object variable(const std::string& name) const {
+    const tk::Value* v = variables ? [&] { const auto it = variables->find(name); return it == variables->end() ? nullptr : &it->second; }() : nullptr;
+    return v ? to_py(*v) : nb::none();
+  }
+  bool set_variable(const std::string& name, nb::handle value) const {
+    return set_variable_fn && (*set_variable_fn)(name, value_from_py(value));
+  }
   void log(const std::string& text, const std::string& level) const {
     if (log_fn) (*log_fn)(node, level, text);
   }
@@ -216,7 +225,7 @@ nb::object context(const tk::Context& ctx) {
   nb::set keys;
   if (ctx.keys_down)
     for (const auto& k : *ctx.keys_down) keys.add(nb::str(k.c_str()));
-  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn, ctx.progress_fn});
+  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn, ctx.progress_fn, ctx.variables, ctx.set_variable_fn});
 }
 
 // Runs `fn` with the GIL held; a Python error becomes a C++ error the run reports.
@@ -456,8 +465,8 @@ std::vector<tk::ParamDef> params_from_py(nb::handle dict, const std::string& at)
     } else if (nb::isinstance<nb::tuple>(v) && (nb::len(nb::cast<nb::tuple>(v)) == 2 || nb::len(nb::cast<nb::tuple>(v)) == 3)) {
       const auto t = nb::cast<nb::tuple>(v);  // paperboat.Param(default, type, options)
       tk::ParamDef p{.id = id, .type = nb::cast<std::string>(t[1])};
-      if (p.type != "number" && p.type != "boolean" && p.type != "text" && p.type != "key" && p.type != "file" && p.type != "enum")
-        throw std::runtime_error(at + ": param " + id + " has type \"" + p.type + "\" (number, boolean, text, key, file or enum)");
+      if (p.type != "number" && p.type != "boolean" && p.type != "text" && p.type != "key" && p.type != "file" && p.type != "enum" && p.type != "variable")
+        throw std::runtime_error(at + ": param " + id + " has type \"" + p.type + "\" (number, boolean, text, key, file, enum or variable)");
       if (p.is_number()) p.default_value = nb::cast<double>(t[0]);
       else p.default_text = nb::cast<std::string>(t[0]);
       if (nb::len(t) == 3)
@@ -691,6 +700,11 @@ NB_MODULE(_engine, m) {
       .def_ro("node", &BlockContext::node, "the id of the block (or station object) being called")
       .def("log", &BlockContext::log, nb::arg("text"), nb::arg("level") = "info",
            "Write a line to the Console, tagged with this block's id (level: info, warn, error).")
+      .def("variable", &BlockContext::variable, nb::arg("name"),
+           "A project variable's value now (a number, a boolean as 1.0 / 0.0, or text), or None.")
+      .def("set_variable", &BlockContext::set_variable, nb::arg("name"), nb::arg("value"),
+           "Set a tunable variable (a number, or text for enum / text / file ones); it takes effect at the end "
+           "of the pass and is kept in the project. False, with a Console warning, if refused.")
       .def("progress", &BlockContext::progress, nb::arg("fraction"),
            "How far a long step has got, 0 to 1: the UI shows it on the block.");
 

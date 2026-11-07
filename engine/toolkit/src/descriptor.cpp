@@ -78,8 +78,8 @@ std::vector<ParamDef> new_params(const json& obj, const std::string& at) {
       p.unit = v.value("unit", std::string{});
       if (p.is_number()) p.default_value = number_of(v.at("default"));
       else p.default_text = v.at("default").get<std::string>();
-      if (p.type != "number" && p.type != "boolean" && p.type != "text" && p.type != "key" && p.type != "file" && p.type != "enum")
-        throw DescriptorError(at + ": param " + id + " has type \"" + p.type + "\" (number, boolean, text, key, file or enum)");
+      if (p.type != "number" && p.type != "boolean" && p.type != "text" && p.type != "key" && p.type != "file" && p.type != "enum" && p.type != "variable")
+        throw DescriptorError(at + ": param " + id + " has type \"" + p.type + "\" (number, boolean, text, key, file, enum or variable)");
       if (p.type == "enum") {
         p.options = v.value("options", std::vector<std::string>{});
         if (p.options.empty()) throw DescriptorError(at + ": enum param " + id + " needs options");

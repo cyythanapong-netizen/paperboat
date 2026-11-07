@@ -28,6 +28,8 @@ export const VarsContext = createContext<VarsApi | null>(null);
 
 /** A variable being dragged from the sheet onto a field (dataTransfer can't be read on dragover). */
 const dragged = { current: null as Variable | null };
+/** The name of the variable being dragged from the sheet, if any. */
+export const draggedVariable = () => dragged.current?.name;
 export const VAR_DRAG = "application/x-paperboat-variable";
 
 const show = (v: unknown) => (typeof v === "number" ? String(+v.toPrecision(6)) : typeof v === "boolean" ? (v ? "on" : "off") : String(v ?? "–"));

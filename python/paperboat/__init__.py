@@ -87,7 +87,9 @@ def vector_port(id: str, dimension: int | None = None, components=()) -> Port:
 class Param(NamedTuple):
     """A param with a type its default doesn't say: Param("Space", "key"), Param("data/a.png",
     "file"), Param("fast", "enum", ["slow", "fast"]) (a dropdown; the block gets the name in
-    its params, and an expression its index). Plain defaults say it: a number, a bool (a
+    its params, and an expression its index), Param("Kp", "variable") (a picker of the project's
+    variables; the block gets the name, to read with ctx.variable or write with ctx.set_variable).
+    Plain defaults say it: a number, a bool (a
     "boolean", a checkbox), text ("text")."""
 
     default: float | str

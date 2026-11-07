@@ -149,6 +149,14 @@ void Session::on_message(const std::string& text) {
     s.run = std::jthread([&s, id, number, graph = msg.value("graph", json::object()), station, variables, keys_now, tune_now,
                           settings = msg.value("settings", json())](std::stop_token stop) {
       auto emit = [&s, number](const json& m) {
+        if (m.value("type", "") == "variables.patch") {  // a block set variables (#166): later runs start from them
+          std::lock_guard lock(s.mutex);
+          for (json* list : {&s.variables, s.tuned ? &*s.tuned : nullptr}) {
+            if (!list || !list->is_array()) continue;
+            for (auto& v : *list)
+              if (const auto it = m.at("values").find(v.value("name", std::string{})); it != m.at("values").end() && !v.contains("expr")) v["value"] = *it;
+          }
+        }
         if (m.value("type", "") == "run.finished") {  // before the UI hears it: its next edit is not a tuning
           int mine = number;
           s.live_run.compare_exchange_strong(mine, 0);  // not if a newer run has started meanwhile

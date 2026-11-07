@@ -56,7 +56,8 @@ PortDef vector_port(std::string id, std::vector<VectorComponent> components);
 // reach it as text (default_text, through Config): "text", "key" (a KeyboardEvent.code,
 // which key a Key block reads), "file" (a path, relative to the descriptor's folder) and
 // "enum" (one of `options`, a dropdown; a block also gets its index in `options` as a
-// number, so an expression can use it).
+// number, so an expression can use it), and "variable" (the name of a project variable,
+// a picker in the UI; reaches a block as text, for Context::set_variable).
 struct ParamDef {
   std::string id = {};
   double default_value = 0.0;
@@ -245,6 +246,9 @@ struct Entity;
 using LogFn = std::function<void(std::string_view node, std::string_view level, std::string_view text)>;
 // Where Context::progress writes: the run sends it as a `node.progress` event.
 using ProgressFn = std::function<void(std::string_view node, double fraction)>;
+// Where Context::set_variable writes (#166): the run checks the write and applies it at the
+// end of the pass. False when it refuses (unknown, not tunable, a formula, out of range).
+using SetVariableFn = std::function<bool(std::string_view name, const Value& value)>;
 
 // What a block sees on each step.
 struct Context {
@@ -259,6 +263,7 @@ struct Context {
   // boolean as 1 / 0, text for the rest. Set by the run; null in tests. A tunable variable
   // (#75) may change between steps.
   const Values* variables = nullptr;
+  const SetVariableFn* set_variable_fn = nullptr;  // set by the run; null in tests
 
   // The variable called `name` now, or null.
   const Value* variable(std::string_view name) const {
@@ -266,6 +271,13 @@ struct Context {
     const auto it = variables->find(name);
     return it == variables->end() ? nullptr : &it->second;
   }
+
+  // Set the tunable variable `name` (#166), as an autotuner or a calibration does. A number
+  // for a number or boolean variable, text for the rest. It takes effect at the end of this
+  // pass: Variable blocks and bound params see it from the next one, the UI keeps it in the
+  // project. Returns false (and warns in the Console) if refused: unknown, not tunable, a
+  // formula, the wrong type, or outside its min / max.
+  bool set_variable(std::string_view name, const Value& value) const { return set_variable_fn && (*set_variable_fn)(name, value); }
 
   // Write a line to the Console, tagged with the block's id: level "info", "warn" or "error".
   void log(std::string_view text, std::string_view level = "info") const {

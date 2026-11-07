@@ -149,6 +149,15 @@ export function App() {
     },
     [variables, keepVars],
   );
+  // A block set variables during a run (#166): keep them in the project, as if the user had. Not an undo step.
+  useEffect(
+    () =>
+      subscribe((m) => {
+        if (m.type === "variables.patch")
+          setMine((was) => merged(state.variables, was).map((v) => (!v.expr && v.name in m.values ? { ...v, value: m.values[v.name] } : v)));
+      }),
+    [subscribe, state.variables],
+  );
   // The backend keeps the variables it was last told: tell it when they change.
   const backendVars = useRef("[]");
   useEffect(() => {
@@ -350,7 +359,7 @@ export function App() {
     },
     promote: (def, value) => {
       const name = freeName(def.id, variables);
-      const type: Variable["type"] = def.type === "key" ? "text" : def.type;
+      const type: Variable["type"] = def.type === "key" || def.type === "variable" ? "text" : def.type;
       const v: Variable = {
         name,
         type,

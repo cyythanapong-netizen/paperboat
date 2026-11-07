@@ -19,6 +19,7 @@ Default address: `ws://localhost:8765`.
 | `station.load` | `station: Station`                          | on connect, after `graph.load`, if the catalog has `objects` |
 | `variables.load` | `variables: Variable[]`                   | on connect, before `graph.load`, if the backend has default variables (its descriptor's `[[variables]]`) |
 | `variables.values` | `values: { name: value }`, `error?: string`, `at?: string` | on connect and after each `variables.set`: what every variable comes to (a formula's result), or why they don't hold (`at`: the variable or block at fault) |
+| `variables.patch` | `values: { name: value }` | during a run, when a block set tunable variables (`Context::set_variable`, #166): what changed, formulas that follow included. The UI keeps the non-formula ones in the project; the backend already keeps them for the next run |
 | `scene.patch`  | `entities: ({id} & Partial<Entity>)[]`      | during a run                 |
 | `run.started`  | `run: string`                               | when a run starts            |
 | `run.progress` | `run: string`, `fraction: number` (0–1)     | during a run                 |
@@ -57,7 +58,7 @@ Default address: `ws://localhost:8765`.
   "outputs": [{ "id": "y", "type": "signal" }],
   "params":  [{ "id": "amplitude", "type": "number", "default": 5 }],
   // other param types: { "type": "boolean", "default": true } (a checkbox; 1 or 0 to the block),
-  // { "type": "text" | "key" | "file", "default": "…" },
+  // { "type": "text" | "key" | "file" | "variable", "default": "…" },
   // { "type": "enum", "options": ["in-out", "in"], "default": "in-out" } (a choice; the block gets its index)
   "group": "base",                 // optional palette group: the domain, or a toolkit package
   // optional, how to draw it (a hint: absent, or a UI that ignores it, draws the normal card).
@@ -198,6 +199,14 @@ through a formula, on blocks that take a change live: those with no state (`Bloc
 made again with the new param) and those that implement `Block::set_param` (PID's gains). Any other
 block, and a station object's property, takes the new value with the next run; the Console says so
 once. A value its `min`/`max` refuses is ignored, with a warning.
+
+A block may set a tunable variable too (#166; an autotuner or a calibration): `Context::set_variable`
+(C++) and `ctx.set_variable` (Python) check it as the UI's change is checked (a `tunable`, non-formula
+variable, of the value's type, within its range; a refusal warns once in the Console and returns false)
+and apply it at the end of the pass, so every block in a pass sees the same variables. Formulas and
+bound params follow as above, and the backend sends `variables.patch` so the UI keeps the values in the
+project. A `variable` param (a block setting that names a project variable, a picker in the UI) is how a
+block is told which one to set.
 
 **Project file** (#82). Everything a user made, as one JSON file (`name.ppj`), written
 and read by the UI; it is not a message, and a backend needs no code for it. It reuses the shapes

@@ -173,6 +173,8 @@ export function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, variables: m.variables };
     case "variables.values":
       return { ...s, varValues: m.values, varError: m.error ? { text: m.error, at: m.at } : null };
+    case "variables.patch":
+      return { ...s, varValues: { ...s.varValues, ...m.values } };
     case "scene.patch": {
       const entities = { ...s.entities };
       for (const p of m.entities) if (entities[p.id]) entities[p.id] = { ...entities[p.id], ...p };

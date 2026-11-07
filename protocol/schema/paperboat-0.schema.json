@@ -119,7 +119,8 @@
               "enum": [
                 "text",
                 "key",
-                "file"
+                "file",
+                "variable"
               ]
             },
             "default": {
@@ -727,6 +728,31 @@
       ],
       "additionalProperties": false
     },
+    "variables.patch": {
+      "type": "object",
+      "description": "A block set tunable variables during a run (#166, Context::set_variable): what changed, formulas that follow included. The UI keeps the non-formula ones in the project.",
+      "properties": {
+        "type": {
+          "const": "variables.patch"
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "boolean",
+              "string"
+            ]
+          },
+          "description": "The variables that changed, by name, with their new values."
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ],
+      "additionalProperties": false
+    },
     "variables.values": {
       "type": "object",
       "description": "What the variables come to (#36), so the UI shows formulas' values: on connect and after each variables.set. With error (and at, the variable or block at fault) when they don't hold.",
@@ -1115,6 +1141,7 @@
             "station.load",
             "variables.load",
             "variables.values",
+            "variables.patch",
             "run.started",
             "run.progress",
             "run.finished",
@@ -1221,6 +1248,18 @@
           },
           "then": {
             "$ref": "#/$defs/variables.values"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "variables.patch"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/variables.patch"
           }
         },
         {

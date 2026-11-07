@@ -170,7 +170,9 @@ initializers may leave any out.
       Number types (to the block as ``Values``): ``"number"``, ``"boolean"`` (a checkbox; 1
       or 0). Text types (through ``Config``): ``"text"``, ``"key"`` (a ``KeyboardEvent.code``,
       picked by pressing it), ``"file"`` (a path, relative to the descriptor's folder),
-      ``"enum"`` (one of ``options``, a dropdown; the block also gets its index in ``Values``).
+      ``"enum"`` (one of ``options``, a dropdown; the block also gets its index in ``Values``),
+      ``"variable"`` (the name of a project variable, a picker; for
+      :cpp:func:`Context::set_variable`).
 
    .. cpp:member:: std::vector<std::string> options
 
@@ -452,6 +454,16 @@ What runs
    .. cpp:function:: const Value *variable(std::string_view name) const
 
       A variable's value now, or null if there is none of that name.
+
+   .. cpp:function:: bool set_variable(std::string_view name, const Value &value) const
+
+      Set the tunable variable ``name`` (#166), as an autotuner or a calibration does: a
+      number for a number or boolean variable, text for an enum, text or file one. It takes
+      effect at the end of the pass, so every block in a pass sees the same variables;
+      formulas over it and params bound to it follow (a block that takes no live change is
+      told once in the Console), and the UI keeps the value in the project. Returns false,
+      with a warning in the Console, if the variable is unknown, not ``tunable``, a formula,
+      of another type, or the value is outside its ``min`` / ``max``.
 
    .. cpp:function:: void log(std::string_view text, std::string_view level = "info") const
 

@@ -29,7 +29,8 @@ Top level
    **Defining a block on a C++ parent.** An extendable template (``signal/generator``) is a
    parent: an entry that ``use``\ s it may add ``params`` (``{ size = 2, fast = true, name =
    "x", key = { default = "Space", type = "key" }, mode = { default = "a", type = "enum",
-   options = ["a", "b"] } }``; in an expression an enum is its index) and set any ``config``; the parent
+   options = ["a", "b"] } }``; in an expression an enum is its index; ``type = "variable"``
+   names a project variable) and set any ``config``; the parent
    checks the definition at load (an expression that doesn't compile fails here, with where).
    The new block belongs to the domain.
 

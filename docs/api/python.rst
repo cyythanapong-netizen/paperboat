@@ -117,7 +117,9 @@ Definitions
    A param (or property) whose type its default doesn't say: ``Param("Space", "key")``,
    ``Param("data/a.png", "file")``, ``Param("fast", "enum", ["slow", "fast"])`` (a dropdown:
    the block gets the name). Plain defaults say it: a number (``number``), a bool
-   (``boolean``, a checkbox, 1.0 or 0.0 to the block), text (``text``).
+   (``boolean``, a checkbox, 1.0 or 0.0 to the block), text (``text``). ``Param("Kp",
+   "variable")`` names a project variable (a picker in the UI): the block gets the name, to
+   pass to ``ctx.variable`` or ``ctx.set_variable``.
 
 .. py:class:: Linked(inputs=(), outputs=(), kind="probe", label="")
 
@@ -461,6 +463,19 @@ What a block sees
    .. py:attribute:: node
 
       The id of the block (or station object) being called.
+
+   .. py:method:: variable(name)
+
+      A project variable's value now: a number, a boolean as 1.0 or 0.0, text; ``None`` if
+      there is none of that name.
+
+   .. py:method:: set_variable(name, value)
+
+      Set a ``tunable`` variable (#166), as an autotuner or a calibration does: a number
+      (or ``bool``) for a number or boolean variable, text for an enum, text or file one.
+      It takes effect at the end of the pass; formulas and params bound to it follow, and
+      the UI keeps the value in the project. Returns ``False``, with a warning in the
+      Console, if refused (unknown, not tunable, a formula, the wrong type, out of range).
 
    .. py:method:: log(text, level="info")
 

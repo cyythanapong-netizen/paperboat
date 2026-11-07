@@ -45,7 +45,7 @@ void add_values(Registry& registry) {
   registry.add(std::move(number));
 
   registry.add(make_template(
-      "base", "variable", "Variable", {}, {"y"}, {{.id = "name", .type = "text"}},
+      "base", "variable", "Variable", {}, {"y"}, {{.id = "name", .type = "variable"}},
       [](const Values&, const Config& text) {
         const auto it = text.find("name");
         return std::make_unique<VariableValue>(it == text.end() ? "" : it->second);

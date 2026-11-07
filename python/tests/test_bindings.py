@@ -378,3 +378,45 @@ def test_an_elementwise_python_block_takes_a_vector_and_stays_scalar_on_numbers(
     assert last["show"]["v"] == [10.0, 20.0]
     assert [c["id"] for c in last["show"]["components"]] == ["p", "q"]
     assert last["num"]["v"] == 20.0  # numbers in: a number out, as before
+
+
+TUNER_BACKEND = '''
+import paperboat
+from paperboat import Param
+
+class Tuner(paperboat.Block):
+    type, label = "tuner", "Tuner"
+    outputs = ["seen"]
+    params = {"target": Param("g", "variable")}
+    def step(self, ctx, inputs):
+        if ctx.t >= 0.5:
+            assert ctx.set_variable(self.params["target"], 4.0)
+            assert not ctx.set_variable("h", 1.0)  # not tunable
+        return {"seen": ctx.variable("g")}
+
+paperboat.serve(paperboat.Backend(engine="test-tuner", descriptor="descriptor.toml", blocks=[Tuner],
+                                  dt=0.1, duration=1.0, emit_every=1))
+'''
+
+TUNER_DESCRIPTOR = '''
+domain = "tuner"
+import = ["dashboard"]
+[[variables]]
+name = "g"
+value = 2
+tunable = true
+[[variables]]
+name = "h"
+value = 3
+[graph]
+nodes = [{ id = "tuner", type = "tuner" }, { id = "show", type = "display" }]
+edges = [{ from = ["tuner", "seen"], to = ["show", "in"] }]
+'''
+
+
+def test_a_python_block_reads_and_sets_a_tunable_variable(tmp_path: Path) -> None:
+    # #166: ctx.set_variable lands at the end of the pass; the UI is told with variables.patch.
+    msgs = run_backend(tmp_path, backend=TUNER_BACKEND, descriptor=TUNER_DESCRIPTOR)
+    seen = [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "show"]
+    assert seen[0] == 2.0 and seen[-1] == 4.0
+    assert [m["values"] for m in msgs if m["type"] == "variables.patch"] == [{"g": 4.0}]
