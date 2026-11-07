@@ -145,7 +145,8 @@ the plain prompt (set ``PAPERBOAT_NO_CONSOLE=1`` to choose it).
 .. code-block:: text
 
    › run counter-cpp          a job: builds, starts, and hands the prompt straight back
-   › app start                the web app, as another job
+   › start                    the web app, as another job (stop and restart: the same, no target)
+   › start squero-studio-om   a program from apps.toml; list shows each running thing's KIND
    › check counter-cpp        each stage as it runs (manifest, catalog, smoke, golden)
    › logs counter-cpp         the job's last lines; logs -f follows them
    › top                      every running backend: r restarts, s stops, Enter opens its log

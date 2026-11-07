@@ -30,6 +30,31 @@ output = "dist"
   CHECK_THROWS(tk::parse_apps_manifest("[[apps]]\nname = \"x\"\n"));
 }
 
+TEST_CASE("an app is a program or a library, and a program says how it launches and where it listens") {
+  const auto apps = tk::parse_apps_manifest(R"(
+[[apps]]
+name = "tool"
+repo = "https://example.com/tool.git"
+kind = "program"
+launch = "tool-cmd"
+port = 8123
+[[apps]]
+name = "kit"
+repo = "https://example.com/kit.git"
+kind = "library"
+[[apps]]
+name = "plain"
+repo = "https://example.com/plain.git"
+)");
+  REQUIRE(apps.size() == 3);
+  CHECK(apps[0].kind == "program");
+  CHECK(apps[0].launch == "tool-cmd");
+  CHECK(apps[0].port == 8123);
+  CHECK(apps[1].kind == "library");
+  CHECK(apps[2].kind == "program");  // the default
+  CHECK_THROWS(tk::parse_apps_manifest("[[apps]]\nname = \"x\"\nrepo = \"r\"\nkind = \"service\"\n"));
+}
+
 TEST_CASE("pkg lifecycle: deps first, versions from tags, update, uninstall guard") {
   const fs::path tmp = fs::temp_directory_path() / "paperboat_apps_test";
   std::error_code ec;

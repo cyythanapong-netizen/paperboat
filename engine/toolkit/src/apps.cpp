@@ -138,6 +138,11 @@ std::vector<AppEntry> parse_apps_manifest(std::string_view toml_text) {
     e.repo = (*t)["repo"].value_or(std::string{});
     e.description = (*t)["description"].value_or(std::string{});
     e.output = (*t)["output"].value_or(std::string{});
+    e.kind = (*t)["kind"].value_or(std::string{"program"});
+    e.launch = (*t)["launch"].value_or(std::string{});
+    e.port = (*t)["port"].value_or(0);
+    if (e.kind != "program" && e.kind != "library")
+      throw DescriptorError("apps[" + std::to_string(i) + "]: kind must be \"program\" or \"library\"");
     e.deps = strings(*t, "deps");
     e.build = strings(*t, "build");
     if (e.name.empty() || e.repo.empty()) throw DescriptorError("apps[" + std::to_string(i) + "]: needs name and repo");

@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <optional>
 #include <iostream>
 #include <map>
 #include <string>
@@ -39,6 +40,8 @@ namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
 namespace tui = paperboat::tui;
 namespace platform = paperboat::platform;
+
+using Command = int (*)(const std::vector<std::string_view>&);
 namespace fs = std::filesystem;
 
 const tk::Registry& full_registry() {
@@ -60,31 +63,36 @@ void print_help() {
 Usage:
   paperboat <command> [arguments...]
 
-Backend Commands:
-  run, start [path | pkg.ppk] [options]
-                             Build and run a backend (or .ppk package) in foreground
-                             Options:
-                               --port <N>      Specify listen port (default: 8765)
-                               --no-build      Skip C++ build step
-                               --clean         Clean build directory first
-                               --time          Print build/startup timing
+Start and stop (the web app, backends and programs):
+  start [target] [options]   Without a target: the web app (dev server, port 3047).
+                             A backend (folder, name or .ppk): build it and run it in the foreground.
+                             A program from apps.toml (squero-studio-om, or its command, squero): run it.
+                               --port <N>      Listen port (backend 8765, web app 3047, squero 8790)
+                               --daemon        Run in the background (the web app and programs)
+                               --host <H>      The web app's listen host (default 0.0.0.0)
+                             Backend only:
+                               --no-build      Skip the C++ build step
+                               --clean         Clean the build directory first
+                               --time          Print build and startup timing
                                --verbose       Verbose build output
-                               --var <key=val> Set default variable value
+                               --var <key=val> Set a default variable value
+  stop [target | --all]      Without a target: the web app. Otherwise a backend (port, name or folder) or a
+                             program. --all stops every running backend.
+  restart [target]           Restart the web app, or a backend or program
+  list, ps [--json]          Everything running, with a KIND column: backend or app
+  run [path | pkg.ppk]       Start a backend (the same options as start)
 
-  build [path] [--clean]     Compile a C++ backend (rebuild: the same with --clean)
+Backends:
   backends [--json]          List the backends you can run (examples, installed)
-  list, ps [--json]          List all running Paperboat backends
-  restart [path | port]      Restart a running backend
-  stop [path | port | --all] Stop a running backend or all backends
+  build [path] [--clean]     Compile a C++ backend
+  rebuild [path]             Clean and compile a C++ backend (build --clean)
+  open <file.ppj> [--run] [--port <N>] [--no-build]
+                             Open a saved project file with its backend (--run: headless)
 
-Web Application:
-  app start [options]        Start Vite web app dev server (default port: 3047)
-                               --port <N>      Web server port (default 3047)
-                               --host <H>      Listen host (default 0.0.0.0)
-                               --daemon        Run in background
-  app stop [--port <N>]      Stop web app dev server
-  app restart [options]      Restart web app dev server
-  app build                  Run production frontend build
+Web app:
+  app start|stop|restart     The same as start, stop and restart without a target
+  app build                  Run the production frontend build
+  (start --daemon and app start --daemon keep it in the background; stop ends it)
 
 Examples Orchestration:
   examples start [--dir <P>] Launch all example backends (ports 8765-8773)
@@ -119,7 +127,8 @@ Modelica (Squero Studio OM, needs OpenModelica):
   squero [Model.mo] [--port <N>] [--app <dir>] [--version <V>]
                              Squero Studio OM: the squero/0 server and the app (squero-studio-om,
                              fetched on first use; default port 8790); opens Model.mo
-                             (default ./Untitled.mo, created if missing)
+                             (default ./Untitled.mo, created if missing).
+                             The same as `start squero-studio-om`; `stop squero-studio-om` ends it
 
 Updating:
   update [--check] [--no-build]
@@ -128,7 +137,7 @@ Updating:
                              rebuild them, and refresh installed apps. --check only reports.
 
 Packages (apps from other repositories, see apps.toml):
-  pkg list [--json]          The apps, installed or not
+  pkg list [--json]          The programs and libraries, installed or not (KIND column)
   pkg install <name>[@<V>]   Clone a release (default: newest, else main) and build it
   pkg update <name|--all>    Install the newest release of an installed app
   pkg uninstall <name>       Remove an app
@@ -369,60 +378,184 @@ int cmd_backends(const std::vector<std::string_view>& args) {
   return 0;
 }
 
+// The first sentence of an app's description, for the one-line listings.
+std::string first_sentence(std::string text) {
+  if (const auto dot = text.find(". "); dot != std::string::npos) text.resize(dot);
+  if (!text.empty() && text.back() == '.') text.pop_back();
+  return text;
+}
+
+constexpr int kWebAppPort = 3047;
+
+// An app from apps.toml (squero-studio-om): `target` is the name, or the command that launches it (`squero`).
+// A path or a ./relative name is never one: that is a backend folder.
+std::optional<tk::AppEntry> find_program(std::string_view target) {
+  if (target.empty() || target.starts_with('.') || target.find_first_of("/\\") != std::string_view::npos) return std::nullopt;
+  for (auto& app : tk::list_apps())
+    if (app.name == target || (!app.launch.empty() && app.launch == target)) return app;
+  return std::nullopt;
+}
+
+// What is running, backends and apps alike; `kind` says which.
+struct RunningItem {
+  std::string kind;  // "backend" | "app"
+  std::string name;
+  std::string detail;
+  int port = 0;
+  int pid = 0;
+  std::string url;
+  json extra = json::object();
+};
+
+std::vector<RunningItem> running_items() {
+  std::vector<RunningItem> items;
+  for (const auto& b : core::BackendManager::list_running_backends()) {
+    items.push_back({"backend", b.domain.empty() ? "unknown" : b.domain, b.engine, b.port, b.pid, b.ws_url,
+                     {{"engine", b.engine}, {"domain", b.domain}, {"ws_url", b.ws_url}, {"cwd", b.cwd.string()},
+                      {"backend_dir", b.backend_dir.string()}, {"started_at", b.started_at}}});
+  }
+  const auto app = [&](const std::string& name, const std::string& detail, int port) {
+    if (!core::BackendManager::is_port_listening(port)) return;
+    items.push_back({"app", name, detail, port, core::BackendManager::find_pid_by_port(port),
+                     "http://localhost:" + std::to_string(port), {{"engine", ""}, {"domain", name}, {"ws_url", ""}}});
+  };
+  app("paperboat", "the web app (dev server)", kWebAppPort);
+  for (const auto& a : tk::list_apps())
+    if (a.kind == "program" && a.port > 0) app(a.name, first_sentence(a.description), a.port);
+  return items;
+}
+
 int cmd_list(const std::vector<std::string_view>& args) {
   bool json_out = false;
   for (auto a : args) {
     if (a == "--json") json_out = true;
   }
 
-  auto list = core::BackendManager::list_running_backends();
+  const auto items = running_items();
   if (json_out) {
     json arr = json::array();
-    for (const auto& b : list) {
-      arr.push_back({
-          {"port", b.port},
-          {"pid", b.pid},
-          {"engine", b.engine},
-          {"domain", b.domain},
-          {"ws_url", b.ws_url},
-          {"cwd", b.cwd.string()},
-          {"backend_dir", b.backend_dir.string()},
-          {"started_at", b.started_at},
-      });
+    for (const auto& it : items) {
+      json row = {{"kind", it.kind}, {"name", it.name}, {"port", it.port}, {"pid", it.pid}, {"url", it.url}};
+      row.update(it.extra);
+      arr.push_back(std::move(row));
     }
     std::cout << arr.dump(2) << '\n';
     return 0;
   }
 
-  if (list.empty()) {
-    std::cout << "No running Paperboat backends.\n";
+  if (items.empty()) {
+    std::cout << "Nothing is running. `paperboat start` starts the web app; `paperboat start <backend|program>` the rest.\n";
     return 0;
   }
 
-  std::cout << std::left << std::setw(8) << "PORT"
-            << std::setw(8) << "PID"
-            << std::setw(28) << "ENGINE"
-            << std::setw(18) << "DOMAIN"
-            << "WS URL" << '\n';
-
-  for (const auto& b : list) {
-    std::cout << std::left << std::setw(8) << b.port
-              << std::setw(8) << b.pid
-              << std::setw(28) << b.engine
-              << std::setw(18) << b.domain
-              << b.ws_url << '\n';
+  std::cout << std::left << std::setw(9) << "KIND" << std::setw(7) << "PORT" << std::setw(8) << "PID" << std::setw(22)
+            << "NAME" << std::setw(28) << "DETAIL" << "URL\n";
+  for (const auto& it : items) {
+    std::cout << std::left << std::setw(9) << it.kind << std::setw(7) << it.port << std::setw(8) << it.pid
+              << std::setw(22) << it.name << std::setw(28) << it.detail << it.url << '\n';
   }
   return 0;
 }
 
+int cmd_app(const std::vector<std::string_view>& args);
+Command find_command(std::string_view name);
+
+// `start`, `stop` and `restart` with no target are for the main app (the web app); `app <verb>` is the same.
+int main_app(std::string_view verb, const std::vector<std::string_view>& args) {
+  std::vector<std::string_view> forwarded = {verb};
+  forwarded.insert(forwarded.end(), args.begin(), args.end());
+  return cmd_app(forwarded);
+}
+
+// The first argument that is not a flag or a flag's value: what `start`/`stop`/`restart` act on.
+std::string target_of(const std::vector<std::string_view>& args) {
+  for (std::size_t i = 0; i < args.size(); ++i) {
+    if (args[i] == "--port" || args[i] == "--host" || args[i] == "--var" || args[i] == "--version") ++i;
+    else if (!args[i].starts_with("-")) return std::string(args[i]);
+  }
+  return {};
+}
+
+std::vector<std::string_view> without(const std::vector<std::string_view>& args, std::string_view target) {
+  std::vector<std::string_view> rest;
+  bool dropped = false;
+  for (auto a : args) {
+    if (!dropped && a == target) dropped = true;
+    else rest.push_back(a);
+  }
+  return rest;
+}
+
+// --port N, else the program's own port from apps.toml.
+int port_of(const tk::AppEntry& app, const std::vector<std::string_view>& args) {
+  for (std::size_t i = 0; i + 1 < args.size(); ++i)
+    if (args[i] == "--port") return std::stoi(std::string(args[i + 1]));
+  return app.port;
+}
+
+int stop_program(tk::AppEntry app, const std::vector<std::string_view>& args = {}) {
+  if (app.kind == "library") {
+    std::cerr << "error: " << app.name << " is a library, not a program\n";
+    return 1;
+  }
+  app.port = port_of(app, args);
+  if (app.port <= 0) {
+    std::cerr << "error: " << app.name << " has no port in apps.toml, so paperboat can't find it to stop it\n";
+    return 1;
+  }
+  if (!core::BackendManager::is_port_listening(app.port)) {
+    std::cout << app.name << " is not running\n";
+    return 0;
+  }
+  const int pid = core::BackendManager::find_pid_by_port(app.port);
+  core::BackendManager::free_port(app.port, 2000);
+  if (core::BackendManager::is_port_listening(app.port)) {
+    std::cerr << "error: could not stop " << app.name << " (pid " << pid << ", port " << app.port << ")\n";
+    return 1;
+  }
+  std::cout << "stopped " << app.name << " (pid " << pid << ", port " << app.port << ")\n";
+  return 0;
+}
+
+// Run a program in the foreground through its launch command, or --daemon: the same, detached, with a log.
+int start_program(const tk::AppEntry& app, std::vector<std::string_view> rest) {
+  if (app.launch.empty()) {
+    std::cerr << "error: " << app.name << " has no launch command in apps.toml\n";
+    return 1;
+  }
+  const auto daemon = std::ranges::find(rest, std::string_view("--daemon"));
+  if (daemon == rest.end()) {
+    const Command launch = find_command(app.launch);
+    if (!launch) {
+      std::cerr << "error: " << app.name << " launches with `paperboat " << app.launch << "`, which this build doesn't have\n";
+      return 1;
+    }
+    return launch(rest);
+  }
+  rest.erase(daemon);
+  std::vector<std::string> argv = {platform::exe_path().string(), "start", app.name};
+  for (auto a : rest) argv.emplace_back(a);
+  const fs::path log = platform::shared_tmp_dir() / ("paperboat-" + app.name + ".log");
+  const int pid = core::ProcessRunner::run_detached(argv, {}, {}, log);
+  if (pid <= 0) {
+    std::cerr << "error: could not start " << app.name << '\n';
+    return 1;
+  }
+  std::cout << "started " << app.name << " (pid " << pid << ", port " << port_of(app, rest) << ") · log " << log.string() << '\n';
+  return 0;
+}
+
 int cmd_restart(const std::vector<std::string_view>& args) {
-  if (args.empty()) {
-    std::cerr << "error: specify backend path or port to restart (e.g. `paperboat restart 8765`)\n";
-    return 2;
+  const std::string target = target_of(args);
+  if (target.empty()) return main_app("restart", args);
+  if (const auto app = find_program(target)) {
+    if (const int rc = stop_program(*app, args); rc != 0) return rc;
+    auto rest = without(args, target);
+    rest.emplace_back("--daemon");
+    return start_program(*app, rest);
   }
   core::BackendRunOptions opts;
-  std::string target(args[0]);
-  for (std::size_t i = 1; i < args.size(); ++i) {
+  for (std::size_t i = 0; i < args.size(); ++i) {
     if (args[i] == "--port" && i + 1 < args.size()) {
       opts.port = std::stoi(std::string(args[++i]));
     }
@@ -431,21 +564,31 @@ int cmd_restart(const std::vector<std::string_view>& args) {
 }
 
 int cmd_stop(const std::vector<std::string_view>& args) {
-  if (args.empty()) {
-    std::cerr << "error: specify backend path, port, or --all (e.g. `paperboat stop 8765`)\n";
-    return 2;
-  }
-  bool all = false;
-  std::string target;
-  for (auto a : args) {
-    if (a == "--all") all = true;
-    else if (!a.starts_with("-") && target.empty()) target = std::string(a);
-  }
-  if (!all && target.empty()) {
-    std::cerr << "error: specify backend path, port, or --all\n";
-    return 2;
-  }
+  const bool all = std::ranges::find(args, std::string_view("--all")) != args.end();
+  const std::string target = target_of(args);
+  if (!all && target.empty()) return main_app("stop", args);
+  if (const auto app = find_program(target)) return stop_program(*app, args);
   return core::BackendManager::stop_backend(target, all) ? 0 : 1;
+}
+
+// start: no target is the web app; a program from apps.toml (start squero-studio-om) runs that; anything else is a backend.
+int cmd_start(const std::vector<std::string_view>& args) {
+  const std::string target = target_of(args);
+  if (target.empty()) return main_app("start", args);
+  if (const auto app = find_program(target)) {
+    if (app->kind == "library") {
+      std::cerr << "error: " << app->name << " is a library, not a program\n";
+      return 1;
+    }
+    return start_program(*app, without(args, target));
+  }
+  std::error_code ec;
+  if (!fs::exists(target, ec) && !fs::is_directory(core::BackendManager::resolve_backend_dir(target), ec)) {
+    std::cerr << "error: \"" << target << "\" is neither a backend nor a program\n"
+              << "  backends: `paperboat backends` (or a folder or .ppk)   programs: `paperboat pkg list`\n";
+    return 1;
+  }
+  return cmd_run(args);
 }
 
 int cmd_app(const std::vector<std::string_view>& args) {
@@ -657,14 +800,16 @@ int cmd_pkg(const std::vector<std::string_view>& args) {
       json arr = json::array();
       for (const auto& a : list)
         arr.push_back({{"name", a.name}, {"repo", a.repo}, {"description", a.description},
-                       {"installed", a.installed}, {"version", a.version}, {"deps", a.deps}});
+                       {"installed", a.installed}, {"version", a.version}, {"deps", a.deps}, {"kind", a.kind},
+                       {"launch", a.launch}, {"port", a.port}});
       std::cout << arr.dump(2) << '\n';
       return 0;
     }
     if (list.empty()) std::cerr << "no apps (apps.toml not found in the repository root)\n";
+    std::cout << std::left << std::setw(20) << "NAME" << std::setw(9) << "KIND" << std::setw(15) << "VERSION" << "DESCRIPTION\n";
     for (const auto& a : list)
-      std::cout << std::left << std::setw(20) << a.name << std::setw(14) << (a.installed ? a.version : "not installed")
-                << a.description << '\n';
+      std::cout << std::left << std::setw(20) << a.name << std::setw(9) << a.kind << std::setw(15)
+                << (a.installed ? a.version : "not installed") << a.description << '\n';
     return 0;
   }
   if (sub == "update" && all) {
@@ -1179,8 +1324,6 @@ int cmd_squero(const std::vector<std::string_view>& args) {
 int cmd_commands(const std::vector<std::string_view>& args);
 int cmd_top(const std::vector<std::string_view>&);
 
-using Command = int (*)(const std::vector<std::string_view>&);
-
 // What a command's free argument names, for completion: a backend, a toolkit, something
 // running (name or port), a .ppk file, or nothing.
 struct CommandSpec {
@@ -1196,18 +1339,21 @@ struct CommandSpec {
 // The subcommands the command line, the basic prompt and the console share (`commands --json`).
 const std::vector<CommandSpec>& command_table() {
   static const std::vector<CommandSpec> table = {
-      {"run", cmd_run, "Build and run a backend", {"start"}, {},
+      {"start", cmd_start, "Start the web app, or a backend or program (start [backend|program])", {}, {},
+       {"--port", "--host", "--daemon", "--no-build", "--clean", "--time", "--verbose", "--var", "--version"}, "target"},
+      {"stop", cmd_stop, "Stop the web app, or a backend or program (stop [backend|program])", {}, {}, {"--all", "--port"},
+       "target"},
+      {"restart", cmd_restart, "Restart the web app, or a backend or program", {}, {}, {"--port"}, "target"},
+      {"run", cmd_run, "Build and run a backend (or .ppk) in the foreground", {}, {},
        {"--port", "--no-build", "--clean", "--time", "--verbose", "--var"}, "backend"},
       {"open", cmd_open, "Open a saved project file (.ppj, .paperboat.json)", {}, {},
        {"--run", "--port", "--no-build"}, "project"},
       {"build", cmd_build, "Compile a C++ backend", {}, {}, {"--clean"}, "backend"},
       {"rebuild", cmd_rebuild, "Clean and compile a C++ backend", {}, {}, {}, "backend"},
       {"backends", cmd_backends, "List the backends you can run", {}, {}, {"--json"}},
-      {"list", cmd_list, "List running backends", {"ps"}, {}, {"--json"}},
-      {"restart", cmd_restart, "Restart a running backend", {}, {}, {"--port"}, "target"},
-      {"stop", cmd_stop, "Stop a running backend", {}, {}, {"--all"}, "target"},
-      {"app", cmd_app, "Manage the web app dev server", {}, {"start", "stop", "restart", "build"},
-       {"--port", "--host", "--daemon"}},
+      {"list", cmd_list, "List what is running, backends and apps (KIND)", {"ps"}, {}, {"--json"}},
+      {"app", cmd_app, "The web app: start, stop, restart, build (start/stop/restart do the same)", {},
+       {"start", "stop", "restart", "build"}, {"--port", "--host", "--daemon"}},
       {"examples", cmd_examples, "Run all example backends", {}, {"start", "stop", "status"}, {"--dir"}},
       {"toolkit", cmd_toolkit, "Manage optional toolkits", {}, {"list", "install", "update", "uninstall", "versions"},
        {"--json", "--all", "--no-build", "--version"}, "toolkit"},
@@ -1300,31 +1446,16 @@ bool launch_console(const std::vector<std::string>& args) {
 }
 
 void print_interactive_help() {
-  std::cout << R"(Interactive Commands:
-  run, start <target>      Build and start backend (or .ppk package)
-  build, rebuild <target>  Compile a C++ backend (rebuild cleans first)
-  backends                 List the backends you can run
-  list (or ps)             List running Paperboat backends
-  restart <target>         Restart backend on port or name
-  stop <target|--all>      Stop running backend
-  app <start|stop|build>   Manage the web application dev server
-  examples <start|stop|status>
-                           Manage example backends (ports 8765-8773)
-  toolkit <list|install|update|versions>
-                           Manage optional toolkits (e.g. `toolkit install opencv`)
-  pkg <list|install|update|uninstall|versions|path>
-                           Apps from other repositories (e.g. `pkg install squero-studio-om`)
-  update [--check]         Pull this repository and its app checkouts, rebuild
-  check [backend] [--fast] 4-stage backend verification (manifest, catalog, smoke, golden)
-  pack [folder] [--out <pkg>]
-                           Package backend into .ppk archive
-  unpack <pkg> [--dir <dir>]
-                           Unpack and verify .ppk archive
-  status                   Show overall status of backends and examples
-  clear                    Clear screen and redraw banner
-  help                     Show this help message
-  exit (or quit)           Exit interactive prompt
-)";
+  std::cout << "Interactive commands:\n";
+  for (const auto& c : command_table()) {
+    std::string names(c.name);
+    for (const auto alias : c.aliases) names += ", " + std::string(alias);
+    std::cout << "  " << std::left << std::setw(18) << names << c.summary << '\n';
+  }
+  std::cout << "  " << std::left << std::setw(18) << "status" << "Everything running, and the example backends\n"
+            << "  " << std::setw(18) << "clear" << "Clear the screen and redraw the banner\n"
+            << "  " << std::setw(18) << "help" << "This list (`help <anything>` for the full manual)\n"
+            << "  " << std::setw(18) << "exit, quit" << "Leave the prompt\n";
 }
 
 int run_interactive_prompt() {

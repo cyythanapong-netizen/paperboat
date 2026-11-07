@@ -1,3 +1,12 @@
+# Windows builds only the process-layer tests; the rest of the suite uses POSIX (setenv, sh, /tmp).
+if(WIN32)
+  add_executable(paperboat_process_tests process_test.cpp)
+  target_link_libraries(paperboat_process_tests PRIVATE paperboat::core Catch2::Catch2WithMain paperboat_warnings)
+  include(Catch)
+  catch_discover_tests(paperboat_process_tests)
+  return()
+endif()
+
 add_executable(paperboat_tests
   descriptor_test.cpp
   control_test.cpp
@@ -12,6 +21,7 @@ add_executable(paperboat_tests
   vector_test.cpp
   cli_test.cpp
   apps_test.cpp
+  process_test.cpp
 )
 target_link_libraries(paperboat_tests
   PRIVATE paperboat::toolkit paperboat::core nlohmann_json::nlohmann_json Catch2::Catch2WithMain paperboat_warnings)

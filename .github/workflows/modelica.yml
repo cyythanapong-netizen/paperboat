@@ -46,7 +46,7 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/openmodelica-keyring.gpg] https://build.openmodelica.org/apt $(lsb_release -cs) stable" | \
             sudo tee /etc/apt/sources.list.d/openmodelica.list
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends openmodelica omlib-modelica-4.0.0 omc
+          sudo apt-get install -y --no-install-recommends openmodelica omc
           omc --version
 
       - name: Preload Modelica Standard Library

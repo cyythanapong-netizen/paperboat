@@ -5,7 +5,7 @@
 # CI runs it on ubuntu-22.04; locally: podman run --rm -v <export>:/src:z debian:bookworm /src/scripts/build_release.sh
 set -euo pipefail
 src="$(cd "$(dirname "$0")/.." && pwd)"
-out="${1:-$src/dist}"
+out="$(realpath -m "${1:-$src/dist}")"  # absolute: cpack runs from the build directory
 build="$src/engine/build"   # where bin/paperboat and the CLI tests look for it
 
 cmake -S "$src/engine" -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release \

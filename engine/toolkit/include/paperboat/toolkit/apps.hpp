@@ -20,6 +20,9 @@ struct AppEntry {
   std::vector<std::string> deps;   // apps that must sit next to this one when it builds
   std::vector<std::string> build;  // commands run in the app's folder after the clone
   std::string output;              // folder the build makes (what `paperboat squero` serves)
+  std::string kind = "program";    // "program" runs (start/stop it); "library" only builds
+  std::string launch;              // the paperboat command that runs a program (`squero`)
+  int port = 0;                    // where a running program listens (`stop` and `list` find it there)
   bool installed = false;
   std::string version;             // installed: a release ("0.1.0") or "dev" (main)
 };

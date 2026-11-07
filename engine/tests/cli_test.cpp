@@ -11,6 +11,7 @@
 #include "paperboat/core/backend_manager.hpp"
 #include "paperboat/core/process.hpp"
 #include "paperboat/toolkit/installer.hpp"
+#include "paperboat/toolkit/platform.hpp"
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
 #endif
@@ -531,4 +532,60 @@ TEST_CASE("paperboat open validates project file and backend") {
   CHECK(res5.exit_code == 0);
   fs::remove(valid_proj);
   fs::remove_all(backend_dir);
+}
+
+namespace {
+// The CLI built with these tests: <build>/tests/paperboat_tests -> <build>/tools/paperboat.
+fs::path find_cli() {
+  const fs::path beside = paperboat::platform::exe_path().parent_path().parent_path() / "tools" / "paperboat";
+  return fs::is_regular_file(beside) ? beside : fs::path{"bin/paperboat"};
+}
+}  // namespace
+
+TEST_CASE("every command in the table is in the help menu and the prompt's help") {
+  const fs::path cli = find_cli();
+  REQUIRE(fs::is_regular_file(cli));
+  const auto table = nlohmann::json::parse(core::ProcessRunner::run_sync({cli.string(), "commands", "--json"}).stdout_text);
+  const auto help = core::ProcessRunner::run_sync({cli.string(), "--help"}).stdout_text;
+  REQUIRE(table.size() > 10);
+  for (const auto& c : table) {
+    const std::string name = c["name"];
+    INFO("command: " << name);
+    CHECK(help.find("  " + name) != std::string::npos);  // a line of the manual starts with it
+  }
+}
+
+TEST_CASE("start, stop and restart are one command each, and run no longer aliases start") {
+  const fs::path cli = find_cli();
+  REQUIRE(fs::is_regular_file(cli));
+  const auto table = nlohmann::json::parse(core::ProcessRunner::run_sync({cli.string(), "commands", "--json"}).stdout_text);
+  int starts = 0;
+  for (const auto& c : table) {
+    if (c["name"] == "start") ++starts;
+    if (c["name"] == "run") CHECK(c["aliases"].empty());
+  }
+  CHECK(starts == 1);
+}
+
+TEST_CASE("start names what it could not find, and a library is not a program") {
+  const fs::path cli = find_cli();
+  REQUIRE(fs::is_regular_file(cli));
+  const auto missing = core::ProcessRunner::run_sync({cli.string(), "start", "no-such-thing-xyz"});
+  CHECK(missing.exit_code == 1);
+  CHECK(missing.stderr_text.find("neither a backend nor a program") != std::string::npos);
+  const auto lib = core::ProcessRunner::run_sync({cli.string(), "start", "paperboat-shared"});
+  CHECK(lib.exit_code == 1);
+  CHECK(lib.stderr_text.find("is a library") != std::string::npos);
+}
+
+TEST_CASE("list --json says what kind each running thing is") {
+  const fs::path cli = find_cli();
+  REQUIRE(fs::is_regular_file(cli));
+  const auto rows = nlohmann::json::parse(core::ProcessRunner::run_sync({cli.string(), "list", "--json"}).stdout_text);
+  REQUIRE(rows.is_array());
+  for (const auto& r : rows) {
+    CHECK((r["kind"] == "backend" || r["kind"] == "app"));
+    CHECK(r.contains("port"));
+    CHECK(r.contains("pid"));
+  }
 }

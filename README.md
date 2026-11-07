@@ -15,6 +15,7 @@ what they send.<br><br>
 | Engine | C++ build and the engine tests | [![engine](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/engine.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/engine.yml?query=branch%3Adev) |
 | Python | the bindings and the protocol schema | [![python](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/python.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/python.yml?query=branch%3Adev) |
 | Web and console | typecheck, tests and build of `apps/web` and `apps/cli` | [![web](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/web.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/web.yml?query=branch%3Adev) |
+| Release | `.deb`, `.tar.gz`, `.zip` and the npm packages, built on a `v<version>` tag | [![release](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/release.yml/badge.svg)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/release.yml) [![latest release](https://img.shields.io/github/v/release/cyythanapong-netizen/paperboat?include_prereleases&label=latest)](https://github.com/cyythanapong-netizen/paperboat/releases) |
 | Docs | the [API reference](https://cyythanapong-netizen.github.io/paperboat/), warnings as errors | [![docs](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
 
 ## Documentation
@@ -99,15 +100,16 @@ npm run dev                   # http://localhost:3047
 Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 
 ```sh
-./bin/paperboat run cart-pole       # builds and runs cart-pole backend
-./bin/paperboat list                # lists all active backends
-./bin/paperboat app start           # starts web app on port 3047
+./bin/paperboat start cart-pole     # builds and runs the cart-pole backend (run is the same)
+./bin/paperboat list                # everything running, with a KIND: backend or app
+./bin/paperboat start               # starts the web app on port 3047 (stop / restart: the same, no target)
 ./bin/paperboat examples start      # launches all example backends (ports 8765-8773)
 ./bin/paperboat examples status     # checks status of example backends
 ./bin/paperboat toolkit list        # lists available and installed toolkits
 ./bin/paperboat update --check    # is this checkout (and its app checkouts) behind? `update` pulls and rebuilds
 ./bin/paperboat pkg list            # apps from other repositories (apps.toml): squero-studio-om, ...
-./bin/paperboat squero              # Squero Studio OM; fetches and builds it on first use (needs omc, git, npm)
+./bin/paperboat start squero-studio-om   # a program from apps.toml (= `paperboat squero`); fetched and built on first use
+./bin/paperboat stop squero-studio-om    # `start` and `stop` take a backend or a program; with no target, the web app
 ```
 
 ### Install
