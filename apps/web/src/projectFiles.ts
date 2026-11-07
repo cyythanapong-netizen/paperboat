@@ -17,7 +17,7 @@ declare global {
   }
 }
 
-const TYPES: Types = [{ description: "Paperboat project", accept: { "application/json": [".json"] } }];
+const TYPES: Types = [{ description: "Paperboat project", accept: { "application/json": [".ppj", ".json"] } }];
 const cancelled = (e: unknown) => e instanceof DOMException && e.name === "AbortError";
 
 /**
@@ -63,7 +63,7 @@ export async function pickText(): Promise<{ name: string; text: string } | null>
   return new Promise((resolve, reject) => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = ".json,application/json";
+    input.accept = ".ppj,.json,application/json";
     input.hidden = true;
     const done = (v: { name: string; text: string } | null) => {
       input.remove();

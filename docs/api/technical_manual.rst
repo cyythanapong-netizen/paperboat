@@ -302,7 +302,7 @@ communicates exclusively through structured message passing.
 Project Serialization Format
 ----------------------------
 
-Projects are serialized as formatted JSON (`*.paperboat.json`):
+Projects are serialized as formatted JSON (``*.ppj``):
 
 .. code-block:: json
 

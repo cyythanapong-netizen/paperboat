@@ -12,8 +12,9 @@ protocol already has.
 The file
 --------
 
-``name.paperboat.json``: readable JSON, indented, so a diff shows what changed. Parts that are
-empty are left out.
+``name.ppj``: readable JSON, indented, so a diff shows what changed. Parts that are
+empty are left out. Files saved before the extension changed (``name.paperboat.json``) still
+open.
 
 .. code-block:: json
 

@@ -1,4 +1,4 @@
-// Project files (#82): everything a user made, as one JSON file. Pure functions: building the
+// Project files (#82, #34): everything a user made, as one JSON file (`name.ppj`). Pure functions: building the
 // file, reading and checking one, naming it, and the small lists the browser keeps (recent
 // projects and the autosave). The shape is `Project` in protocol.ts, generated from the schema.
 
@@ -8,7 +8,7 @@ import { readStored as read, writeStored as write } from "./storage.ts";
 /** The format version this app writes and reads. A newer file is refused. */
 export const PROJECT_VERSION = 0;
 /** The file name's ending. One place to change it. */
-export const PROJECT_EXT = ".paperboat.json";
+export const PROJECT_EXT = ".ppj";
 
 type Parts = {
   backend: string;
@@ -113,9 +113,9 @@ export function projectFileName(name: string): string {
   return `${clean || "project"}${PROJECT_EXT}`;
 }
 
-/** The project's name from its file's: without `.paperboat.json` (or `.json`). */
+/** The project's name from its file's: without `.ppj` (or `.paperboat.json`, `.json` from before). */
 export function projectName(file: string): string {
-  const name = file.replace(/\.paperboat\.json$/i, "").replace(/\.json$/i, "").trim();
+  const name = file.replace(/\.(ppj|paperboat\.json|json)$/i, "").trim();
   return name || "Untitled";
 }
 

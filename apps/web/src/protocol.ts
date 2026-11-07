@@ -338,7 +338,7 @@ export type PortSides = {
   bottom?: string[];
 };
 
-/** A project file (#82): everything a user made, as one JSON file (name.paperboat.json). It is not a protocol message; the UI writes and reads it. flow, station, variables and dashboard are the shapes the protocol already uses. A block whose type the opening backend lacks stays as a lost block, params and wires kept. */
+/** A project file (#82): everything a user made, as one JSON file (name.ppj). It is not a protocol message; the UI writes and reads it. flow, station, variables and dashboard are the shapes the protocol already uses. A block whose type the opening backend lacks stays as a lost block, params and wires kept. */
 export type Project = {
   /** The project format version. Opening refuses a newer one and says so. */
   paperboat: 0;

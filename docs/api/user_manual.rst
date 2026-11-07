@@ -225,12 +225,12 @@ Project Management
 ------------------
 
 Paperboat saves your entire workspace into human-readable, version-controlled project files
-with the extension :code:`.paperboat.json`.
+with the extension :code:`.ppj` (JSON inside).
 
 - **Saving**: Press :kbd:`Ctrl` + :kbd:`S` (or :kbd:`File > Save`) to save changes. To save a copy,
   choose :kbd:`File > Save As...`.
 - **Opening**: Press :kbd:`Ctrl` + :kbd:`O` (or :kbd:`File > Open`), or drag-and-drop any
-  :code:`.paperboat.json` file directly into your browser window.
+  :code:`.ppj` file (or an older :code:`.paperboat.json`) directly into your browser window.
 - **Session Restoration**: If your browser accidentally closes or refreshes during a run,
   reopening the app presents an option to restore your unsaved session state.
 
