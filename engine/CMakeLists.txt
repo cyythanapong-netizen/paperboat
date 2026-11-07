@@ -13,6 +13,10 @@ option(PAPERBOAT_BUILD_MODELICA "Build engine/modelica when omc is installed" ${
 option(PAPERBOAT_MODELICA_WITHOUT_OMC "Build engine/modelica even when omc is not installed (release packages: omc is only needed at run time)" OFF)
 option(PAPERBOAT_STATIC_RUNTIME "Link libstdc++ and libgcc statically, so a release binary needs only glibc" OFF)
 
+if(MSVC AND PAPERBOAT_STATIC_RUNTIME)  # no vcruntime DLL to install next to the .exe; set before the dependencies are fetched
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 # Dependencies: use an installed copy if there is one, otherwise fetch a pinned release.
 include(FetchContent)
 FetchContent_Declare(nlohmann_json

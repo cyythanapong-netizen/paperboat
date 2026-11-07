@@ -7,6 +7,13 @@ file(READ web/station.js PAPERBOAT_STATION_JS)
 configure_file(src/station_js.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/station_js.cpp @ONLY)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS web/station.js)
 
+# The process layer is per platform: fork/poll on POSIX, CreateProcess and job objects on Windows.
+if(WIN32)
+  set(PAPERBOAT_PROCESS_SOURCE src/process_win.cpp)
+else()
+  set(PAPERBOAT_PROCESS_SOURCE src/process.cpp)
+endif()
+
 add_library(paperboat_core
   src/station.cpp
   src/graph.cpp
@@ -15,7 +22,7 @@ add_library(paperboat_core
   src/session.cpp
   src/serve.cpp
   src/main.cpp
-  src/process.cpp
+  ${PAPERBOAT_PROCESS_SOURCE}
   src/backend_manager.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/station_js.cpp
 )
@@ -25,6 +32,9 @@ target_include_directories(paperboat_core PUBLIC include)
 target_link_libraries(paperboat_core
   PUBLIC paperboat::toolkit nlohmann_json::nlohmann_json tomlplusplus::tomlplusplus
   PRIVATE ixwebsocket paperboat_warnings)
+if(WIN32)
+  target_link_libraries(paperboat_core PRIVATE ws2_32 iphlpapi)  # port checks in backend_manager
+endif()
 
 target_compile_definitions(paperboat_core PRIVATE
   PAPERBOAT_HOST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"

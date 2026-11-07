@@ -31,7 +31,7 @@ TARGETS = {
 
 def pack(stage: Path, out: Path) -> None:
     out.mkdir(parents=True, exist_ok=True)
-    subprocess.run(["npm", "pack", "--silent", "--pack-destination", str(out.resolve())], cwd=stage, check=True)
+    subprocess.run([shutil.which("npm") or "npm", "pack", "--silent", "--pack-destination", str(out.resolve())], cwd=stage, check=True)
 
 
 def main() -> None:

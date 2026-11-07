@@ -14,7 +14,9 @@ on:
       - "scripts/build_release.sh"
       - "scripts/pack_npm.py"
       - "engine/CMakeLists.txt"
-      - "engine/tools/CMakeLists.txt"
+      - "engine/core/**"
+      - "engine/toolkit/**"
+      - "engine/tools/**"
       - ".github/workflows/release.yml"
   workflow_dispatch:
 
@@ -65,9 +67,56 @@ jobs:
           name: linux
           path: dist/
 
+  windows:
+    name: Windows (.zip, npm)
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Version
+        id: version
+        run: |
+          v=$(sed -nE 's/^project\(paperboat VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' engine/CMakeLists.txt)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      # The CLI, the core and the toolkit; engine/modelica (omc) and the tests are POSIX-only for now.
+      - name: Build
+        run: |
+          cmake -S engine -B engine/build -G "Visual Studio 17 2022" -A x64 \
+            -DPAPERBOAT_STATIC_RUNTIME=ON -DPAPERBOAT_BUILD_TESTS=OFF -DPAPERBOAT_BUILD_MODELICA=OFF
+          cmake --build engine/build --config Release --parallel
+      - name: The binary runs
+        run: |
+          exe=engine/build/tools/Release/paperboat.exe
+          "$exe" --version
+          "$exe" commands | grep -q pkg
+          "$exe" pkg versions squero-studio-om || true   # git over the pipe layer
+          "$exe" < /dev/null                              # the prompt: its banner runs git through the process layer
+      - name: Package (.zip, npm)
+        run: |
+          v=${{ steps.version.outputs.version }}
+          (cd engine/build && cpack -G ZIP -C Release -B "$GITHUB_WORKSPACE/dist")
+          python scripts/pack_npm.py --version "$v" --out dist/npm --target win32-x64 --binary engine/build/tools/Release/paperboat.exe
+          python scripts/pack_npm.py --version "$v" --out dist/npm --main
+      - name: The npm packages install and run through the launcher
+        run: |
+          prefix=$(mktemp -d)
+          npm install -g --prefix "$prefix" dist/npm/paperboat-cli-win32-x64-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz
+          node "$prefix/node_modules/@paperboat/cli/bin/paperboat.js" --version
+          node "$prefix/node_modules/@paperboat/cli/bin/paperboat.js" pkg list
+          rm dist/npm/paperboat-cli-[0-9]*.tgz   # the launcher is published from the Linux job
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/
+
   publish:
     name: Publish (tags only)
-    needs: [linux]
+    needs: [linux, windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     permissions:

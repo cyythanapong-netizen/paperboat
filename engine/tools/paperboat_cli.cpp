@@ -10,7 +10,6 @@
 #include <map>
 #include <string>
 #include <string_view>
-#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -20,6 +19,7 @@
 #include "paperboat/core/process.hpp"
 #include "paperboat/toolkit/apps.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
+#include "paperboat/toolkit/platform.hpp"
 #include "paperboat/toolkit/update.hpp"
 #include "paperboat/toolkit/installer.hpp"
 #ifdef PAPERBOAT_HAS_OPENCV
@@ -38,6 +38,7 @@ using nlohmann::json;
 namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
 namespace tui = paperboat::tui;
+namespace platform = paperboat::platform;
 namespace fs = std::filesystem;
 
 const tk::Registry& full_registry() {
@@ -713,9 +714,8 @@ int cmd_pkg(const std::vector<std::string_view>& args) {
 
 // The build directory of the running binary (engine/build/dev, engine/build, ...).
 fs::path running_build_dir(const fs::path& root) {
-  std::error_code ec;
-  fs::path p = fs::read_symlink("/proc/self/exe", ec);
-  for (p = p.parent_path(); !ec && p != p.root_path() && p.has_parent_path(); p = p.parent_path())
+  fs::path p = platform::exe_path();
+  for (p = p.parent_path(); !p.empty() && p != p.root_path() && p.has_parent_path(); p = p.parent_path())
     if (fs::is_regular_file(p / "CMakeCache.txt")) return p;
   return root / "engine" / "build";
 }
@@ -789,8 +789,7 @@ int cmd_update(const std::vector<std::string_view>& args) {
   if (checkout) {
     sync("paperboat", root, changed);
   } else {  // an installed package: there is no repository to pull
-    std::error_code ec;
-    const bool npm = fs::read_symlink("/proc/self/exe", ec).string().find("node_modules") != std::string::npos;
+    const bool npm = platform::exe_path().string().find("node_modules") != std::string::npos;
     if (!npm) {
       say("paperboat", std::string(tui::kVersion) + ", installed from a package: update it with your package manager");
     } else {
@@ -1264,9 +1263,13 @@ int cmd_top(const std::vector<std::string_view>&) {
 // The console (apps/cli, Ink) replaces this process on a terminal. Returns only when it
 // can't: not a terminal, PAPERBOAT_NO_CONSOLE set, not built, or no `node` on PATH.
 bool launch_console(const std::vector<std::string>& args) {
-  if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO) || std::getenv("PAPERBOAT_NO_CONSOLE")) return false;
+#ifdef _WIN32
+  (void)args;
+  return false;  // the console replaces this process with node (execvp); on Windows the basic prompt is used
+#else
+  if (!platform::is_tty(0) || !platform::is_tty(1) || std::getenv("PAPERBOAT_NO_CONSOLE")) return false;
   std::error_code ec;
-  const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+  const fs::path exe = platform::exe_path();
   fs::path script;
   if (const char* env = std::getenv("PAPERBOAT_CONSOLE"); env && *env) {
     script = env;
@@ -1293,6 +1296,7 @@ bool launch_console(const std::vector<std::string>& args) {
   execvp("node", argv.data());
   std::cerr << "note: `node` not found on PATH; using the basic prompt\n";
   return false;
+#endif
 }
 
 void print_interactive_help() {
@@ -1329,7 +1333,7 @@ int run_interactive_prompt() {
 
   std::string line;
   while (true) {
-    if (isatty(STDIN_FILENO)) {
+    if (platform::is_tty(0)) {
       std::cout << "\033[1;38;2;74;144;226mpaperboat\033[0m> " << std::flush;
     }
     if (!std::getline(std::cin, line)) {
@@ -1345,7 +1349,7 @@ int run_interactive_prompt() {
       break;
     }
     if (cmd == "clear" || cmd == "cls") {
-      if (isatty(STDOUT_FILENO)) std::cout << "\033[2J\033[H";
+      if (platform::is_tty(1)) std::cout << "\033[2J\033[H";
       tui::render_banner(false);
       continue;
     }
