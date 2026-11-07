@@ -138,6 +138,23 @@ TEST_CASE("rk4_step matches exp(-t)") {
   CHECK_THAT(x[0], WithinAbs(std::exp(-1.0), 1e-8));
 }
 
+TEST_CASE("integrator and lag accept solver parameter and step accurately") {
+  auto integ_rk4 = make("control/integrator", {{"initial", 0.0}, {"solver", "rk4"}});
+  REQUIRE(integ_rk4 != nullptr);
+  const double dt = 0.01;
+  for (int k = 0; k < 100; ++k) {
+    integ_rk4->step({.t = k * dt, .dt = dt}, {{"u", 5.0}});
+  }
+  CHECK_THAT(get_or(integ_rk4->outputs(), "y"), WithinAbs(5.0 * 1.0, 1e-9));
+
+  auto lag_rk4 = make("control/lag", {{"tau", 1.0}, {"solver", "rk4"}});
+  REQUIRE(lag_rk4 != nullptr);
+  for (int k = 0; k < 200; ++k) {
+    lag_rk4->step({.t = k * dt, .dt = dt}, {{"u", 2.0}});
+  }
+  CHECK_THAT(get_or(lag_rk4->outputs(), "y"), WithinAbs(2.0 * (1.0 - std::exp(-2.0)), 1e-3));
+}
+
 TEST_CASE("base/constant outputs its value") {
   const auto* t = paperboat::toolkit::builtins().find("base/constant");
   REQUIRE(t);

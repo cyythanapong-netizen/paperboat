@@ -644,6 +644,7 @@ int cmd_check(const std::vector<std::string_view>& args) {
         {"warnings", res.warnings},
         {"missing_toolkits", res.missing_toolkits},
     };
+    if (!res.solver.empty()) doc["solver"] = res.solver;
     if (stream) {
       doc["event"] = "result";
       emit(std::move(doc));
@@ -655,7 +656,11 @@ int cmd_check(const std::vector<std::string_view>& args) {
 
   std::cout << "backend \"" << (res.name.empty() ? res.domain : res.name)
             << "\" (" << (res.version.empty() ? "0.1.0" : res.version)
-            << ", " << (res.language.empty() ? "unknown" : res.language) << "):\n";
+            << ", " << (res.language.empty() ? "unknown" : res.language);
+  if (!res.solver.empty()) {
+    std::cout << ", solver: " << res.solver;
+  }
+  std::cout << "):\n";
 
   for (const auto& step : res.steps) {
     if (step.skipped) {

@@ -2,6 +2,7 @@
 
 #include "paperboat/core/executor.hpp"
 
+#include <paperboat/toolkit/solve.hpp>
 #include <paperboat/toolkit/variables.hpp>
 
 #include <algorithm>
@@ -568,13 +569,29 @@ RunSettings with_overrides(RunSettings base, const json& settings) {
   number("duration", base.duration, true);
   number("dt", base.dt, false);
   number("speed", base.speed, true);
+  if (settings.contains("solver")) {
+    if (!settings.at("solver").is_string())
+      throw std::invalid_argument("run setting solver must be a string");
+    const std::string s = settings.at("solver").get<std::string>();
+    const auto& valid = toolkit::solve::names();
+    if (std::find(valid.begin(), valid.end(), s) == valid.end()) {
+      std::string list;
+      for (const auto& name : valid) list += (list.empty() ? "" : ", ") + name;
+      throw std::invalid_argument("unknown solver \"" + s + "\" (expected one of: " + list + ")");
+    }
+    base.solver = s;
+  }
   if (base.duration > 0 && base.duration / base.dt > 1e7)
     throw std::invalid_argument("run settings: more than 10 million clock steps (duration / dt)");
   return base;
 }
 
 json settings_json(const RunSettings& s) {
-  return {{"mode", s.mode == RunSettings::Mode::Once ? "once" : "clock"}, {"duration", s.duration}, {"dt", s.dt}, {"speed", s.speed}};
+  json j = {{"mode", s.mode == RunSettings::Mode::Once ? "once" : "clock"}, {"duration", s.duration}, {"dt", s.dt}, {"speed", s.speed}};
+  if (!s.solver.empty()) {
+    j["solver"] = s.solver;
+  }
+  return j;
 }
 
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,

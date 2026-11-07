@@ -44,6 +44,7 @@ The ``backend.toml`` file at the root of the backend folder configures identific
    run = "build/paperboat-cart-pole"
    port = 8766
    descriptor = "descriptor.toml"
+   solver = "rk4"                   # optional: default solver ("rk4", "rk45", "rk2", "euler", "discrete")
    toolkits = ["opencv"]            # optional: required toolkits
 
    [test]
@@ -76,6 +77,9 @@ Field Reference
 ``[backend].descriptor``
   *String*. Relative path to the domain descriptor file (default: ``"descriptor.toml"``).
 
+``[backend].solver``
+  *Optional string*. Default numerical ODE solver for simulation runs and dynamic models (e.g. ``"rk4"``, ``"rk45"``, ``"rk2"``, ``"euler"``, ``"discrete"``). May also be placed under ``[run].solver``. If the built-in solvers API or continuous blocks/models are used and unspecified, defaults to ``"rk4"``.
+
 ``[backend].toolkits``
   *Optional list of strings*. Required optional toolkits that must be installed in the engine (e.g. ``["opencv"]``), or ``["__all__"]`` to import and require all toolkits and built-in packages available in the Paperboat repository.
 
@@ -94,8 +98,8 @@ The unified CLI provides ``paperboat check`` to validate a backend through a fou
 Stages
 ~~~~~~
 
-1. **Manifest & Layout**: Validates ``backend.toml`` syntax and fields, verifies that descriptor, build files, and golden files exist, checks toolkit prerequisites, and validates descriptor syntax with line-accurate error reporting.
-2. **Catalog & Block Completeness**: Confirms that all templates imported or referenced in ``[[blocks]]`` and ``[graph]`` exist either in built-in toolkits, declared optional toolkits, or domain code. When ``toolkit = ["__all__"]`` or ``import = ["__all__"]`` is specified, all built-in packages (``base``, ``control``, ``dashboard``, ``math``, ``signal``, ``step``, ``string``) and installed toolkits are loaded into the catalog.
+1. **Manifest & Layout**: Validates ``backend.toml`` syntax and fields (including ``solver`` against supported algorithms), verifies that descriptor, build files, and golden files exist, checks toolkit prerequisites, and validates descriptor syntax with line-accurate error reporting.
+2. **Catalog & Block Completeness**: Confirms that all templates imported or referenced in ``[[blocks]]`` and ``[graph]`` exist either in built-in toolkits, declared optional toolkits, or domain code. When ``toolkit = ["__all__"]`` or ``import = ["__all__"]`` is specified, all built-in packages (``base``, ``control``, ``dashboard``, ``math``, ``signal``, ``step``, ``string``) and installed toolkits are loaded into the catalog. Also checks whether the built-in solvers API or continuous blocks/models are used, ensures a valid solver is resolved, and verifies solver instantiation.
 3. **Live Protocol Smoke Test**: Builds C++ backends incrementally or prepares the Python environment, allocates an isolated ephemeral TCP port, spawns the backend, and runs ``protocol/smoke_test.py`` over WebSockets. Skipped if ``--fast`` is specified.
 4. **Golden Run Comparison**: Executes the starter flow headless (``--run``), validates all emitted events against JSON Schema, and verifies output tolerances and signals against ``expected.json``. Skipped if ``--fast`` is specified or no golden test is declared.
 

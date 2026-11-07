@@ -25,6 +25,7 @@ import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
 import { isArrangeLocked, isModeAllowed, isPageAllowed, type LockConfig } from "./lock";
 import { LockDialog } from "./LockDialog";
+import { changed } from "./RunOptions";
 
 const DEFAULT_URL =
   new URLSearchParams(location.search).get("backend") ??
@@ -86,6 +87,17 @@ const MODE_OPTIONS: { value: Mode; label: string; hint: string }[] = [
   { value: "commander", label: "commander", hint: "Station and Flow, the Board under them (Alt+M)" },
   { value: "lookout", label: "lookout", hint: "The Board, Station and Flow at its sides (Alt+M)" },
 ];
+
+const SOLVERS = ["rk4", "rk45", "rk2", "euler", "discrete"] as const;
+type SolverOption = (typeof SOLVERS)[number];
+
+const SOLVER_LABELS: Record<SolverOption, string> = {
+  rk4: "RK4 (Classic)",
+  rk45: "RK45 (Adaptive)",
+  rk2: "RK2 (Heun)",
+  euler: "Euler",
+  discrete: "Discrete",
+};
 
 /** "1 object", "2 objects". */
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -908,6 +920,15 @@ export function App() {
   /** An Edit action on the canvas: on while the Flow is in view and the canvas allows it. */
   const onCanvas = (can: (c: FlowControls["can"]) => boolean) => () => flowInView && !!flow.current && can(flow.current.can);
   const canvasWhy = (why: string) => (flowInView ? why : "Open the Flow page first");
+
+  const usesSolvers = Boolean(
+    state.runDefaults.solver ||
+    state.blocks.some((b) => b.type === "integrator" || b.type === "lag" || b.params?.some((p) => p.id === "solver")) ||
+    state.objects.some((o) => o.props?.some((p) => p.id === "solver")) ||
+    nodes.some((n) => isBlock(n) && (n.data.def.type === "integrator" || n.data.def.type === "lag" || n.data.params?.solver !== undefined)),
+  );
+  const currentSolver = ((runSettings.solver ?? state.runDefaults.solver ?? "rk4").toLowerCase()) as SolverOption;
+
   const commands: Command[] = [
     { id: "file.open", label: "Open…", menu: "file", group: "project", shortcut: "Ctrl+O", chord: { key: "o", ctrl: true }, enabled: state.connection === "open", why: "Not connected to a backend", run: () => void openFile() },
     { id: "file.save", label: "Save", menu: "file", group: "project", shortcut: "Ctrl+S", chord: { key: "s", ctrl: true }, enabled: !!state.engine, why: "Not connected to a backend yet", run: () => void saveProject(false) },
@@ -1000,8 +1021,28 @@ export function App() {
       },
     },
 
-    { id: "run.run", label: "Run", menu: "run", group: "run", enabled: canRun, why: whyNotRun || undefined, run },
+    {
+      id: "run.run",
+      label: "Run",
+      menu: "run",
+      group: "run",
+      meta: usesSolvers ? currentSolver.toUpperCase() : undefined,
+      enabled: canRun,
+      why: whyNotRun || undefined,
+      run,
+    },
     { id: "run.cancel", label: "Cancel", menu: "run", group: "run", enabled: running, why: "No run in progress", run: () => send({ type: "run.cancel" }) },
+    ...(usesSolvers
+      ? SOLVERS.map((s) => ({
+          id: `run.solver.${s}`,
+          label: SOLVER_LABELS[s],
+          menu: "run" as const,
+          group: "solver",
+          checked: currentSolver === s,
+          meta: currentSolver === s ? "active" : undefined,
+          run: () => setRunSettings((prev) => changed({ ...prev, solver: s }, state.runDefaults)),
+        }))
+      : []),
   ];
   useShortcuts(commands);
 
@@ -1009,7 +1050,7 @@ export function App() {
     <div className={`app mode-${mode}`}>
       <header className="bar">
         <Wordmark running={running} />
-        <MenuBar commands={commands} />
+        <MenuBar commands={commands} menuLabels={usesSolvers ? { run: `Run (${currentSolver.toUpperCase()})` } : undefined} />
         <ProjectLabel name={projectTitle} dirty={dirty} />
         <span className="spacer" />
         <ToolkitsButton

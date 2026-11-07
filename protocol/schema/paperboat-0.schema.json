@@ -2088,6 +2088,17 @@
           "type": "number",
           "minimum": 0,
           "description": "Times real time (1: as the clock goes; 0: as fast as it can)."
+        },
+        "solver": {
+          "type": "string",
+          "enum": [
+            "rk4",
+            "rk45",
+            "rk2",
+            "euler",
+            "discrete"
+          ],
+          "description": "The solver used for continuous integration."
         }
       },
       "additionalProperties": false

@@ -60,6 +60,7 @@ struct BackendManifest {
   std::string descriptor = "descriptor.toml";
   std::vector<std::string> toolkits;
   std::string golden;    // from [test].golden
+  std::string solver;    // default solver: "rk4", "rk45", "rk2", "euler", "discrete"
   bool has_manifest = false;
 };
 
@@ -78,6 +79,7 @@ struct CheckResult {
   std::string language;
   std::string domain;
   std::string engine;
+  std::string solver;
   std::vector<std::string> errors;
   std::vector<std::string> warnings;
   std::vector<std::string> imported_packages;

@@ -11,4 +11,8 @@ void Model::step(const Context& ctx, const Values& in) {
   solver_->step(x_, ctx.t, ctx.dt, [&](double t, const solve::State& x) { return derivatives(t, x, in); });
 }
 
+void Model::set_solver(std::string_view solver, solve::Options options) {
+  solver_ = solve::make(solver, options);
+}
+
 }  // namespace paperboat::toolkit

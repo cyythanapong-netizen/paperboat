@@ -40,8 +40,8 @@ from ._engine import Context, Entity, Handle, make, options, remember_args, scen
 Vector = list[float]
 
 __all__ = [
-    "Backend", "Block", "Context", "DomainState", "Entity", "Generator", "Handle", "Linked", "Model", "Monitor", "Param",
-    "Port", "StationObject", "Step", "Timed", "Vector", "VectorComponent", "scene", "serve", "solve", "vector_port",
+    "Backend", "Block", "Context", "DomainState", "Entity", "Generator", "Handle", "Linked", "Model", "Monitor", "ODE", "Param",
+    "Port", "StationObject", "Step", "Timed", "Vector", "VectorComponent", "ode", "scene", "serve", "solve", "vector_port",
 ]
 
 
@@ -285,6 +285,95 @@ class Model(StationObject):
         return [0.0] * len(x)
 
 
+class ODE:
+    """An ODE system dx/dt = f(t, x) integrated with a built-in solver (rk4, rk45, rk2, euler, discrete)."""
+
+    def __init__(self, f: Callable, x0, solver: str = "rk4", **options):
+        import inspect
+
+        self._f = f
+        self.solver = solver
+        self._solver = solve.Solver(solver, **options)
+        self._is_numpy = hasattr(x0, "__array__")
+        self.x = list(x0)
+        self.t = 0.0
+
+        try:
+            sig = inspect.signature(f)
+            params = list(sig.parameters.keys())
+            if len(params) == 1:
+                self._mode = "x"
+            elif len(params) >= 2 and params[0] in ("t", "time"):
+                self._mode = "tx"
+            else:
+                self._mode = "xt"
+        except Exception:
+            self._mode = "auto"
+
+    def step(self, t_or_dt: float, dt: float | None = None):
+        """Advance the ODE state by one step. Can be called as step(t, dt) or step(dt)."""
+        if dt is None:
+            t = self.t
+            step_dt = float(t_or_dt)
+        else:
+            t = float(t_or_dt)
+            step_dt = float(dt)
+            self.t = t
+
+        def call_f(at: float, cur_x):
+            if self._mode == "x":
+                return self._f(cur_x)
+            elif self._mode == "tx":
+                return self._f(at, cur_x)
+            elif self._mode == "xt":
+                return self._f(cur_x, at)
+            else:
+                try:
+                    return self._f(cur_x, at)
+                except TypeError:
+                    return self._f(at, cur_x)
+
+        def wrapped_f(at: float, current_x: list[float]):
+            if self._is_numpy:
+                try:
+                    import numpy as np
+                    val = call_f(at, np.array(current_x))
+                    if hasattr(val, "tolist"):
+                        return val.tolist()
+                    return list(val)
+                except ImportError:
+                    pass
+            val = call_f(at, current_x)
+            if hasattr(val, "tolist"):
+                return val.tolist()
+            return list(val)
+
+        res = self._solver.step(wrapped_f, self.x, t, step_dt)
+        self.t = t + step_dt
+        if self._is_numpy:
+            try:
+                import numpy as np
+                self.x = np.array(res)
+            except ImportError:
+                self.x = res
+        else:
+            self.x = res
+        return self.x
+
+
+def ode(f: Callable, x0, solver: str = "rk4", **options) -> ODE:
+    """Bootstrap an ODE system with a built-in solver. Returns an ODE object with .step(t, dt)."""
+    return ODE(f, x0, solver=solver, **options)
+
+
+solve.ode = ode
+solve.rk4 = lambda f, x0, **options: ode(f, x0, solver="rk4", **options)
+solve.rk45 = lambda f, x0, **options: ode(f, x0, solver="rk45", **options)
+solve.rk2 = lambda f, x0, **options: ode(f, x0, solver="rk2", **options)
+solve.euler = lambda f, x0, **options: ode(f, x0, solver="euler", **options)
+solve.discrete = lambda f, x0, **options: ode(f, x0, solver="discrete", **options)
+
+
 class DomainState:
     """What a domain's blocks share during a run (a game, a document, a physical system).
     The engine makes one per run, steps it after each clocked pass and draws it."""
@@ -320,6 +409,7 @@ class Backend:
     speed: float = 1.0                           # times real time (0: as fast as it can); the UI may change it per run
     view: dict | None = None                     # the scene's camera hint, e.g. {"mode": "2d", …}
     port: int = 8765
+    solver: str = "rk4"                          # default solver: rk4 | rk45 | rk2 | euler | discrete
 
 
 def serve(backend: Backend) -> None:
@@ -332,8 +422,21 @@ def serve(backend: Backend) -> None:
     except ValueError as err:
         print(err, file=sys.stderr)
         sys.exit(2)
+    solver = backend.solver
+    if solver == "rk4":
+        desc_path = Path(backend.descriptor)
+        manifest_path = desc_path.parent / "backend.toml" if desc_path.parent != Path(".") else Path("backend.toml")
+        if manifest_path.is_file():
+            try:
+                import tomllib
+                doc = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+                toml_solver = doc.get("backend", {}).get("solver") or doc.get("run", {}).get("solver")
+                if toml_solver:
+                    solver = str(toml_solver)
+            except Exception:
+                pass
     hosted = make(backend.engine, str(backend.descriptor), list(backend.blocks), list(backend.objects), backend.state,
-                  backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view, backend.speed)
+                  backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view, backend.speed, solver)
     if run:
         try:
             status = hosted.run_starter(variables, duration)

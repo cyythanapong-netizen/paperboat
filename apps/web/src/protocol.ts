@@ -337,6 +337,8 @@ export type RunSettings = {
   dt?: number;
   /** Times real time (1: as the clock goes; 0: as fast as it can). */
   speed?: number;
+  /** The solver used for continuous integration. */
+  solver?: "rk4" | "rk45" | "rk2" | "euler" | "discrete";
 };
 
 /** A named, typed value (#36), used by reference in block params and station props. Exactly one of value and expr. */

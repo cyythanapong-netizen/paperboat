@@ -27,6 +27,7 @@ struct RunSettings {
   int emit_every = 4;      // send signals and scene patches every N steps
   bool real_time = true;   // pace emits at wall-clock speed (tests turn it off)
   double speed = 1.0;      // times real time when paced; 0: as fast as it can
+  std::string solver = "rk4";  // default solver: "rk4", "rk45", "rk2", "euler", "discrete"
 };
 
 // `base` with a graph.run's `settings` on top (duration, dt, speed; never mode). Throws

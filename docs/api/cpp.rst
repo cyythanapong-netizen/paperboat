@@ -710,6 +710,10 @@ Solvers
       Advance ``x`` from ``t`` to ``t + dt``. Throws ``std::runtime_error`` when ``f``
       returns a state of another size, or ``rk45`` can't meet its tolerances.
 
+   .. cpp:function:: template <std::size_t N> void step(std::array<double, N> &x, double t, double dt, const std::function<std::array<double, N>(double, const std::array<double, N>&)> &f)
+
+      Advance a fixed-size state vector without heap allocations.
+
 .. cpp:function:: std::unique_ptr<solve::Solver> solve::make(std::string_view name, Options options = {})
 
    A solver by name: ``rk4`` (classic Runge–Kutta, the default), ``rk45`` (Dormand–Prince,
@@ -720,6 +724,10 @@ Solvers
 .. cpp:function:: void solve::step(std::string_view solver, State &x, double t, double dt, const Deriv &f, Options options = {})
 
    One step with a fresh solver of that name.
+
+.. cpp:function:: template <std::size_t N> void solve::step(std::string_view solver, std::array<double, N> &x, double t, double dt, const std::function<std::array<double, N>(double, const std::array<double, N>&)> &f, Options options = {})
+
+   Fixed-size state overload for stepping with a fresh solver of that name.
 
 .. cpp:function:: const std::vector<std::string> &solve::names()
 
@@ -746,6 +754,10 @@ Model
    ``entities()``.
 
    .. cpp:function:: explicit Model(solve::State initial, std::string_view solver = "rk4", solve::Options options = {})
+
+   .. cpp:function:: void set_solver(std::string_view solver, solve::Options options = {})
+
+      Configure or switch the numerical solver for the model.
 
    .. cpp:function:: virtual solve::State derivatives(double t, const solve::State &x, const Values &in) const = 0
 

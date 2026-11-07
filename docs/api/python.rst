@@ -395,6 +395,30 @@ Bound from the engine's toolkit (C++: :cpp:class:`Model`, ``paperboat::solve``,
 
 .. py:function:: solve.names() -> list[str]
 
+.. py:function:: ode(f, x0, solver="rk4", **options) -> ODE
+
+   Bootstrap an ODE system :math:`dx/dt = f(x, t)` or :math:`f(t, x)` with a built-in solver
+   (``"rk4"``, ``"rk45"``, ``"rk2"``, ``"euler"``, or ``"discrete"``). Returns an :py:class:`ODE`
+   instance whose state is advanced by ``ode.step(dt)`` or ``ode.step(t, dt)``.
+
+.. py:class:: ODE
+
+   .. py:attribute:: x
+      Current state vector (list or numpy array, preserving input array type).
+
+   .. py:attribute:: t
+      Current simulation time.
+
+   .. py:attribute:: solver
+      Name of the active solver algorithm.
+
+   .. py:method:: step(t_or_dt, dt=None)
+
+      Advance the ODE state by one step. Supports calling as ``step(dt)`` or ``step(t, dt)``.
+
+Convenience solver constructors are also available directly on ``paperboat.solve``:
+``solve.ode``, ``solve.rk4``, ``solve.rk45``, ``solve.rk2``, ``solve.euler``, and ``solve.discrete``.
+
 The scene builders return :py:class:`Entity` objects; ``entities()`` may return them,
 dicts, or lists of them (a spring), mixed. Points are ``(x, y)`` or ``(x, y, z)``.
 

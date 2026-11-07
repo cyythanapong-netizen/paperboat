@@ -38,6 +38,9 @@ class Model : public StationObject {
   // The state now.
   const solve::State& x() const { return x_; }
 
+  // Change the solver advancing this model.
+  void set_solver(std::string_view solver, solve::Options options = {});
+
  protected:
   // For a model that changes its own state between steps (a bounce, a reset).
   solve::State& state() { return x_; }

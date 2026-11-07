@@ -603,7 +603,7 @@ std::string read_file(const std::string& path) {
 // the built-in toolkit; then the descriptor loads against that registry.
 std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descriptor, nb::list blocks, nb::list objects,
                              nb::object state, const std::string& mode, double dt, double duration, int emit_every,
-                             nb::object view, double speed) {
+                             nb::object view, double speed, const std::string& solver) {
   auto h = std::make_unique<Hosted>();
   h->registry = tk::builtins();
   const std::string domain = tk::descriptor_domain(read_file(descriptor));
@@ -644,14 +644,14 @@ std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descr
     t.def = object_def(cls);
     t.name = domain + "/" + t.def.type;
     if (text_attr(cls, "_paperboat") == "model") {
-      t.make = [cls](const tk::Values& props) -> std::unique_ptr<tk::StationObject> {
+      t.make = [cls, default_solver = solver](const tk::Values& props) -> std::unique_ptr<tk::StationObject> {
         return with_python([&]() -> std::unique_ptr<tk::StationObject> {
           nb::object obj = cls(to_py(props));
           auto initial = state_from_py(obj.attr("initial")(), "initial()");
           // A `solver` prop (an enum the user picks) wins over the class's `solver`.
-          const std::string solver = tk::get_text(props, "solver", text_attr(cls, "solver", "rk4"));
+          const std::string s = tk::get_text(props, "solver", text_attr(cls, "solver", default_solver));
           obj.attr("x") = state_to_py(initial);
-          return std::make_unique<ModelAdapter>(obj, std::move(initial), solver);
+          return std::make_unique<ModelAdapter>(obj, std::move(initial), s);
         });
       };
     } else {
@@ -674,7 +674,8 @@ std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descr
            .duration = duration,
            .emit_every = emit_every,
            .real_time = true,
-           .speed = speed};
+           .speed = speed,
+           .solver = solver};
   if (!state.is_none()) {
     nb::handle factory = h->state;
     b.state = [factory]() -> std::unique_ptr<tk::DomainState> {
@@ -717,7 +718,8 @@ NB_MODULE(_engine, m) {
 
   m.def("make", &make, nb::arg("engine"), nb::arg("descriptor"), nb::arg("blocks"), nb::arg("objects"),
         nb::arg("state").none(), nb::arg("mode"), nb::arg("dt"), nb::arg("duration"), nb::arg("emit_every"),
-        nb::arg("view").none(), nb::arg("speed") = 1.0, "Register the domain's classes and load the descriptor.");
+        nb::arg("view").none(), nb::arg("speed") = 1.0, nb::arg("solver") = "rk4",
+        "Register the domain's classes and load the descriptor.");
 
   // --- Domain code's tools: the scene builders and solvers, bound from the toolkit ---
 
