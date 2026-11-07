@@ -238,3 +238,33 @@ export function targetName(target: string): string {
   if (base === '.' || base === '') return 'backend';
   return base.replace(/\.ppk$/, '').replace(/-(cpp|python)$/, '');
 }
+
+/** Format a numbered backend instance name (`cart-pole`, 1 → `cart-pole_1`). */
+export function instanceName(base: string, id: number): string {
+  return `${base}_${id}`;
+}
+
+/** Parse `<base>_<id>` into its base backend name and numeric instance id. */
+export function parseInstanceName(name: string): {base: string; id: number | null} {
+  const m = /^(.+)_(\d+)$/.exec(name);
+  return m ? {base: m[1], id: Number(m[2])} : {base: name, id: null};
+}
+
+/** Whether `name` is `base` itself or a numbered instance `<base>_<id>`. */
+export function isInstance(name: string, base: string): boolean {
+  if (name === base) return true;
+  const parsed = parseInstanceName(name);
+  return parsed.id !== null && parsed.base === base;
+}
+
+/** Allocate the lowest available `<base>_<id>` (starting at 1) not in `existingNames`. */
+export function nextInstanceName(base: string, existingNames: string[]): string {
+  const used = new Set<number>();
+  for (const name of existingNames) {
+    const {base: b, id} = parseInstanceName(name);
+    if (b === base && id !== null) used.add(id);
+  }
+  let id = 1;
+  while (used.has(id)) id++;
+  return `${base}_${id}`;
+}

@@ -288,11 +288,13 @@ std::vector<std::string> load_toolkit_requirements(const fs::path& backend_dir,
                                                    const std::vector<ToolkitEntry>& known) {
   if (backend_dir.empty()) return {};
   std::set<std::string> known_names;
-  for (const auto& k : known) known_names.insert(k.name);
+  for (const auto& k : known) {
+    if (!k.builtin) known_names.insert(k.name);
+  }
 
   std::vector<std::string> reqs;
   auto add = [&](const std::string& name) {
-    if (name.empty()) return;
+    if (name.empty() || name == "builtin") return;
     if (!known_names.empty() && !known_names.contains(name)) return;
     if (std::ranges::find(reqs, name) == reqs.end()) reqs.push_back(name);
   };
@@ -348,8 +350,22 @@ std::vector<std::string> load_toolkit_requirements(const fs::path& backend_dir,
 std::vector<ToolkitEntry> list_toolkits(const fs::path& repo_root,
                                         const fs::path& backend_dir,
                                         bool fetch_versions) {
+  std::string pkg_list;
+  for (const auto& p : builtins().packages()) {
+    if (!pkg_list.empty()) pkg_list += ", ";
+    pkg_list += p;
+  }
+  ToolkitEntry builtin_entry;
+  builtin_entry.name = "builtin";
+  builtin_entry.builtin = true;
+  builtin_entry.optional = false;
+  builtin_entry.installed = true;
+  builtin_entry.description = "Paperboat standard toolkit packages (" + pkg_list + ")";
+
   const fs::path root = repo_root.empty() ? find_repo_root(backend_dir) : repo_root;
-  if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) return {};
+  if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) {
+    return {std::move(builtin_entry)};
+  }
   auto entries = load_toolkits_manifest(root / "toolkits.toml");
   const auto reqs = load_toolkit_requirements(backend_dir, entries);
   for (auto& e : entries) {
@@ -365,6 +381,7 @@ std::vector<ToolkitEntry> list_toolkits(const fs::path& repo_root,
       e.default_version = !e.versions.empty() ? e.versions.front() : "dev";
     }
   }
+  entries.insert(entries.begin(), std::move(builtin_entry));
   return entries;
 }
 
@@ -373,7 +390,7 @@ std::string toolkits_json(const std::vector<ToolkitEntry>& list,
                           std::string_view busy_state) {
   json arr = json::array();
   for (const auto& e : list) {
-    json item = {{"name", e.name}, {"repo", e.repo}, {"installed", e.installed}};
+    json item = {{"name", e.name}, {"repo", e.repo}, {"installed", e.installed}, {"builtin", e.builtin}};
     if (!e.description.empty()) item["description"] = e.description;
     if (e.required) item["required"] = true;
     if (!e.version.empty()) item["version"] = e.version;
@@ -390,6 +407,9 @@ ToolkitResult install_toolkit(std::string_view name,
                               const fs::path& repo_root,
                               const HostBuild& host,
                               const ToolkitLog& log) {
+  if (name == "builtin") {
+    return {false, "cannot install built-in toolkit"};
+  }
   const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
   if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) {
     return {false, "cannot find toolkits.toml in repository root"};
@@ -397,6 +417,7 @@ ToolkitResult install_toolkit(std::string_view name,
   const auto entries = load_toolkits_manifest(root / "toolkits.toml");
   const ToolkitEntry* entry = find_entry(entries, name);
   if (!entry) return {false, "unknown toolkit \"" + std::string(name) + "\""};
+  if (entry->builtin) return {false, "cannot install built-in toolkit"};
 
   const std::string url = resolve_repo_url(*entry);
 
@@ -490,6 +511,9 @@ ToolkitResult uninstall_toolkit(std::string_view name,
                                 const fs::path& repo_root,
                                 const HostBuild& host,
                                 const ToolkitLog& log) {
+  if (name == "builtin") {
+    return {false, "cannot uninstall built-in toolkit"};
+  }
   const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
   if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) {
     return {false, "cannot find toolkits.toml in repository root"};
@@ -497,6 +521,7 @@ ToolkitResult uninstall_toolkit(std::string_view name,
   const auto entries = load_toolkits_manifest(root / "toolkits.toml");
   const ToolkitEntry* entry = find_entry(entries, name);
   if (!entry) return {false, "unknown toolkit \"" + std::string(name) + "\""};
+  if (entry->builtin) return {false, "cannot uninstall built-in toolkit"};
 
   const fs::path target_dir = root / "engine" / "toolkit" / entry->name;
   if (!fs::exists(target_dir)) {
@@ -548,6 +573,133 @@ std::vector<std::string> list_toolkit_versions(std::string_view name,
   pclose(pipe);
   std::ranges::sort(versions);
   return versions;
+}
+
+ToolkitInspectResult inspect_toolkit(std::string_view name,
+                                     const Registry& registry,
+                                     const fs::path& repo_root) {
+  ToolkitInspectResult res;
+  auto collect_package = [&](std::string_view pkg) {
+    for (const auto* st : registry.objects(pkg)) {
+      res.station_blocks.push_back({st->name, st->def.label, st->def.description});
+    }
+    for (const auto* t : registry.package(pkg)) {
+      if (t->abstract) continue;
+      if (!t->def.instrument.empty()) {
+        res.dashboard_instruments.push_back({t->name, t->def.label, t->def.instrument, t->def.description});
+      } else {
+        res.flow_blocks.push_back({t->name, t->def.label, t->def.description});
+      }
+    }
+  };
+
+  if (name == "builtin") {
+    res.name = "builtin";
+    res.builtin = true;
+    res.installed = true;
+    res.found = true;
+    for (const auto& pkg : builtins().packages()) {
+      collect_package(pkg);
+    }
+    return res;
+  }
+
+  const auto builtin_pkgs = builtins().packages();
+  if (std::ranges::find(builtin_pkgs, name) != builtin_pkgs.end()) {
+    res.name = std::string(name);
+    res.builtin = true;
+    res.installed = true;
+    res.found = true;
+    collect_package(name);
+    return res;
+  }
+
+  const auto all_toolkits = list_toolkits(repo_root);
+  if (const auto* entry = find_entry(all_toolkits, name)) {
+    res.name = entry->name;
+    res.builtin = entry->builtin;
+    res.installed = entry->installed || !registry.package(name).empty() || !registry.objects(name).empty();
+    res.found = true;
+    collect_package(name);
+    return res;
+  }
+
+  const auto reg_pkgs = registry.packages();
+  if (std::ranges::find(reg_pkgs, name) != reg_pkgs.end()) {
+    res.name = std::string(name);
+    res.builtin = false;
+    res.installed = true;
+    res.found = true;
+    collect_package(name);
+    return res;
+  }
+
+  return res;
+}
+
+std::string toolkit_inspect_json(const ToolkitInspectResult& res) {
+  json st_arr = json::array();
+  for (const auto& b : res.station_blocks) {
+    st_arr.push_back({{"type", b.type}, {"label", b.label}, {"description", b.description}});
+  }
+  json fl_arr = json::array();
+  for (const auto& b : res.flow_blocks) {
+    fl_arr.push_back({{"type", b.type}, {"label", b.label}, {"description", b.description}});
+  }
+  json in_arr = json::array();
+  for (const auto& i : res.dashboard_instruments) {
+    in_arr.push_back({{"type", i.type}, {"label", i.label}, {"instrument", i.instrument}, {"description", i.description}});
+  }
+  json doc = {
+      {"name", res.name},
+      {"builtin", res.builtin},
+      {"installed", res.installed},
+      {"station_blocks", std::move(st_arr)},
+      {"flow_blocks", std::move(fl_arr)},
+      {"dashboard_instruments", std::move(in_arr)},
+  };
+  return doc.dump(2);
+}
+
+std::string toolkit_inspect_text(const ToolkitInspectResult& res) {
+  std::ostringstream out;
+  out << "Toolkit: " << res.name << " ("
+      << (res.builtin ? "built-in" : (res.installed ? "installed" : "not installed")) << ")\n";
+
+  out << "\nStation blocks (" << res.station_blocks.size() << "):\n";
+  if (res.station_blocks.empty()) {
+    out << "  (none)\n";
+  } else {
+    for (const auto& b : res.station_blocks) {
+      out << "  " << b.type << "\t" << b.label;
+      if (!b.description.empty()) out << "\t" << b.description;
+      out << "\n";
+    }
+  }
+
+  out << "\nFlow blocks (" << res.flow_blocks.size() << "):\n";
+  if (res.flow_blocks.empty()) {
+    out << "  (none)\n";
+  } else {
+    for (const auto& b : res.flow_blocks) {
+      out << "  " << b.type << "\t" << b.label;
+      if (!b.description.empty()) out << "\t" << b.description;
+      out << "\n";
+    }
+  }
+
+  out << "\nDashboard instruments (" << res.dashboard_instruments.size() << "):\n";
+  if (res.dashboard_instruments.empty()) {
+    out << "  (none)\n";
+  } else {
+    for (const auto& i : res.dashboard_instruments) {
+      out << "  " << i.type << "\t" << i.label << " [" << i.instrument << "]";
+      if (!i.description.empty()) out << "\t" << i.description;
+      out << "\n";
+    }
+  }
+
+  return out.str();
 }
 
 }  // namespace paperboat::toolkit

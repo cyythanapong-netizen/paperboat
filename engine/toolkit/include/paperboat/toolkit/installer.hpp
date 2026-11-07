@@ -10,6 +10,8 @@
 #include <string_view>
 #include <vector>
 
+#include "paperboat/toolkit/registry.hpp"
+
 namespace paperboat::toolkit {
 
 struct ToolkitEntry {
@@ -17,12 +19,36 @@ struct ToolkitEntry {
   std::string repo;
   std::string description;
   bool optional = true;
+  bool builtin = false;
   std::string engine;
   bool installed = false;
   bool required = false;
   std::string version;
   std::vector<std::string> versions;
   std::string default_version;
+};
+
+struct ToolkitInspectBlock {
+  std::string type;
+  std::string label;
+  std::string description;
+};
+
+struct ToolkitInspectInstrument {
+  std::string type;
+  std::string label;
+  std::string instrument;
+  std::string description;
+};
+
+struct ToolkitInspectResult {
+  std::string name;
+  bool builtin = false;
+  bool installed = false;
+  bool found = false;
+  std::vector<ToolkitInspectBlock> station_blocks;
+  std::vector<ToolkitInspectBlock> flow_blocks;
+  std::vector<ToolkitInspectInstrument> dashboard_instruments;
 };
 
 struct HostBuild {
@@ -81,5 +107,12 @@ ToolkitResult uninstall_toolkit(std::string_view name,
 // Remote release versions/tags for an optional toolkit.
 std::vector<std::string> list_toolkit_versions(std::string_view name,
                                                const std::filesystem::path& repo_root = {});
+
+// Inspect blocks, station objects, and dashboard instruments of a toolkit or package.
+ToolkitInspectResult inspect_toolkit(std::string_view name,
+                                     const Registry& registry = builtins(),
+                                     const std::filesystem::path& repo_root = {});
+std::string toolkit_inspect_json(const ToolkitInspectResult& res);
+std::string toolkit_inspect_text(const ToolkitInspectResult& res);
 
 }  // namespace paperboat::toolkit

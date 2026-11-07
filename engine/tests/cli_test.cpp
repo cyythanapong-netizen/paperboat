@@ -10,10 +10,16 @@
 
 #include "paperboat/core/backend_manager.hpp"
 #include "paperboat/core/process.hpp"
+#include "paperboat/toolkit/installer.hpp"
+#ifdef PAPERBOAT_HAS_OPENCV
+#include "paperboat/toolkit/opencv.hpp"
+#endif
 #include "../tools/paperboat_tui.hpp"
+#include <nlohmann/json.hpp>
 
 using Catch::Matchers::ContainsSubstring;
 namespace core = paperboat::core;
+namespace tk = paperboat::toolkit;
 namespace fs = std::filesystem;
 
 TEST_CASE("ProcessRunner sync execution captures exit code and output") {
@@ -339,4 +345,72 @@ TEST_CASE("resolve_backend_dir makes a relative backend path absolute") {
   CHECK(dir.is_absolute());
   CHECK(fs::equivalent(dir, rel));
   fs::remove_all(rel);
+}
+
+TEST_CASE("list_toolkits includes built-in toolkit and inspect_toolkit categorizes blocks and instruments") {
+  const auto list = tk::list_toolkits();
+  REQUIRE_FALSE(list.empty());
+  CHECK(list.front().name == "builtin");
+  CHECK(list.front().builtin);
+  CHECK(list.front().installed);
+  CHECK_FALSE(list.front().optional);
+
+  const auto j = nlohmann::json::parse(tk::toolkits_json(list));
+  REQUIRE(j.is_array());
+  REQUIRE_FALSE(j.empty());
+  CHECK(j[0]["name"] == "builtin");
+  CHECK(j[0]["builtin"] == true);
+  CHECK(j[0]["installed"] == true);
+
+  // Built-in toolkit cannot be installed or uninstalled
+  CHECK_FALSE(tk::install_toolkit("builtin").ok);
+  CHECK_FALSE(tk::uninstall_toolkit("builtin").ok);
+
+  // Inspecting "builtin" aggregates flow blocks and dashboard instruments
+  const auto builtin_res = tk::inspect_toolkit("builtin");
+  CHECK(builtin_res.found);
+  CHECK(builtin_res.name == "builtin");
+  CHECK(builtin_res.builtin);
+  CHECK(builtin_res.installed);
+  CHECK_FALSE(builtin_res.flow_blocks.empty());
+  CHECK_FALSE(builtin_res.dashboard_instruments.empty());
+
+  const auto builtin_json = nlohmann::json::parse(tk::toolkit_inspect_json(builtin_res));
+  CHECK(builtin_json["name"] == "builtin");
+  CHECK(builtin_json["builtin"] == true);
+  CHECK(builtin_json["flow_blocks"].size() == builtin_res.flow_blocks.size());
+  CHECK(builtin_json["dashboard_instruments"].size() == builtin_res.dashboard_instruments.size());
+
+  const auto builtin_text = tk::toolkit_inspect_text(builtin_res);
+  CHECK_THAT(builtin_text, ContainsSubstring("Toolkit: builtin (built-in)"));
+  CHECK_THAT(builtin_text, ContainsSubstring("Flow blocks"));
+  CHECK_THAT(builtin_text, ContainsSubstring("Dashboard instruments"));
+
+  // Inspecting individual packages ("math", "dashboard")
+  const auto math_res = tk::inspect_toolkit("math");
+  CHECK(math_res.found);
+  CHECK(math_res.builtin);
+  CHECK_FALSE(math_res.flow_blocks.empty());
+  CHECK(math_res.dashboard_instruments.empty());
+
+  const auto dash_res = tk::inspect_toolkit("dashboard");
+  CHECK(dash_res.found);
+  CHECK(dash_res.builtin);
+  CHECK_FALSE(dash_res.dashboard_instruments.empty());
+
+#ifdef PAPERBOAT_HAS_OPENCV
+  tk::Registry reg = tk::builtins();
+  tk::opencv::register_opencv(reg);
+  const auto cv_res = tk::inspect_toolkit("opencv", reg);
+  CHECK(cv_res.found);
+  CHECK_FALSE(cv_res.builtin);
+  CHECK(cv_res.installed);
+  CHECK_FALSE(cv_res.station_blocks.empty());
+  CHECK_FALSE(cv_res.flow_blocks.empty());
+  CHECK_FALSE(cv_res.dashboard_instruments.empty());
+#endif
+
+  // Unknown toolkit returns found = false
+  const auto unknown_res = tk::inspect_toolkit("nonexistent_xyz");
+  CHECK_FALSE(unknown_res.found);
 }

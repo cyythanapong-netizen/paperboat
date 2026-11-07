@@ -17,6 +17,9 @@ import {
   type Sources,
   findCommand,
   fuzzy,
+  isInstance,
+  nextInstanceName,
+  parseInstanceName,
   pushLine,
   remember,
   splitWords,
@@ -107,6 +110,7 @@ export interface Backend {
 export interface Toolkit {
   name: string;
   installed: boolean;
+  builtin?: boolean;
   version?: string;
   description: string;
 }
@@ -170,17 +174,30 @@ export function say(line: Out): void {
 export const alive = (j: Job) => j.state !== 'exited';
 export const busy = () => S.jobs.some(j => j.state === 'building') || S.tasks.length > 0 || S.mode === 'dash';
 
-/** The newest job by that name: a live service first, then any live one, then any. */
+/** The newest job by that name (or instance base name / port): a live service first, then any live one, then any. */
 export function jobBy(name: string): Job | undefined {
-  const all = S.jobs.filter(j => j.name === name);
+  const exact = S.jobs.filter(j => j.name === name || (name !== '' && String(j.port) === name));
+  if (exact.length) {
+    return exact.filter(j => alive(j) && j.kind !== 'build').pop() ?? exact.filter(alive).pop() ?? exact[exact.length - 1];
+  }
+  const byBase = S.jobs.filter(j => isInstance(j.name, name));
   return (
-    all.filter(j => alive(j) && j.kind !== 'build').pop() ?? all.filter(alive).pop() ?? all[all.length - 1]
+    byBase.filter(j => alive(j) && j.kind !== 'build').pop() ?? byBase.filter(alive).pop() ?? byBase[byBase.length - 1]
   );
 }
 
-/** A live service (not a build) by name or port. */
-const serviceBy = (target: string) =>
-  S.jobs.find(j => alive(j) && j.kind !== 'build' && (j.name === target || String(j.port) === target));
+/** All live services (not builds) matching an exact instance name, port, or base backend name. */
+export function servicesBy(target: string): Job[] {
+  const exact = S.jobs.filter(j => alive(j) && j.kind !== 'build' && (j.name === target || String(j.port) === target));
+  if (exact.length) return exact;
+  return S.jobs.filter(j => alive(j) && j.kind !== 'build' && isInstance(j.name, target));
+}
+
+/** A live service (not a build) by name, base name, or port. */
+export const serviceBy = (target: string): Job | undefined => {
+  const matches = servicesBy(target);
+  return matches[matches.length - 1];
+};
 
 export function sources(): Sources {
   let ppk: string[] = [];
@@ -189,14 +206,22 @@ export function sources(): Sources {
   } catch {
     // unreadable folder: no packages to offer
   }
+  const liveServices = S.jobs.filter(j => alive(j) && j.kind !== 'build');
+  const baseTargets = [...new Set(liveServices.map(j => parseInstanceName(j.name).base))].filter(
+    base => !liveServices.some(j => j.name === base),
+  );
   return {
     commands: S.commands,
     listDir,
     args: {
       backend: S.backends.map(x => ({value: x.name, detail: `${x.language} · :${x.port} · ${x.description}`})),
-      toolkit: S.toolkits.map(x => ({value: x.name, detail: x.installed ? 'installed' : 'available'})),
+      toolkit: S.toolkits.map(x => ({value: x.name, detail: x.builtin ? 'built-in' : x.installed ? 'installed' : 'available'})),
       target: [
-        ...S.jobs.filter(j => alive(j) && j.kind !== 'build').map(j => ({value: j.name, detail: `job ${j.id} · :${j.port}`})),
+        ...liveServices.map(j => ({value: j.name, detail: `job ${j.id} · :${j.port}`})),
+        ...baseTargets.map(bName => {
+          const instances = liveServices.filter(j => isInstance(j.name, bName));
+          return {value: bName, detail: `${instances.length} instance${instances.length === 1 ? '' : 's'} (${instances.map(j => j.name).join(', ')})`};
+        }),
         ...S.external.map(e => ({value: e.name, detail: `:${e.port} · started outside`})),
       ],
       job: [...new Set(S.jobs.map(j => j.name))].map(n => ({value: n, detail: jobBy(n)!.state})),
@@ -338,7 +363,8 @@ let nextJob = 1;
 /** What a job is busy with before it's up: C++ backends compile first. */
 export function doing(job: Job): string {
   if (job.kind === 'build') return 'compiling';
-  const language = S.backends.find(x => x.name === job.name)?.language;
+  const base = parseInstanceName(job.name).base;
+  const language = S.backends.find(x => x.name === job.name || x.name === base)?.language;
   return job.kind === 'backend' && language !== 'python' ? 'building' : 'starting';
 }
 
@@ -527,8 +553,13 @@ export const kb = (bytes: number) => (bytes >= 1e6 ? `${(bytes / 1e6).toFixed(1)
 
 /** Toolkit changes, one after another, each its own row with a spinner. */
 export async function toolkitOps(ops: Array<{op: string; name: string}>): Promise<void> {
+  const validOps = ops.filter(o => o.name !== 'builtin' && !S.toolkits.find(t => t.name === o.name)?.builtin);
+  if (!validOps.length) {
+    say([dg('cannot modify built-in toolkit')]);
+    return;
+  }
   const task = newTask('toolkit', 'toolkits');
-  task.ops = ops.map(o => ({...o, state: 'queued', t0: 0, log: []}));
+  task.ops = validOps.map(o => ({...o, state: 'queued', t0: 0, log: []}));
   for (const op of task.ops) {
     op.state = 'running';
     op.t0 = Date.now();
@@ -611,27 +642,50 @@ export function openLogs(job: Job, back: Mode): void {
 
 export function runBackend(target: string, args: string[] = []): void {
   const backend = S.backends.find(x => x.name === target);
-  const name = backend ? backend.name : targetName(target);
-  // A path's port isn't known until `paperboat run` says it (see spawnJob); 0 till then.
-  const port = Number(flag(args, '--port')) || backend?.port || 0;
-  const running = serviceBy(name) ?? (port ? serviceBy(String(port)) : undefined);
-  if (running) {
-    say([mu(`${running.name} is already running on :${running.port} · restart ${running.name} to rebuild it`)]);
-    return;
+  const baseName = backend ? backend.name : targetName(target);
+  const liveJobs = S.jobs.filter(j => alive(j) && j.kind !== 'build');
+  const name = nextInstanceName(baseName, liveJobs.map(j => j.name));
+
+  const explicitPortStr = flag(args, '--port');
+  const explicitPort = explicitPortStr ? Number(explicitPortStr) : 0;
+  if (explicitPort) {
+    const conflict = liveJobs.find(j => j.port === explicitPort);
+    if (conflict) {
+      say([mu(`${conflict.name} is already running on :${conflict.port} · choose another --port or stop ${conflict.name}`)]);
+      return;
+    }
   }
-  startJob(name, 'backend', ['run', target, ...args.filter(a => a !== target)], port);
+
+  const usedPorts = new Set<number>([
+    ...liveJobs.map(j => j.port).filter(Boolean),
+    ...S.external.map(e => e.port),
+  ]);
+  let port = explicitPort || backend?.port || 8765;
+  if (!explicitPort) {
+    while (usedPorts.has(port)) port++;
+  }
+
+  const restArgs = args.filter(a => a !== target);
+  const runArgs = !explicitPort && port ? ['run', target, ...restArgs, '--port', String(port)] : ['run', target, ...restArgs];
+  startJob(name, 'backend', runArgs, port);
 }
 
 export function stopTarget(target: string): void {
-  const job = serviceBy(target);
-  if (job) void stopJob(job);
-  else void plain(['stop', target]);
+  const jobs = servicesBy(target);
+  if (jobs.length) {
+    for (const job of jobs) void stopJob(job);
+  } else {
+    void plain(['stop', target]);
+  }
 }
 
 export function restartTarget(target: string): void {
-  const job = serviceBy(target);
-  if (job) void restartJob(job);
-  else void plain(['restart', target]);
+  const jobs = servicesBy(target);
+  if (jobs.length) {
+    for (const job of jobs) void restartJob(job);
+  } else {
+    void plain(['restart', target]);
+  }
 }
 
 export function restartJobById(job: Job): void {
@@ -771,7 +825,7 @@ export function exec(raw: string): void {
       if (!pos[0]) return openToolkits();
       if (['install', 'add', 'update', 'uninstall', 'remove'].includes(pos[0]) && !args.includes('--version')) {
         const op = pos[0] === 'add' ? 'install' : pos[0] === 'remove' ? 'uninstall' : pos[0];
-        const names = op === 'update' && args.includes('--all') ? S.toolkits.filter(t => t.installed).map(t => t.name) : pos.slice(1);
+        const names = op === 'update' && args.includes('--all') ? S.toolkits.filter(t => t.installed && !t.builtin).map(t => t.name) : pos.slice(1);
         if (!names.length) return void say([dg('which toolkit?'), mu(' · toolkit list shows them')]);
         void toolkitOps(names.map(name => ({op, name})));
         return;

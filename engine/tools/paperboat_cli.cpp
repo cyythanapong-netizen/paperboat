@@ -20,6 +20,9 @@
 #include "paperboat/core/process.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
 #include "paperboat/toolkit/installer.hpp"
+#ifdef PAPERBOAT_HAS_OPENCV
+#include "paperboat/toolkit/opencv.hpp"
+#endif
 #include "paperboat_tui.hpp"
 
 namespace {
@@ -29,6 +32,17 @@ namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
 namespace tui = paperboat::tui;
 namespace fs = std::filesystem;
+
+const tk::Registry& full_registry() {
+  static const tk::Registry r = [] {
+    tk::Registry all = tk::builtins();
+#ifdef PAPERBOAT_HAS_OPENCV
+    tk::opencv::register_opencv(all);
+#endif
+    return all;
+  }();
+  return r;
+}
 
 bool launch_console(const std::vector<std::string>& args);
 
@@ -70,7 +84,8 @@ Examples Orchestration:
   examples status            Show status of example backends
 
 Toolkits:
-  toolkit list [--json]      List all available and installed toolkits
+  toolkit list [name] [--json]
+                             List all toolkits, or inspect blocks/instruments of <name>
   toolkit install <name>     Install an optional toolkit (e.g. opencv)
   toolkit update <name|--all>
                              Update an installed toolkit, or every installed one
@@ -405,13 +420,27 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
   }
 
   if (sub == "list") {
+    if (!name.empty()) {
+      auto res = tk::inspect_toolkit(name, full_registry());
+      if (!res.found) {
+        std::cerr << "paperboat toolkit: unknown toolkit or package \"" << name << "\"\n";
+        return 1;
+      }
+      if (json_out) {
+        std::cout << tk::toolkit_inspect_json(res) << '\n';
+      } else {
+        std::cout << tk::toolkit_inspect_text(res);
+      }
+      return 0;
+    }
     auto list = tk::list_toolkits();
     if (json_out) {
       std::cout << tk::toolkits_json(list) << '\n';
       return 0;
     }
     for (const auto& t : list) {
-      std::cout << t.name << "\t" << (t.installed ? "installed" : "not installed") << "\t" << t.repo;
+      const char* status = t.builtin ? "built-in toolkit" : (t.installed ? "installed" : "not installed");
+      std::cout << t.name << "\t" << status << "\t" << (t.repo.empty() ? "-" : t.repo);
       if (!t.description.empty()) std::cout << "\t" << t.description;
       std::cout << '\n';
     }
@@ -437,7 +466,7 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
   if (sub == "update" && all) {
     int failed = 0;
     for (const auto& t : tk::list_toolkits()) {
-      if (!t.installed) continue;
+      if (!t.installed || t.builtin) continue;
       std::vector<std::string_view> one = {"update", t.name};
       if (!rebuild) one.emplace_back("--no-build");
       failed += cmd_toolkit(one) != 0;

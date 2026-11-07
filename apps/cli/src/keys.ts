@@ -80,16 +80,17 @@ function dash(input: string, key: Key, ctrlC: boolean): void {
 
 function toolkits(input: string, key: Key, ctrlC: boolean): void {
   const n = S.toolkits.length;
+  const cur = S.toolkits[S.tk.i];
   if (key.downArrow) S.tk.i = clamp(S.tk.i + 1, n);
   else if (key.upArrow) S.tk.i = clamp(S.tk.i - 1, n);
-  else if (input === ' ' && n) S.tk.want[S.tk.i] = !S.tk.want[S.tk.i];
-  else if (input === 'u' && S.toolkits[S.tk.i]?.installed) {
+  else if (input === ' ' && n && !cur?.builtin) S.tk.want[S.tk.i] = !S.tk.want[S.tk.i];
+  else if (input === 'u' && cur?.installed && !cur?.builtin) {
     S.mode = 'prompt';
-    void toolkitOps([{op: 'update', name: S.toolkits[S.tk.i].name}]);
+    void toolkitOps([{op: 'update', name: cur.name}]);
   } else if (key.escape || ctrlC) S.mode = 'prompt';
   else if (key.return) {
     const ops = S.toolkits.flatMap((t, i) =>
-      S.tk.want[i] === t.installed ? [] : [{op: S.tk.want[i] ? 'install' : 'uninstall', name: t.name}],
+      t.builtin || S.tk.want[i] === t.installed ? [] : [{op: S.tk.want[i] ? 'install' : 'uninstall', name: t.name}],
     );
     S.mode = 'prompt';
     if (ops.length) void toolkitOps(ops);

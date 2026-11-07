@@ -7,7 +7,7 @@ import {Box, Static, Text, useAnimation, useApp, useInput, useWindowSize} from '
 import {useEffect, type ReactNode} from 'react';
 
 import {handleKey} from './keys.ts';
-import {ghost, searchHistory} from './model.ts';
+import {ghost, isInstance, searchHistory} from './model.ts';
 import {
   S, alive, busy, dashRows, doing, init, kb, openDash, openPicker, openToolkits, pickList, sec, sources, stepLine,
   useStore, type Out, type Seg, type Task,
@@ -156,7 +156,7 @@ function Picker() {
       {list.map(({backend: x, match}, i, all) => {
         const width = Math.max(...all.map(r => r.backend.name.length)) + 2;
         const on = i === S.picker.i;
-        const running = S.jobs.some(j => j.name === x.name && alive(j) && j.kind !== 'build') || S.external.some(e => e.port === x.port);
+        const running = S.jobs.some(j => isInstance(j.name, x.name) && alive(j) && j.kind !== 'build') || S.external.some(e => e.port === x.port);
         return (
           <Text key={x.name} wrap="truncate" bold={on}>
             {on ? <Text color={SIGNAL}>▸ </Text> : '  '}
@@ -207,7 +207,7 @@ function Dashboard({frame, now}: {frame: number; now: number}) {
 }
 
 function Toolkits() {
-  const changes = S.toolkits.flatMap((t, i) => (S.tk.want[i] === t.installed ? [] : [`${S.tk.want[i] ? '+' : '−'} ${t.name}`]));
+  const changes = S.toolkits.flatMap((t, i) => (t.builtin || S.tk.want[i] === t.installed ? [] : [`${S.tk.want[i] ? '+' : '−'} ${t.name}`]));
   return (
     <Panel title={<Text><Text bold>Toolkits</Text><Text dimColor>{` · ${S.toolkits.filter(t => t.installed).length} installed`}</Text></Text>}>
       {S.toolkits.map((t, i) => {
@@ -215,9 +215,9 @@ function Toolkits() {
         return (
           <Text key={t.name} wrap="truncate" bold={on}>
             {on ? <Text color={SIGNAL}>▸ </Text> : '  '}
-            {S.tk.want[i] ? '[✓] ' : <Text color="gray">[ ] </Text>}
+            {t.builtin ? <Text color="cyan">{'[built-in] '}</Text> : S.tk.want[i] ? '[✓]        ' : <Text color="gray">{'[ ]        '}</Text>}
             {t.name.padEnd(10)}
-            {t.installed ? `installed ${t.version ?? ''}`.padEnd(18) : <Text color="gray">{'available'.padEnd(18)}</Text>}
+            {t.builtin ? <Text color="cyan">{'built-in'.padEnd(18)}</Text> : t.installed ? `installed ${t.version ?? ''}`.padEnd(18) : <Text color="gray">{'available'.padEnd(18)}</Text>}
             <Text dimColor>{t.description}</Text>
           </Text>
         );

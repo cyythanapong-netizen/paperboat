@@ -554,9 +554,13 @@ engine = ">=0.1"
                           .c_str()) == 0);
 
   auto list = tk::list_toolkits(root, backend_dir);
-  REQUIRE(list.size() == 1);
-  CHECK_FALSE(list[0].installed);
-  CHECK(list[0].required);
+  REQUIRE(list.size() == 2);
+  CHECK(list[0].name == "builtin");
+  CHECK(list[0].builtin);
+  CHECK(list[0].installed);
+  CHECK(list[1].name == "opencv");
+  CHECK_FALSE(list[1].installed);
+  CHECK(list[1].required);
 
   std::vector<std::string> logs;
   auto logger = [&](std::string_view, std::string_view text) { logs.emplace_back(text); };
@@ -564,12 +568,12 @@ engine = ">=0.1"
   const auto installed = tk::install_toolkit("opencv", "dev", root, {.source_dir = {}, .build_dir = {}, .skip_rebuild = true}, logger);
   CHECK(installed.ok);
   CHECK(fs::is_regular_file(root / "engine" / "toolkit" / "opencv" / "toolkit.toml"));
-  CHECK(tk::list_toolkits(root, backend_dir)[0].installed);
+  CHECK(tk::list_toolkits(root, backend_dir)[1].installed);
 
   const auto removed = tk::uninstall_toolkit("opencv", root, {.source_dir = {}, .build_dir = {}, .skip_rebuild = true}, logger);
   CHECK(removed.ok);
   CHECK_FALSE(fs::exists(root / "engine" / "toolkit" / "opencv"));
-  CHECK_FALSE(tk::list_toolkits(root, backend_dir)[0].installed);
+  CHECK_FALSE(tk::list_toolkits(root, backend_dir)[1].installed);
   CHECK_FALSE(logs.empty());
 
   fs::remove_all(tmp, ec);

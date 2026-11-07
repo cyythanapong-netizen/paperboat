@@ -11,6 +11,24 @@
 
 #include "paperboat/toolkit/descriptor.hpp"
 #include "paperboat/toolkit/installer.hpp"
+#ifdef PAPERBOAT_HAS_OPENCV
+#include "paperboat/toolkit/opencv.hpp"
+#endif
+
+namespace {
+
+const paperboat::toolkit::Registry& full_registry() {
+  static const paperboat::toolkit::Registry r = [] {
+    paperboat::toolkit::Registry all = paperboat::toolkit::builtins();
+#ifdef PAPERBOAT_HAS_OPENCV
+    paperboat::toolkit::opencv::register_opencv(all);
+#endif
+    return all;
+  }();
+  return r;
+}
+
+}  // namespace
 
 int main(int argc, char** argv) {
   namespace tk = paperboat::toolkit;
@@ -27,13 +45,27 @@ int main(int argc, char** argv) {
   const std::string_view cmd = pos.empty() ? "list" : pos[0];
   try {
     if (cmd == "list") {
+      if (pos.size() >= 2) {
+        const auto res = tk::inspect_toolkit(pos[1], full_registry());
+        if (!res.found) {
+          std::cerr << "paperboat-toolkit: unknown toolkit or package \"" << pos[1] << "\"\n";
+          return 1;
+        }
+        if (json_out) {
+          std::cout << tk::toolkit_inspect_json(res) << '\n';
+        } else {
+          std::cout << tk::toolkit_inspect_text(res);
+        }
+        return 0;
+      }
       const auto list = tk::list_toolkits();
       if (json_out) {
         std::cout << tk::toolkits_json(list) << '\n';
         return 0;
       }
       for (const auto& t : list) {
-        std::cout << t.name << "\t" << (t.installed ? "installed" : "not installed") << "\t" << t.repo;
+        const char* status = t.builtin ? "built-in toolkit" : (t.installed ? "installed" : "not installed");
+        std::cout << t.name << "\t" << status << "\t" << (t.repo.empty() ? "-" : t.repo);
         if (!t.description.empty()) std::cout << "\t" << t.description;
         std::cout << '\n';
       }
