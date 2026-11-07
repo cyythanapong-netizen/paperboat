@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# Squero Studio OM: the Studio server (squero/0) and, once built, the Studio app on the same
-# port. The same as `paperboat squero`; options pass through (--port N, --app DIR).
-exec "$(dirname "${BASH_SOURCE[0]}")/paperboat" squero "$@"

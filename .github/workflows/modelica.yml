@@ -1,8 +1,6 @@
 # OpenModelica integration tests: C++ omc bridge, squero/0 server, and generated backend goldens.
 #
-# Cross-repo: splitting into separate repos (Paperboat vs Squero Studio OM) is deferred
-# until the in-repo split is stable (contracts §1). Once split, this workflow would move
-# to the Studio repository (or trigger via repository_dispatch against published packages).
+# The Studio app itself lives in the squero-studio-om repo; this covers the engine side of it.
 name: modelica
 
 on:
@@ -11,13 +9,11 @@ on:
     paths:
       - "engine/modelica/**"
       - "examples/dc-drive-cpp/**"
-      - "apps/studio/**"
       - ".github/workflows/modelica.yml"
   pull_request:
     paths:
       - "engine/modelica/**"
       - "examples/dc-drive-cpp/**"
-      - "apps/studio/**"
       - ".github/workflows/modelica.yml"
 
 concurrency:

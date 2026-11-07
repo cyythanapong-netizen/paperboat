@@ -1,4 +1,6 @@
 # The web app and the console: typecheck, tests, build. One workflow per check, so each has its own README badge.
+# @paperboat/shared is the sibling paperboat-shared repo ("file:../../../paperboat-shared" from apps/web),
+# so both are checked out side by side.
 name: web
 
 on:
@@ -10,26 +12,34 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    working-directory: paperboat
+
 jobs:
   web:
     name: Web app (typecheck and build)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          path: paperboat
+      - uses: actions/checkout@v4
+        with:
+          repository: cyythanapong-netizen/paperboat-shared
+          path: paperboat-shared
+          token: ${{ secrets.DOWNSTREAM_TOKEN || github.token }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - name: The protocol types are generated from the schema, and current
         run: python3 protocol/gen_ts.py --check
       - name: The design tokens are current
         run: python3 docs/gen_tokens.py --check
-      - run: npm ci
+      - run: npm install
+        working-directory: paperboat-shared
+      - run: npm install
       - run: npm run typecheck
       - run: npm test -w @paperboat/web
       - run: npm test -w @paperboat/cli
-      - run: npm test -w @paperboat/shared
-      - run: npm test -w @paperboat/studio
       - run: npm run build
-      - run: npm run build:studio
-

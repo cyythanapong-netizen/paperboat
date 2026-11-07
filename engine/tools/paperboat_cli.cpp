@@ -893,7 +893,8 @@ int cmd_modelica(const std::vector<std::string_view>& args) {
 }
 
 // paperboat squero [Model.mo] [--port N] [--app dir]: Squero Studio OM's server (squero/0), serving
-// the built Studio app (apps/studio/dist) on the same port when there is one.
+// the built Studio app (the squero-studio-om repo's dist/, next to this one, or --app) on the same
+// port when there is one.
 int cmd_squero(const std::vector<std::string_view>& args) {
 #ifndef PAPERBOAT_HAS_MODELICA
   (void)args;
@@ -910,10 +911,11 @@ int cmd_squero(const std::vector<std::string_view>& args) {
   }
   if (app.empty()) {
     const fs::path root = tk::find_repo_root();
-    if (!root.empty() && fs::is_regular_file(root / "apps" / "studio" / "dist" / "index.html"))
-      app = root / "apps" / "studio" / "dist";
+    const fs::path sibling = root.empty() ? fs::path{} : root.parent_path() / "squero-studio-om" / "dist";
+    if (!sibling.empty() && fs::is_regular_file(sibling / "index.html"))
+      app = sibling;
     else
-      std::cerr << "note: Studio isn't built (apps/studio/dist); serving squero/0 only\n";
+      std::cerr << "note: Studio isn't built (../squero-studio-om/dist, or pass --app); serving squero/0 only\n";
   }
   return mo::serve_squero(port, app, {}, file);
 #endif

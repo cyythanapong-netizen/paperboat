@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  // @paperboat/shared is a linked sibling with its own node_modules; keep one React.
+  resolve: { dedupe: ["react", "react-dom", "@xyflow/react"] },
   server: {
     port: 3047,
   },

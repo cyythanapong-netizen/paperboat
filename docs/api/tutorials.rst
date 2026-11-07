@@ -494,7 +494,7 @@ except where noted. Start the server from ``examples/`` so the dock's default ex
 
 .. code-block:: bash
 
-   cd examples && ../bin/squero-om dc-drive-cpp/modelica/DCDrive.mo
+   cd examples && ../../squero-studio-om/bin/squero-om dc-drive-cpp/modelica/DCDrive.mo
 
 1. **Place parts.** Filter the library and double-click: ``SignalVoltage``, ``Resistor``,
    ``Inductor``, ``RotationalEMF``, ``Ground``, two ``Inertia`` (rotor, load),
@@ -520,12 +520,12 @@ fixed = true))``, ...), the top-level ``parameter`` declarations and the armatur
 ``Real i = L1.i annotation(__paperboat(probe = true))`` were typed into the ``.mo``.
 
 Squero Studio OM, the Modelica editor, talks to the same omc through ``paperboat squero``
-(or ``bin/squero-om``), a WebSocket server speaking ``squero/0``:
+(or ``bin/squero-om`` in ``squero-studio-om``), a WebSocket server speaking ``squero/0``:
 ``{"id", "op": "omc", "expr"}`` answered by ``{"id", "ok", "result" | "error"}``, plus
 ``{"op": "status", "state", "version"}`` pushes. Only an allow-list of omc calls passes.
 
 ``paperboat squero [Model.mo]`` (or ``bin/squero-om``) also serves the built Studio app
-(``apps/studio/dist``) on the same port and opens ``Model.mo``, default ``./Untitled.mo``. Beyond ``omc``
+(``../squero-studio-om/dist``, or ``--app DIR``) on the same port and opens ``Model.mo``, default ``./Untitled.mo``. Beyond ``omc``
 it has six ops of its own, written in C++ and confined to the opened model, each answered by
 ``{"id", "ok": true, "result": {…}}`` or ``{"id", "ok": false, "error"}``:
 

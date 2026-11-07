@@ -2,15 +2,14 @@
   "name": "paperboat",
   "private": true,
   "workspaces": [
-    "apps/*",
-    "packages/*"
+    "apps/*"
   ],
   "scripts": {
     "dev": "npm run dev -w @paperboat/web --",
     "build": "npm run build -w @paperboat/web && npm run build:cli",
     "build:cli": "npm run build -w @paperboat/cli",
     "cli": "./bin/paperboat",
-    "typecheck": "npm run typecheck -w @paperboat/shared && npm run typecheck -w @paperboat/web && npm run typecheck -w @paperboat/cli && npm run typecheck -w @paperboat/studio",
+    "typecheck": "npm run typecheck -w @paperboat/web && npm run typecheck -w @paperboat/cli",
     "backend:mass-spring": "./bin/paperboat run mass-spring",
     "backend:cart-pole": "./bin/paperboat run cart-pole",
     "backend:parametric": "./bin/paperboat run parametric",
@@ -26,7 +25,6 @@
     "docs": "./scripts/build_docs.sh",
     "publish:dev": "python3 scripts/publish.py",
     "test:python": "npm run build:python --silent && python3 -m pytest -q python/tests",
-    "gen:protocol": "python3 protocol/gen_ts.py",
-    "build:studio": "npm run build -w @paperboat/studio"
+    "gen:protocol": "python3 protocol/gen_ts.py"
   }
 }

@@ -275,9 +275,9 @@ with the extension :code:`.ppj` (JSON inside).
 Squero Studio: OpenModelica
 ---------------------------
 
-Squero Studio OM is a separate app for building the equipment a Paperboat flow runs: you draw
+Squero Studio OM is a separate app, in the ``squero-studio-om`` repository, for building the equipment a Paperboat flow runs: you draw
 a Modelica model, and Paperboat opens the backend generated from it. It is not a page of the
-app above. Start it with ``bin/squero-om [Model.mo]`` (the same as ``paperboat squero``) and open
+app above. Start it with ``bin/squero-om [Model.mo]`` there (it runs ``paperboat squero``) and open
 ``http://localhost:8790``; with no file it opens ``./Untitled.mo``, creating it if it isn't there. It needs
 OpenModelica (``omc``) on the path.
 

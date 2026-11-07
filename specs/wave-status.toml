@@ -4,6 +4,7 @@
 contracts = "specs/issue-160-contracts.md"
 contracts_rev = 3
 current_wave = 4
+state = "done"   # epic #160 finished 2026-11-07; the repo split is below
 omc_version = "1.27.0~dev-5-g5f1d2c5"
 
 [waves.0]
@@ -64,16 +65,31 @@ Fixed on dev (8a19b77), found only by the live run:
 Left for Wave 4 A: popover row `i.start =` shows an empty value (nested modifier read)."""
 
 [waves.4]
-state = "active"
+state = "done"
+integrated = "merged to dev 2026-11-07: lane A 8baedcb (dc-drive-cpp), lane B 675a07c (docs, CI, plates.css)"
+verified = """Orchestrator on merged dev before the split: typecheck, build, build:studio green; web 97/97,
+shared 11/11, studio 35/35, cli 10/10; gen_ts and gen_tokens current; paperboat_tests 2093/151 pass;
+paperboat check examples/dc-drive-cpp: manifest, catalog (36 blocks, 1 station object), smoke, golden ok."""
 prompts = ["specs/prompts/wave4_lane_a.md", "specs/prompts/wave4_lane_b.md"]
 gate = "dc-drive-cpp authored in Studio passes check + smoke + golden; docs build clean; CI workflows valid; epic #160 done-whens ticked"
+
+[split]
+state = "done"
+repos = ["paperboat (dev)", "../paperboat-shared (main, @paperboat/shared)", "../squero-studio-om (main, bin squero-om)"]
+notes = """packages/shared and apps/studio removed from paperboat. apps/web consumes
+file:../../../paperboat-shared (relative to apps/web). Studio launcher bin/squero-om runs
+`paperboat squero --app dist`. protocol.ts and docs tokens.css are generated across repos
+(protocol/gen_ts.py, docs/gen_tokens.py write/read ../paperboat-shared). The .mo importer, extends
+resolver and quantisers are C++ in engine/modelica and stay in paperboat."""
+verified = """paperboat-shared: build + 11/11 tests. squero-studio-om: typecheck, build, 35/35 tests.
+paperboat: typecheck, web 97/97, cli 10/10, build, paperboat_tests 2093/151, check dc-drive-cpp, docs build clean."""
 
 [lanes.A]
 cli = "claude"
 model = "sonnet-5.5"
 effort = "medium"
 wave = 4
-state = "review"
+state = "done"
 task = "E2E golden probe: DC drive authored in Studio -> examples/dc-drive-cpp, check + smoke + PID/graph golden; retire dc-motor-cpp"
 contracts = ["§1", "§3", "§4", "§6", "§8"]
 prompt = "specs/prompts/wave4_lane_a.md"
@@ -96,7 +112,7 @@ cli = "agy"
 model = "flash-3.8"
 effort = "low"
 wave = 4
-state = "review"
+state = "done"
 task = "DESIGN.md (Squero Studio OM, Custom block look), protocol/README.md (view.icon, connectors, squero/0), CI workflows, shared plates.css + connectError wording"
 contracts = ["§1", "§3", "§4", "§5", "§8"]
 prompt = "specs/prompts/wave4_lane_b.md"

@@ -22,14 +22,24 @@ jobs:
     name: API reference (Sphinx, warnings as errors)
     runs-on: ubuntu-24.04
     steps:
+      # docs/gen_tokens.py reads the sibling paperboat-shared repo's tokens.css.
       - uses: actions/checkout@v4
+        with:
+          path: paperboat
+      - uses: actions/checkout@v4
+        with:
+          repository: cyythanapong-netizen/paperboat-shared
+          path: paperboat-shared
+          token: ${{ secrets.DOWNSTREAM_TOKEN || github.token }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: The docs' tokens are generated from the app's, and current
         run: python3 docs/gen_tokens.py --check
+        working-directory: paperboat
       - run: pip install sphinx shibuya
       - run: sphinx-build -W -b html docs/api docs/api/_build
+        working-directory: paperboat
       - name: Setup Pages
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
         uses: actions/configure-pages@v5
@@ -37,7 +47,7 @@ jobs:
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/api/_build
+          path: paperboat/docs/api/_build
 
   deploy:
     name: Deploy to GitHub Pages
