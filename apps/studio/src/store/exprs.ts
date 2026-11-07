@@ -24,10 +24,12 @@ export const toUnits = (x: number, y: number): [number, number] => [x / PX_PER_U
 /** Modelica units to canvas px. */
 export const toPx = (x: number, y: number): [number, number] => [x * PX_PER_UNIT + 0, -y * PX_PER_UNIT + 0];
 
-export function placementAnnotation(at: Placement): string {
+/** `onIcon`: where the part sits on the model's own icon (Modelica units), for a top-level port. */
+export function placementAnnotation(at: Placement, onIcon?: [number, number]): string {
   const [x, y] = toUnits(at.x, at.y);
   const extent = at.mirror ? "{{10, -10}, {-10, 10}}" : "{{-10, -10}, {10, 10}}";
-  return `Placement(visible=true, transformation=transformation(origin={${num(x)}, ${num(y)}}, extent=${extent}${at.rotation ? `, rotation=${at.rotation}` : ""}))`;
+  const icon = onIcon ? `, iconTransformation=iconTransformation(extent={{${num(onIcon[0] - 10)}, ${num(onIcon[1] - 10)}}, {${num(onIcon[0] + 10)}, ${num(onIcon[1] + 10)}}})` : "";
+  return `Placement(visible=true, transformation=transformation(origin={${num(x)}, ${num(y)}}, extent=${extent}${at.rotation ? `, rotation=${at.rotation}` : ""})${icon})`;
 }
 
 export function linePoints(points: [number, number][]): string {
@@ -41,8 +43,8 @@ export const addComponent = (model: string, cls: string, name: string, at: Place
 export const addPlain = (model: string, cls: string, name: string) =>
   `addComponent(${check(NAME, "a component name", name)}, ${check(CLASS, "a class name", cls)}, ${check(CLASS, "a model name", model)})`;
 
-export const updateComponent = (model: string, cls: string, name: string, at: Placement) =>
-  `updateComponent(${check(NAME, "a component name", name)}, ${check(CLASS, "a class name", cls)}, ${check(CLASS, "a model name", model)}, annotate=${placementAnnotation(at)})`;
+export const updateComponent = (model: string, cls: string, name: string, at: Placement, onIcon?: [number, number]) =>
+  `updateComponent(${check(NAME, "a component name", name)}, ${check(CLASS, "a class name", cls)}, ${check(CLASS, "a model name", model)}, annotate=${placementAnnotation(at, onIcon)})`;
 
 export const deleteComponent = (model: string, name: string) =>
   `deleteComponent(${check(NAME, "a component name", name)}, ${check(CLASS, "a model name", model)})`;

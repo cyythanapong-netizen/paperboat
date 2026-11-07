@@ -1,10 +1,10 @@
 [backend]
 format = 0
-name = "dc-motor"
+name = "dc-drive"
 version = "0.1.0"
 engine = ">=0.1"
 language = "cpp"
-run = "build/paperboat-dc-motor"
+run = "build/paperboat-dc-drive"
 port = 8780
 descriptor = "descriptor.toml"
 

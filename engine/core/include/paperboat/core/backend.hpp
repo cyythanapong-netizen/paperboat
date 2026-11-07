@@ -41,6 +41,7 @@ json load_json(const std::filesystem::path& path);
 struct Options {
   int port = 0;
   bool run = false;
+  bool catalog = false;  // --catalog: print the catalog's block and station object types, then exit
   std::vector<std::pair<std::string, std::string>> vars = {};
   std::optional<double> duration = std::nullopt;
   std::string project = "";

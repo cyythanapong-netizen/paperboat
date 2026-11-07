@@ -1,9 +1,9 @@
 // What each StudioApi action sends to omc, as plain data: the expressions, or the words why not.
 // The hook in index.tsx only runs them; a test can read them here.
 
+import type { IconDef } from "@paperboat/shared";
 import type { Connection, StudioModel } from "../model/types.ts";
 import * as x from "./exprs.ts";
-import { freshName } from "./splice.ts";
 import { endOf, hasWire, split, wireError } from "./wires.ts";
 
 /** "R1.R" sets a part's modifier; "J" a top-level parameter's default, made first when it isn't there. */
@@ -26,11 +26,32 @@ export function connectExprs(model: StudioModel, a: string, b: string): { error:
 export function entryExprs(model: StudioModel, kind: "input" | "output", target: string): string[] {
   if (!target.includes(".") || !endOf(model, target)) throw new Error("a probe or input needs a port to attach to; variables need an annotation in the .mo for now");
   const taken = model.components.map((c) => c.name);
-  const name = freshName(kind === "input" ? "u" : "y", taken).toLowerCase().replace(/1$/, "");
+  // named for the port it joins (V1.v -> v, S2.w -> w), else u/y; a taken name gets a number
+  const port = split(target).port;
+  const base = /^[a-z]\w*$/i.test(port) && !taken.includes(port) ? port : kind === "input" ? "u" : "y";
+  const name = !taken.includes(base) ? base : [...Array(99).keys()].map((i) => `${base}${i + 1}`).find((n) => !taken.includes(n))!;
   const part = model.components.find((c) => c.name === split(target).part);
   const at = { x: x.snap((part?.placement.x ?? 0) + (kind === "input" ? -200 : 200)), y: part?.placement.y ?? 0, rotation: 0 as const };
   const cls = kind === "input" ? "Modelica.Blocks.Interfaces.RealInput" : "Modelica.Blocks.Interfaces.RealOutput";
   return [x.addComponent(model.name, cls, name, at), kind === "input" ? x.addConnection(model.name, name, target) : x.addConnection(model.name, target, name)];
+}
+
+/** The Look tab's port placement, written back as each entry's iconTransformation (the inverse of the importer's quantise_ports). */
+export function iconPortExprs(model: StudioModel, icon: IconDef): string[] {
+  const halfW = 100 * (icon.w ?? 1);
+  const halfH = 100 * (icon.h ?? 1);
+  const out: string[] = [];
+  for (const port of icon.ports ?? []) {
+    const part = model.components.find((c) => c.name === port.id && model.entries.some((e) => e.name === port.id));
+    if (!part) continue;
+    const along = port.at / 100;
+    const at: [number, number] =
+      port.side === "left" ? [-halfW, halfH - along * 2 * halfH]
+      : port.side === "right" ? [halfW, halfH - along * 2 * halfH]
+      : [-halfW + along * 2 * halfW, port.side === "top" ? halfH : -halfH];
+    out.push(x.updateComponent(model.name, part.class, part.name, part.placement, at));
+  }
+  return out;
 }
 
 export function removeEntryExprs(model: StudioModel, entry: string): string[] {

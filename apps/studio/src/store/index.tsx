@@ -13,7 +13,7 @@ import * as x from "./exprs.ts";
 import { classLook, type IconCache } from "./looks.ts";
 import { readModel } from "./read.ts";
 import { freshName, splicePlan, throughPorts } from "./splice.ts";
-import { entryExprs, connectExprs, removeEntryExprs, removeExprs, setParamExprs } from "./plans.ts";
+import { entryExprs, connectExprs, iconPortExprs, removeEntryExprs, removeExprs, setParamExprs } from "./plans.ts";
 import { endOf, split } from "./wires.ts";
 
 type PartNode = Node<{ part: PartSnap }>;
@@ -191,6 +191,7 @@ export function useStudioStore(omc: OmcClient, status: OmcStatus): { api: Studio
       async setIcon(icon: IconDef) {
         await enqueue(async () => {
           await omc.op("set_icon", { model: name, icon });
+          for (const expr of iconPortExprs(model, icon)) await omc.call(expr);
           await omc.op("save", { model: name });
           await refresh();
         });

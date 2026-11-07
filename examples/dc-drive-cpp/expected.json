@@ -1,10 +1,10 @@
 {
   "$comment": "What `--run` (the PID speed loop, headless) must produce; checked by protocol/golden.py.",
   "status": "done",
-  "run": "build/paperboat-dc-motor",
+  "run": "build/paperboat-dc-drive",
   "signals": {
     "graph-i": [
-      1.926201353e-14,
+      6.969616825e-11,
       1e-06
     ],
     "graph-v": [
