@@ -717,6 +717,10 @@ Spec build(const Dae& d, const std::string& model, const std::vector<std::string
 // --- files ---
 
 void write(GenerateResult& r, const fs::path& rel, const std::string& text, bool once = false) {
+  if (r.dry) {
+    r.files[rel.generic_string()] = text;
+    return;
+  }
   const fs::path p = r.out / rel;
   if (once && fs::exists(p)) return;
   fs::create_directories(p.parent_path());
@@ -1268,9 +1272,15 @@ GenerateResult generate(Omc& omc, const GenerateOptions& o) {
   if (o.path != "auto" && o.path != "ode" && o.path != "fmu")
     throw GenerateError("--path is auto, ode or fmu, not " + o.path);
   GenerateResult r;
+  r.dry = o.dry;
+  const auto progress = [&](std::string_view stage, double fraction) {
+    if (o.progress) o.progress(stage, fraction);
+  };
+  progress("check", 0);
   r.model = load(omc, o.source, o.model);
   if (const CheckResult c = check(omc, o.source, r.model); !c.ok) throw GenerateError(c.message);
 
+  progress("flatten", 0.25);
   const OmValue dump = parse_value(ok_call(
       omc, "dumpXMLDAE(" + r.model + ", translationLevel=\"backEnd\", addMathMLCode=false, addSolvingInfo=true, "
            "fileNamePrefix=\"" + backend_name(r.model) + "_dae\")"));
@@ -1346,9 +1356,16 @@ GenerateResult generate(Omc& omc, const GenerateOptions& o) {
                               : "ODE: no events, no torn systems, no external functions";
 
   constexpr int port = 8780;
-  fs::create_directories(r.out);
+  progress("generate", 0.5);
+  if (!o.dry) fs::create_directories(r.out);
   std::string domain;
+  if (fmu && o.dry) {
+    r.notices.push_back("dry run: the FMU path builds with omc, so no files are previewed");
+    progress("generate", 1);
+    return r;
+  }
   if (fmu) {
+    progress("build", 0.6);
     const OmValue built = parse_value(ok_call(
         omc, "buildModelFMU(" + r.model + ", version=\"2.0\", fmuType=\"cs\", fileNamePrefix=\"" + spec.label +
                  "\", platforms={\"static\"})"));
@@ -1365,7 +1382,7 @@ GenerateResult generate(Omc& omc, const GenerateOptions& o) {
   } else {
     domain = ode_cpp(spec);
     std::error_code ec;
-    fs::remove(r.out / "fmu" / (spec.label + ".fmu"), ec);
+    if (!o.dry) fs::remove(r.out / "fmu" / (spec.label + ".fmu"), ec);
   }
 
   write(r, "CMakeLists.txt", cmake(spec, fmu));
@@ -1373,10 +1390,11 @@ GenerateResult generate(Omc& omc, const GenerateOptions& o) {
   write(r, fs::path("domain") / (spec.id + ".hpp"), hpp(spec));
   write(r, fs::path("domain") / (spec.id + ".cpp"), domain);
   const fs::path mo = fs::path("modelica") / (spec.label + ".mo");
-  if (!fs::exists(r.out / mo) || !fs::equivalent(r.out / mo, o.source)) write(r, mo, read_file(o.source));
+  if (o.dry || !fs::exists(r.out / mo) || !fs::equivalent(r.out / mo, o.source)) write(r, mo, read_file(o.source));
   write(r, "backend.toml", backend_toml(spec, port), true);
   write(r, "descriptor.toml", descriptor(spec), true);
   write(r, "README.md", readme(spec, r), true);
+  progress("generate", 1);
   return r;
 }
 

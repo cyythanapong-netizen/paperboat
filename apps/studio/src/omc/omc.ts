@@ -5,8 +5,11 @@
 export type OmcState = 'ready' | 'checking' | 'failed';
 export type OmcStatus = {state: OmcState; version: string};
 
-type Reply = {id?: number; ok?: boolean; result?: string; error?: string; op?: string} & Partial<OmcStatus>;
-type Waiter = {resolve: (result: string) => void; reject: (error: Error) => void};
+type Reply = {id?: number; ok?: boolean; result?: unknown; error?: string; op?: string; stage?: string; fraction?: number} & Partial<OmcStatus>;
+type Waiter = {resolve: (result: unknown) => void; reject: (error: Error) => void; progress?: (stage: string, fraction: number) => void};
+
+/** The two calls the store makes; tests give it a fake. */
+export type OmcCalls = Pick<OmcClient, 'call' | 'op'>;
 
 export class OmcClient {
   status: OmcStatus = {state: 'checking', version: ''};
@@ -16,7 +19,10 @@ export class OmcClient {
   private closing = false;
   private readonly open: Promise<void>;
 
-  constructor(url: string, private readonly onStatus: (status: OmcStatus) => void = () => {}) {
+  private readonly onStatus: (status: OmcStatus) => void;
+
+  constructor(url: string, onStatus: (status: OmcStatus) => void = () => {}) {
+    this.onStatus = onStatus;
     this.ws = new WebSocket(url);
     this.open = new Promise((resolve, reject) => {
       this.ws.addEventListener('open', () => resolve(), {once: true});
@@ -32,11 +38,21 @@ export class OmcClient {
 
   // omc's answer as text (`true`, `"…"`, `{…}`); rejects with omc's or the server's words.
   async call(expr: string): Promise<string> {
+    return String(await this.send({op: 'omc', expr}));
+  }
+
+  // One of Studio's own squero/0 ops (open, save, icon, set_icon, generate, simulate); `progress`
+  // hears the server's {op: "progress"} pushes for this call.
+  async op<T = unknown>(op: string, args: Record<string, unknown> = {}, progress?: (stage: string, fraction: number) => void): Promise<T> {
+    return (await this.send({op, ...args}, progress)) as T;
+  }
+
+  private async send(message: Record<string, unknown>, progress?: Waiter['progress']): Promise<unknown> {
     await this.open;
     const id = this.next++;
     return new Promise((resolve, reject) => {
-      this.waiting.set(id, {resolve, reject});
-      this.ws.send(JSON.stringify({id, op: 'omc', expr}));
+      this.waiting.set(id, {resolve, reject, progress});
+      this.ws.send(JSON.stringify({id, ...message}));
     });
   }
 
@@ -58,6 +74,10 @@ export class OmcClient {
     }
     const waiter = msg.id === undefined ? undefined : this.waiting.get(msg.id);
     if (!waiter || msg.id === undefined) return;
+    if (msg.op === 'progress') {
+      waiter.progress?.(msg.stage ?? '', msg.fraction ?? 0);
+      return;
+    }
     this.waiting.delete(msg.id);
     if (msg.ok) waiter.resolve(msg.result ?? '');
     else waiter.reject(new Error(msg.error ?? 'omc call failed'));

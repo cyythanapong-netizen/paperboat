@@ -3,12 +3,14 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
+#include <catch2/catch_approx.hpp>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <set>
 #include <string>
 #include <vector>
@@ -434,4 +436,134 @@ end CustomThermal;
   CHECK(wall.icon["ports"][0]["id"] == "port_a");
   CHECK(wall.icon["ports"][1]["id"] == "port_b");
   fs::remove_all(tmp);
+}
+
+// --- squero/0 ops (#160 Wave 3) ---
+
+namespace {
+
+bool have_omc() { return std::system("command -v omc >/dev/null 2>&1") == 0; }
+
+json op(mo::Omc& omc, json request, const mo::Session& session = {}) {
+  return json::parse(mo::handle(omc, request.dump(), session));
+}
+
+}  // namespace
+
+TEST_CASE("set_icon writes tokens as fixed Modelica values and refuses what it can't", "[squero]") {
+  const json icon = {{"w", 2},
+                     {"g", {{{"t", "rect"}, {"x", 15}, {"y", 35}, {"w", 70}, {"h", 30}, {"fill", "raised"}, {"corner", "md"}},
+                            {{"t", "line"}, {"p", {{5, 50}, {15, 50}}}, {"weight", "wire"}, {"dash", "axis"}},
+                            {{"t", "text"}, {"x", 50}, {"y", 50}, {"s", "R={R}"}, {"font", "mono"}, {"stroke", "muted"}}}}};
+  const std::string text = mo::icon_annotation(icon);
+  CHECK_THAT(text, Catch::Matchers::StartsWith("Icon(coordinateSystem(extent={{-200, -100}, {200, 100}})"));
+  CHECK_THAT(text, Catch::Matchers::ContainsSubstring("fillPattern=FillPattern.Solid"));
+  CHECK_THAT(text, Catch::Matchers::ContainsSubstring("pattern=LinePattern.Dash"));
+  CHECK_THAT(text, Catch::Matchers::ContainsSubstring("textString=\"R=%R\""));
+  // y runs down in an icon and up in Modelica: y=50 is the middle, y=0 the top.
+  CHECK_THAT(mo::icon_annotation({{"g", {{{"t", "line"}, {"p", {{0, 0}, {100, 100}}}}}}}),
+             Catch::Matchers::ContainsSubstring("points={{-100, 100}, {100, -100}}"));
+
+  CHECK_THROWS_AS(mo::icon_annotation({{"g", {{{"t", "bezier"}}}}}), mo::OmcError);
+  CHECK_THROWS_AS(mo::icon_annotation({{"g", {{{"t", "line"}, {"p", {{0, 0}, {5, 5}}}, {"stroke", "pink"}}}}}), mo::OmcError);
+  CHECK_THROWS_AS(mo::icon_annotation({{"w", 2}, {"h", 2}, {"g", json::array()}}), mo::OmcError);
+
+  mo::Omc omc;  // never started: both refuse before calling it
+  CHECK(op(omc, {{"id", 1}, {"op", "set_icon"}, {"model", "Modelica.Electrical.Analog.Basic.Resistor"}, {"icon", icon}})["ok"] == false);
+  CHECK(op(omc, {{"id", 2}, {"op", "save"}, {"model", "Modelica"}})["error"].get<std::string>().find("may edit") != std::string::npos);
+  CHECK(op(omc, {{"id", 3}, {"op", "simulate"}, {"model", "M"}, {"stop", -1}})["ok"] == false);
+}
+
+TEST_CASE("set_icon round-trips the Wave 2 icon goldens through omc", "[squero][omc]") {
+  if (!have_omc()) SKIP("omc not installed");
+  mo::Omc omc;
+  for (const char* stem : {"Resistor", "Inductor", "Capacitor", "Ground", "Inertia"}) {
+    INFO(stem);
+    const json golden = read_golden(stem)["icon"];
+    const std::string model = std::string("RT") + stem;
+    const fs::path file = fs::temp_directory_path() / (model + ".mo");
+    std::ofstream(file) << "model " << model << "\nend " << model << ";\n";
+    CHECK(op(omc, {{"id", 1}, {"op", "open"}}, {.file = file})["ok"] == true);
+    const json reply = op(omc, {{"id", 2}, {"op", "set_icon"}, {"model", model}, {"icon", golden}});
+    INFO(reply.dump());
+    REQUIRE(reply["ok"] == true);
+    const json back = mo::import_class(omc, model).icon;
+    CHECK(back["g"] == golden["g"]);
+    CHECK(back.value("w", 1) == golden.value("w", 1));
+    CHECK(back.value("h", 1) == golden.value("h", 1));
+    CHECK(op(omc, {{"id", 3}, {"op", "save"}, {"model", model}})["ok"] == true);
+    std::ifstream saved(file);
+    CHECK_THAT(std::string(std::istreambuf_iterator<char>(saved), {}), Catch::Matchers::ContainsSubstring("Icon("));
+    fs::remove(file);
+  }
+}
+
+TEST_CASE("icon, generate (dry, with progress) and simulate answer over handle", "[squero][omc]") {
+  if (!have_omc()) SKIP("omc not installed");
+  const fs::path dir = fs::temp_directory_path() / "paperboat-squero-test";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  const fs::path file = dir / "Decay.mo";
+  std::ofstream(file) << R"(model Decay
+  parameter Real k = 2;
+  Real x(start = 1, fixed = true);
+equation
+  der(x) = -k * x;
+end Decay;
+)";
+  mo::Omc omc;
+  std::vector<json> pushed;
+  const mo::Session session{[&](const std::string& text) { pushed.push_back(json::parse(text)); }, file};
+
+  const json opened = op(omc, {{"id", 1}, {"op", "open"}}, session);
+  REQUIRE(opened["ok"] == true);
+  CHECK(opened["result"]["model"] == "Decay");
+
+  const json icon = op(omc, {{"id", 2}, {"op", "icon"}, {"class", "Modelica.Electrical.Analog.Basic.Resistor"}}, session);
+  REQUIRE(icon["ok"] == true);
+  CHECK(icon["result"]["icon"]["ports"].size() == 3);  // p, n and the conditional heatPort
+  CHECK(icon["result"]["connectors"].contains("PositivePin"));
+  CHECK(op(omc, {{"id", 3}, {"op", "icon"}, {"class", "Modelica.Electrical.Analog.Basic.Resistor"}}, session) ==
+        json{{"id", 3}, {"ok", true}, {"result", icon["result"]}});  // the cached answer is the same
+
+  const json dry = op(omc, {{"id", 4}, {"op", "generate"}, {"source", file.string()}, {"model", "Decay"}, {"dry", true}}, session);
+  INFO(dry.dump());
+  REQUIRE(dry["ok"] == true);
+  CHECK(dry["result"]["path"] == "ode");
+  CHECK(dry["result"]["files"].contains("domain/decay.cpp"));
+  CHECK_FALSE(fs::exists("decay-cpp"));
+  CHECK_FALSE(fs::exists(dir / "decay-cpp"));
+  REQUIRE_FALSE(pushed.empty());
+  CHECK(pushed.front()["op"] == "progress");
+  CHECK(pushed.front()["id"] == 4);
+  CHECK(pushed.back()["stage"] == "generate");
+  CHECK(pushed.back()["fraction"] == 1);
+
+  const json sim = op(omc, {{"id", 5}, {"op", "simulate"}, {"model", "Decay"}, {"stop", 1.0}, {"vars", {"x"}}}, session);
+  INFO(sim.dump());
+  REQUIRE(sim["ok"] == true);
+  const auto& t = sim["result"]["t"];
+  const auto& x = sim["result"]["series"]["x"];
+  REQUIRE(t.size() == x.size());
+  CHECK(t.size() > 100);
+  CHECK(x.front().get<double>() == Catch::Approx(1.0));
+  CHECK(x.back().get<double>() == Catch::Approx(std::exp(-2.0)).epsilon(0.01));  // x' = -2x
+  CHECK(sim["result"]["series"].size() == 1);
+
+  fs::remove_all(dir);
+}
+
+TEST_CASE("the allow-list has what the canvas reads and edits, and nothing that writes elsewhere", "[squero]") {
+  CHECK(mo::allowed(R"(getComponentModifierNames(M, "R1"))"));
+  CHECK(mo::allowed("getNthConnectionAnnotation(M, 1)"));
+  CHECK(mo::allowed("getClassRestriction(Modelica.Electrical.Analog.Basic.Resistor)"));
+  CHECK(mo::allowed("setComponentModifierValue(M, R1.R, $Code(=10))"));
+  CHECK(mo::allowed("updateComponent(R1, A.B, M, annotate=Placement(visible=true, transformation=transformation(origin={1, 2}, "
+                    "extent={{-10, -10}, {10, 10}}, rotation=90)))"));
+  CHECK(mo::allowed("setParameterValue(M, k, 3)"));
+  // saving, simulating and the icon annotation are squero/0 ops of their own, confined to the user's model
+  CHECK_FALSE(mo::allowed("save(M)"));
+  CHECK_FALSE(mo::allowed("simulate(M, stopTime=1)"));
+  CHECK_FALSE(mo::allowed("addClassAnnotation(M, annotate=Icon())"));
+  CHECK_FALSE(mo::allowed("writeFile(\"/tmp/x\", \"y\")"));
 }

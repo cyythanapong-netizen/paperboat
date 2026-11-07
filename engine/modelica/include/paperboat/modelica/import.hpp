@@ -119,6 +119,13 @@ nlohmann::json quantise_icon(const std::vector<OmValue>& icon_annotations, const
 void resolve_connectors(Omc& omc, std::string_view class_name, std::vector<RawPort>& out_ports,
                         std::map<std::string, ConnectorDef>& out_connectors, ImportNotice& notice);
 
+// The inverse of quantise_icon (Studio's Look tab, squero/0 `set_icon`): an IconDef's `w`, `h`
+// and `g` as a Modelica `Icon(coordinateSystem(...), graphics={...})` annotation. Tokens map
+// to fixed colours, thicknesses and patterns, so importing the text again gives `g` back.
+// `ports` are not written: connector placement belongs to the components, not the icon.
+// Throws OmcError on an unknown primitive or token.
+std::string icon_annotation(const nlohmann::json& icon);
+
 // Imports a loaded or MSL Modelica class (`Modelica.Electrical.Analog.Basic.Resistor`).
 ImportedModel import_class(Omc& omc, std::string_view class_name);
 

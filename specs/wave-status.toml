@@ -58,15 +58,73 @@ cli = "claude"
 model = "sonnet-5.5"
 effort = "high"
 wave = 3
-state = "ready"
+state = "review"
 task = "apps/studio: top bar, library tree, acausal canvas + splice, split view + Simulate, StudioApi store, squero/0 ops"
 contracts = ["§8.1", "§8.2", "§1", "§3", "§4", "§5", "§6"]
 prompt = "specs/prompts/wave3_lane_a.md"
 branch = "epic160/lane-a-w3"
 blocker = ""
-notes = ""
-modified_files = []
-verification = ""
+notes = """Studio runs end to end on the real StudioApi: squero-om serves apps/studio/dist; library tree, acausal canvas, splice, split view (.mo and dry C++), Simulate, undo via shared undo.ts. Decisions and things B / the orchestrator should know:
+- Server model: `paperboat squero [Model.mo]` opens that file (default ./Untitled.mo, created) through a new `open` op; the store saves (`save` op) after every edit and `generate` reads the saved file, so edits, save and the dry generate all go through one queue (a loadFile in generate would otherwise drop an unsaved edit).
+- squero/0 ops added (squero.hpp): open, save, icon, set_icon, generate (dry, progress), simulate. Allow-list additions: isPartial, getSourceFile, getClassComment, getComponentModifierNames, getNthConnectionAnnotation, getParameterNames, getParameterValue, setParameterValue, setComponentProperties, updateComponent, updateConnection. save, simulate and addClassAnnotation are NOT on the allow-list: they are ops confined to the opened model (the MSL is refused).
+- Bug found and fixed in the Wave 1 server: after a browser tab closed, every later client hung. gdb showed the client mutex owned by a thread that was itself waiting on it in the Close handler (the status push sends under that lock), so the lock is now recursive and the push walks a copy; the hang did not come back in the runs below.
+- set_icon writes `g` and the plate size only (ports are component placements, not the icon); {param} text round-trips but always comes back mono. It round-trips all five Wave 2 goldens (test).
+- For B: StudioApi.setParam("J", v) makes a missing top-level parameter as `Real J = v` (omc 1.27 answers false to setComponentProperties, so it is not yet `parameter`). addEntry works on a port path; on a variable it throws (a variable probe needs `annotation(__paperboat(probe=true))`, which addComponent cannot write); the words say so. `selection` holds part names; connect() returns the word message and never throws for a refused wire. exportBackend calls the non-dry generate on the saved file with the progress pushes.
+- Placement: a part's placement is its plate centre in px on the 20px grid, 2px per Modelica unit, y flipped; rotation 0/90/180/270 and mirror are read and drawn (ports turn with the icon) but there is no rotate gesture yet. Wires are drawn with xyflow's smoothstep unless the .mo has Line(points) bends, which are kept (squared to the ports); Studio does not write bends itself.
+- Shared (frozen) gaps, see [[requests]]: plate / port / wire / menu CSS lives in apps/web styles.css, so Studio copies it; connectError's word for output -> acausal reads "an output joins only an acausal port".
+- Not done: moving a wire's bends, a rotate/mirror gesture, the Look tab / popover / dock bodies (B)."""
+modified_files = [
+  "apps/studio/src/App.tsx",
+  "apps/studio/src/canvas/Canvas.tsx",
+  "apps/studio/src/canvas/QuickAdd.tsx",
+  "apps/studio/src/canvas/geometry.ts",
+  "apps/studio/src/canvas/rotate.ts",
+  "apps/studio/src/library/Library.tsx",
+  "apps/studio/src/library/classes.ts",
+  "apps/studio/src/main.tsx",
+  "apps/studio/src/omc/omc.ts",
+  "apps/studio/src/omc/parse.ts",
+  "apps/studio/src/shell/TopBar.tsx",
+  "apps/studio/src/simulate/Simulate.tsx",
+  "apps/studio/src/split/Split.tsx",
+  "apps/studio/src/store/diff.ts",
+  "apps/studio/src/store/exprs.ts",
+  "apps/studio/src/store/index.tsx",
+  "apps/studio/src/store/looks.ts",
+  "apps/studio/src/store/plans.ts",
+  "apps/studio/src/store/read.ts",
+  "apps/studio/src/store/splice.ts",
+  "apps/studio/src/store/wires.ts",
+  "apps/studio/src/styles.css",
+  "apps/studio/test/a-canvas.test.ts",
+  "apps/studio/test/a-store.test.ts",
+  "apps/studio/vite.config.ts",
+  "docs/api/tutorials.rst",
+  "docs/api/user_manual.rst",
+  "engine/modelica/CMakeLists.txt",
+  "engine/modelica/include/paperboat/modelica/generate.hpp",
+  "engine/modelica/include/paperboat/modelica/import.hpp",
+  "engine/modelica/include/paperboat/modelica/squero.hpp",
+  "engine/modelica/src/generate.cpp",
+  "engine/modelica/src/omc.cpp",
+  "engine/modelica/src/seticon.cpp",
+  "engine/modelica/src/squero.cpp",
+  "engine/tests/modelica_test.cpp",
+  "engine/tools/paperboat_cli.cpp",
+  "specs/evidence/wave3-a/cpp-dark.png",
+  "specs/evidence/wave3-a/cpp-light.png",
+  "specs/evidence/wave3-a/mo-dark.png",
+  "specs/evidence/wave3-a/mo-light.png",
+  "specs/evidence/wave3-a/refused-dark.png",
+  "specs/evidence/wave3-a/refused-light.png",
+  "specs/evidence/wave3-a/studio-dark.png",
+  "specs/evidence/wave3-a/studio-light.png",
+]
+verification = """Lane A re-ran 2026-11-07 in worktree epic160-lane-a-w3 (engine/build/dev):
+engine build: no warnings (touched every modelica source, the tests and the CLI, rebuilt: 0 "warning"); paperboat_tests 2087 assertions / 151 cases pass from the repo root, incl. [squero] 83/4 and [modelica] 677/9 (omc 1.27.0~dev-5-g5f1d2c5 is installed, so the [omc] cases ran, not skipped);
+npm run typecheck, npm run build, npm run build:studio: exit 0; npm test -w @paperboat/web 97/97, -w @paperboat/shared 11/11, -w @paperboat/studio 23/23; npm run docs: build succeeded with -W (no warnings), Studio section in docs/api/user_manual.rst, the ops in tutorials.rst; gen_tokens --check and gen_ts --check current.
+Live check through squero-om (headless Chromium via playwright-core, built dist on :8790, a fresh Untitled.mo each run): dragged SignalVoltage, Resistor, Inductor, Ground and Blocks.Sources.Constant from the library; wired V1.p-R1.p, R1.n-L1.p, L1.n-V1.n, V1.n-G1.p and the signal C1.y -> V1.v (a RealInput) by dragging ports; selected the R1.n-L1.p wire, pressed / and typed Resistor: the line read exactly "Insert R2: R1.n -> p, n -> L1.p", Enter gave connect(R1.n, R2.p) and connect(R2.n, L1.p) in the .mo; the split view showed the .mo and the C++ ("ode - ODE: no events, no torn systems, no external functions", domain/untitled.cpp, nothing written to disk); Simulate plotted L1.i, L1.v, R1.i; Delete of G1 then Ctrl+Z restored it and its wires in one step; an output dragged onto an inductor pin was refused in words ("an output joins only an acausal port, not a NegativePin") and no wire was made. Screenshots in light and dark: specs/evidence/wave3-a/{studio,cpp,mo,refused}-{light,dark}.png.
+Not run: B's popover, sheet and dock (stubs on this branch), so the merged-dev gate (B's panels on the real StudioApi) is the orchestrator's."""
 
 [lanes.B]
 cli = "agy"
@@ -125,3 +183,15 @@ from = "A"
 to = "B"
 what = "Schema $defs IconDef, Prim, IconPort, ConnectorDef, Connectors (+ view.icon, catalog.connectors, ToolkitStatus.builtin) are on branch epic160/lane-a-w2 at d00e932; validate engine output against them."
 state = "done"
+
+[[requests]]
+from = "A"
+to = "orchestrator"
+what = "Move the plate, port, wire and menu rules (.compact-block/.plate/.glyph, .react-flow__handle + .ip-*, .wire-*, .menu*, .chip, .switch, .quick-add) from apps/web/src/styles.css into packages/shared (e.g. plates.css next to tokens.css) and have both apps import it. apps/studio/src/styles.css copies them (marked at its top) because shared components render with classes shared does not ship; delete the copy when this lands."
+state = "open"
+
+[[requests]]
+from = "A"
+to = "orchestrator"
+what = "packages/shared/src/ports.ts connectError: for an output wired to an acausal port the message reads an output joins only an acausal port, not a NegativePin; it should say what the output does join (an output joins only an input). Wording only; packages/shared/test/ports.test.ts does not pin this one."
+state = "open"
