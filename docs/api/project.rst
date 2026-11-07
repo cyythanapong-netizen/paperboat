@@ -77,4 +77,20 @@ it. The bar shows the project's name, with a dot while there are changes not sav
   (**Restore your last session?**). It also keeps the last few saved or opened projects, so
   Recent projects can reopen them.
 
+From the CLI
+------------
+
+You can launch a saved project with the CLI:
+
+.. code-block:: bash
+
+   paperboat open project.ppj
+
+This validates the project format, resolves and starts the matching backend, ensures the Web UI is
+running, and loads the project. To execute the saved project headlessly:
+
+.. code-block:: bash
+
+   paperboat open project.ppj --run
+
 What isn't in a project yet: the last run's results (logs, signals).

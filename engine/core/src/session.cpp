@@ -17,8 +17,12 @@ struct Session::State {
   State(const Backend& b, Send s)
       : backend(b),
         send(std::move(s)),
-        station(b.catalog->station.empty() ? json() : json::parse(b.catalog->station)),
-        variables(b.catalog->variables.empty() ? json::array() : json::parse(b.catalog->variables)) {}
+        station(!b.initial_project.is_null() && b.initial_project.contains("station")
+                    ? b.initial_project["station"]
+                    : (b.catalog->station.empty() ? json() : json::parse(b.catalog->station))),
+        variables(!b.initial_project.is_null() && b.initial_project.contains("variables")
+                      ? b.initial_project["variables"]
+                      : (b.catalog->variables.empty() ? json::array() : json::parse(b.catalog->variables))) {}
 
   const Backend& backend;
   Send send;
@@ -105,6 +109,11 @@ Session::Session(const Backend& backend, Send send)
   if (!s.variables.empty()) s.emit({{"type", "variables.load"}, {"variables", s.variables}});
   s.emit({{"type", "graph.load"}, {"graph", json::parse(catalog.graph)}});
   if (!s.station.is_null()) s.emit({{"type", "station.load"}, {"station", s.station}});
+  if (!backend.initial_project.is_null() && backend.initial_project.is_object()) {
+    s.emit({{"type", "project.load"},
+            {"name", backend.initial_project_name},
+            {"project", backend.initial_project}});
+  }
 }
 
 Session::~Session() = default;

@@ -48,6 +48,8 @@ struct Backend {
   // Its own run style, if the core's three (clock, once, steps) don't fit: an executor for
   // this graph. Empty: default_executor().
   std::function<std::unique_ptr<Executor>(const Graph&, const RunSettings&)> executor = {};
+  json initial_project = nullptr;
+  std::string initial_project_name = "";
 };
 
 using Emit = std::function<void(const json& message)>;

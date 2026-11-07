@@ -3,7 +3,10 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CLI="$REPO_ROOT/engine/build/tools/paperboat"
+CLI="$REPO_ROOT/engine/build/dev/tools/paperboat"
+if [ ! -x "$CLI" ]; then
+  CLI="$REPO_ROOT/engine/build/tools/paperboat"
+fi
 
 if [ ! -x "$CLI" ]; then
   if command -v paperboat >/dev/null 2>&1; then

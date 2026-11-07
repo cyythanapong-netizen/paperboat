@@ -714,6 +714,11 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     }
 
     std::vector<std::string> args = {bin.string(), "--port", std::to_string(port)};
+    if (opts.run) args.emplace_back("--run");
+    if (!opts.project_file.empty()) {
+      args.emplace_back("--project");
+      args.emplace_back(opts.project_file);
+    }
     append_vars(args, opts);
 
     std::cout << "paperboat running " << bin.filename().string() << " on " << ws_url(port) << std::endl;
@@ -734,6 +739,11 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     }
 
     std::vector<std::string> args = {py_env.python_bin.string(), script_run_arg, "--port", std::to_string(port)};
+    if (opts.run) args.emplace_back("--run");
+    if (!opts.project_file.empty()) {
+      args.emplace_back("--project");
+      args.emplace_back(opts.project_file);
+    }
     append_vars(args, opts);
 
     std::cout << "paperboat running python " << server_script.filename().string() << " on " << ws_url(port) << std::endl;

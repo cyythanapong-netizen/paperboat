@@ -29,6 +29,8 @@ struct BackendRunOptions {
   bool time_metrics = false;
   bool verbose = false;
   std::vector<std::pair<std::string, std::string>> vars;
+  std::string project_file = "";
+  bool run = false;
 };
 
 enum class BackendKind {

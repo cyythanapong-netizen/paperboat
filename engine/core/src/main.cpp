@@ -90,8 +90,10 @@ Options parse_options(int argc, char** argv, int default_port) {
       options.vars.emplace_back(setting.substr(0, eq), setting.substr(eq + 1));
     } else if (arg == "--duration" && i + 1 < argc) {
       options.duration = std::stod(argv[++i]);
+    } else if (arg == "--project" && i + 1 < argc) {
+      options.project = argv[++i];
     } else {
-      throw std::invalid_argument("unknown option " + arg + " (use --port N, --run, --duration S, --var name=value)");
+      throw std::invalid_argument("unknown option " + arg + " (use --port N, --run, --duration S, --project P, --var name=value)");
     }
   }
   return options;
@@ -142,10 +144,18 @@ std::string run_starter(const Backend& backend, std::ostream& out, const std::ve
     out.flush();
     return "failed";
   }
-  const json station = catalog.station.empty() ? json() : json::parse(catalog.station);
-  const json variables = with_vars(catalog, vars);
+  json graph = json::parse(catalog.graph);
+  json station = catalog.station.empty() ? json() : json::parse(catalog.station);
+  json variables = with_vars(catalog, vars);
+  if (!backend.initial_project.is_null() && backend.initial_project.is_object()) {
+    const auto& p = backend.initial_project;
+    if (p.contains("flow") && p["flow"].is_object()) graph = p["flow"];
+    if (p.contains("station")) station = p["station"];
+    if (p.contains("variables") && p["variables"].is_array()) variables = p["variables"];
+    if (p.contains("run") && p["run"].is_object()) headless.run = with_overrides(headless.run, p["run"]);
+  }
   const auto emit = [&out](const json& msg) { out << msg.dump() << '\n'; };
-  const auto status = run("run-1", json::parse(catalog.graph), station, headless, emit, nullptr, {}, nullptr, variables);
+  const auto status = run("run-1", graph, station, headless, emit, nullptr, {}, nullptr, variables);
   out.flush();  // a host may end the process right after (the Python bindings do)
   return status;
 }
@@ -159,15 +169,28 @@ int main(const Backend& backend, int argc, char** argv, int default_port) {
     std::cerr << err.what() << '\n';
     return 2;
   }
+  Backend b = backend;
+  if (!options.project.empty()) {
+    try {
+      b.initial_project = load_json(options.project);
+      b.initial_project_name = std::filesystem::path(options.project).stem().string();
+      if (b.initial_project_name.ends_with(".paperboat")) {
+        b.initial_project_name = b.initial_project_name.substr(0, b.initial_project_name.size() - 10);
+      }
+    } catch (const std::exception& err) {
+      std::cerr << "error: cannot load project file " << options.project << ": " << err.what() << '\n';
+      return 1;
+    }
+  }
   if (options.run) {
     try {
-      return run_starter(backend, std::cout, options.vars, options.duration) == "done" ? 0 : 1;
+      return run_starter(b, std::cout, options.vars, options.duration) == "done" ? 0 : 1;
     } catch (const std::invalid_argument& err) {
       std::cerr << err.what() << '\n';
       return 2;
     }
   }
-  return serve(backend, options.port);
+  return serve(b, options.port);
 }
 
 }  // namespace paperboat::core

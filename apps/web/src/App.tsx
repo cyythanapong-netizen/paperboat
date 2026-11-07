@@ -614,6 +614,17 @@ export function App() {
     setBaseline(rebase);
     requestAnimationFrame(() => fitView());
   };
+  // The backend can send an initial project on connect (#126).
+  useEffect(
+    () =>
+      subscribe((m) => {
+        if (m.type === "project.load") {
+          const name = m.name || projectName(m.project.backend || "project");
+          applyProject(m.project, name);
+        }
+      }),
+    [subscribe, state.blocks, state.station],
+  );
   const remember = (p: Project, name: string) =>
     setRecent((prev) => {
       const next = addRecent(prev, { name, savedAt: Date.now(), project: p });

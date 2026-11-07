@@ -396,6 +396,24 @@ export type Project = {
   dashboard?: DashboardLayout;
   /** Only the run settings the user changed from the backend's defaults. */
   run?: RunSettings;
+  /** Optional UI preferences and restrictions saved with the project (#104). */
+  ui?: {
+    /** Lock down parts of the UI behind an optional passcode (#104). */
+    lock?: {
+      /** When true, lock the Board's Arrange button and command. */
+      arrange?: boolean;
+      /** Allowed page ids ('station', 'flow', 'dashboard'). */
+      pages?: string[];
+      /** Allowed view mode ids ('navigator', 'commander', 'lookout'). */
+      modes?: string[];
+      /** Salted hash of the unlock passcode. */
+      passcode?: {
+        algo: string;
+        salt: string;
+        hash: string;
+      };
+    };
+  };
 };
 
 /** Every message a backend sends. */
@@ -435,6 +453,11 @@ export type ServerMsg =
   | {
     type: "variables.load";
     variables: Variables;
+  }
+  | {
+    type: "project.load";
+    name?: string;
+    project: Project;
   }
   | {
     type: "variables.values";

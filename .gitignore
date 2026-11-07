@@ -7,6 +7,7 @@ GEMINI.md
 .cursor/
 .aider*
 GUIDELINES.md
+ARCHITECTURE.md
 
 # --- Builds ---
 build/

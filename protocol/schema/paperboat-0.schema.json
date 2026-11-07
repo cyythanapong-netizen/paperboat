@@ -728,6 +728,26 @@
       ],
       "additionalProperties": false
     },
+    "project.load": {
+      "type": "object",
+      "description": "Initial project configuration loaded by the backend on startup (#126).",
+      "properties": {
+        "type": {
+          "const": "project.load"
+        },
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "$ref": "#/$defs/Project"
+        }
+      },
+      "required": [
+        "type",
+        "project"
+      ],
+      "additionalProperties": false
+    },
     "variables.patch": {
       "type": "object",
       "description": "A block set tunable variables during a run (#166, Context::set_variable): what changed, formulas that follow included. The UI keeps the non-formula ones in the project.",
@@ -1140,6 +1160,7 @@
             "graph.load",
             "station.load",
             "variables.load",
+            "project.load",
             "variables.values",
             "variables.patch",
             "run.started",
@@ -1236,6 +1257,18 @@
           },
           "then": {
             "$ref": "#/$defs/variables.load"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "project.load"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/project.load"
           }
         },
         {
@@ -2240,6 +2273,59 @@
         "run": {
           "$ref": "#/$defs/RunSettings",
           "description": "Only the run settings the user changed from the backend's defaults."
+        },
+        "ui": {
+          "type": "object",
+          "description": "Optional UI preferences and restrictions saved with the project (#104).",
+          "additionalProperties": false,
+          "properties": {
+            "lock": {
+              "type": "object",
+              "description": "Lock down parts of the UI behind an optional passcode (#104).",
+              "additionalProperties": false,
+              "properties": {
+                "arrange": {
+                  "type": "boolean",
+                  "description": "When true, lock the Board's Arrange button and command."
+                },
+                "pages": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Allowed page ids ('station', 'flow', 'dashboard')."
+                },
+                "modes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Allowed view mode ids ('navigator', 'commander', 'lookout')."
+                },
+                "passcode": {
+                  "type": "object",
+                  "description": "Salted hash of the unlock passcode.",
+                  "properties": {
+                    "algo": {
+                      "type": "string"
+                    },
+                    "salt": {
+                      "type": "string"
+                    },
+                    "hash": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "algo",
+                    "salt",
+                    "hash"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
         }
       }
     }

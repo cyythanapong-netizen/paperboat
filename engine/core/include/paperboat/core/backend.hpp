@@ -43,6 +43,7 @@ struct Options {
   bool run = false;
   std::vector<std::pair<std::string, std::string>> vars = {};
   std::optional<double> duration = std::nullopt;
+  std::string project = "";
 };
 Options parse_options(int argc, char** argv, int default_port);  // throws std::invalid_argument
 

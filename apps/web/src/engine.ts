@@ -171,6 +171,8 @@ export function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, station: m.station };
     case "variables.load":
       return { ...s, variables: m.variables };
+    case "project.load":
+      return s;
     case "variables.values":
       return { ...s, varValues: m.values, varError: m.error ? { text: m.error, at: m.at } : null };
     case "variables.patch":
