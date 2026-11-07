@@ -1,0 +1,12 @@
+[backend]
+format = 0
+name = "dc-motor"
+version = "0.1.0"
+engine = ">=0.1"
+language = "cpp"
+run = "build/paperboat-dc-motor"
+port = 8780
+descriptor = "descriptor.toml"
+
+[test]
+golden = "expected.json"

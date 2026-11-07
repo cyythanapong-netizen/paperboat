@@ -121,7 +121,7 @@ export function complete(line: string, sources: Sources): {candidates: Candidate
     if (!cmd) return {candidates: [], from, word};
     if (word.startsWith('-')) pool = cmd.flags.map(f => ({value: f, detail: FLAG_HELP[f] ?? ''}));
     else if (cmd.subcommands.length && index === 1) pool = cmd.subcommands.map(s => ({value: s, detail: ''}));
-    else if ((cmd.arg === 'backend' || cmd.arg === 'ppk') && isPath(word) && sources.listDir) {
+    else if ((cmd.arg === 'backend' || cmd.arg === 'ppk' || cmd.arg === 'file') && isPath(word) && sources.listDir) {
       // Complete the last segment; the candidate is the whole path so far.
       const cut = word.lastIndexOf('/') + 1;
       const dir = word.slice(0, cut);

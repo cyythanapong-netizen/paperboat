@@ -439,3 +439,43 @@ In descriptor TOML:
      { from = ["k", "y"], to = ["split", "u"] },
      { from = ["split", "theta"], to = ["angle", "in"] },
    ]
+
+Tutorial 7: A Backend from a Modelica Model
+-------------------------------------------
+
+A Modelica model can become a backend without writing its equations again. With
+OpenModelica installed (``omc`` on ``PATH``, which also builds ``engine/modelica``):
+
+.. code-block:: bash
+
+   paperboat modelica check DCMotor.mo
+   paperboat modelica generate DCMotor.mo --out dc-motor-cpp/
+   paperboat build dc-motor-cpp && paperboat run dc-motor-cpp
+
+``generate`` asks omc for the model's backend DAE (``dumpXMLDAE``) and picks a path, printing
+which and why (``--path ode|fmu|auto``, default ``auto``):
+
+- **ode**: the solved equations become plain C++ in a ``paperboat::Model``, advanced by the
+  station object's ``solver`` prop (``rk4`` by default). It links only the engine.
+- **fmu**: when the model has events (``when``, zero crossings), a torn or implicit system,
+  or calls an external function or table, omc builds a co-simulation FMU and the generated
+  station object steps it.
+
+What becomes what:
+
+- the model is one **station object**; its props are the top-level ``parameter`` values and
+  the ``start`` of each state with ``fixed = true`` (as ``<state>_start``), with units;
+- its **linked block** (no feedthrough) takes the top-level ``RealInput``\ s and gives the
+  top-level ``RealOutput``\ s plus every variable marked
+  ``annotation(__paperboat(probe = true))``;
+- everything else stays inside the compiled model.
+
+``CMakeLists.txt``, ``main.cpp`` and ``domain/`` are rewritten on every generate;
+``descriptor.toml`` (a step on each input, a graph on each output), ``backend.toml`` and
+``README.md`` are written once and then yours. ``examples/dc-motor-cpp`` is one such backend,
+its descriptor edited into a PID speed loop.
+
+Squero Studio OM, the Modelica editor, talks to the same omc through ``paperboat squero``
+(or ``bin/squero-om``), a WebSocket server speaking ``squero/0``:
+``{"id", "op": "omc", "expr"}`` answered by ``{"id", "ok", "result" | "error"}``, plus
+``{"op": "status", "state", "version"}`` pushes. Only an allow-list of omc calls passes.
