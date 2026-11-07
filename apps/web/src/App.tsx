@@ -1142,6 +1142,7 @@ export function App() {
           <RunStates.Provider value={runStates}>
             <FlowEditor
               blocks={state.blocks}
+              connectors={state.connectors}
               nodes={nodes}
               edges={edges}
               setNodes={setNodes}

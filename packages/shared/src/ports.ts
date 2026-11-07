@@ -1,4 +1,4 @@
-import type { BlockDef, ParamValue, PortDef, PortSides } from "./protocol.ts";
+import type { BlockDef, ConnectorDef, Connectors, IconDef, IconPort, ParamValue, PortDef, PortSides } from "./protocol.ts";
 
 /**
  * Why a wire may not join output `from` to input `to` (#4), or null if it may. The same
@@ -219,37 +219,73 @@ export function inForm(def: BlockDef, params: Record<string, ParamValue>): Block
 
 
 
-/**
- * Checks connection compatibility between ports, including Modelica connectors (§4).
- * Returns a word message explaining why the connection cannot be made, or null if valid.
- */
-export function checkWireConnection(
-  source: { kind?: "output" | "acausal" | "input"; connectorClass?: string; isInsideComposite?: boolean },
-  target: { kind?: "input" | "acausal" | "output"; connectorClass?: string; isInsideComposite?: boolean }
-): string | null {
-  // Acausal wire rules
-  if (source.kind === "acausal" || target.kind === "acausal") {
-    if (source.kind !== "acausal" || target.kind !== "acausal") {
-      return "acausal ports only connect to acausal ports";
-    }
-    const normalize = (c?: string) => {
-      if (!c) return "";
-      if (c === "Pin" || c === "PositivePin" || c === "NegativePin") return "Pin";
-      return c;
-    };
-    if (normalize(source.connectorClass) !== normalize(target.connectorClass)) {
-      return `cannot connect ${source.connectorClass ?? "port"} to ${target.connectorClass ?? "port"}`;
-    }
-    return null;
-  }
+/** One end of a wire, for `connectError`: a connector port of an icon, or a legacy signal port. */
+export type WireEnd = { kind: ConnectorDef["kind"]; cls: string; inside?: boolean };
 
-  // Causal wire rules
-  // output -> input only; input -> input rejected; inside connectors of composite connect through
-  if (source.kind === "input" && target.kind === "input" && !source.isInsideComposite && !target.isInsideComposite) {
-    return "cannot connect input to input";
+/** A legacy port is a causal signal port: an output end or an input end. */
+export const signalEnd = (dir: "in" | "out"): WireEnd => ({ kind: dir === "in" ? "input" : "output", cls: "signal" });
+
+/** An icon port as a wire end, from the catalog's connector table; null when its class is unknown. */
+export const iconEnd = (port: IconPort, connectors: Connectors | undefined): WireEnd | null => {
+  const c = connectors?.[port.class];
+  return c ? { kind: c.kind, cls: port.class } : null;
+};
+
+/** Pin, PositivePin, NegativePin are one class; Flange_a / Flange_b, HeatPort_a / _b likewise. */
+const family = (c: string) => (/^(Positive|Negative)Pin$/.test(c) ? "Pin" : c.replace(/_[ab]$/, ""));
+
+/**
+ * Why a wire may not join `from` (the end the wire starts at, as a source) to `to` (§4), in
+ * words, or null if it may. Acausal ends join the same connector class family only; causal ends
+ * join output to input, never input to input; an inside connector of a composite connects through.
+ */
+export function connectError(from: WireEnd, to: WireEnd): string | null {
+  const name = (e: WireEnd) => (e.kind === "acausal" ? `a ${e.cls}` : e.kind === "input" || e.kind === "output" ? `an ${e.kind}` : `a ${e.cls}`);
+  if (from.kind === "expandable" || to.kind === "expandable") return "an expandable connector cannot be wired yet";
+  if (from.kind === "acausal" || to.kind === "acausal") {
+    if (from.kind !== to.kind) return `${name(from)} joins only an acausal port, not ${name(to)}`;
+    return family(from.cls) === family(to.cls) ? null : `${name(from)} does not join ${name(to)}`;
   }
-  if (source.kind === "output" && target.kind === "output" && !source.isInsideComposite && !target.isInsideComposite) {
-    return "cannot connect output to output";
-  }
+  if (from.inside || to.inside) return null;
+  if (from.kind === "input" && to.kind === "input") return "an input does not join an input";
+  if (from.kind === "output" && to.kind === "output") return "an output does not join an output";
+  if (from.kind === "input" && to.kind === "output") return "wire from the output to the input";
   return null;
 }
+
+/** An icon port with where it sits now: `at` along its side (0..100), hidden when its `if` param is false. */
+export type PlacedIconPort = { port: IconPort; at: number; hidden: boolean; count?: number };
+
+const truthy = (v: ParamValue | undefined) => v !== undefined && v !== false && v !== 0 && v !== "" && v !== "false";
+
+/**
+ * An icon's ports as its params make them. A port whose `if` param is false is hidden and the
+ * others on its side re-spread evenly; its wires stay (drawn as missing). An `array` port is one
+ * port with the count (n, from its param) as a badge: the #164 vector port, not a second kind.
+ */
+export function placeIconPorts(icon: IconDef, params: Record<string, ParamValue>): PlacedIconPort[] {
+  const ports = icon.ports ?? [];
+  const hidden = (p: IconPort) => p.if !== undefined && !truthy(params[p.if]);
+  const out: PlacedIconPort[] = ports.map((port) => {
+    const n = port.array === undefined ? undefined : Number(params[port.array]);
+    return { port, at: port.at, hidden: hidden(port), ...(n !== undefined && Number.isFinite(n) ? { count: Math.max(0, Math.floor(n)) } : {}) };
+  });
+  for (const side of SIDES) {
+    const here = out.filter((e) => e.port.side === side);
+    if (!here.some((e) => e.hidden)) continue;
+    const shown = here.filter((e) => !e.hidden);
+    shown.forEach((e, i) => (e.at = ((i + 1) / (shown.length + 1)) * 100));
+  }
+  return out;
+}
+
+/** A hover line for a connector port: its id, then potential / flow / stream names with units. */
+export function connectorHint(id: string, c: ConnectorDef | undefined): string {
+  if (!c) return id;
+  const names = (l?: { id: string; unit: string }[]) => (l ?? []).map((x) => `${x.id} (${x.unit})`).join(", ");
+  const parts = [["potential", c.potential], ["flow", c.flow], ["stream", c.stream]].flatMap(([k, l]) => (names(l as never) ? [`${k}: ${names(l as never)}`] : []));
+  return [id, ...parts].join("\n");
+}
+
+/** A wire's look class from its connector: weight in tenths, `d` when dashed. Causal wires are "signal". */
+export const netWireType = (c: ConnectorDef | undefined): string => (!c || c.kind !== "acausal" ? "signal" : `net-${Math.round(c.weight * 10)}${c.dash === "dashed" ? "d" : ""}`);
