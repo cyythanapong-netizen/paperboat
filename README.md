@@ -8,7 +8,7 @@
 <p align="center">A framework for engineering apps: set up a scene, wire a node graph, run it and<br>
 watch the results live. Backends are written in C++ or Python; the web UI builds itself from
 what they send.<br><br>
-<strong><a href="https://cyythanapong-netizen.github.io/paperboat/">Documentation &rarr;</a></strong></p>
+📖 <strong>Documentation website: <a href="https://cyythanapong-netizen.github.io/paperboat/">https://cyythanapong-netizen.github.io/paperboat/</a></strong></p>
 
 | Check | What it runs | `dev` |
 | --- | --- | --- |
@@ -16,6 +16,17 @@ what they send.<br><br>
 | Python | the bindings and the protocol schema | [![python](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/python.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/python.yml?query=branch%3Adev) |
 | Web and console | typecheck, tests and build of `apps/web` and `apps/cli` | [![web](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/web.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/web.yml?query=branch%3Adev) |
 | Docs | the [API reference](https://cyythanapong-netizen.github.io/paperboat/), warnings as errors | [![docs](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
+
+## Documentation
+
+Full documentation, guides, and API references are hosted on GitHub Pages:  
+👉 **[cyythanapong-netizen.github.io/paperboat](https://cyythanapong-netizen.github.io/paperboat/)**
+
+- **[User Manual](https://cyythanapong-netizen.github.io/paperboat/user_manual.html)** — UI, view modes (Navigator, Commander, Lookout), Station, Flow, and Board
+- **[Technical Manual](https://cyythanapong-netizen.github.io/paperboat/technical_manual.html)** — Engine architecture, WebSocket protocol (`paperboat/0`), graph scheduling
+- **[Tutorials](https://cyythanapong-netizen.github.io/paperboat/tutorials.html)** — Step-by-step guides for custom C++ and Python backends
+- **[Quickstart](https://cyythanapong-netizen.github.io/paperboat/quickstart.html)** — Navigation, controls, and keyboard shortcuts
+- **[API Reference](https://cyythanapong-netizen.github.io/paperboat/cpp.html)** — C++ SDK, Python SDK, Toolkit, Descriptors, and Protocol
 
 Every app follows one shape:
 
@@ -58,7 +69,7 @@ examples/backends/        example backends, each a project of its own that uses 
                           ordering policy on the Flow page (Python)
   double-pendulum-cpp/    simulation: three stories (RLS payload identification, energy
                           swing-up, and LQR balance) with vector ports on the Flow page (C++)
-docs/                     plan, and the API reference (docs/api, reStructuredText)
+docs/                     plan, and the API reference (docs/api; live at https://cyythanapong-netizen.github.io/paperboat/)
 ```
 
 The UI has no domain code. The backend sends a block catalog, a scene and a starter
@@ -102,7 +113,7 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 leaving the prompt. Backends run as background jobs, the bar at the bottom shows what is
 live, Tab completes commands, backends and paths, and → takes the grey suggestion from
 history. In a script or a pipe, `paperboat` stays the plain CLI. Build it once with
-`npm install && npm run build:cli`; see [the quickstart](docs/api/quickstart.rst) for the keys.
+`npm install && npm run build:cli`; see [the quickstart](https://cyythanapong-netizen.github.io/paperboat/quickstart.html) for the keys.
 
 <img src=".github/readme/console.png" alt="The console: two backends running as jobs, a check with its stages, and a grey suggestion from history" width="100%">
 
