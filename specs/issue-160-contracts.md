@@ -73,7 +73,7 @@ in `engine.ts` stays in web).
 - Done when: `npm run typecheck` and `npm run build` pass; `apps/web` renders identically
   (screenshots of Flow, Station, Board in light and dark before/after; zero diff accepted).
 
-## 3. `view.icon` (Lane B renders, Lane A emits)
+## 3. `view.icon` (Wave 2: Lane A renders, Lane B emits)
 
 Additive to `BlockDef.view`; absent means today's plate. TS types live in
 `packages/shared/src/protocol.ts`:
@@ -217,7 +217,7 @@ Done when: `examples/dc-motor-cpp/` is generated from a DC motor + inertia + spr
 `.mo`, builds, passes `paperboat check` and `npm run smoke`, and a PID flow on it matches
 `expected.json` (golden).
 
-## 7. `.mo` import and quantisers (Lane A, Wave 2)
+## 7. `.mo` import and quantisers (Lane B, Wave 2)
 
 - Connector resolution through `extends` chains → `{class, kind, potential, flow, stream}`.
 - `iconTransformation` (extent, origin, rotation, mirror) → `{side, at}`: nearest edge, `at`
@@ -230,14 +230,63 @@ Done when: `examples/dc-motor-cpp/` is generated from a DC motor + inertia + spr
 - Tests: MSL `Resistor`, `Inductor`, `Capacitor`, `Ground`, `Rotational.Components.Inertia`,
   plus a model with `Pin p[n]` and an `if` port. Output is validated against §3's types.
 
-## 8. Studio surface (Waves 3+, outline only)
+## 8. Studio surface (Wave 3, rev 3)
 
-Lane A: library tree (MSL + local), acausal canvas (undirected wires, §4 rules, word errors,
-`/` quick-add with wire splicing `Insert R2: R1.n -> p, n -> L1.p`), split view
-`[ .mo ] causal ODE c++`, local Simulate plot. Lane B: Component/Interface sheet, Look tab
-(§3 primitives, 5-unit snap, no colour picker), Balance dock
-(`L1.n unconnected [ Fix: Ground ]`). Detailed Wave 3+ contracts get written before Wave 3
-starts (the epic brief was truncated at Wave 3 Lane B).
+### 8.1 Ownership (replaces §0 for Wave 3)
+
+| Path | Owner |
+| --- | --- |
+| `apps/studio/{package.json,tsconfig.json,vite.config.ts,index.html}` | A |
+| `apps/studio/src/{main.tsx,App.tsx,styles.css}` | A |
+| `apps/studio/src/{shell,library,canvas,split,simulate,omc,store}/**` | A |
+| `apps/studio/test/a-*.test.ts` | A |
+| `engine/**`, `bin/**`, `apps/cli/**` (squero/0 ops below) | A |
+| `apps/studio/src/{popover,sheet,dock}/**` (each with its own `.css`) | B |
+| `apps/studio/test/b-*.test.ts`, `apps/studio/test/fake.ts` | B |
+| `apps/studio/src/model/types.ts` (the seam) | orchestrator, frozen |
+| `packages/shared/**`, `apps/web/**`, `protocol/**` | frozen; `[[requests]]` |
+
+`App.tsx` mounts B's slots with these fixed signatures (stubs on `dev` at Wave 3 start):
+`<ComponentPopover component onClose/>`, `<InterfaceSheet open onClose/>`, `<StudioDock/>`.
+A decides when they mount (click on a component, `Alt+V`), B decides what they draw. B reads
+and writes the model only through `useStudio()` (`src/model/types.ts`); never through the
+canvas or the omc client for edits (raw `omc` is for read-only calls such as `checkModel`).
+
+### 8.2 Lane A
+
+- Top bar `squero studio [ OM ]` + `chip(status)` (C6). `squero-om` serves `apps/studio/dist`
+  by default when it exists.
+- Library tree: `getClassNames(Modelica, recursive=true)` lazily per package, plus local `.mo`;
+  each leaf shows its imported icon (`paperboat modelica icon` code via a squero/0 op).
+- Acausal canvas on `@xyflow/react` with shared `Compact`/`Icon`/ports: undirected acausal
+  wires, causal arrows, §4 validity with word errors, junction dots, `/` quick-add with wire
+  splicing (`Insert R2: R1.n -> p, n -> L1.p`, one undo step). Every edit goes through omc
+  (`addComponent`, `addConnection`, ...), so `.mo` stays OMEdit-compatible.
+- Split view `[ .mo ] causal ODE c++`: `.mo` via `list()` (read-only in this wave), the
+  generated C++ from a dry-run `generate`. Simulate: local check plot (uPlot) of chosen
+  variables; never a second Flow page.
+- `StudioApi` implementation in `src/store/`, provided as `StudioContext`.
+- New squero/0 ops (engine, C++): `{op:"icon", class}` → `{icon, connectors, notice}`;
+  `{op:"generate", source, model, out, dry?}` → `{op:"progress", id, stage, fraction}` pushes
+  then `{id, ok, result:{path, reason, out, files?}}` (`files` only when `dry`);
+  `{op:"set_icon", model, icon}` (IconDef → `Icon(graphics)` annotation, the inverse of §7, C++);
+  `{op:"simulate", model, stop, vars}` → `{t:[], series:{v:[]}}`. Allow-list additions only if
+  read-only or confined to the opened file.
+
+### 8.3 Lane B
+
+- Component popover: params as `NumberField` rows (`setParam`), `=` binds a param to a
+  top-level parameter (creates it), `+ Probe` / `+ Input` on a port (`addEntry`). No modals.
+- Interface sheet (`Alt+V`): Station props (top-level `params`, editable defaults), entry pills
+  (inputs left, outputs right, remove), the linked block preview (shared `Compact` + `Icon` with
+  `model.icon` and the entries as ports), and the Look tab: §3 primitives as keys, drag on the
+  5-unit grid, stroke/weight/fill/dash as `Choice` controls, no colour picker, light+dark
+  preview; saves through `setIcon`.
+- Dock: live balance `equations / unknowns` from `checkModel` (debounced after each edit),
+  dangling flow connectors as `L1.n unconnected [ Fix: Ground ]` (fix by domain: electrical →
+  `Ground`, translational/rotational → `Fixed`, others no fix button; fix = `addComponent` +
+  `connect`), and `Export backend` with the 2px signal progress line from `ExportProgress`.
+- Tests against `test/fake.ts` (a fake `StudioApi`), no omc needed.
 
 ## 9. Shared rules
 

@@ -2,8 +2,8 @@
 # state: pending | active | blocked | review | done
 
 contracts = "specs/issue-160-contracts.md"
-contracts_rev = 2
-current_wave = 2
+contracts_rev = 3
+current_wave = 3
 omc_version = "1.27.0~dev-5-g5f1d2c5"
 
 [waves.0]
@@ -36,69 +36,52 @@ gate_wave2 = "integration done on dev; gen_ts/gen_tokens fixes land as Wave 2 la
 gate = "both lanes done + orchestrator review; apps/web zero visual diff; generator builds dc-motor-cpp"
 
 [waves.2]
-state = "active"
+state = "done"
+integrated = "merged to dev 2026-11-07: lane A b8c53b6, lane B b75d585; no conflicts"
+verified = """Orchestrator on dev after merge: typecheck, build green; web 97/97, shared 11/11 (renderer
+reads B's MSL *.icon.json goldens, 0 skipped); gen_ts --check and gen_tokens --check current;
+engine build clean; paperboat_tests 2010/147 pass, [modelica] 677/9 pass;
+paperboat check examples/dc-motor-cpp: manifest, catalog, smoke (schema fix now on dev), golden all ok.
+Watch: check's catalog stage reports "0 blocks, 0 station objects" and warns no block type
+"dc-motor" in the static catalog (the generated object registers in C++); Wave 4 A to confirm."""
 prompts = ["specs/prompts/wave2_lane_a.md", "specs/prompts/wave2_lane_b.md"]
 gate = "importer tests green on MSL set; icon renderer token test green"
 
 [waves.3]
-state = "pending"
-gate = "contracts §8 expanded by orchestrator before start"
+state = "active"
+prompts = ["specs/prompts/wave3_lane_a.md", "specs/prompts/wave3_lane_b.md"]
+scaffold = "apps/studio scaffold + frozen seam src/model/types.ts + B slot stubs committed to dev by orchestrator"
+gate = "both lanes review; merged dev builds studio; live squero-om run shows canvas + B panels on the real StudioApi"
 
 [lanes.A]
 cli = "claude"
 model = "sonnet-5.5"
-effort = "medium"
-wave = 2
-state = "review"
-task = "view.icon renderer + first-class ports in @paperboat/shared"
-contracts = ["§0", "§1", "§5", "§6"]
-branch = "epic160/lane-a-w2"
+effort = "high"
+wave = 3
+state = "ready"
+task = "apps/studio: top bar, library tree, acausal canvas + splice, split view + Simulate, StudioApi store, squero/0 ops"
+contracts = ["§8.1", "§8.2", "§1", "§3", "§4", "§5", "§6"]
+prompt = "specs/prompts/wave3_lane_a.md"
+branch = "epic160/lane-a-w3"
 blocker = ""
-notes = """Wave 2 A: schema $defs at d00e932 (Step 1). Not done: StationGraph does not draw icon blocks (it holds station objects, not blocks), so connectors reach FlowEditor only; npm run smoke not run (needs B's engine output); GUIDELINES.md/ARCHITECTURE.md are untracked in the main tree and were not edited here. Acausal ports carry a source and a target handle in one place so a wire may start at either end. Previous: No specs/prompts task file existed: worked from contracts §5/§6. Uncommitted on branch
-epic160/lane-a-w1 in worktree .claude/worktrees/epic160-lane-a. Allow-list adds getErrorString
-(read-only; how Studio words a failed call). Generated backends default to port 8780; squero to
-8790. paperboat check's smoke stage fails on dev for every backend until the ToolkitStatus
-schema request below lands (verified green with it patched in, then reverted). FMU path verified
-end to end only via a mirrored omc: this machine's OM install has root-only buildproject/config.*
-(see GUIDELINES Lessons). GUIDELINES.md and ARCHITECTURE.md are gitignored; edited in the main tree."""
-modified_files = [
-  "packages/shared/src/{icon.ts,Icon.tsx,ports.ts,Compact.tsx,wireSnap.tsx,protocol.ts(generated),index.ts,components.ts}",
-  "packages/shared/{package.json,test/**}",
-  "apps/web/src/{FlowEditor.tsx,App.tsx,engine.ts,styles.css}",
-  "protocol/schema/paperboat-0.schema.json, protocol/gen_ts.py, docs/gen_tokens.py, scripts/build_docs.py, docs/api/protocol.rst",
-  "protocol/README.md, apps/web/DESIGN.md",
-  "specs/evidence/wave2-a/*",
-]
-verification = """
-npm run typecheck                         green (shared, web, cli)
-npm run build                             green
-npm test -w @paperboat/web                97 pass, 0 fail
-npm test -w @paperboat/shared             10 pass, 0 fail (tokens, fallback, ports, fixtures; goldens skip until B lands *.icon.json)
-python3 protocol/gen_ts.py --check        current (OUT = packages/shared/src/protocol.ts)
-python3 docs/gen_tokens.py --check        current (source = packages/shared/src/tokens.css)
-npm run docs                              built with -W, no warnings
-screenshots                               specs/evidence/wave2-a/flow-light.png, flow-dark.png (Resistor/Inertia 2x1, Ground 1x1, Tank 1x2, 3-wire Ground node)
-"""
+notes = ""
+modified_files = []
+verification = ""
 
 [lanes.B]
 cli = "agy"
 model = "argon-4"
-effort = "high"
-wave = 2
+effort = "medium"
+wave = 3
 state = "ready"
-task = ".mo loader, extends resolver, iconTransformation + Icon(graphics) quantisers, engine passthrough"
-contracts = ["§0", "§3", "§4", "§5", "§6", "§7"]
-branch = "epic160/lane-b-w2"
+task = "Studio component popover, interface sheet + Look tab, dock (balance, Fix: Ground, Export backend)"
+contracts = ["§8.1", "§8.3", "§3", "§4", "§6"]
+prompt = "specs/prompts/wave3_lane_b.md"
+branch = "epic160/lane-b-w3"
 blocker = ""
-notes = "Wave 1 (epic160/lane-b-w1 @ c0bbca7) done and awaiting orchestrator integration into dev; dev (0a0f38b) has neither engine/modelica/ nor packages/shared/. Held off creating epic160/lane-b-w2 worktree until Wave 1 merges into dev."
-modified_files = [
-  "package.json",
-  "package-lock.json",
-  "apps/web/package.json",
-  "apps/web/src/**",
-  "packages/shared/**",
-]
-verification = "npm run typecheck (all 3 workspaces green), npm run build (vite build and cli build green), npm test -w @paperboat/web (96 tests pass)"
+notes = ""
+modified_files = []
+verification = ""
 
 # Model routing (contracts rev 2): lane A = Anthropic only, lane B = Google only.
 [routing]
@@ -116,20 +99,26 @@ wave4 = { a = { model = "sonnet-5.5", effort = "medium", task = "E2E golden dc_d
 [[requests]]
 from = "A"
 to = "orchestrator"
-what = "(moved to Wave 2 lane A step 1) protocol/schema/paperboat-0.schema.json: add `builtin: boolean` to $defs.ToolkitStatus. Pre-existing since 3a2a978 (#157): the engine sends it in hello/catalog toolkits and smoke rejects it, so `paperboat check`/`npm run smoke` fail for every backend on dev."
-state = "open"
+what = "(done in d00e932, Wave 2 A) protocol/schema/paperboat-0.schema.json: add `builtin: boolean` to $defs.ToolkitStatus. Pre-existing since 3a2a978 (#157): the engine sends it in hello/catalog toolkits and smoke rejects it, so `paperboat check`/`npm run smoke` fail for every backend on dev."
+state = "done"
 
 [[requests]]
 from = "A"
 to = "B"
 what = "protocol/README.md: note squero/0 (Studio <-> Studio server, separate from paperboat/0): {id, op: omc, expr} -> {id, ok, result|error}; {op: status, state, version} pushes; allow-list in engine/modelica (omc.cpp allowed_calls)."
-state = "open"
+state = "accepted"   # Wave 4 lane B (protocol/README.md), with the Wave 3 ops
 
 [[requests]]
 from = "A"
 to = "B"
 what = "apps/studio: the top bar chip can use chip(status) from apps/studio/src/omc/omc.ts; the client is OmcClient(url, onStatus). Default server ws://localhost:8790. Optional root package.json script \"studio\": \"./bin/squero-om\"."
-state = "open"
+state = "accepted"   # Wave 3 lane A owns the top bar (contracts §8.2)
+
+[[requests]]
+from = "A"
+to = "B"
+what = "Schema $defs IconDef, Prim, IconPort, ConnectorDef, Connectors (+ view.icon, catalog.connectors, ToolkitStatus.builtin) are on branch epic160/lane-a-w2 at d00e932; validate engine output against them."
+state = "done"
 
 [[requests]]
 from = "A"
