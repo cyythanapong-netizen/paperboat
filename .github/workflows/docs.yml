@@ -28,7 +28,7 @@ jobs:
           python-version: "3.12"
       - name: The docs' tokens are generated from the app's, and current
         run: python3 docs/gen_tokens.py --check
-      - run: pip install sphinx furo
+      - run: pip install sphinx shibuya
       - run: sphinx-build -W -b html docs/api docs/api/_build
       - name: Setup Pages
         if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main')

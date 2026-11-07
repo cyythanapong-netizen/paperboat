@@ -26,12 +26,12 @@ GEN_TOKENS = ROOT / "docs" / "gen_tokens.py"
 
 
 def check_dependencies() -> None:
-    """Ensure furo theme is installed."""
+    """Ensure shibuya theme is installed."""
     try:
-        import furo  # noqa: F401
+        import shibuya  # noqa: F401
     except ImportError:
-        print("[deps] Installing furo Sphinx theme...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "furo"], check=True)
+        print("[deps] Installing shibuya Sphinx theme...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "shibuya"], check=True)
 
 
 def sync_tokens() -> None:
