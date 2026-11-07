@@ -1,4 +1,11 @@
-# paperboat
+<h1 align="center"><img src=".github/readme/logo.svg" width="560" alt="paperboat"></h1>
+
+| Check | What it runs | `dev` |
+| --- | --- | --- |
+| Engine | C++ build and the engine tests | [![engine](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/engine.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/engine.yml?query=branch%3Adev) |
+| Python | the bindings and the protocol schema | [![python](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/python.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/python.yml?query=branch%3Adev) |
+| Web and console | typecheck, tests and build of `apps/web` and `apps/cli` | [![web](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/web.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/web.yml?query=branch%3Adev) |
+| Docs | the API reference, warnings as errors | [![docs](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
 
 A reusable framework for engineering apps that follow one shape:
 
@@ -13,6 +20,7 @@ No hardware needed. See `docs/plan.html` for the plan.
 
 ```
 apps/web/                 React UI (Vite + TypeScript, React Flow, three.js)
+apps/cli/                 the developer console (Ink + TypeScript): drives the paperboat CLI
 engine/                   C++20 engine: toolkit (reusable blocks and station objects),
                           core (the generic backend), descriptor loader
 python/                   Python bindings for the engine (pip install ./python): write a
@@ -77,6 +85,22 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ./bin/paperboat examples status     # checks status of example backends
 ./bin/paperboat toolkit list        # lists available and installed toolkits
 ```
+
+### The console
+
+`./bin/paperboat` with no command opens the console: run, build and check backends without
+leaving the prompt. Backends run as background jobs, the bar at the bottom shows what is
+live, Tab completes commands, backends and paths, and → takes the grey suggestion from
+history. In a script or a pipe, `paperboat` stays the plain CLI. Build it once with
+`npm install && npm run build:cli`; see [the quickstart](docs/api/quickstart.rst) for the keys.
+
+<img src=".github/readme/console.png" alt="The console: two backends running as jobs, a check with its stages, and a grey suggestion from history" width="100%">
+
+Tab opens a menu with each backend's language, port and description; `top` lists every
+running backend to restart, stop or follow its log.
+
+<img src=".github/readme/complete.png" alt="Tab completion of run, listing the example backends" width="100%">
+<img src=".github/readme/dashboard.png" alt="The process dashboard" width="100%">
 
 The UI opens on the mass-spring backend. To switch, type another backend's URL in the
 header and press **Connect**: the palette, canvas and scene change to that domain, and
