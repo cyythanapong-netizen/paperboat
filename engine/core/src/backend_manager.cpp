@@ -853,10 +853,6 @@ fs::path BackendManager::find_examples_dir(const fs::path& hint) {
     return root / "examples" / "backends";
   }
 
-  if (!root.empty() && fs::is_directory(root / "examples" / "backends")) {
-    return root / "examples" / "backends";
-  }
-
   return {};
 }
 
