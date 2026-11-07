@@ -418,13 +418,13 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
   }
 
   if (!needs_rebuild(backend_dir, build_dir)) {
-    if (verbose) std::cout << "[build] up to date (skipped)\n";
+    if (verbose) std::cout << "[build] up to date (skipped)" << std::endl;
     if (elapsed_seconds) *elapsed_seconds = seconds_since(start_time);
     return true;
   }
 
   if (!fs::exists(build_dir / "CMakeCache.txt")) {
-    if (verbose) std::cout << "[build] configuring with cmake…\n";
+    if (verbose) std::cout << "[build] configuring with cmake…" << std::endl;
     const fs::path root = toolkit::find_repo_root(backend_dir);
     std::vector<std::string> config_cmd = {"cmake", "-S", backend_dir.string(), "-B", build_dir.string()};
     if (!root.empty() && fs::is_directory(root / "engine")) {
@@ -437,7 +437,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
     }
   }
 
-  if (verbose) std::cout << "[build] compiling backend…\n";
+  if (verbose) std::cout << "[build] compiling backend…" << std::endl;
   auto build_res = ProcessRunner::run_sync({"cmake", "--build", build_dir.string()});
   if (!build_res.ok()) {
     if (error_msg) *error_msg = "cmake build failed: " + build_res.stderr_text;
@@ -480,6 +480,7 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
 
   env.env.emplace_back("no_proxy", "localhost,127.0.0.1");
   env.env.emplace_back("NO_PROXY", "localhost,127.0.0.1");
+  env.env.emplace_back("PYTHONUNBUFFERED", "1");  // log lines reach `paperboat run` as they are printed
 
   // 3. Ensure C++ Python bindings (_engine*.so) are built
   if (!root.empty() && fs::is_directory(root / "python")) {
@@ -685,12 +686,9 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
   }
 
   const std::string domain_name = dir.filename().string();
+  // Flushed per line: when stdout is a pipe (the console, a log file) lines still come live.
   auto log_cb = [domain_name](std::string_view stream, std::string_view line) {
-    if (stream == "stderr") {
-      std::cerr << "[" << domain_name << "] " << line << '\n';
-    } else {
-      std::cout << "[" << domain_name << "] " << line << '\n';
-    }
+    (stream == "stderr" ? std::cerr : std::cout) << "[" << domain_name << "] " << line << std::endl;
   };
 
   if (kind == BackendKind::Cpp) {
@@ -718,7 +716,7 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     std::vector<std::string> args = {bin.string(), "--port", std::to_string(port)};
     append_vars(args, opts);
 
-    std::cout << "paperboat running " << bin.filename().string() << " on " << ws_url(port) << '\n';
+    std::cout << "paperboat running " << bin.filename().string() << " on " << ws_url(port) << std::endl;
     return ProcessRunner::run_stream(args, dir, {}, log_cb);
   } else {
     // Python backend
@@ -738,7 +736,7 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     std::vector<std::string> args = {py_env.python_bin.string(), script_run_arg, "--port", std::to_string(port)};
     append_vars(args, opts);
 
-    std::cout << "paperboat running python " << server_script.filename().string() << " on " << ws_url(port) << '\n';
+    std::cout << "paperboat running python " << server_script.filename().string() << " on " << ws_url(port) << std::endl;
     return ProcessRunner::run_stream(args, dir, py_env.env, log_cb);
   }
 }
@@ -988,8 +986,7 @@ bool BackendManager::start_app(int port, const std::string& host, bool daemon) {
     return false;
   } else {
     return ProcessRunner::run_stream(args, root, {}, [](std::string_view stream, std::string_view line) {
-      if (stream == "stderr") std::cerr << line << '\n';
-      else std::cout << line << '\n';
+      (stream == "stderr" ? std::cerr : std::cout) << line << std::endl;
     }) == 0;
   }
 }
