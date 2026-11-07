@@ -1076,6 +1076,13 @@
           "type": "boolean",
           "description": "Ships with the engine (always installed)."
         },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Block types this toolkit provides (from toolkits.toml), so a flow with missing blocks can name the toolkit to install."
+        },
         "busy": {
           "enum": [
             "installing",

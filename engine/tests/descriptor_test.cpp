@@ -517,11 +517,14 @@ repo = "https://github.com/cyythanapong-netizen/paperboat-toolkit-opencv.git"
 description = "Image blocks."
 optional = true
 engine = ">=0.1"
+blocks = ["gray", "canny"]
 )");
   REQUIRE(parsed.size() == 1);
   CHECK(parsed[0].name == "opencv");
   CHECK(parsed[0].optional);
   CHECK(parsed[0].engine == ">=0.1");
+  CHECK(parsed[0].blocks == std::vector<std::string>{"gray", "canny"});
+  CHECK(nlohmann::json::parse(tk::toolkits_json(parsed))[0]["blocks"] == nlohmann::json{"gray", "canny"});
 
   const fs::path tmp = fs::temp_directory_path() / "paperboat_toolkit_installer_test";
   std::error_code ec;

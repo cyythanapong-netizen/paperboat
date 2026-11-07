@@ -254,3 +254,6 @@ Optional external toolkit from ``paperboat-toolkit-opencv`` (installed into ``en
 (``size``, ``c``, ``invert``), ``hsv_range``, ``canny`` (``low``, ``high``), ``erode``, ``dilate``,
 ``open``, ``close`` (``size``, ``iterations``), ``invert``, ``distance``. Monitor ``view`` (an image
 instrument). Station object ``image`` (props ``file``, ``width``; linked block out ``image``).
+Its ``toolkits.toml`` entry lists these block types in ``blocks = [...]``; the engine sends them in
+``ToolkitStatus.blocks`` so the UI can name the toolkit when a flow uses a block that is not installed.
+A new optional toolkit does the same, with no change to the web app.

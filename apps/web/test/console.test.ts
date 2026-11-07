@@ -68,9 +68,11 @@ test("toolkits status updates from hello and toolkits.status and detects missing
 
   // Also detects missing toolkits from missing block types in an opened project/flow.
   assert.deepEqual(
-    missingRequiredToolkits([{ name: "opencv", repo: "https://example.com/opencv.git", installed: false }], ["canny"]).map((t) => t.name),
-    ["opencv"],
+    missingRequiredToolkits([{ name: "audio", repo: "https://example.com/audio.git", installed: false, blocks: ["oscillator"] }], ["oscillator"]).map((t) => t.name),
+    ["audio"],
   );
+  // A toolkit that does not list the missing type is not blamed for it.
+  assert.deepEqual(missingRequiredToolkits([{ name: "audio", repo: "https://example.com/audio.git", installed: false }], ["oscillator"]), []);
 });
 
 test("reducer ignores unknown message types without crashing or dropping state", () => {
