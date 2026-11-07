@@ -60,13 +60,18 @@ export async function readModel(omc: OmcCalls, name: string, file: string | unde
     wires.push({ a: atom(c[0]), b: atom(c[1]), ...(bends ? { points: bends } : {}) });
   }
 
+  const typeClass = new Map<string, boolean>();
   let index = 0;
   for (let i = 0; i < comps.length; i++) {
     const c = list(comps[i]);
     const cls = atom(c[0]);
     const id = atom(c[1]);
     if (!cls || !id || atom(c[3]) === "protected") continue;
-    if (PRIMITIVE.has(cls)) continue; // top-level parameters and variables are not parts
+    // top-level parameters and plain variables are not parts: Real, or a `type` such as
+    // Modelica.Units.SI.Inductance, or anything declared parameter/constant
+    if (PRIMITIVE.has(cls) || atom(c[8]) === "parameter" || atom(c[8]) === "constant") continue;
+    if (!typeClass.has(cls)) typeClass.set(cls, atom(parseValue(await omc.call(`getClassRestriction(${cls})`))) === "type");
+    if (typeClass.get(cls)) continue;
     const names = list(parseValue(await omc.call(`getComponentModifierNames(${name}, ${quoted(id)})`)));
     const params: Record<string, string> = {};
     for (const m of names) {

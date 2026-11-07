@@ -40,10 +40,14 @@ export function StudioDock() {
     setOutDir((prev) => (prev ? prev : defaultExportFolder(api.model.name)));
   }, [api.model.name]);
 
+  // Keyed on the model and omc only: api itself is rebuilt on every status push, and
+  // checkModel causes one, so depending on api re-checks forever.
+  const omc = api.omc;
+  const modelName = api.model.name;
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
-      void checkModelBalance(api).then((res) => {
+      void checkModelBalance({ omc, model: { name: modelName } }).then((res) => {
         if (!cancelled) setBalance(res);
       });
     }, 300);
@@ -51,7 +55,7 @@ export function StudioDock() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [api, modelSignature]);
+  }, [omc, modelName, modelSignature]);
 
   const dangling = findDanglingFlowPorts(api.model);
   const isBalanced = balance.kind === "balanced";

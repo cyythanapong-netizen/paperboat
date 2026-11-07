@@ -71,7 +71,7 @@ export function parseBalance(reply: string | Error): BalanceResult {
   };
 }
 
-export async function checkModelBalance(api: StudioApi): Promise<BalanceResult> {
+export async function checkModelBalance(api: { omc: Pick<StudioApi["omc"], "call">; model: { name: string } }): Promise<BalanceResult> {
   try {
     const reply = await api.omc.call(`checkModel(${api.model.name})`);
     return parseBalance(reply);
@@ -245,8 +245,13 @@ export async function fixDanglingPort(api: StudioApi, item: DanglingPort): Promi
 }
 
 export function defaultExportFolder(modelName: string): string {
-  const short = (modelName.split(".").pop() ?? modelName).trim() || "model";
-  return `${short}-cpp`;
+  // the generator's backend_name (engine/modelica/src/generate.cpp): DCMotor -> dc-motor
+  const short = (modelName.split(".").pop() ?? modelName)
+    .replace(/([a-z0-9])([A-Z])|([A-Z])([A-Z][a-z])/g, (_, a, b, c, d) => (a ? `${a}-${b}` : `${c}-${d}`))
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
+  return `${short || "model"}-cpp`;
 }
 
 export type ExportOutcome =

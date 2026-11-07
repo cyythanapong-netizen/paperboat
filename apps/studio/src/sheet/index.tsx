@@ -18,6 +18,7 @@ import {
 } from "@paperboat/shared";
 import { CompactBlock, NumberField, Switch } from "@paperboat/shared/components";
 import { useStudio } from "../model/types.ts";
+import { defaultExportFolder } from "../dock/dock.ts";
 import {
   addPrimToIcon,
   applyPlateSize,
@@ -130,7 +131,7 @@ export function InterfaceSheet({ open, onClose }: InterfaceSheetProps) {
   const outputs = api.model.entries.filter((e) => e.kind === "output");
   const linkedBlockDef = buildLinkedBlockDef(api.model, draftIcon);
   const shortModel = api.model.name.split(".").pop() ?? api.model.name;
-  const folderHint = `${shortModel.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase()}-cpp/`;
+  const folderHint = `${defaultExportFolder(shortModel)}/`;
 
   const svgPoint = (e: ReactPointerEvent<SVGElement>): [number, number] => {
     const svg = svgRef.current;

@@ -144,7 +144,7 @@ test("dock: dangling flow connector detection and fix choice per domain", async 
 
 test("dock: exportBackend streams progress sequence and formats result or error", async () => {
   const api = createFakeStudio();
-  assert.equal(defaultExportFolder(api.model.name), "RLCircuit-cpp");
+  assert.equal(defaultExportFolder(api.model.name), "rl-circuit-cpp");
 
   const seen: ExportProgress[] = [];
   const outcome = await runBackendExport(api, "rl_circuit-cpp", (p) => seen.push(p));
@@ -166,4 +166,10 @@ test("dock: exportBackend streams progress sequence and formats result or error"
   const failed = await runBackendExport(api, "rl_circuit-cpp", () => {});
   assert.equal(failed.ok, false);
   assert.equal(failed.line, "DAE has structural singularity");
+});
+
+test("export folder follows the generator's backend_name", () => {
+  assert.equal(defaultExportFolder("DCMotor"), "dc-motor-cpp");
+  assert.equal(defaultExportFolder("Lib.Pkg.CartPole"), "cart-pole-cpp");
+  assert.equal(defaultExportFolder("my_model2"), "my-model2-cpp");
 });
