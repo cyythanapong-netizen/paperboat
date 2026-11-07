@@ -1,47 +1,3 @@
-// Protocol definitions shared across Paperboat packages.
-// Includes contracts from Epic #160 §3 (view.icon) and §4 (Connectors).
-
-export type Stroke = "ink" | "muted" | "signal";          // --text, --line-strong, --signal (live state only)
-export type Weight = "thin" | "normal" | "wire";          // 1, 1.5, 2 px
-export type Dash   = "solid" | "axis";                    // never red: dashed red = missing only
-export type Fill   = "none" | "ink" | "raised" | "sunken";// --text, --surface-raised, --surface-sunken
-export type Corner = "0" | "sm" | "md";                   // md = 5px
-export type Pt = [number, number];                        // 0..100, multiples of 5
-
-export type Prim = { stroke?: Stroke; weight?: Weight; dash?: Dash; fill?: Fill } & (
-  | { t: "line";    p: Pt[] }
-  | { t: "poly";    p: Pt[] }
-  | { t: "rect";    x: number; y: number; w: number; h: number; corner?: Corner }
-  | { t: "ellipse"; x: number; y: number; w: number; h: number }
-  | { t: "arc";     x: number; y: number; w: number; h: number; a0: number; a1: number }
-  | { t: "text";    x: number; y: number; s: string; font?: "sans" | "mono";
-      size?: 12 | 12.5 | 13 | 15 | 30 }            // s may hold {param}
-);
-
-export type IconPort = {
-  id: string; class: string;                       // key into descriptor `connectors`
-  side: "left" | "right" | "top" | "bottom";
-  at: number;                                      // 0..100 along the edge, multiple of 5
-  variant?: "hollow" | "filled";                   // a/b or p/n side, never state
-  array?: string;                                  // param id holding n (#164 vector port)
-  if?: string;                                     // param id; port exists while truthy
-};
-
-export type IconDef = { w?: 1 | 2; h?: 1 | 2; g: Prim[]; ports?: IconPort[] };  // 1x1, 2x1, 1x2 only; 1x1 = 64x56
-
-export type ConnectorDef = {
-  kind: "acausal" | "input" | "output" | "expandable";   // expandable: reserved, not drawn yet
-  handle: "square" | "diamond" | "ring2" | "triangle" | "circle";
-  alt?: "hollow" | "filled";                              // look of variant "filled"/"hollow" swap
-  size: 8 | 10 | 12;                                      // px
-  weight: 1.2 | 1.8 | 2;                                  // wire px
-  dash?: "solid" | "dashed";                              // thermal wires dashed (grey, not red)
-  potential?: { id: string; unit: string }[];
-  flow?: { id: string; unit: string }[];
-  stream?: { id: string; unit: string }[];
-};
-export type Connectors = Record<string, ConnectorDef>;           // key = Modelica class short name
-
 // Generated from protocol/schema/paperboat-0.schema.json by protocol/gen_ts.py.
 // Do not edit: change the schema and run `npm run gen:protocol`.
 
@@ -87,6 +43,136 @@ export type ParamDef = {
   default: string;
   options: string[];
 };
+
+/** ink = --text, muted = --line-strong, signal = --signal (live state only). */
+export type Stroke = "ink" | "muted" | "signal";
+
+/** 1, 1.5 or 2 px. */
+export type Weight = "thin" | "normal" | "wire";
+
+/** Never red: dashed red means missing only. */
+export type Dash = "solid" | "axis";
+
+/** none, --text, --surface-raised or --surface-sunken. */
+export type Fill = "none" | "ink" | "raised" | "sunken";
+
+/** md = 5px. */
+export type Corner = "0" | "sm" | "md";
+
+/** A point in the icon's 0..100 box, multiples of 5. */
+export type Pt = [number, number];
+
+/** One icon primitive (§3). Attribute values are tokens, never colours or paths. */
+export type Prim = {
+  t: "line";
+  p: Pt[];
+  stroke?: Stroke;
+  weight?: Weight;
+  dash?: Dash;
+  fill?: Fill;
+} | {
+  t: "poly";
+  p: Pt[];
+  stroke?: Stroke;
+  weight?: Weight;
+  dash?: Dash;
+  fill?: Fill;
+} | {
+  t: "rect";
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  corner?: Corner;
+  stroke?: Stroke;
+  weight?: Weight;
+  dash?: Dash;
+  fill?: Fill;
+} | {
+  t: "ellipse";
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  stroke?: Stroke;
+  weight?: Weight;
+  dash?: Dash;
+  fill?: Fill;
+} | {
+  t: "arc";
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  a0: number;
+  a1: number;
+  stroke?: Stroke;
+  weight?: Weight;
+  dash?: Dash;
+  fill?: Fill;
+} | {
+  t: "text";
+  x: number;
+  y: number;
+  /** May hold {param}, filled like the caption value. */
+  s: string;
+  font?: "sans" | "mono";
+  size?: 12 | 12.5 | 13 | 15 | 30;
+  stroke?: Stroke;
+  weight?: Weight;
+  dash?: Dash;
+  fill?: Fill;
+};
+
+export type IconPort = {
+  id: string;
+  /** Key into the catalog's connectors. */
+  class: string;
+  side: "left" | "right" | "top" | "bottom";
+  /** 0..100 along the edge, a multiple of 5. */
+  at: number;
+  /** a/b or p/n side, never state. */
+  variant?: "hollow" | "filled";
+  /** Param id holding n (the vector port model). */
+  array?: string;
+  /** Param id; the port exists while it is truthy. */
+  if?: string;
+};
+
+/** A block's custom look: 1x1 (64x56), 2x1 or 1x2 plates only. */
+export type IconDef = {
+  w?: 1 | 2;
+  h?: 1 | 2;
+  g: Prim[];
+  ports?: IconPort[];
+};
+
+export type ConnectorDef = {
+  /** expandable is reserved, not drawn yet. */
+  kind: "acausal" | "input" | "output" | "expandable";
+  handle: "square" | "diamond" | "ring2" | "triangle" | "circle";
+  /** The look the variant swaps to. */
+  alt?: "hollow" | "filled";
+  size: 8 | 10 | 12;
+  weight: 1.2 | 1.8 | 2;
+  /** Thermal wires are dashed grey, not red. */
+  dash?: "solid" | "dashed";
+  potential?: {
+    id: string;
+    unit: string;
+  }[];
+  flow?: {
+    id: string;
+    unit: string;
+  }[];
+  stream?: {
+    id: string;
+    unit: string;
+  }[];
+};
+
+/** Connector classes the blocks' icon ports refer to (§4), by Modelica class short name. */
+export type Connectors = Record<string, ConnectorDef>;
 
 export type BlockDef = {
   type: string;
@@ -215,6 +301,8 @@ export type ToolkitStatus = {
   versions?: string[];
   /** Suggested default release version to install. */
   default?: string;
+  /** Ships with the engine (always installed). */
+  builtin?: boolean;
   /** Set while an operation is running for this toolkit. */
   busy?: "installing" | "updating" | "uninstalling";
 };
@@ -478,9 +566,8 @@ export type ServerMsg =
   | {
     type: "catalog";
     blocks: BlockDef[];
-    /** Modelica connector definitions (§4). */
-    connectors?: Connectors;
     objects?: ObjectDef[];
+    connectors?: Connectors;
     dashboard?: DashboardLayout;
   }
   | {
@@ -614,4 +701,3 @@ export type ClientMsg =
     type: "toolkit.uninstall";
     name: string;
   };
-

@@ -1,4 +1,4 @@
-"""Generate the web app's protocol types (apps/web/src/protocol.ts) from the JSON Schema
+"""Generate the shared protocol types (packages/shared/src/protocol.ts) from the JSON Schema
 (protocol/schema/paperboat-0.schema.json), the source of truth for message shapes.
 
     python3 protocol/gen_ts.py           # write protocol.ts
@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA = ROOT / "protocol" / "schema" / "paperboat-0.schema.json"
-OUT = ROOT / "apps" / "web" / "src" / "protocol.ts"
+OUT = ROOT / "packages" / "shared" / "src" / "protocol.ts"
 
 
 def doc(text: str | None, indent: str = "") -> str:
@@ -103,7 +103,7 @@ def main() -> None:
     text = generate()
     if "--check" in sys.argv:
         if not OUT.exists() or OUT.read_text() != text:
-            sys.exit("apps/web/src/protocol.ts is out of date: run npm run gen:protocol")
+            sys.exit("packages/shared/src/protocol.ts is out of date: run npm run gen:protocol")
         print("protocol.ts is current")
         return
     OUT.write_text(text)

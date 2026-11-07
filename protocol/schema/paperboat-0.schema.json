@@ -158,6 +158,507 @@
       ],
       "description": "A setting on a block, or a property of a station object. number and boolean reach the block as numbers (boolean: a checkbox, 1 or 0); text, key (a KeyboardEvent.code, picked by pressing it) and file (a path, relative to the descriptor) as text; enum (one of options, a dropdown) as its name (and to an expression, its index)."
     },
+    "Stroke": {
+      "enum": [
+        "ink",
+        "muted",
+        "signal"
+      ],
+      "description": "ink = --text, muted = --line-strong, signal = --signal (live state only)."
+    },
+    "Weight": {
+      "enum": [
+        "thin",
+        "normal",
+        "wire"
+      ],
+      "description": "1, 1.5 or 2 px."
+    },
+    "Dash": {
+      "enum": [
+        "solid",
+        "axis"
+      ],
+      "description": "Never red: dashed red means missing only."
+    },
+    "Fill": {
+      "enum": [
+        "none",
+        "ink",
+        "raised",
+        "sunken"
+      ],
+      "description": "none, --text, --surface-raised or --surface-sunken."
+    },
+    "Corner": {
+      "enum": [
+        "0",
+        "sm",
+        "md"
+      ],
+      "description": "md = 5px."
+    },
+    "Pt": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "A point in the icon's 0..100 box, multiples of 5."
+    },
+    "Prim": {
+      "description": "One icon primitive (§3). Attribute values are tokens, never colours or paths.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "line"
+            },
+            "p": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Pt"
+              }
+            },
+            "stroke": {
+              "$ref": "#/$defs/Stroke"
+            },
+            "weight": {
+              "$ref": "#/$defs/Weight"
+            },
+            "dash": {
+              "$ref": "#/$defs/Dash"
+            },
+            "fill": {
+              "$ref": "#/$defs/Fill"
+            }
+          },
+          "required": [
+            "t",
+            "p"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "poly"
+            },
+            "p": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Pt"
+              }
+            },
+            "stroke": {
+              "$ref": "#/$defs/Stroke"
+            },
+            "weight": {
+              "$ref": "#/$defs/Weight"
+            },
+            "dash": {
+              "$ref": "#/$defs/Dash"
+            },
+            "fill": {
+              "$ref": "#/$defs/Fill"
+            }
+          },
+          "required": [
+            "t",
+            "p"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "rect"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "w": {
+              "type": "number"
+            },
+            "h": {
+              "type": "number"
+            },
+            "corner": {
+              "$ref": "#/$defs/Corner"
+            },
+            "stroke": {
+              "$ref": "#/$defs/Stroke"
+            },
+            "weight": {
+              "$ref": "#/$defs/Weight"
+            },
+            "dash": {
+              "$ref": "#/$defs/Dash"
+            },
+            "fill": {
+              "$ref": "#/$defs/Fill"
+            }
+          },
+          "required": [
+            "t",
+            "x",
+            "y",
+            "w",
+            "h"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "ellipse"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "w": {
+              "type": "number"
+            },
+            "h": {
+              "type": "number"
+            },
+            "stroke": {
+              "$ref": "#/$defs/Stroke"
+            },
+            "weight": {
+              "$ref": "#/$defs/Weight"
+            },
+            "dash": {
+              "$ref": "#/$defs/Dash"
+            },
+            "fill": {
+              "$ref": "#/$defs/Fill"
+            }
+          },
+          "required": [
+            "t",
+            "x",
+            "y",
+            "w",
+            "h"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "arc"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "w": {
+              "type": "number"
+            },
+            "h": {
+              "type": "number"
+            },
+            "a0": {
+              "type": "number"
+            },
+            "a1": {
+              "type": "number"
+            },
+            "stroke": {
+              "$ref": "#/$defs/Stroke"
+            },
+            "weight": {
+              "$ref": "#/$defs/Weight"
+            },
+            "dash": {
+              "$ref": "#/$defs/Dash"
+            },
+            "fill": {
+              "$ref": "#/$defs/Fill"
+            }
+          },
+          "required": [
+            "t",
+            "x",
+            "y",
+            "w",
+            "h",
+            "a0",
+            "a1"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "text"
+            },
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "s": {
+              "type": "string",
+              "description": "May hold {param}, filled like the caption value."
+            },
+            "font": {
+              "enum": [
+                "sans",
+                "mono"
+              ]
+            },
+            "size": {
+              "enum": [
+                12,
+                12.5,
+                13,
+                15,
+                30
+              ]
+            },
+            "stroke": {
+              "$ref": "#/$defs/Stroke"
+            },
+            "weight": {
+              "$ref": "#/$defs/Weight"
+            },
+            "dash": {
+              "$ref": "#/$defs/Dash"
+            },
+            "fill": {
+              "$ref": "#/$defs/Fill"
+            }
+          },
+          "required": [
+            "t",
+            "x",
+            "y",
+            "s"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "IconPort": {
+      "type": "object",
+      "required": [
+        "id",
+        "class",
+        "side",
+        "at"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "class": {
+          "type": "string",
+          "description": "Key into the catalog's connectors."
+        },
+        "side": {
+          "enum": [
+            "left",
+            "right",
+            "top",
+            "bottom"
+          ]
+        },
+        "at": {
+          "type": "number",
+          "description": "0..100 along the edge, a multiple of 5."
+        },
+        "variant": {
+          "enum": [
+            "hollow",
+            "filled"
+          ],
+          "description": "a/b or p/n side, never state."
+        },
+        "array": {
+          "type": "string",
+          "description": "Param id holding n (the vector port model)."
+        },
+        "if": {
+          "type": "string",
+          "description": "Param id; the port exists while it is truthy."
+        }
+      }
+    },
+    "IconDef": {
+      "type": "object",
+      "required": [
+        "g"
+      ],
+      "additionalProperties": false,
+      "description": "A block's custom look: 1x1 (64x56), 2x1 or 1x2 plates only.",
+      "properties": {
+        "w": {
+          "enum": [
+            1,
+            2
+          ]
+        },
+        "h": {
+          "enum": [
+            1,
+            2
+          ]
+        },
+        "g": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Prim"
+          }
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/IconPort"
+          }
+        }
+      }
+    },
+    "ConnectorDef": {
+      "type": "object",
+      "required": [
+        "kind",
+        "handle",
+        "size",
+        "weight"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "acausal",
+            "input",
+            "output",
+            "expandable"
+          ],
+          "description": "expandable is reserved, not drawn yet."
+        },
+        "handle": {
+          "enum": [
+            "square",
+            "diamond",
+            "ring2",
+            "triangle",
+            "circle"
+          ]
+        },
+        "alt": {
+          "enum": [
+            "hollow",
+            "filled"
+          ],
+          "description": "The look the variant swaps to."
+        },
+        "size": {
+          "enum": [
+            8,
+            10,
+            12
+          ]
+        },
+        "weight": {
+          "enum": [
+            1.2,
+            1.8,
+            2
+          ]
+        },
+        "dash": {
+          "enum": [
+            "solid",
+            "dashed"
+          ],
+          "description": "Thermal wires are dashed grey, not red."
+        },
+        "potential": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "unit"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "flow": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "unit"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "stream": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "unit": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "unit"
+            ],
+            "additionalProperties": false
+          }
+        }
+      }
+    },
+    "Connectors": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ConnectorDef"
+      },
+      "description": "Connector classes the blocks' icon ports refer to (§4), by Modelica class short name."
+    },
     "BlockDef": {
       "type": "object",
       "properties": {
@@ -222,6 +723,10 @@
             "value": {
               "type": "string",
               "description": "The caption's value, an expression of the block's params: {k}, {min}…{max}."
+            },
+            "icon": {
+              "$ref": "#/$defs/IconDef",
+              "description": "Additive icon definition (§3); absent means plain plate."
             }
           }
         },
@@ -567,6 +1072,10 @@
           "type": "string",
           "description": "Suggested default release version to install."
         },
+        "builtin": {
+          "type": "boolean",
+          "description": "Ships with the engine (always installed)."
+        },
         "busy": {
           "enum": [
             "installing",
@@ -627,6 +1136,9 @@
           "items": {
             "$ref": "#/$defs/ObjectDef"
           }
+        },
+        "connectors": {
+          "$ref": "#/$defs/Connectors"
         },
         "dashboard": {
           "$ref": "#/$defs/DashboardLayout"
