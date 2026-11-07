@@ -75,3 +75,22 @@ id in the error ``log`` (``node``); the UI marks it, and the Console line links 
 
 The canvas survives a backend coming back: if the user changed the graph since the same
 backend loaded it, the graph stays and is checked against the new catalog.
+
+Commented and bypassed blocks
+-----------------------------
+
+Nodes in ``graph.nodes`` may optionally declare ``commented: true`` alongside an optional
+``comment_mode`` (``"out"`` or ``"through"``, defaulting to ``"out"``):
+
+- **Comment out** (``"out"``): The engine excludes the block from the execution schedule and
+  dependency ordering. Downstream blocks connected to its output ports receive default unsupplied
+  values (e.g. ``0.0``). Feedback cycles passing through commented-out blocks do not cause
+  algebraic loop errors. In Step flows, tokens reaching a commented-out step block terminate
+  cleanly.
+- **Comment through / bypass** (``"through"``): The engine bypasses the block's internal calculation.
+  For single-input single-output (SISO) blocks or blocks with identically named input and output
+  ports, incoming signals pass directly to matching outputs. In Step flows, step execution tokens
+  immediately pass through to the ``next`` output.
+- **Block notes**: Nodes can carry a ``comment`` string for documentation and design rationale,
+  stored in the project file without affecting execution.
+

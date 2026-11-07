@@ -69,6 +69,16 @@ void add_values(Registry& registry) {
         const double value = get_or(p, "value") != 0 ? 1.0 : 0.0;
         return std::make_unique<Stateless>([=](const Context&, const Values&) { return Values{{"y", value}}; });
       }, "On or off: 1 or 0."));
+
+  Template note;
+  note.name = "base/comment";
+  note.def = {.type = "comment", .label = "Note", .kind = Kind::Function, .inputs = {}, .outputs = {},
+              .params = {{.id = "text", .type = "text", .default_text = "Note..."}},
+              .description = "A canvas note or annotation card."};
+  note.make = [](const Values&, const Config&) {
+    return std::make_unique<Stateless>([](const Context&, const Values&) { return Values{}; });
+  };
+  registry.add(std::move(note));
 }
 
 }  // namespace paperboat::toolkit::base

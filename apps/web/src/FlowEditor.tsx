@@ -68,7 +68,15 @@ import { PageIcon } from "./Shell";
  * red from what it had, until the type comes back or the user replaces it.
  * `ports`: where the user moved its ports to (drag a port's name); absent: inputs left, outputs right.
  */
-export type BlockData = { def: BlockDef; params: Record<string, ParamValue>; missing?: boolean; ports?: PortSides };
+export type BlockData = {
+  def: BlockDef;
+  params: Record<string, ParamValue>;
+  missing?: boolean;
+  ports?: PortSides;
+  commented?: boolean;
+  commentMode?: "out" | "through";
+  comment?: string;
+};
 export type BlockNode = Node<BlockData, "block">;
 /** What the Flow canvas holds: blocks, and the groups (frames) around some of them. */
 export type FlowNode = BlockNode | GroupNode;
@@ -105,9 +113,10 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const states = useContext(RunStates);
   const active = states.active.has(id);
   const progress = states.progress[id];
-  const { params, missing } = data;
+  const { params, missing, commented, commentMode, comment } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
+  const [noteOpen, setNoteOpen] = useState(false);
   // Ports that follow a param come and go: have the canvas measure the handles again.
   const updateInternals = useUpdateNodeInternals();
   const portKey = [...def.inputs, ...def.outputs].map((p) => p.id).join(",");
@@ -129,6 +138,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
         def={def}
         params={params}
         selected={!!selected}
+        commented={commented}
         word={failed ? "failed" : active ? "running" : undefined}
         progress={progress}
         onExpand={() => setExpanded(true)}
@@ -139,21 +149,37 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
     );
   }
   const step = hasStepPorts(def);
-  const classes = ["block", `kind-${def.kind}`, step && "step", selected && "selected", active && "active", def.linked && "linked", missing && "missing", failed && "failed"];
+  const mode = commentMode ?? "out";
+  const classes = [
+    "block",
+    `kind-${def.kind}`,
+    step && "step",
+    selected && "selected",
+    active && "active",
+    def.linked && "linked",
+    missing && "missing",
+    failed && "failed",
+    commented && "commented",
+    commented && mode === "through" && "comment-through",
+  ];
   // The head's tag says what is happening to the block, else what it is: words, not colours.
-  const tag = missing
-    ? "missing"
-    : failed
-      ? "failed"
-      : active
-        ? "running"
-        : def.linked
-          ? "linked"
-          : step
-            ? "step"
-            : def.kind === "function"
-              ? "fn"
-              : def.kind;
+  const tag = commented
+    ? mode === "through"
+      ? "// bypass"
+      : "// commented"
+    : missing
+      ? "missing"
+      : failed
+        ? "failed"
+        : active
+          ? "running"
+          : def.linked
+            ? "linked"
+            : step
+              ? "step"
+              : def.kind === "function"
+                ? "fn"
+                : def.kind;
   return (
     <div
       className={classes.filter(Boolean).join(" ")}
@@ -165,6 +191,14 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           {missing ? def.type : def.label}
           {def.linked && <span className="linked-tag"> <PageIcon page="station" className="link-mark" />{id}</span>}
         </span>
+        <button
+          type="button"
+          className={`block-note-btn nodrag ${comment ? "has-note" : ""}`}
+          title={comment ? `Note: ${comment}` : "Add note"}
+          onClick={() => setNoteOpen((o) => !o)}
+        >
+          {comment ? "note*" : "note"}
+        </button>
         <span className={`block-tag tag-${tag}`}>{tag}</span>
         {def.view?.compact && (
           <button className="fold nodrag" title="Fold back to a plate" onClick={() => setExpanded(false)}>
@@ -172,6 +206,16 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
           </button>
         )}
       </div>
+      {noteOpen && (
+        <div className="block-note-well nodrag nowheel nopan">
+          <textarea
+            className="block-note-input"
+            placeholder="Notes or formulas..."
+            value={comment ?? ""}
+            onChange={(e) => updateNodeData(id, { comment: e.target.value })}
+          />
+        </div>
+      )}
       {active && progress !== undefined && progress < 1 && (
         <div className="block-progress" title={`${Math.round(progress * 100)} %`}>
           <div style={{ width: `${progress * 100}%` }} />
@@ -288,6 +332,7 @@ const HotWire = createContext<string | null>(null);
 const Lit = createContext<ReadonlySet<string> | null>(null);
 /** Whole-canvas routed wire geometries computed in one pass. */
 const WireRoutes = createContext<Map<string, WireRoute> | null>(null);
+const CommentedOutContext = createContext<ReadonlySet<string>>(new Set());
 
 function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire>) {
   const { deleteElements } = useReactFlow();
@@ -296,6 +341,9 @@ function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire
   const follow = lit ? (lit.has(id) ? " lit" : " dim") : "";
   const routes = useContext(WireRoutes);
   const route = routes?.get(id);
+  const commentedOut = useContext(CommentedOutContext);
+  const wireCommented = commentedOut.has(geometry.source) || commentedOut.has(geometry.target);
+  const commentedClass = wireCommented ? " wire-commented" : "";
 
   let path: string;
   let x: number;
@@ -324,8 +372,8 @@ function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire
   return (
     <>
       {/* Casing: a wider stroke in the canvas colour, so where wires cross, one is seen to pass over the other. */}
-      <path d={path} className={`wire-casing${follow}`} />
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} className={`wire-${data?.type ?? "signal"}${hot ? " drop-target" : ""}${follow}`} />
+      <path d={path} className={`wire-casing${follow}${commentedClass}`} />
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} className={`wire-${data?.type ?? "signal"}${hot ? " drop-target" : ""}${follow}${commentedClass}`} />
       {/* What a dropped card finds under the pointer: a wide, invisible stroke tagged with the wire. */}
       <path d={path} className="wire-hit" data-wire={id} />
       {selected && (
@@ -454,10 +502,29 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
     const ports = n.ports ? { ports: n.ports } : {};
     if (def) {
       const node = makeNode(def, n.id, x, y, n.params);
-      return { ...node, data: { ...node.data, ...ports } };
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          ...ports,
+          ...(n.commented !== undefined ? { commented: n.commented } : {}),
+          ...(n.comment_mode !== undefined ? { commentMode: n.comment_mode } : {}),
+          ...(n.comment !== undefined ? { comment: n.comment } : {}),
+        },
+      };
     }
     const node = makeNode(missingDef(n.type, n.params ?? {}, wires, n.id), n.id, x, y, n.params);
-    return { ...node, data: { ...node.data, ...ports, missing: true } };
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        ...ports,
+        missing: true,
+        ...(n.commented !== undefined ? { commented: n.commented } : {}),
+        ...(n.comment_mode !== undefined ? { commentMode: n.comment_mode } : {}),
+        ...(n.comment !== undefined ? { comment: n.comment } : {}),
+      },
+    };
   });
   const byId = new Map<string, BlockDef>(nodes.map((n) => [n.id, inForm(n.data.def, n.data.params)]));
   // Groups round their blocks and the groups in them, innermost first: each is made while
@@ -514,7 +581,10 @@ export function resolveBlocks(nodes: FlowNode[], edges: Wire[], blocks: BlockDef
       const defaults = Object.fromEntries(def.params.map((p) => [p.id, p.default]));
       const kept = Object.fromEntries(Object.entries(n.data.params).filter(([k]) => k in defaults));
       const ports = n.data.ports ? { ports: n.data.ports } : {};
-      return { ...n, deletable: !def.linked, data: { def, params: { ...defaults, ...kept }, ...ports } };
+      const commented = n.data.commented !== undefined ? { commented: n.data.commented } : {};
+      const commentMode = n.data.commentMode !== undefined ? { commentMode: n.data.commentMode } : {};
+      const comment = n.data.comment !== undefined ? { comment: n.data.comment } : {};
+      return { ...n, deletable: !def.linked, data: { def, params: { ...defaults, ...kept }, ...ports, ...commented, ...commentMode, ...comment } };
     }
     const wires = edges.map((e) => ({ ...e, type: e.data?.type }));
     return { ...n, deletable: true, data: { ...n.data, def: missingDef(n.data.def.type, n.data.params, wires, n.id, n.data.def), missing: true } };
@@ -525,7 +595,15 @@ export function resolveBlocks(nodes: FlowNode[], edges: Wire[], blocks: BlockDef
 export function toGraph(nodes: FlowNode[], edges: Wire[]): Graph {
   const groups = toGroups(nodes);
   return {
-    nodes: nodes.filter(isBlock).map((n) => ({ id: n.id, type: n.data.def.type, params: n.data.params, ...(n.data.ports ? { ports: n.data.ports } : {}) })),
+    nodes: nodes.filter(isBlock).map((n) => ({
+      id: n.id,
+      type: n.data.def.type,
+      params: n.data.params,
+      ...(n.data.ports ? { ports: n.data.ports } : {}),
+      ...(n.data.commented !== undefined ? { commented: n.data.commented } : {}),
+      ...(n.data.commentMode !== undefined ? { comment_mode: n.data.commentMode } : {}),
+      ...(n.data.comment !== undefined ? { comment: n.data.comment } : {}),
+    })),
     edges: edges.map((e) => ({ from: [e.source, e.sourceHandle ?? ""], to: [e.target, e.targetHandle ?? ""] })),
     ...(groups.length > 0 ? { groups } : {}),
   };
@@ -603,7 +681,8 @@ export type FlowControls = {
   ungroup: () => void;
   /** Arrange this level and its contents; false when locked or already arranged. */
   arrange: () => boolean;
-  can: { copy: boolean; paste: boolean; remove: boolean; group: boolean; frame: boolean; story: boolean; ungroup: boolean; arrange: boolean };
+  comment: (mode?: "out" | "through") => void;
+  can: { copy: boolean; paste: boolean; remove: boolean; group: boolean; frame: boolean; story: boolean; ungroup: boolean; arrange: boolean; comment: boolean };
 };
 
 /** Blocks by palette group, groups in catalog order. */
@@ -901,6 +980,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   // ---- Several at once: dragging on empty canvas draws a box; a dialog acts on it (#54) ----
   const [busy, setBusy] = useState(false); // dragging blocks or the box: the dialog waits
   const pickedNodes = shown.nodes.filter((n) => n.selected && !n.hidden);
+  const pickedBlocks = pickedNodes.filter(isBlock);
   const pickedWires = shown.edges.filter((w) => w.selected);
   const pickedFrames = pickedNodes.filter(isFrame);
   // One block picked inside an open subsystem or story: its ports can be exposed on the group.
@@ -908,6 +988,27 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
   const pickedBlock = pickedNodes.length === 1 && isBlock(pickedNodes[0]) ? pickedNodes[0] : undefined;
   const kept = pickedNodes.filter((n) => isBlock(n) && n.data.def.linked).length; // linked blocks aren't deleted
   const many = pickedNodes.length > 0; // a block or group, with or without wires (wires alone have ×)
+  const allCommented = pickedBlocks.length > 0 && pickedBlocks.every((b) => b.data.commented);
+
+  const toggleComment = (mode: "out" | "through" = "out") => {
+    if (pickedBlocks.length === 0) return;
+    const shouldComment = !allCommented || (mode === "through" && pickedBlocks.some((b) => b.data.commentMode !== "through"));
+    const ids = new Set(pickedBlocks.map((b) => b.id));
+    setNodes((ns) =>
+      ns.map((n) => {
+        if (!ids.has(n.id) || !isBlock(n)) return n;
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            commented: shouldComment,
+            commentMode: shouldComment ? mode : undefined,
+          },
+        };
+      }),
+    );
+  };
+
   // The dialog floats above the selection, or below it when the selection is at the top of
   // the canvas (above, it would sit under the panel's head, out of reach).
   const pickedIds = pickedNodes.map((n) => n.id).join(",");
@@ -935,6 +1036,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
       group,
       ungroup: () => pickedFrames.forEach((f) => actions.ungroup(f.id)),
       arrange,
+      comment: (mode: "out" | "through" = "out") => toggleComment(mode),
       can: {
         copy: copySelection(nodes, edges) !== null,
         get paste() {
@@ -946,6 +1048,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
         story: canStory,
         ungroup: pickedFrames.length > 0,
         arrange: !locked && canArrangeFlow(nodes, level),
+        comment: pickedBlocks.length > 0,
       },
     };
   }
@@ -956,9 +1059,21 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
     if (!many) return;
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      if (e.key !== "Escape" || ownKeys(t) || (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT"))) return;
-      e.preventDefault(); // not a key for the backend
-      deselect();
+      if (ownKeys(t) || (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT"))) return;
+      if ((e.ctrlKey || e.metaKey) && (e.key === "/" || e.code === "Slash")) {
+        e.preventDefault();
+        toggleComment("out");
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key.toLowerCase() === "y" || e.code === "KeyY")) {
+        e.preventDefault();
+        toggleComment("through");
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault(); // not a key for the backend
+        deselect();
+      }
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -1108,12 +1223,17 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
 
   const box = wrap.current?.getBoundingClientRect();
   const rel = (x: number, y: number) => ({ x: x - (box?.left ?? 0), y: y - (box?.top ?? 0) });
+  const commentedOut = useMemo(
+    () => new Set(nodes.filter(isBlock).filter((n) => n.data.commented && n.data.commentMode !== "through").map((n) => n.id)),
+    [nodes],
+  );
 
   return (
     <GroupActions.Provider value={{ ...actions, enter: go, stateOf }}>
     <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
     <Lit.Provider value={lit}>
     <WireRoutes.Provider value={wireRoutes}>
+    <CommentedOutContext.Provider value={commentedOut}>
     <div className="flow">
       <div
         className="flow-canvas"
@@ -1226,6 +1346,22 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
             <span className="lbl">{summary}</span>
             <button
               className="key small"
+              disabled={pickedBlocks.length === 0}
+              title={allCommented ? "Uncomment selected blocks (Ctrl+/)" : "Comment out selected blocks (Ctrl+/)"}
+              onClick={() => toggleComment("out")}
+            >
+              {allCommented ? "Uncomment" : "Comment"}
+            </button>
+            <button
+              className="key small"
+              disabled={pickedBlocks.length === 0}
+              title="Bypass (comment through) selected blocks (Ctrl+Shift+Y)"
+              onClick={() => toggleComment("through")}
+            >
+              Bypass
+            </button>
+            <button
+              className="key small"
               disabled={kept === pickedNodes.length && pickedWires.length === 0}
               title="Delete the selection (Delete)"
               onClick={removePicked}
@@ -1305,6 +1441,7 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
         />
       )}
     </div>
+    </CommentedOutContext.Provider>
     </WireRoutes.Provider>
     </Lit.Provider>
     </HotWire.Provider>
@@ -1316,7 +1453,8 @@ export function FlowEditor({ blocks, nodes, edges, setNodes, setEdges, onNodesCh
 const GESTURES: [string, string][] = [
   ["Add a block", "/ or double-click the canvas"],
   ["Select", "Click a block · Ctrl-drag a box · Ctrl-click adds"],
-  ["Act on a selection", "The dialog above it: delete, group, story"],
+  ["Act on a selection", "The dialog above it: delete, group, story, comment"],
+  ["Comment out · bypass", "Ctrl+/ · Ctrl+Shift+Y"],
   ["Pan · zoom", "Drag the canvas · the wheel"],
   ["Remove a wire", "Drag its end off the port"],
   ["Move a port", "Drag its name to another side · double-click puts it back"],

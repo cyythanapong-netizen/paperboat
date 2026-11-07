@@ -174,6 +174,12 @@ export type GraphNode = {
   /** Its place on the Flow canvas; backends ignore it. */
   pos?: [number, number];
   ports?: PortSides;
+  /** Whether the block is commented out or bypassed. */
+  commented?: boolean;
+  /** Comment mode: out (omitted from execution) or through (bypassed). */
+  comment_mode?: "out" | "through";
+  /** User notes or documentation for this block. */
+  comment?: string;
 };
 
 export type GraphEdge = {

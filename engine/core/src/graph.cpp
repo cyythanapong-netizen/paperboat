@@ -89,6 +89,10 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     Node node{.id = n.at("id").get<std::string>(), .entry = nullptr, .def = {}, .block = nullptr, .step = nullptr,
               .object = nullptr, .monitor = nullptr};
     if (out.nodes.contains(node.id)) throw GraphError(node.id, "two blocks are called " + node.id);
+    node.commented = n.value("commented", false);
+    node.comment_mode = n.value("comment_mode", "out");
+    node.comment = n.value("comment", "");
+    const bool commented_out = node.commented && node.comment_mode == "out";
     const auto type = n.at("type").get<std::string>();
     node.entry = catalog.find(type);
     if (!node.entry)
@@ -116,31 +120,42 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
       try {
         return make();
       } catch (const GraphError&) {
+        if (commented_out) return decltype(make()){};
         throw;
       } catch (const std::exception& err) {
+        if (commented_out) return decltype(make()){};
         throw GraphError(node.id, node.id + ": " + err.what());
       }
     };
     if (node.entry->linked) {
       // A linked block is its station object's handle: same id, and the object must exist.
       auto it = std::ranges::find(station, node.id, &StationItem::id);
-      if (it == station.end() || !it->entry->def.block || it->entry->def.block->type != type)
-        throw GraphError(node.id, "block " + node.id + " is linked to a station object that isn't there; add it on the Station page");
-      node.object = it->instance.get();
+      if (it == station.end() || !it->entry->def.block || it->entry->def.block->type != type) {
+        if (!commented_out)
+          throw GraphError(node.id, "block " + node.id + " is linked to a station object that isn't there; add it on the Station page");
+      } else {
+        node.object = it->instance.get();
+      }
     } else if (def.kind == toolkit::Kind::Monitor && def.outputs.empty()) {
       // The core samples monitors; one from a template may turn its input into what it
       // shows (output "value", such as an image as a picture). A Monitor that declares
       // outputs (a Switch) is an ordinary block instead, sampled on its first output.
       if (node.entry->from && node.entry->from->make) node.monitor = made([&] { return node.entry->make(params, text); });
     } else if (toolkit::has_step_ports(def)) {
-      if (!node.entry->from || !node.entry->from->make_step) throw GraphError(node.id, "no implementation for step block type: " + type);
-      node.step = made([&] { return node.entry->make_step(params, text); });
+      if (!node.entry->from || !node.entry->from->make_step) {
+        if (!commented_out) throw GraphError(node.id, "no implementation for step block type: " + type);
+      } else {
+        node.step = made([&] { return node.entry->make_step(params, text); });
+      }
       out.has_steps = true;
       const bool has_step_input = std::ranges::any_of(def.inputs, [](const auto& p) { return p.type == "step"; });
-      if (!has_step_input) out.hats.push_back(node.id);
+      if (!has_step_input && !commented_out) out.hats.push_back(node.id);
     } else {
-      if (!node.entry->from || !node.entry->from->make) throw GraphError(node.id, "no implementation for block type: " + type);
-      node.block = made([&] { return node.entry->make(params, text); });
+      if (!node.entry->from || !node.entry->from->make) {
+        if (!commented_out) throw GraphError(node.id, "no implementation for block type: " + type);
+      } else {
+        node.block = made([&] { return node.entry->make(params, text); });
+      }
     }
     node.params = std::move(params);
     node.text = std::move(text);
@@ -212,13 +227,17 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     // (an integrator, a delay) gives its outputs before it reads its inputs: a wire into
     // one doesn't make it wait, so a loop through it is allowed.
     const bool waits = !dst.object && !dst.step && dst.def.feedthrough;
-    if (!src.step && waits && story(from.first) == story(to.first)) deps[to.first].push_back(from.first);
+    const bool src_out = src.commented && src.comment_mode == "out";
+    const bool dst_out = dst.commented && dst.comment_mode == "out";
+    if (!src_out && !dst_out && !src.step && waits && story(from.first) == story(to.first)) deps[to.first].push_back(from.first);
   }
 
   std::vector<std::string> outside;
   std::map<std::string, std::vector<std::string>> inside;
   for (const auto& id : ids) {
-    if (out.nodes.at(id).step) continue;
+    const auto& node = out.nodes.at(id);
+    if (node.step) continue;
+    if (node.commented && node.comment_mode == "out") continue;  // Commented-out blocks excluded from simulation
     if (auto it = out.story_of.find(id); it != out.story_of.end()) inside[it->second].push_back(id);
     else outside.push_back(id);
   }

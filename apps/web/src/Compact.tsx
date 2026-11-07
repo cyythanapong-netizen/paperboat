@@ -112,6 +112,7 @@ export function CompactBlock({
   def,
   params,
   selected,
+  commented,
   word,
   progress,
   onExpand,
@@ -121,6 +122,7 @@ export function CompactBlock({
   def: BlockDef;
   params: Record<string, ParamValue>;
   selected: boolean;
+  commented?: boolean;
   word?: "running" | "failed";
   progress?: number;
   onExpand: () => void;
@@ -151,7 +153,7 @@ export function CompactBlock({
   return (
     <div
       ref={root}
-      className={["compact-block", `kind-${def.kind}`, selected && "selected", word && word, open && "open"].filter(Boolean).join(" ")}
+      className={["compact-block", `kind-${def.kind}`, selected && "selected", commented && "commented", word && word, open && "open"].filter(Boolean).join(" ")}
       onDoubleClick={onExpand}
     >
       <div
