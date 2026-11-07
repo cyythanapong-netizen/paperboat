@@ -5,3 +5,5 @@ repo = "https://github.com/cyythanapong-netizen/paperboat-toolkit-opencv.git"
 description = "Image processing blocks, view monitor, and image station object (OpenCV)."
 optional = true
 engine = ">=0.1"
+blocks = ["gray", "blur", "median", "threshold", "adaptive_threshold", "hsv_range", "canny",
+          "erode", "dilate", "open", "close", "invert", "distance", "view", "image"]
