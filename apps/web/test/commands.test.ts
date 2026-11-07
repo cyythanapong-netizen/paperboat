@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { byMenu, chordMatches, describe, isEnabled, rank, type Command } from "../src/commands.ts";
+import { byMenu, chordMatches, describe, GROUP_TITLES, isEnabled, rank, type Command } from "../src/commands.ts";
 
 const cmd = (id: string, label: string, menu: Command["menu"], extra: Partial<Command> = {}): Command => ({
   id,
@@ -80,4 +80,14 @@ test("enabled: absent is on; a function is read each time", () => {
   assert.ok(!isEnabled(c));
   on = true;
   assert.ok(isEnabled(c));
+});
+
+test("solver group has display title Solver and groups commands", () => {
+  const solverCmd = cmd("run.solver.rk4", "RK4", "run", { group: "solver", checked: true });
+  const menus = byMenu([solverCmd]);
+  assert.equal(menus[0].id, "run");
+  assert.equal(menus[0].items[0].group, "solver");
+  assert.equal(GROUP_TITLES[menus[0].items[0].group!], "Solver");
+  assert.equal(menus[0].items[0].label, "RK4");
+  assert.equal(menus[0].items[0].checked, true);
 });

@@ -23,6 +23,7 @@
 #include "paperboat/core/process.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
 #include "paperboat/toolkit/installer.hpp"
+#include "paperboat/toolkit/solve.hpp"
 
 namespace paperboat::core {
 namespace {
@@ -714,6 +715,11 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     }
 
     std::vector<std::string> args = {bin.string(), "--port", std::to_string(port)};
+    if (opts.run) args.emplace_back("--run");
+    if (!opts.project_file.empty()) {
+      args.emplace_back("--project");
+      args.emplace_back(opts.project_file);
+    }
     append_vars(args, opts);
 
     std::cout << "paperboat running " << bin.filename().string() << " on " << ws_url(port) << std::endl;
@@ -734,6 +740,11 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     }
 
     std::vector<std::string> args = {py_env.python_bin.string(), script_run_arg, "--port", std::to_string(port)};
+    if (opts.run) args.emplace_back("--run");
+    if (!opts.project_file.empty()) {
+      args.emplace_back("--project");
+      args.emplace_back(opts.project_file);
+    }
     append_vars(args, opts);
 
     std::cout << "paperboat running python " << server_script.filename().string() << " on " << ws_url(port) << std::endl;
@@ -839,14 +850,7 @@ fs::path BackendManager::find_examples_dir(const fs::path& hint) {
     }
   }
 
-  const fs::path fallback = "/home/cyyth/.local/share/opencode/worktree/f0d43b/paperboat-examples";
-  if (is_examples_dir(fallback)) return fallback;
-
   if (!root.empty() && is_examples_dir(root / "examples" / "backends")) {
-    return root / "examples" / "backends";
-  }
-
-  if (!root.empty() && fs::is_directory(root / "examples" / "backends")) {
     return root / "examples" / "backends";
   }
 
@@ -1074,6 +1078,22 @@ BackendManifest BackendManager::load_manifest(const fs::path& backend_dir, std::
       m.golden = doc["test"]["golden"].value_or(std::string{});
     }
 
+    if (doc["backend"]["solver"].is_string()) {
+      m.solver = doc["backend"]["solver"].value<std::string>().value();
+    } else if (doc["run"]["solver"].is_string()) {
+      m.solver = doc["run"]["solver"].value<std::string>().value();
+    }
+
+    if (!m.solver.empty()) {
+      const auto& valid_solvers = toolkit::solve::names();
+      if (std::find(valid_solvers.begin(), valid_solvers.end(), m.solver) == valid_solvers.end()) {
+        std::string list;
+        for (const auto& s : valid_solvers) list += (list.empty() ? "" : ", ") + s;
+        if (error_msg) *error_msg = "backend.toml: invalid solver '" + m.solver + "' (expected one of: " + list + ")";
+        return m;
+      }
+    }
+
     if (m.name.empty()) {
       if (error_msg) *error_msg = "backend.toml: missing required field 'name'";
       return m;
@@ -1199,6 +1219,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   res.version = manifest.version;
   res.language = manifest.language;
   res.engine = manifest.engine;
+  res.solver = manifest.solver;
 
   // Check descriptor file exists
   const fs::path desc_file = dir / manifest.descriptor;
@@ -1273,6 +1294,9 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   step_manifest.duration_seconds = seconds_since(t_start);
   step_manifest.ok = true;
   step_manifest.message = "format 0, " + manifest.descriptor + ", " + manifest.language;
+  if (!manifest.solver.empty()) {
+    step_manifest.message += ", solver " + manifest.solver;
+  }
   finish(step_manifest);
   res.manifest_ok = true;
 
@@ -1358,9 +1382,68 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
     return res;
   }
 
+  // Detect whether built-in solvers API is used by the backend
+  bool uses_solvers = !manifest.solver.empty();
+  if (!uses_solvers && catalog_success) {
+    try {
+      toolkit::DescriptorOptions desc_opts;
+      desc_opts.optional_imports = available_toolkits;
+      const auto cat = toolkit::load_descriptor_file(desc_file, toolkit::builtins(), desc_opts);
+      for (const auto& entry : cat.entries) {
+        if (entry.def.type == "integrator" || entry.def.type == "lag") { uses_solvers = true; break; }
+        for (const auto& p : entry.def.params) {
+          if (p.id == "solver") { uses_solvers = true; break; }
+        }
+        if (uses_solvers) break;
+      }
+      if (!uses_solvers) {
+        for (const auto& obj : cat.objects) {
+          for (const auto& p : obj.def.props) {
+            if (p.id == "solver") { uses_solvers = true; break; }
+          }
+          if (uses_solvers) break;
+        }
+      }
+    } catch (...) {}
+  }
+  if (!uses_solvers) {
+    std::error_code ec;
+    for (const auto& entry : fs::recursive_directory_iterator(dir, ec)) {
+      if (!entry.is_regular_file()) continue;
+      const auto ext = entry.path().extension().string();
+      if (ext != ".cpp" && ext != ".hpp" && ext != ".h" && ext != ".py") continue;
+      const auto pstr = entry.path().string();
+      if (pstr.find("/build/") != std::string::npos || pstr.find("/.") != std::string::npos) continue;
+      std::ifstream in(entry.path());
+      std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+      if (content.find("paperboat::solve") != std::string::npos ||
+          content.find("paperboat.solve") != std::string::npos ||
+          content.find("paperboat::Model") != std::string::npos ||
+          content.find("paperboat.Model") != std::string::npos ||
+          content.find("paperboat/toolkit/solve.hpp") != std::string::npos) {
+        uses_solvers = true;
+        break;
+      }
+    }
+  }
+
+  if (uses_solvers) {
+    if (res.solver.empty()) {
+      res.solver = "rk4";
+    }
+    try {
+      auto s = toolkit::solve::make(res.solver);
+    } catch (const std::exception& err) {
+      return fail(step_catalog, "failed to initialize solver " + res.solver + ": " + err.what());
+    }
+  }
+
   step_catalog.ok = true;
   step_catalog.message = std::to_string(res.block_count) + " blocks, " +
                          std::to_string(res.object_count) + " station objects";
+  if (!res.solver.empty()) {
+    step_catalog.message += ", solver " + res.solver;
+  }
   finish(step_catalog);
   res.catalog_ok = true;
 

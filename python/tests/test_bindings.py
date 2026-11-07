@@ -378,3 +378,125 @@ def test_an_elementwise_python_block_takes_a_vector_and_stays_scalar_on_numbers(
     assert last["show"]["v"] == [10.0, 20.0]
     assert [c["id"] for c in last["show"]["components"]] == ["p", "q"]
     assert last["num"]["v"] == 20.0  # numbers in: a number out, as before
+
+
+TUNER_BACKEND = '''
+import paperboat
+from paperboat import Param
+
+class Tuner(paperboat.Block):
+    type, label = "tuner", "Tuner"
+    outputs = ["seen"]
+    params = {"target": Param("g", "variable")}
+    def step(self, ctx, inputs):
+        if ctx.t >= 0.5:
+            assert ctx.set_variable(self.params["target"], 4.0)
+            assert not ctx.set_variable("h", 1.0)  # not tunable
+        return {"seen": ctx.variable("g")}
+
+paperboat.serve(paperboat.Backend(engine="test-tuner", descriptor="descriptor.toml", blocks=[Tuner],
+                                  dt=0.1, duration=1.0, emit_every=1))
+'''
+
+TUNER_DESCRIPTOR = '''
+domain = "tuner"
+import = ["dashboard"]
+[[variables]]
+name = "g"
+value = 2
+tunable = true
+[[variables]]
+name = "h"
+value = 3
+[graph]
+nodes = [{ id = "tuner", type = "tuner" }, { id = "show", type = "display" }]
+edges = [{ from = ["tuner", "seen"], to = ["show", "in"] }]
+'''
+
+
+def test_a_python_block_reads_and_sets_a_tunable_variable(tmp_path: Path) -> None:
+    # #166: ctx.set_variable lands at the end of the pass; the UI is told with variables.patch.
+    msgs = run_backend(tmp_path, backend=TUNER_BACKEND, descriptor=TUNER_DESCRIPTOR)
+    seen = [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "show"]
+    assert seen[0] == 2.0 and seen[-1] == 4.0
+    assert [m["values"] for m in msgs if m["type"] == "variables.patch"] == [{"g": 4.0}]
+
+
+def test_solve_ode_scalar_and_list():
+    import math
+    import paperboat
+
+    # Exponential decay dx/dt = -x, x0 = 1.0
+    ode = paperboat.solve.ode(lambda x, t: [-x[0]], [1.0], solver="rk4")
+    assert ode.solver == "rk4"
+    assert ode.t == 0.0
+    assert ode.x == [1.0]
+
+    dt = 0.01
+    for _ in range(100):
+        ode.step(dt)
+
+    assert abs(ode.t - 1.0) < 1e-12
+    assert abs(ode.x[0] - math.exp(-1.0)) < 1e-6
+
+    # Test reset state
+    ode.x = [2.0]
+    assert ode.x == [2.0]
+
+
+def test_solve_ode_numpy_and_rk45():
+    import numpy as np
+    import paperboat
+
+    # Harmonic oscillator: dx/dt = v, dv/dt = -x
+    def f(state, t):
+        x, v = state[0], state[1]
+        return np.array([v, -x])
+
+    x0 = np.array([0.0, 1.0])
+    ode = paperboat.ode(f, x0, solver="rk45")
+    dt = 0.01
+    for _ in range(100):
+        res = ode.step(dt)
+
+    assert isinstance(res, np.ndarray)
+    # x(t) = sin(t), at t=1.0: sin(1) approx 0.84147, cos(1) approx 0.54030
+    assert abs(res[0] - np.sin(1.0)) < 1e-4
+    assert abs(res[1] - np.cos(1.0)) < 1e-4
+
+
+def test_solve_ode_step_with_explicit_time_and_euler():
+    import paperboat
+
+    # dx/dt = 2*t, x(0) = 0
+    ode = paperboat.solve.ode(lambda x, t: [2.0 * t], [0.0], solver="euler")
+    dt = 0.1
+    for k in range(10):
+        ode.step(k * dt, dt)
+
+    assert ode.solver == "euler"
+
+
+def test_backend_with_solver_setting():
+    import paperboat
+
+    b = paperboat.Backend(engine="test-engine", descriptor="descriptor.toml", solver="rk45")
+    assert b.solver == "rk45"
+
+
+def test_solve_helper_functions():
+    import paperboat
+
+    s_rk4 = paperboat.solve.rk4(lambda x: [-x[0]], [1.0])
+    assert s_rk4.solver == "rk4"
+    s_rk45 = paperboat.solve.rk45(lambda x: [-x[0]], [1.0])
+    assert s_rk45.solver == "rk45"
+    s_rk2 = paperboat.solve.rk2(lambda x: [-x[0]], [1.0])
+    assert s_rk2.solver == "rk2"
+    s_euler = paperboat.solve.euler(lambda x: [-x[0]], [1.0])
+    assert s_euler.solver == "euler"
+    s_disc = paperboat.solve.discrete(lambda x: [x[0] * 0.5], [1.0])
+    assert s_disc.solver == "discrete"
+    s_disc.step(0.1)
+    assert abs(s_disc.x[0] - 0.5) < 1e-12
+

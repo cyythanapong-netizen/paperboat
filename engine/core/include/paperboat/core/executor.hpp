@@ -91,6 +91,13 @@ class Run {
   // Takes a changed variables list (#75): each tunable variable's new value reaches the Variable
   // blocks and the number params bound to it, between two steps.
   void tune(const json& list);
+  // Takes `next` (a variables list) as the run's: formulas follow, bound params change on
+  // their blocks. A list the variables refuse is ignored with a warning.
+  void apply_variables(const json& next);
+  // A block's Context::set_variable (#166): checked now, kept in `pending_` until the end of the pass.
+  bool set_variable(std::string_view name, const toolkit::Value& value);
+  // The end of a pass: applies what blocks set, and tells the UI (variables.patch).
+  void commit_variables();
   bool change_param(Node& node, const toolkit::ParamDef& def, double value);
 
   std::string id_;
@@ -104,6 +111,8 @@ class Run {
   std::string failed_;  // the block that threw, if one did
   toolkit::LogFn log_;
   toolkit::ProgressFn progress_;
+  toolkit::SetVariableFn set_variable_;
+  json pending_;  // the variables list with this pass's set_variable writes; null when none
   std::map<std::string, std::chrono::steady_clock::time_point, std::less<>> progress_sent_;  // node → last node.progress
   std::chrono::steady_clock::time_point run_start_time_{};
   bool run_started_time_set_ = false;

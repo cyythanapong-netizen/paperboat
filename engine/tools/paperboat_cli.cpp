@@ -147,6 +147,99 @@ int cmd_run(const std::vector<std::string_view>& args) {
   return core::BackendManager::run_backend(path, opts);
 }
 
+int cmd_open(const std::vector<std::string_view>& args) {
+  std::string file_path;
+  core::BackendRunOptions opts;
+  bool run_headless = false;
+  int port = 0;
+
+  for (std::size_t i = 0; i < args.size(); ++i) {
+    auto a = args[i];
+    if (a == "--run") {
+      run_headless = true;
+    } else if (a == "--port" && i + 1 < args.size()) {
+      port = std::stoi(std::string(args[++i]));
+    } else if (a == "--no-build") {
+      opts.build = false;
+    } else if (!a.starts_with("-") && file_path.empty()) {
+      file_path = std::string(a);
+    }
+  }
+
+  if (file_path.empty()) {
+    std::cerr << "usage: paperboat open <file.ppj|file.paperboat.json> [--run] [--port <port>] [--no-build]\n";
+    return 2;
+  }
+
+  const fs::path p(file_path);
+  if (!fs::is_regular_file(p)) {
+    std::cerr << "error: file not found: " << file_path << '\n';
+    return 1;
+  }
+
+  json proj;
+  try {
+    std::ifstream in(p);
+    in >> proj;
+  } catch (const std::exception& err) {
+    std::cerr << "error: invalid project file: " << err.what() << '\n';
+    return 1;
+  }
+
+  if (!proj.is_object() || !proj.contains("paperboat") || !proj["paperboat"].is_number_integer()) {
+    std::cerr << "error: invalid project file: missing \"paperboat\" format version\n";
+    return 1;
+  }
+  if (proj["paperboat"] != 0) {
+    std::cerr << "error: unsupported project version " << proj["paperboat"] << " (this tool supports version 0)\n";
+    return 1;
+  }
+  if (!proj.contains("backend") || !proj["backend"].is_string()) {
+    std::cerr << "error: invalid project file: missing \"backend\" specification\n";
+    return 1;
+  }
+  if (!proj.contains("flow") || !proj["flow"].is_object()) {
+    std::cerr << "error: invalid project file: missing \"flow\" graph\n";
+    return 1;
+  }
+
+  const std::string backend_name = proj["backend"].get<std::string>();
+  const fs::path backend_dir = core::BackendManager::resolve_backend_dir(backend_name);
+  if (backend_dir.empty() || !fs::is_directory(backend_dir)) {
+    std::cerr << "error: backend \"" << backend_name << "\" not found\n";
+    return 1;
+  }
+
+  // Check required toolkits
+  const auto manifest = core::BackendManager::load_manifest(backend_dir);
+  const auto installed_toolkits = tk::list_toolkits();
+  for (const auto& req : manifest.toolkits) {
+    bool found = false;
+    for (const auto& t : installed_toolkits) {
+      if (t.name == req) {
+        if (t.installed || t.builtin) found = true;
+        break;
+      }
+    }
+    if (!found) {
+      std::cerr << "error: required toolkit \"" << req << "\" is not installed\n";
+      return 1;
+    }
+  }
+
+  opts.port = port;
+  opts.project_file = fs::canonical(p).string();
+  opts.run = run_headless;
+
+  if (run_headless) {
+    return core::BackendManager::run_backend(backend_dir, opts);
+  }
+
+  core::BackendManager::start_app();
+  std::cout << "[ok] opening project \"" << p.filename().string() << "\" with backend " << backend_name << '\n';
+  return core::BackendManager::run_backend(backend_dir, opts);
+}
+
 int cmd_build(const std::vector<std::string_view>& args) {
   std::string path;
   bool clean = false;
@@ -551,6 +644,7 @@ int cmd_check(const std::vector<std::string_view>& args) {
         {"warnings", res.warnings},
         {"missing_toolkits", res.missing_toolkits},
     };
+    if (!res.solver.empty()) doc["solver"] = res.solver;
     if (stream) {
       doc["event"] = "result";
       emit(std::move(doc));
@@ -562,7 +656,11 @@ int cmd_check(const std::vector<std::string_view>& args) {
 
   std::cout << "backend \"" << (res.name.empty() ? res.domain : res.name)
             << "\" (" << (res.version.empty() ? "0.1.0" : res.version)
-            << ", " << (res.language.empty() ? "unknown" : res.language) << "):\n";
+            << ", " << (res.language.empty() ? "unknown" : res.language);
+  if (!res.solver.empty()) {
+    std::cout << ", solver: " << res.solver;
+  }
+  std::cout << "):\n";
 
   for (const auto& step : res.steps) {
     if (step.skipped) {
@@ -711,6 +809,8 @@ const std::vector<CommandSpec>& command_table() {
   static const std::vector<CommandSpec> table = {
       {"run", cmd_run, "Build and run a backend", {"start"}, {},
        {"--port", "--no-build", "--clean", "--time", "--verbose", "--var"}, "backend"},
+      {"open", cmd_open, "Open a saved project file (.ppj, .paperboat.json)", {}, {},
+       {"--run", "--port", "--no-build"}, "project"},
       {"build", cmd_build, "Compile a C++ backend", {}, {}, {"--clean"}, "backend"},
       {"rebuild", cmd_rebuild, "Clean and compile a C++ backend", {}, {}, {}, "backend"},
       {"backends", cmd_backends, "List the backends you can run", {}, {}, {"--json"}},

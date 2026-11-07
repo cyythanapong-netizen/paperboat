@@ -17,10 +17,11 @@ type Parts = {
   variables?: Variables;
   dashboard?: DashboardLayout;
   run?: RunSettings;
+  ui?: Project["ui"];
 };
 
 /** The project for these parts: the parts that are empty or absent are left out, so the file stays small and readable. */
-export function buildProject({ backend, flow, station, variables, dashboard, run }: Parts): Project {
+export function buildProject({ backend, flow, station, variables, dashboard, run, ui }: Parts): Project {
   return {
     paperboat: PROJECT_VERSION,
     backend,
@@ -29,6 +30,7 @@ export function buildProject({ backend, flow, station, variables, dashboard, run
     ...(variables && variables.length > 0 ? { variables } : {}),
     ...(dashboard ? { dashboard } : {}),
     ...(run && Object.keys(run).length > 0 ? { run } : {}),
+    ...(ui && ui.lock && Object.keys(ui.lock).length > 0 ? { ui } : {}),
   };
 }
 
@@ -70,7 +72,7 @@ function flowProblem(flow: unknown): string | null {
 
 /** The first thing wrong with the optional parts, in words, or null. */
 function partsProblem(p: Record<string, unknown>): string | null {
-  const { station, variables, dashboard, run } = p;
+  const { station, variables, dashboard, run, ui } = p;
   if (station !== undefined) {
     if (!isObj(station) || !Array.isArray(station.objects)) return "station.objects must be a list";
     for (const [i, o] of station.objects.entries()) if (!isObj(o) || !isText(o.id) || !isText(o.type)) return `station.objects[${i}] needs an id and a type`;
@@ -85,6 +87,23 @@ function partsProblem(p: Record<string, unknown>): string | null {
   if (run !== undefined) {
     if (!isObj(run)) return "run must be an object";
     for (const k of ["duration", "dt", "speed"]) if (run[k] !== undefined && !isNum(run[k])) return `run.${k} must be a number`;
+  }
+  if (ui !== undefined) {
+    if (!isObj(ui)) return "ui must be an object";
+    if (ui.lock !== undefined) {
+      if (!isObj(ui.lock)) return "ui.lock must be an object";
+      const { arrange, pages, modes, passcode } = ui.lock;
+      if (arrange !== undefined && typeof arrange !== "boolean") return "ui.lock.arrange must be a boolean";
+      if (pages !== undefined) {
+        if (!Array.isArray(pages) || pages.length === 0 || !pages.every(isText)) return "ui.lock.pages must be a non-empty list of page ids";
+      }
+      if (modes !== undefined) {
+        if (!Array.isArray(modes) || modes.length === 0 || !modes.every(isText)) return "ui.lock.modes must be a non-empty list of mode ids";
+      }
+      if (passcode !== undefined) {
+        if (!isObj(passcode) || !isText(passcode.algo) || !isText(passcode.salt) || !isText(passcode.hash)) return "ui.lock.passcode needs algo, salt, and hash";
+      }
+    }
   }
   return null;
 }

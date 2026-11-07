@@ -1095,3 +1095,126 @@ TEST_CASE("step block comment through immediately bypasses to next step output")
   }
   CHECK(stopped_by_stop);
 }
+
+// --- Blocks write variables (#166)
+
+namespace {
+
+// Sets g to its `target` param's variable each step from the 10th: the way an autotuner would.
+// It also tries what must be refused, and reads g back.
+class Tuner final : public tk::Block {
+ public:
+  Tuner(const tk::Values&, const tk::Config& config) : target(config.at("target")) {}
+  tk::Values step(const tk::Context& ctx, const tk::Values&) override {
+    seen = ctx.variable("g") ? std::get<double>(*ctx.variable("g")) : -1;
+    if (++n == 10) {
+      CHECK(ctx.set_variable(target, 4.0));
+      CHECK_FALSE(ctx.set_variable("h", 1.0));        // not tunable
+      CHECK_FALSE(ctx.set_variable("twice", 1.0));    // a formula
+      CHECK_FALSE(ctx.set_variable("nope", 1.0));     // unknown
+      CHECK_FALSE(ctx.set_variable(target, 99.0));    // above its max
+      CHECK_FALSE(ctx.set_variable(target, "text"));  // wrong type
+      reads_before_commit = std::get<double>(*ctx.variable("g"));
+    }
+    return {{"y", seen}};
+  }
+  std::string target;
+  int n = 0;
+  double seen = 0;
+  inline static double reads_before_commit = 0;
+};
+
+const tk::Catalog& writer_catalog() {
+  static const tk::Registry registry = [] {
+    tk::Registry r = tk::builtins();
+    r.add(tk::define_block<Tuner>("tune", {.type = "tuner", .label = "Tuner", .outputs = {{"y"}},
+                                           .params = {{.id = "target", .type = "variable", .default_text = "g"}}}));
+    return r;
+  }();
+  static const tk::Catalog catalog = tk::load_descriptor(R"(domain = "tune"
+import = ["base", "math", "control", "dashboard"]
+[[variables]]
+name = "g"
+value = 2
+max = 10
+tunable = true
+[[variables]]
+name = "h"
+value = 3
+[[variables]]
+name = "twice"
+expr = "g * 2"
+[graph]
+nodes = [
+  { id = "tuner", type = "tuner" },
+  { id = "live", type = "variable", params = { name = "g" } },
+  { id = "gain", type = "gain", params = { k = { var = "g" } } },
+  { id = "one", type = "constant", params = { value = 1 } },
+  { id = "see-seen", type = "display" }, { id = "see-live", type = "display" }, { id = "see-gain", type = "display" },
+]
+edges = [
+  { from = ["tuner", "y"], to = ["see-seen", "in"] }, { from = ["live", "y"], to = ["see-live", "in"] },
+  { from = ["one", "y"], to = ["gain", "u"] }, { from = ["gain", "y"], to = ["see-gain", "in"] },
+]
+)", registry);
+  return catalog;
+}
+
+}  // namespace
+
+TEST_CASE("a block sets a tunable variable: applied at the end of the pass, formulas and bound params follow, the UI is told") {
+  const auto& catalog = writer_catalog();
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 1, .emit_every = 1, .real_time = false}};
+  Collected out;
+  CHECK(core::run("r", json::parse(catalog.graph), nullptr, backend, out.emit(), nullptr, {}, nullptr, json::parse(catalog.variables)) == "done");
+  CHECK(Tuner::reads_before_commit == 2.0);  // not yet: the pass finishes with the old value
+  CHECK(out.last_signal("see-seen") == 4.0);  // the next pass reads the new one
+  CHECK(out.last_signal("see-live") == 4.0);
+  CHECK(out.last_signal("see-gain") == 4.0);  // a param bound to it follows
+  const auto patches = std::ranges::count_if(out.messages, [](const json& m) { return m["type"] == "variables.patch"; });
+  REQUIRE(patches == 1);
+  const auto patch = std::ranges::find_if(out.messages, [](const json& m) { return m["type"] == "variables.patch"; });
+  CHECK(patch->at("values") == json({{"g", 4.0}, {"twice", 8.0}}));
+  // each refusal warned once, on the block
+  int warned = 0;
+  for (const auto& m : out.messages)
+    if (m["type"] == "log" && m["level"] == "warn" && m.value("node", "") == "tuner") ++warned;
+  CHECK(warned == 5);
+}
+
+TEST_CASE("a variable a block set during a run is what the session starts the next run from") {
+  const auto& catalog = writer_catalog();
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 0.3, .emit_every = 1, .real_time = false}};
+  std::vector<json> sent;
+  std::mutex mutex;
+  core::Session session(backend, [&](const std::string& text) {
+    std::lock_guard lock(mutex);
+    sent.push_back(json::parse(text));
+  });
+  const auto finished = [&](int count) {
+    for (int i = 0; i < 500; ++i) {
+      {
+        std::lock_guard lock(mutex);
+        if (std::ranges::count_if(sent, [](const json& m) { return m["type"] == "run.finished"; }) >= count) return;
+      }
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+  };
+  session.on_message(R"({"type": "graph.run", "graph": )" + catalog.graph + "}");
+  finished(1);
+  session.on_message(R"({"type": "graph.run", "graph": )" + catalog.graph + "}");
+  finished(2);
+  std::lock_guard lock(mutex);
+  // the second run starts from the tuned g = 4: its first Variable sample reads 4
+  bool second = false;
+  double first_live = 0;
+  int runs = 0;
+  for (const auto& m : sent) {
+    if (m["type"] == "run.started") second = ++runs == 2;
+    if (second && m["type"] == "signal" && m["node"] == "see-live") {
+      first_live = m["v"];
+      break;
+    }
+  }
+  CHECK(first_live == 4.0);
+}

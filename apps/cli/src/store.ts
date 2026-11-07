@@ -508,8 +508,8 @@ async function check(args: string[]): Promise<void> {
     line => other.push(line),
   );
   endTask(task);
-  const r = result as null | {ok: boolean; name: string; language: string; version: string; errors: string[]; warnings: string[]};
-  say([b('check '), s(r?.name || target), mu(r ? ` · ${r.language} · ${r.version}` : '')]);
+  const r = result as null | {ok: boolean; name: string; language: string; version: string; solver?: string; errors: string[]; warnings: string[]};
+  say([b('check '), s(r?.name || target), mu(r ? ` · ${r.language} · ${r.version}${r.solver ? ` · solver: ${r.solver}` : ''}` : '')]);
   for (const step of task.steps) if (step.state !== 'waiting') say(stepLine(step));
   for (const w of r?.warnings ?? []) say([mu(`    warning: ${w}`)]);
   if (r?.ok) {

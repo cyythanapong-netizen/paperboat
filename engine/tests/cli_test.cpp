@@ -180,6 +180,78 @@ TEST_CASE("BackendManifest load_manifest validates schema and required fields") 
   fs::remove_all(tmp_dir, ec);
 }
 
+TEST_CASE("BackendManifest load_manifest validates solver setting in backend.toml") {
+  const fs::path tmp_dir = fs::temp_directory_path() / "pb_test_manifest_solver";
+  std::error_code ec;
+  fs::remove_all(tmp_dir, ec);
+  fs::create_directories(tmp_dir, ec);
+
+  // 1. Valid solver in [backend]
+  {
+    std::ofstream out(tmp_dir / "backend.toml");
+    out << "[backend]\nformat = 0\nname = \"test-solver\"\nlanguage = \"python\"\nrun = \"server.py\"\nsolver = \"rk45\"\n";
+  }
+  std::string err;
+  auto m_valid = core::BackendManager::load_manifest(tmp_dir, &err);
+  CHECK(m_valid.has_manifest);
+  CHECK(err.empty());
+  CHECK(m_valid.solver == "rk45");
+
+  // 2. Valid solver in [run]
+  {
+    std::ofstream out(tmp_dir / "backend.toml");
+    out << "[backend]\nformat = 0\nname = \"test-solver-run\"\nlanguage = \"python\"\nrun = \"server.py\"\n\n[run]\nsolver = \"discrete\"\n";
+  }
+  err.clear();
+  auto m_run = core::BackendManager::load_manifest(tmp_dir, &err);
+  CHECK(m_run.has_manifest);
+  CHECK(err.empty());
+  CHECK(m_run.solver == "discrete");
+
+  // 3. Invalid solver name fails
+  {
+    std::ofstream out(tmp_dir / "backend.toml");
+    out << "[backend]\nformat = 0\nname = \"bad-solver\"\nlanguage = \"python\"\nrun = \"server.py\"\nsolver = \"nonexistent_solver\"\n";
+  }
+  err.clear();
+  auto m_bad = core::BackendManager::load_manifest(tmp_dir, &err);
+  CHECK_FALSE(m_bad.has_manifest);
+  CHECK_THAT(err, ContainsSubstring("invalid solver 'nonexistent_solver'"));
+
+  fs::remove_all(tmp_dir, ec);
+}
+
+TEST_CASE("BackendManager check_backend checks solver setting and solver api detection") {
+  const fs::path tmp_dir = fs::temp_directory_path() / "pb_test_check_solver";
+  std::error_code ec;
+  fs::remove_all(tmp_dir, ec);
+  fs::create_directories(tmp_dir, ec);
+
+  {
+    std::ofstream btoml(tmp_dir / "backend.toml");
+    btoml << "[backend]\nformat = 0\nname = \"solver-check\"\nlanguage = \"python\"\nrun = \"server.py\"\nsolver = \"rk45\"\n";
+  }
+  {
+    std::ofstream srv(tmp_dir / "server.py");
+    srv << "# dummy\n";
+  }
+  {
+    std::ofstream desc(tmp_dir / "descriptor.toml");
+    desc << "domain = \"solver-check\"\nimport = [\"control\"]\n";
+  }
+
+  auto res = core::BackendManager::check_backend(tmp_dir, /*fast=*/true);
+  CHECK(res.ok);
+  CHECK(res.manifest_ok);
+  CHECK(res.catalog_ok);
+  CHECK(res.solver == "rk45");
+  REQUIRE(res.steps.size() >= 2);
+  CHECK_THAT(res.steps[0].message, ContainsSubstring("solver rk45"));
+  CHECK_THAT(res.steps[1].message, ContainsSubstring("solver rk45"));
+
+  fs::remove_all(tmp_dir, ec);
+}
+
 TEST_CASE("BackendManager check_backend handles broken descriptor with line accuracy") {
   const fs::path tmp_dir = fs::temp_directory_path() / "pb_test_broken_desc";
   std::error_code ec;
@@ -413,4 +485,50 @@ TEST_CASE("list_toolkits includes built-in toolkit and inspect_toolkit categoriz
   // Unknown toolkit returns found = false
   const auto unknown_res = tk::inspect_toolkit("nonexistent_xyz");
   CHECK_FALSE(unknown_res.found);
+}
+
+TEST_CASE("paperboat open validates project file and backend") {
+  fs::path cli = "bin/paperboat";
+  if (!fs::is_regular_file(cli)) cli = "engine/build/dev/tools/paperboat";
+  if (!fs::is_regular_file(cli)) cli = fs::current_path() / "engine" / "build" / "dev" / "tools" / "paperboat";
+  if (!fs::is_regular_file(cli)) cli = fs::current_path().parent_path() / "tools" / "paperboat";
+  REQUIRE(fs::is_regular_file(cli));
+
+  // Missing file fails
+  auto res1 = core::ProcessRunner::run_sync({cli.string(), "open", "nonexistent_file.ppj"});
+  CHECK(res1.exit_code != 0);
+
+  // Invalid JSON fails
+  const fs::path tmp = fs::temp_directory_path() / "bad_project.ppj";
+  std::ofstream(tmp) << "not json content";
+  auto res2 = core::ProcessRunner::run_sync({cli.string(), "open", tmp.string()});
+  CHECK(res2.exit_code != 0);
+  fs::remove(tmp);
+
+  // Missing backend in project fails
+  std::ofstream(tmp) << "{\"paperboat\": 0, \"flow\": {}}";
+  auto res3 = core::ProcessRunner::run_sync({cli.string(), "open", tmp.string()});
+  CHECK(res3.exit_code != 0);
+
+  // Unknown backend fails
+  std::ofstream(tmp) << "{\"paperboat\": 0, \"backend\": \"nonexistent_backend_xyz\", \"flow\": {}}";
+  auto res4 = core::ProcessRunner::run_sync({cli.string(), "open", tmp.string()});
+  CHECK(res4.exit_code != 0);
+  fs::remove(tmp);
+
+  // Valid project with --run runs headlessly against a backend
+  const fs::path backend_dir = fs::temp_directory_path() / "pb_test_backend";
+  fs::remove_all(backend_dir);
+  fs::create_directories(backend_dir);
+  std::ofstream(backend_dir / "backend.toml") << "[backend]\nformat = 0\nname = \"test_probe\"\nlanguage = \"python\"\n"
+                                                 "run = \"server.py\"\ndescriptor = \"descriptor.toml\"\n";
+  std::ofstream(backend_dir / "descriptor.toml") << "domain = \"test_probe\"\nimport = [\"math\"]\n";
+  std::ofstream(backend_dir / "server.py") << "import sys; sys.exit(0)\n";
+
+  const fs::path valid_proj = fs::temp_directory_path() / "test_run.ppj";
+  std::ofstream(valid_proj) << "{\"paperboat\": 0, \"backend\": \"" + backend_dir.string() + "\", \"flow\": {\"nodes\": [], \"edges\": []}}";
+  auto res5 = core::ProcessRunner::run_sync({cli.string(), "open", valid_proj.string(), "--run", "--no-build"});
+  CHECK(res5.exit_code == 0);
+  fs::remove(valid_proj);
+  fs::remove_all(backend_dir);
 }

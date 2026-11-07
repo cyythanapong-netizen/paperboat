@@ -27,6 +27,7 @@ struct RunSettings {
   int emit_every = 4;      // send signals and scene patches every N steps
   bool real_time = true;   // pace emits at wall-clock speed (tests turn it off)
   double speed = 1.0;      // times real time when paced; 0: as fast as it can
+  std::string solver = "rk4";  // default solver: "rk4", "rk45", "rk2", "euler", "discrete"
 };
 
 // `base` with a graph.run's `settings` on top (duration, dt, speed; never mode). Throws
@@ -48,6 +49,8 @@ struct Backend {
   // Its own run style, if the core's three (clock, once, steps) don't fit: an executor for
   // this graph. Empty: default_executor().
   std::function<std::unique_ptr<Executor>(const Graph&, const RunSettings&)> executor = {};
+  json initial_project = nullptr;
+  std::string initial_project_name = "";
 };
 
 using Emit = std::function<void(const json& message)>;

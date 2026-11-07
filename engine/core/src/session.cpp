@@ -17,8 +17,12 @@ struct Session::State {
   State(const Backend& b, Send s)
       : backend(b),
         send(std::move(s)),
-        station(b.catalog->station.empty() ? json() : json::parse(b.catalog->station)),
-        variables(b.catalog->variables.empty() ? json::array() : json::parse(b.catalog->variables)) {}
+        station(!b.initial_project.is_null() && b.initial_project.contains("station")
+                    ? b.initial_project["station"]
+                    : (b.catalog->station.empty() ? json() : json::parse(b.catalog->station))),
+        variables(!b.initial_project.is_null() && b.initial_project.contains("variables")
+                      ? b.initial_project["variables"]
+                      : (b.catalog->variables.empty() ? json::array() : json::parse(b.catalog->variables))) {}
 
   const Backend& backend;
   Send send;
@@ -105,6 +109,11 @@ Session::Session(const Backend& backend, Send send)
   if (!s.variables.empty()) s.emit({{"type", "variables.load"}, {"variables", s.variables}});
   s.emit({{"type", "graph.load"}, {"graph", json::parse(catalog.graph)}});
   if (!s.station.is_null()) s.emit({{"type", "station.load"}, {"station", s.station}});
+  if (!backend.initial_project.is_null() && backend.initial_project.is_object()) {
+    s.emit({{"type", "project.load"},
+            {"name", backend.initial_project_name},
+            {"project", backend.initial_project}});
+  }
 }
 
 Session::~Session() = default;
@@ -149,6 +158,14 @@ void Session::on_message(const std::string& text) {
     s.run = std::jthread([&s, id, number, graph = msg.value("graph", json::object()), station, variables, keys_now, tune_now,
                           settings = msg.value("settings", json())](std::stop_token stop) {
       auto emit = [&s, number](const json& m) {
+        if (m.value("type", "") == "variables.patch") {  // a block set variables (#166): later runs start from them
+          std::lock_guard lock(s.mutex);
+          for (json* list : {&s.variables, s.tuned ? &*s.tuned : nullptr}) {
+            if (!list || !list->is_array()) continue;
+            for (auto& v : *list)
+              if (const auto it = m.at("values").find(v.value("name", std::string{})); it != m.at("values").end() && !v.contains("expr")) v["value"] = *it;
+          }
+        }
         if (m.value("type", "") == "run.finished") {  // before the UI hears it: its next edit is not a tuning
           int mine = number;
           s.live_run.compare_exchange_strong(mine, 0);  // not if a newer run has started meanwhile

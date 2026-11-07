@@ -2,6 +2,7 @@
 
 #include "paperboat/core/executor.hpp"
 
+#include <paperboat/toolkit/solve.hpp>
 #include <paperboat/toolkit/variables.hpp>
 
 #include <algorithm>
@@ -108,6 +109,8 @@ Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit
     emit_({{"type", "node.progress"}, {"node", node}, {"fraction", fraction}});
   };
   ctx_.progress_fn = &progress_;
+  set_variable_ = [this](std::string_view name, const toolkit::Value& value) { return set_variable(name, value); };
+  ctx_.set_variable_fn = &set_variable_;
 }
 
 std::string Run::go(const json& graph_given, const json& station_given, const json& variables) {
@@ -236,6 +239,10 @@ void Run::tune(const json& list) {
     if (sent != list.end() && !sent->contains("expr") && sent->contains("value") && sent->value("type", std::string{}) == v.value("type", std::string{}))
       v["value"] = sent->at("value");
   }
+  apply_variables(next);
+}
+
+void Run::apply_variables(const json& next) {
   if (next == variables_given_) return;
   try {
     const toolkit::Variables now(next);
@@ -271,6 +278,54 @@ void Run::tune(const json& list) {
   } catch (const toolkit::VariableError& err) {
     log("warn", std::string("variable change ignored: ") + err.what());
   }
+}
+
+// A block's write (#166). Only what the UI may tune: a variable of the run, marked `tunable`,
+// not a formula, of the value's type and within its range. A refusal warns once per variable
+// and reason, so a block that writes every step doesn't flood the Console.
+bool Run::set_variable(std::string_view name, const toolkit::Value& value) {
+  const std::string who(name);
+  const auto refuse = [&](const std::string& why) {
+    if (told_.insert("set:" + who + ":" + why).second) log_(ctx_.node, "warn", "set_variable(\"" + who + "\"): " + why);
+    return false;
+  };
+  if (!variables_given_.is_array()) return refuse("no such variable");
+  json next = pending_.is_null() ? variables_given_ : pending_;
+  const auto v = std::ranges::find_if(next, [&](const json& x) { return x.value("name", std::string{}) == who; });
+  if (v == next.end()) return refuse("no such variable");
+  if (v->contains("expr")) return refuse("a formula can't be set; set the variables it uses");
+  if (!v->value("tunable", false)) return refuse("not tunable");
+  const std::string type = v->value("type", std::string("number"));
+  if (const double* number = std::get_if<double>(&value)) {
+    if (type == "number") (*v)["value"] = *number;
+    else if (type == "boolean") (*v)["value"] = *number != 0;
+    else return refuse("is " + type + ", not a number");
+  } else if (const auto* text = std::get_if<std::string>(&value)) {
+    if (type != "enum" && type != "text" && type != "file") return refuse("is " + type + ", not text");
+    (*v)["value"] = *text;
+  } else {
+    return refuse("takes a number or text");
+  }
+  try {
+    const toolkit::Variables check(next);  // range, whole, enum options
+  } catch (const toolkit::VariableError& err) {
+    return refuse(err.what());
+  }
+  pending_ = std::move(next);
+  return true;
+}
+
+void Run::commit_variables() {
+  if (pending_.is_null()) return;
+  const json next = std::move(pending_);
+  pending_ = nullptr;
+  const json before = vars_.values();
+  apply_variables(next);
+  const json after = vars_.values();
+  json changed = json::object();
+  for (const auto& [name, v] : after.items())
+    if (!before.contains(name) || before.at(name) != v) changed[name] = v;
+  if (!changed.empty()) emit_({{"type", "variables.patch"}, {"values", changed}});
 }
 
 // One block's number param to `value`: by the block, else (a block with no state) by making it
@@ -314,7 +369,11 @@ toolkit::Values Run::inputs_of(const Node& node) {
   return in;
 }
 
-json Run::pass() { return pass_over(g_.order); }
+json Run::pass() {
+  json samples = pass_over(g_.order);
+  commit_variables();  // between passes, so every block saw the same variables this one
+  return samples;
+}
 
 json Run::pass_over(const std::vector<std::string>& order) {
   json samples = json::array();
@@ -510,13 +569,29 @@ RunSettings with_overrides(RunSettings base, const json& settings) {
   number("duration", base.duration, true);
   number("dt", base.dt, false);
   number("speed", base.speed, true);
+  if (settings.contains("solver")) {
+    if (!settings.at("solver").is_string())
+      throw std::invalid_argument("run setting solver must be a string");
+    const std::string s = settings.at("solver").get<std::string>();
+    const auto& valid = toolkit::solve::names();
+    if (std::find(valid.begin(), valid.end(), s) == valid.end()) {
+      std::string list;
+      for (const auto& name : valid) list += (list.empty() ? "" : ", ") + name;
+      throw std::invalid_argument("unknown solver \"" + s + "\" (expected one of: " + list + ")");
+    }
+    base.solver = s;
+  }
   if (base.duration > 0 && base.duration / base.dt > 1e7)
     throw std::invalid_argument("run settings: more than 10 million clock steps (duration / dt)");
   return base;
 }
 
 json settings_json(const RunSettings& s) {
-  return {{"mode", s.mode == RunSettings::Mode::Once ? "once" : "clock"}, {"duration", s.duration}, {"dt", s.dt}, {"speed", s.speed}};
+  json j = {{"mode", s.mode == RunSettings::Mode::Once ? "once" : "clock"}, {"duration", s.duration}, {"dt", s.dt}, {"speed", s.speed}};
+  if (!s.solver.empty()) {
+    j["solver"] = s.solver;
+  }
+  return j;
 }
 
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,

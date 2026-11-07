@@ -117,7 +117,9 @@ Definitions
    A param (or property) whose type its default doesn't say: ``Param("Space", "key")``,
    ``Param("data/a.png", "file")``, ``Param("fast", "enum", ["slow", "fast"])`` (a dropdown:
    the block gets the name). Plain defaults say it: a number (``number``), a bool
-   (``boolean``, a checkbox, 1.0 or 0.0 to the block), text (``text``).
+   (``boolean``, a checkbox, 1.0 or 0.0 to the block), text (``text``). ``Param("Kp",
+   "variable")`` names a project variable (a picker in the UI): the block gets the name, to
+   pass to ``ctx.variable`` or ``ctx.set_variable``.
 
 .. py:class:: Linked(inputs=(), outputs=(), kind="probe", label="")
 
@@ -393,6 +395,30 @@ Bound from the engine's toolkit (C++: :cpp:class:`Model`, ``paperboat::solve``,
 
 .. py:function:: solve.names() -> list[str]
 
+.. py:function:: ode(f, x0, solver="rk4", **options) -> ODE
+
+   Bootstrap an ODE system :math:`dx/dt = f(x, t)` or :math:`f(t, x)` with a built-in solver
+   (``"rk4"``, ``"rk45"``, ``"rk2"``, ``"euler"``, or ``"discrete"``). Returns an :py:class:`ODE`
+   instance whose state is advanced by ``ode.step(dt)`` or ``ode.step(t, dt)``.
+
+.. py:class:: ODE
+
+   .. py:attribute:: x
+      Current state vector (list or numpy array, preserving input array type).
+
+   .. py:attribute:: t
+      Current simulation time.
+
+   .. py:attribute:: solver
+      Name of the active solver algorithm.
+
+   .. py:method:: step(t_or_dt, dt=None)
+
+      Advance the ODE state by one step. Supports calling as ``step(dt)`` or ``step(t, dt)``.
+
+Convenience solver constructors are also available directly on ``paperboat.solve``:
+``solve.ode``, ``solve.rk4``, ``solve.rk45``, ``solve.rk2``, ``solve.euler``, and ``solve.discrete``.
+
 The scene builders return :py:class:`Entity` objects; ``entities()`` may return them,
 dicts, or lists of them (a spring), mixed. Points are ``(x, y)`` or ``(x, y, z)``.
 
@@ -461,6 +487,19 @@ What a block sees
    .. py:attribute:: node
 
       The id of the block (or station object) being called.
+
+   .. py:method:: variable(name)
+
+      A project variable's value now: a number, a boolean as 1.0 or 0.0, text; ``None`` if
+      there is none of that name.
+
+   .. py:method:: set_variable(name, value)
+
+      Set a ``tunable`` variable (#166), as an autotuner or a calibration does: a number
+      (or ``bool``) for a number or boolean variable, text for an enum, text or file one.
+      It takes effect at the end of the pass; formulas and params bound to it follow, and
+      the UI keeps the value in the project. Returns ``False``, with a warning in the
+      Console, if refused (unknown, not tunable, a formula, the wrong type, out of range).
 
    .. py:method:: log(text, level="info")
 

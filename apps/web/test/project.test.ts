@@ -90,7 +90,27 @@ test("damage is named by where it is", () => {
   assert.match(bad({ ...base, flow, variables: [{ name: "x", type: "color" }] }), /variables\[0\]/);
   assert.match(bad({ ...base, flow, dashboard: {} }), /dashboard\.instruments/);
   assert.match(bad({ ...base, flow, run: { duration: "long" } }), /run\.duration/);
+  assert.match(bad({ ...base, flow, ui: "not-an-obj" }), /ui must be an object/);
+  assert.match(bad({ ...base, flow, ui: { lock: "not-an-obj" } }), /ui\.lock must be an object/);
+  assert.match(bad({ ...base, flow, ui: { lock: { arrange: "yes" } } }), /ui\.lock\.arrange must be a boolean/);
+  assert.match(bad({ ...base, flow, ui: { lock: { pages: [] } } }), /ui\.lock\.pages must be a non-empty list/);
+  assert.match(bad({ ...base, flow, ui: { lock: { pages: [123] } } }), /ui\.lock\.pages must be a non-empty list/);
+  assert.match(bad({ ...base, flow, ui: { lock: { modes: [] } } }), /ui\.lock\.modes must be a non-empty list/);
+  assert.match(bad({ ...base, flow, ui: { lock: { passcode: { algo: "sha256" } } } }), /ui\.lock\.passcode needs algo, salt, and hash/);
   assert.match(bad({ ...base, flow, run: { duration: "long" } }), /^The project is damaged: /);
+});
+
+test("ui.lock is preserved in buildProject and validated by parseProject", () => {
+  const lock = {
+    arrange: true,
+    pages: ["station", "dashboard"],
+    modes: ["navigator"],
+    passcode: { algo: "sha256", salt: "1234567890abcdef", hash: "abcdef1234567890" },
+  };
+  const p = buildProject({ backend: "b", flow, ui: { lock } });
+  assert.deepEqual(p.ui?.lock, lock);
+  const parsed = ok(stringify(p));
+  assert.deepEqual(parsed.ui?.lock, lock);
 });
 
 test("a file name is made safe and ends in the project extension", () => {

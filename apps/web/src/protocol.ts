@@ -35,7 +35,7 @@ export type ParamDef = {
   default: boolean;
 } | {
   id: string;
-  type: "text" | "key" | "file";
+  type: "text" | "key" | "file" | "variable";
   default: string;
 } | {
   id: string;
@@ -337,6 +337,8 @@ export type RunSettings = {
   dt?: number;
   /** Times real time (1: as the clock goes; 0: as fast as it can). */
   speed?: number;
+  /** The solver used for continuous integration. */
+  solver?: "rk4" | "rk45" | "rk2" | "euler" | "discrete";
 };
 
 /** A named, typed value (#36), used by reference in block params and station props. Exactly one of value and expr. */
@@ -396,6 +398,24 @@ export type Project = {
   dashboard?: DashboardLayout;
   /** Only the run settings the user changed from the backend's defaults. */
   run?: RunSettings;
+  /** Optional UI preferences and restrictions saved with the project (#104). */
+  ui?: {
+    /** Lock down parts of the UI behind an optional passcode (#104). */
+    lock?: {
+      /** When true, lock the Board's Arrange button and command. */
+      arrange?: boolean;
+      /** Allowed page ids ('station', 'flow', 'dashboard'). */
+      pages?: string[];
+      /** Allowed view mode ids ('navigator', 'commander', 'lookout'). */
+      modes?: string[];
+      /** Salted hash of the unlock passcode. */
+      passcode?: {
+        algo: string;
+        salt: string;
+        hash: string;
+      };
+    };
+  };
 };
 
 /** Every message a backend sends. */
@@ -437,11 +457,21 @@ export type ServerMsg =
     variables: Variables;
   }
   | {
+    type: "project.load";
+    name?: string;
+    project: Project;
+  }
+  | {
     type: "variables.values";
     /** Each variable's resolved value, by name. */
     values: Record<string, number | boolean | string>;
     error?: string;
     at?: string;
+  }
+  | {
+    type: "variables.patch";
+    /** The variables that changed, by name, with their new values. */
+    values: Record<string, number | boolean | string>;
   }
   | {
     type: "run.started";

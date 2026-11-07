@@ -16,6 +16,8 @@
 //     return paperboat::solve::State{s[1], -k / m * s[0]};
 //   });
 
+#include <algorithm>
+#include <array>
 #include <functional>
 #include <memory>
 #include <string>
@@ -43,6 +45,21 @@ class Solver {
   // Advance `x` from `t` to `t + dt`. Throws std::runtime_error when f returns a state of
   // another size, or rk45 can't meet its tolerances in max_steps sub-steps.
   virtual void step(State& x, double t, double dt, const Deriv& f) = 0;
+
+  // Fixed-size overload: state as std::array<double, N>.
+  template <std::size_t N>
+  void step(std::array<double, N>& x, double t, double dt,
+            const std::function<std::array<double, N>(double, const std::array<double, N>&)>& f) {
+    State s(x.begin(), x.end());
+    step(s, t, dt, [&](double at, const State& st) {
+      std::array<double, N> arr;
+      std::copy_n(st.begin(), N, arr.begin());
+      auto res = f(at, arr);
+      return State(res.begin(), res.end());
+    });
+    std::copy_n(s.begin(), N, x.begin());
+  }
+
   virtual std::string_view name() const = 0;
 };
 
@@ -54,6 +71,12 @@ std::unique_ptr<Solver> make(std::string_view name, Options options = {});
 
 // One step with a fresh solver of that name (rk45 then starts its sub-steps at dt).
 void step(std::string_view solver, State& x, double t, double dt, const Deriv& f, Options options = {});
+
+template <std::size_t N>
+void step(std::string_view solver, std::array<double, N>& x, double t, double dt,
+          const std::function<std::array<double, N>(double, const std::array<double, N>&)>& f, Options options = {}) {
+  make(solver, options)->step<N>(x, t, dt, f);
+}
 
 // An enum param or prop `solver` (choose one in the UI), defaulting to `fallback`.
 ParamDef param(std::string fallback = "rk4");

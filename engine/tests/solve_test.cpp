@@ -90,6 +90,28 @@ TEST_CASE("solvers say what's wrong") {
   CHECK(p.options.size() == solve::names().size());
 }
 
+TEST_CASE("fixed-size array solver overloads step correctly") {
+  // x'' = -x from (1, 0) using std::array<double, 2>
+  std::array<double, 2> x = {1.0, 0.0};
+  auto rk4 = solve::make("rk4");
+  const double dt = 0.01;
+  for (int k = 0; k < 100; ++k) {
+    rk4->step<2>(x, k * dt, dt, [](double, const std::array<double, 2>& s) -> std::array<double, 2> {
+      return {s[1], -s[0]};
+    });
+  }
+  CHECK_THAT(x[0], WithinAbs(std::cos(1.0), 1e-7));
+
+  // Test free template function solve::step<2>
+  std::array<double, 2> y = {1.0, 0.0};
+  for (int k = 0; k < 100; ++k) {
+    solve::step<2>("rk4", y, k * dt, dt, [](double, const std::array<double, 2>& s) -> std::array<double, 2> {
+      return {s[1], -s[0]};
+    });
+  }
+  CHECK_THAT(y[0], WithinAbs(std::cos(1.0), 1e-7));
+}
+
 namespace {
 
 // A mass on a spring, as a domain would write it.

@@ -170,7 +170,9 @@ initializers may leave any out.
       Number types (to the block as ``Values``): ``"number"``, ``"boolean"`` (a checkbox; 1
       or 0). Text types (through ``Config``): ``"text"``, ``"key"`` (a ``KeyboardEvent.code``,
       picked by pressing it), ``"file"`` (a path, relative to the descriptor's folder),
-      ``"enum"`` (one of ``options``, a dropdown; the block also gets its index in ``Values``).
+      ``"enum"`` (one of ``options``, a dropdown; the block also gets its index in ``Values``),
+      ``"variable"`` (the name of a project variable, a picker; for
+      :cpp:func:`Context::set_variable`).
 
    .. cpp:member:: std::vector<std::string> options
 
@@ -453,6 +455,16 @@ What runs
 
       A variable's value now, or null if there is none of that name.
 
+   .. cpp:function:: bool set_variable(std::string_view name, const Value &value) const
+
+      Set the tunable variable ``name`` (#166), as an autotuner or a calibration does: a
+      number for a number or boolean variable, text for an enum, text or file one. It takes
+      effect at the end of the pass, so every block in a pass sees the same variables;
+      formulas over it and params bound to it follow (a block that takes no live change is
+      told once in the Console), and the UI keeps the value in the project. Returns false,
+      with a warning in the Console, if the variable is unknown, not ``tunable``, a formula,
+      of another type, or the value is outside its ``min`` / ``max``.
+
    .. cpp:function:: void log(std::string_view text, std::string_view level = "info") const
 
       Write a line to the Console (``info``, ``warn``, ``error``), tagged with ``node``.
@@ -698,6 +710,10 @@ Solvers
       Advance ``x`` from ``t`` to ``t + dt``. Throws ``std::runtime_error`` when ``f``
       returns a state of another size, or ``rk45`` can't meet its tolerances.
 
+   .. cpp:function:: template <std::size_t N> void step(std::array<double, N> &x, double t, double dt, const std::function<std::array<double, N>(double, const std::array<double, N>&)> &f)
+
+      Advance a fixed-size state vector without heap allocations.
+
 .. cpp:function:: std::unique_ptr<solve::Solver> solve::make(std::string_view name, Options options = {})
 
    A solver by name: ``rk4`` (classic Runge–Kutta, the default), ``rk45`` (Dormand–Prince,
@@ -708,6 +724,10 @@ Solvers
 .. cpp:function:: void solve::step(std::string_view solver, State &x, double t, double dt, const Deriv &f, Options options = {})
 
    One step with a fresh solver of that name.
+
+.. cpp:function:: template <std::size_t N> void solve::step(std::string_view solver, std::array<double, N> &x, double t, double dt, const std::function<std::array<double, N>(double, const std::array<double, N>&)> &f, Options options = {})
+
+   Fixed-size state overload for stepping with a fresh solver of that name.
 
 .. cpp:function:: const std::vector<std::string> &solve::names()
 
@@ -734,6 +754,10 @@ Model
    ``entities()``.
 
    .. cpp:function:: explicit Model(solve::State initial, std::string_view solver = "rk4", solve::Options options = {})
+
+   .. cpp:function:: void set_solver(std::string_view solver, solve::Options options = {})
+
+      Configure or switch the numerical solver for the model.
 
    .. cpp:function:: virtual solve::State derivatives(double t, const solve::State &x, const Values &in) const = 0
 

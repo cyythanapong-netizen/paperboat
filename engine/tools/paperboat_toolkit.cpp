@@ -79,7 +79,7 @@ int main(int argc, char** argv) {
     const std::string_view name = pos[1];
     std::string version;
     for (std::size_t i = 0; i < args.size(); ++i) {
-      if (args[i] == "--version" && i + 1 < args.size()) {
+      if ((args[i] == "--version" || args[i] == "-v") && i + 1 < args.size()) {
         version = std::string(args[i + 1]);
       }
     }
@@ -88,7 +88,7 @@ int main(int argc, char** argv) {
     };
 
     tk::ToolkitResult res;
-    tk::HostBuild host = rebuild ? tk::HostBuild{} : tk::HostBuild{"", ""};
+    tk::HostBuild host{.source_dir = {}, .build_dir = {}, .skip_rebuild = !rebuild};
     if (cmd == "install" || cmd == "add" || cmd == "update") {
       res = tk::install_toolkit(name, version, {}, host, log);
     } else if (cmd == "uninstall" || cmd == "remove") {

@@ -119,7 +119,8 @@
               "enum": [
                 "text",
                 "key",
-                "file"
+                "file",
+                "variable"
               ]
             },
             "default": {
@@ -727,6 +728,51 @@
       ],
       "additionalProperties": false
     },
+    "project.load": {
+      "type": "object",
+      "description": "Initial project configuration loaded by the backend on startup (#126).",
+      "properties": {
+        "type": {
+          "const": "project.load"
+        },
+        "name": {
+          "type": "string"
+        },
+        "project": {
+          "$ref": "#/$defs/Project"
+        }
+      },
+      "required": [
+        "type",
+        "project"
+      ],
+      "additionalProperties": false
+    },
+    "variables.patch": {
+      "type": "object",
+      "description": "A block set tunable variables during a run (#166, Context::set_variable): what changed, formulas that follow included. The UI keeps the non-formula ones in the project.",
+      "properties": {
+        "type": {
+          "const": "variables.patch"
+        },
+        "values": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "boolean",
+              "string"
+            ]
+          },
+          "description": "The variables that changed, by name, with their new values."
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ],
+      "additionalProperties": false
+    },
     "variables.values": {
       "type": "object",
       "description": "What the variables come to (#36), so the UI shows formulas' values: on connect and after each variables.set. With error (and at, the variable or block at fault) when they don't hold.",
@@ -1114,7 +1160,9 @@
             "graph.load",
             "station.load",
             "variables.load",
+            "project.load",
             "variables.values",
+            "variables.patch",
             "run.started",
             "run.progress",
             "run.finished",
@@ -1215,12 +1263,36 @@
           "if": {
             "properties": {
               "type": {
+                "const": "project.load"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/project.load"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "variables.values"
               }
             }
           },
           "then": {
             "$ref": "#/$defs/variables.values"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "variables.patch"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/variables.patch"
           }
         },
         {
@@ -2016,6 +2088,17 @@
           "type": "number",
           "minimum": 0,
           "description": "Times real time (1: as the clock goes; 0: as fast as it can)."
+        },
+        "solver": {
+          "type": "string",
+          "enum": [
+            "rk4",
+            "rk45",
+            "rk2",
+            "euler",
+            "discrete"
+          ],
+          "description": "The solver used for continuous integration."
         }
       },
       "additionalProperties": false
@@ -2201,6 +2284,59 @@
         "run": {
           "$ref": "#/$defs/RunSettings",
           "description": "Only the run settings the user changed from the backend's defaults."
+        },
+        "ui": {
+          "type": "object",
+          "description": "Optional UI preferences and restrictions saved with the project (#104).",
+          "additionalProperties": false,
+          "properties": {
+            "lock": {
+              "type": "object",
+              "description": "Lock down parts of the UI behind an optional passcode (#104).",
+              "additionalProperties": false,
+              "properties": {
+                "arrange": {
+                  "type": "boolean",
+                  "description": "When true, lock the Board's Arrange button and command."
+                },
+                "pages": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Allowed page ids ('station', 'flow', 'dashboard')."
+                },
+                "modes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Allowed view mode ids ('navigator', 'commander', 'lookout')."
+                },
+                "passcode": {
+                  "type": "object",
+                  "description": "Salted hash of the unlock passcode.",
+                  "properties": {
+                    "algo": {
+                      "type": "string"
+                    },
+                    "salt": {
+                      "type": "string"
+                    },
+                    "hash": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "algo",
+                    "salt",
+                    "hash"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
         }
       }
     }

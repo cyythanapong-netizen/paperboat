@@ -28,7 +28,7 @@ import subprocess
 import sys
 import tempfile
 
-FORBIDDEN = ("CLAUDE.md", "AGENTS.md", "GEMINI.md", "TODO.md", "GUIDELINES.md", ".claude/", ".remember/")
+FORBIDDEN = ("CLAUDE.md", "AGENTS.md", "GEMINI.md", "TODO.md", "GUIDELINES.md", "ARCHITECTURE.md", ".claude/", ".remember/")
 EXAMPLES = "examples/backends"
 
 

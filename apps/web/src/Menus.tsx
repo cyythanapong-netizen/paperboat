@@ -7,7 +7,7 @@ import { useFocusReturn } from "./ProjectUI";
  * ←/→ move between menus, ↓ or Enter opens one, ↑/↓ move in it, Esc closes. Disabled items stay and say
  * why in their tooltip. Keys here are the menu's own, never forwarded to the backend (`data-own-keys`).
  */
-export function MenuBar({ commands }: { commands: Command[] }) {
+export function MenuBar({ commands, menuLabels }: { commands: Command[]; menuLabels?: Partial<Record<MenuId, string>> }) {
   const menus = byMenu(commands);
   const [open, setOpen] = useState<MenuId | null>(null);
   const [rover, setRover] = useState(0); // the one title Tab lands on
@@ -111,7 +111,7 @@ export function MenuBar({ commands }: { commands: Command[] }) {
             onClick={(e) => (open === m.id ? setOpen(null) : openMenu(m.id, e.detail === 0))}
             onPointerEnter={() => open && open !== m.id && setOpen(m.id)}
           >
-            {m.label}
+            {menuLabels?.[m.id] ?? m.label}
           </button>
           {open === m.id && (
             <div className="menu" role="menu" aria-label={m.label}>
