@@ -18,6 +18,7 @@
 
 #include "paperboat/core/backend_manager.hpp"
 #include "paperboat/core/process.hpp"
+#include "paperboat/toolkit/apps.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
 #include "paperboat/toolkit/installer.hpp"
 #ifdef PAPERBOAT_HAS_OPENCV
@@ -113,9 +114,18 @@ Modelica (Squero Studio OM, needs OpenModelica):
                              omc's checkModel on it
   modelica icon <Model.mo | Q.Name> [--class <Name>]
                              Import a Modelica class's icon and connectors as JSON
-  squero [Model.mo] [--port <N>] [--app <dir>]
-                             Squero Studio OM's server, squero/0 (default port 8790);
-                             opens Model.mo (default ./Untitled.mo, created if missing)
+  squero [Model.mo] [--port <N>] [--app <dir>] [--version <V>]
+                             Squero Studio OM: the squero/0 server and the app (squero-studio-om,
+                             fetched on first use; default port 8790); opens Model.mo
+                             (default ./Untitled.mo, created if missing)
+
+Packages (apps from other repositories, see apps.toml):
+  pkg list [--json]          The apps, installed or not
+  pkg install <name>[@<V>]   Clone a release (default: newest, else main) and build it
+  pkg update <name|--all>    Install the newest release of an installed app
+  pkg uninstall <name>       Remove an app
+  pkg versions <name>        Release versions on GitHub, newest first
+  pkg path <name>            The installed app's output folder
 
 Console:
   (no command)               Open the interactive console (apps/cli) on a terminal;
@@ -610,6 +620,90 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
   return 0;
 }
 
+// paperboat pkg: the package manager for apps in other repositories (apps.toml). Same shape as
+// `toolkit`, but into a per-user store, and what's built is an app, not a toolkit of this engine.
+int cmd_pkg(const std::vector<std::string_view>& args) {
+  if (args.empty()) {
+    std::cerr << "usage: paperboat pkg <list|install|update|uninstall|versions|path> [name[@version]] [--version V] [--all] [--json]\n";
+    return 2;
+  }
+  const auto sub = args[0];
+  bool json_out = false;
+  bool all = false;
+  std::string name;
+  std::string version;
+  for (std::size_t i = 1; i < args.size(); ++i) {
+    if (args[i] == "--json") json_out = true;
+    else if (args[i] == "--all") all = true;
+    else if ((args[i] == "--version" || args[i] == "-v") && i + 1 < args.size()) version = std::string(args[++i]);
+    else if (!args[i].starts_with("-") && name.empty()) name = std::string(args[i]);
+  }
+  if (const auto at = name.find('@'); at != std::string::npos) {  // name@version
+    version = name.substr(at + 1);
+    name.resize(at);
+  }
+
+  if (sub == "list") {
+    const auto list = tk::list_apps();
+    if (json_out) {
+      json arr = json::array();
+      for (const auto& a : list)
+        arr.push_back({{"name", a.name}, {"repo", a.repo}, {"description", a.description},
+                       {"installed", a.installed}, {"version", a.version}, {"deps", a.deps}});
+      std::cout << arr.dump(2) << '\n';
+      return 0;
+    }
+    if (list.empty()) std::cerr << "no apps (apps.toml not found in the repository root)\n";
+    for (const auto& a : list)
+      std::cout << std::left << std::setw(20) << a.name << std::setw(14) << (a.installed ? a.version : "not installed")
+                << a.description << '\n';
+    return 0;
+  }
+  if (sub == "update" && all) {
+    int failed = 0;
+    for (const auto& a : tk::list_apps()) {
+      if (!a.installed) continue;
+      const auto r = tk::install_app(a.name, {}, {}, [](std::string_view l, std::string_view t) {
+        (l == "error" ? std::cerr : std::cout) << "[" << l << "] " << t << '\n';
+      });
+      if (!r.ok) std::cerr << "paperboat pkg: " << r.message << '\n';
+      failed += !r.ok;
+    }
+    return failed ? 1 : 0;
+  }
+  if (name.empty()) {
+    std::cerr << "error: app name required (e.g. `paperboat pkg " << sub << " squero-studio-om`)\n";
+    return 2;
+  }
+  if (sub == "versions") {
+    const auto versions = tk::list_app_versions(name);
+    for (const auto& v : versions) std::cout << v << '\n';
+    if (versions.empty()) std::cerr << "no release tags for \"" << name << "\"; install takes main (\"dev\")\n";
+    return 0;
+  }
+  if (sub == "path") {
+    const auto out = tk::app_output(name);
+    if (out.empty()) {
+      std::cerr << "paperboat pkg: \"" << name << "\" is not installed (paperboat pkg install " << name << ")\n";
+      return 1;
+    }
+    std::cout << out.string() << '\n';
+    return 0;
+  }
+  const auto log = [](std::string_view level, std::string_view text) {
+    (level == "error" ? std::cerr : std::cout) << "[" << level << "] " << text << '\n';
+  };
+  tk::ToolkitResult res;
+  if (sub == "install" || sub == "add" || sub == "update") res = tk::install_app(name, version, {}, log);
+  else if (sub == "uninstall" || sub == "remove") res = tk::uninstall_app(name, {}, log);
+  else {
+    std::cerr << "error: unknown pkg subcommand: " << sub << '\n';
+    return 2;
+  }
+  if (!res.ok) std::cerr << "paperboat pkg: " << res.message << '\n';
+  return res.ok ? 0 : 1;
+}
+
 json step_json(const core::CheckStep& s) {
   return {{"name", s.name}, {"ok", s.ok}, {"skipped", s.skipped}, {"message", s.message}, {"duration", s.duration_seconds}};
 }
@@ -892,30 +986,46 @@ int cmd_modelica(const std::vector<std::string_view>& args) {
 #endif
 }
 
-// paperboat squero [Model.mo] [--port N] [--app dir]: Squero Studio OM's server (squero/0), serving
-// the built Studio app (the squero-studio-om repo's dist/, next to this one, or --app) on the same
-// port when there is one.
+// paperboat squero [start|run] [Model.mo] [--port N] [--app dir] [--version V]: Squero Studio OM, the
+// squero/0 server and the Studio app on one port. The app is --app, else a squero-studio-om checkout
+// next to this repo (its dist/, for developing it), else the one `paperboat pkg` installed, fetched
+// on first use (--version V fetches that release).
 int cmd_squero(const std::vector<std::string_view>& args) {
 #ifndef PAPERBOAT_HAS_MODELICA
   (void)args;
   std::cerr << kNoModelica;
   return 1;
 #else
+  constexpr const char* kApp = "squero-studio-om";
   int port = 8790;
   fs::path app;
   fs::path file;
+  std::string version;
   for (std::size_t i = 0; i < args.size(); ++i) {
     if (args[i] == "--port" && i + 1 < args.size()) port = std::stoi(std::string(args[++i]));
     else if (args[i] == "--app" && i + 1 < args.size()) app = std::string(args[++i]);
+    else if (args[i] == "--version" && i + 1 < args.size()) version = std::string(args[++i]);
+    else if (i == 0 && (args[i] == "start" || args[i] == "run")) continue;
     else if (!args[i].starts_with("--")) file = std::string(args[i]);
   }
+  if (version.starts_with('v')) version.erase(0, 1);
   if (app.empty()) {
     const fs::path root = tk::find_repo_root();
-    const fs::path sibling = root.empty() ? fs::path{} : root.parent_path() / "squero-studio-om" / "dist";
-    if (!sibling.empty() && fs::is_regular_file(sibling / "index.html"))
+    const fs::path sibling = root.empty() ? fs::path{} : root.parent_path() / kApp / "dist";
+    if (version.empty() && fs::is_regular_file(sibling / "index.html")) {
       app = sibling;
-    else
-      std::cerr << "note: Studio isn't built (../squero-studio-om/dist, or pass --app); serving squero/0 only\n";
+    } else {
+      std::string have;
+      for (const auto& a : tk::list_apps()) if (a.name == kApp && a.installed) have = a.version;
+      if (have.empty() || (!version.empty() && version != have)) {
+        const auto r = tk::install_app(kApp, version, {}, [](std::string_view, std::string_view t) {
+          std::cerr << "squero: " << t << '\n';
+        });
+        if (!r.ok) std::cerr << "squero: " << r.message << '\n';
+      }
+      app = tk::app_output(kApp);
+      if (app.empty()) std::cerr << "note: Studio isn't installed (paperboat pkg install " << kApp << ", or pass --app); serving squero/0 only\n";
+    }
   }
   return mo::serve_squero(port, app, {}, file);
 #endif
@@ -962,7 +1072,10 @@ const std::vector<CommandSpec>& command_table() {
       {"unpack", cmd_unpack, "Unpack and verify a .ppk", {}, {}, {"--dir", "--json-stream"}, "ppk"},
       {"modelica", cmd_modelica, "Make a backend from a Modelica model", {}, {"generate", "check", "icon"},
        {"--model", "--out", "--path", "--class"}, "file"},
-      {"squero", cmd_squero, "Run Squero Studio OM's server", {"studio"}, {}, {"--port", "--app"}},
+      {"squero", cmd_squero, "Run Squero Studio OM (server and app)", {"studio"}, {"start", "run"},
+       {"--port", "--app", "--version"}, "file"},
+      {"pkg", cmd_pkg, "Apps from other repositories (package manager)", {},
+       {"list", "install", "update", "uninstall", "versions", "path"}, {"--json", "--all", "--version"}},
       {"top", cmd_top, "Process dashboard (console)"},
       {"commands", cmd_commands, "The command table", {}, {}, {"--json"}},
   };
@@ -1048,6 +1161,8 @@ void print_interactive_help() {
                            Manage example backends (ports 8765-8773)
   toolkit <list|install|update|versions>
                            Manage optional toolkits (e.g. `toolkit install opencv`)
+  pkg <list|install|update|uninstall|versions|path>
+                           Apps from other repositories (e.g. `pkg install squero-studio-om`)
   check [backend] [--fast] 4-stage backend verification (manifest, catalog, smoke, golden)
   pack [folder] [--out <pkg>]
                            Package backend into .ppk archive

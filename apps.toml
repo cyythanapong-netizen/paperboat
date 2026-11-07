@@ -1,0 +1,16 @@
+# Apps that live in their own repositories. `paperboat pkg install <name>` clones one (a release tag,
+# or main) into the per-user store and builds it there; `paperboat squero` fetches squero-studio-om
+# on its own. `deps` are installed first and sit next to the app (npm's file:../<dep>).
+[[apps]]
+name = "paperboat-shared"
+repo = "https://github.com/cyythanapong-netizen/paperboat-shared.git"
+description = "The UI kit (@paperboat/shared) the apps build on."
+build = ["npm ci"]
+
+[[apps]]
+name = "squero-studio-om"
+repo = "https://github.com/cyythanapong-netizen/squero-studio-om.git"
+description = "Squero Studio: OpenModelica. The Modelica editor that exports Paperboat C++ backends."
+deps = ["paperboat-shared"]
+build = ["npm ci", "npm run build"]
+output = "dist"

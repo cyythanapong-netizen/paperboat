@@ -195,6 +195,11 @@ struct VersionTriple {
 
 }  // namespace
 
+int run_command(const std::vector<std::string>& args, const fs::path& cwd, const ToolkitLog& log,
+                std::string* last_line, std::string* all_output) {
+  return run_cmd(args, cwd, log, last_line, all_output);
+}
+
 std::vector<std::string> parse_release_tags(std::string_view ls_remote_output) {
   std::istringstream stream{std::string(ls_remote_output)};
   std::string line;

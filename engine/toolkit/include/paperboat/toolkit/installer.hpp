@@ -64,6 +64,11 @@ struct ToolkitResult {
 
 using ToolkitLog = std::function<void(std::string_view level, std::string_view text)>;
 
+// Run a command (argv, no shell) in `cwd`, passing each output line to `log`. Returns the exit status;
+// `last_line` gets the last non-empty line, `all_output` everything.
+int run_command(const std::vector<std::string>& args, const std::filesystem::path& cwd = {},
+                const ToolkitLog& log = {}, std::string* last_line = nullptr, std::string* all_output = nullptr);
+
 // Parse git tags output (e.g. from git ls-remote --tags --refs) into semantic version numbers, newest first.
 std::vector<std::string> parse_release_tags(std::string_view ls_remote_output);
 

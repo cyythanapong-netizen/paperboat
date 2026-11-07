@@ -524,8 +524,9 @@ Squero Studio OM, the Modelica editor, talks to the same omc through ``paperboat
 ``{"id", "op": "omc", "expr"}`` answered by ``{"id", "ok", "result" | "error"}``, plus
 ``{"op": "status", "state", "version"}`` pushes. Only an allow-list of omc calls passes.
 
-``paperboat squero [Model.mo]`` (or ``bin/squero-om``) also serves the built Studio app
-(``../squero-studio-om/dist``, or ``--app DIR``) on the same port and opens ``Model.mo``, default ``./Untitled.mo``. Beyond ``omc``
+``paperboat squero [Model.mo]`` (or ``bin/squero-om``) also serves the Studio app on the same port: ``--app DIR``,
+else a ``squero-studio-om`` checkout next to this repository (its ``dist/``), else the release ``paperboat pkg``
+fetched from GitHub into ``~/.local/share/paperboat/apps`` (the first run does it; ``apps.toml`` lists the apps) and opens ``Model.mo``, default ``./Untitled.mo``. Beyond ``omc``
 it has six ops of its own, written in C++ and confined to the opened model, each answered by
 ``{"id", "ok": true, "result": {…}}`` or ``{"id", "ok": false, "error"}``:
 

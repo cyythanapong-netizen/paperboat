@@ -105,6 +105,8 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ./bin/paperboat examples start      # launches all example backends (ports 8765-8773)
 ./bin/paperboat examples status     # checks status of example backends
 ./bin/paperboat toolkit list        # lists available and installed toolkits
+./bin/paperboat pkg list            # apps from other repositories (apps.toml): squero-studio-om, ...
+./bin/paperboat squero              # Squero Studio OM; fetches and builds it on first use (needs omc, git, npm)
 ```
 
 ### The console
