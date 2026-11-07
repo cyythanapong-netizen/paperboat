@@ -67,6 +67,18 @@ Top level
    link slot to another object's id (checked: the slot exists, the object is there).
    :doc:`station`.
 
+``[[variables]]`` — the starter variables (optional)
+   Named, typed values the user can edit and params can refer to: ``name``, ``type``
+   (``number``, ``boolean``, ``enum``, ``text``, ``file``), ``value`` or ``expr`` (a formula over
+   other variables), and optionally ``unit``, ``min``, ``max``, ``step``, ``whole``, ``options``,
+   ``note``, ``group``. ``exposed`` adds a control in the Dashboard's Controls tile, ``dock`` one in
+   the run dock, and ``tunable`` lets it change during a run (a formula can't). The user's own
+   variables live in the project (:doc:`project`); the shape is in ``protocol/README.md``.
+
+``[dashboard]`` — the starter Dashboard layout (optional)
+   ``columns``, ``tabs``, ``instruments`` and ``decorations`` (labels, sections, separators, the
+   console and the ``controls`` tile); see :doc:`dashboard`.
+
 A complete example
 ------------------
 

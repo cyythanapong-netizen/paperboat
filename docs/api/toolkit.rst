@@ -17,7 +17,7 @@ Package Quick Reference
      - Block Templates
      - Functional Role
    * - :ref:`pkg-base`
-     - ``constant``, ``text``, ``boolean``, ``key``, ``key_hold``, ``to_number``, ``to_text``, ``to_boolean``, ``type_of``, ``now``, ``interval``, ``timeout``, ``delay``, ``if``, ``and``, ``or``, ``xor``, ``not``, ``compare``, ``in_range``
+     - ``constant``, ``text``, ``boolean``, ``key``, ``key_hold``, ``variable``, ``to_number``, ``to_text``, ``to_boolean``, ``type_of``, ``now``, ``interval``, ``timeout``, ``delay``, ``if``, ``and``, ``or``, ``xor``, ``not``, ``compare``, ``in_range``
      - Fundamental values, type conversions, runtime clock delays, and dual signal/step logic gates.
    * - :ref:`pkg-signal`
      - ``clock``, ``sine``, ``step``, ``ramp``, ``square``, ``ease``, ``function``, ``noise``, ``generator``
@@ -68,6 +68,10 @@ Values of each datatype: ``constant`` (Number: a float, param ``value``), ``text
 string) and ``boolean`` (Boolean: a checkbox, 1 or 0 on the wire); all output ``y``. And
 ``key`` (out ``pressed``: 1 while its ``key`` param's key is held in the UI) and ``key_hold``
 (out ``held``: 1 while down; ``duration``: seconds held down so far).
+
+``variable`` (out ``y``; param ``name``): a project variable's value on a wire. Constant for the
+run, or live when the variable is ``tunable``: drag its control during a run and the wire
+follows. An unknown name fails the run on this block.
 
 Type conversions and inspection:
 - ``to_number``: ``in`` (any), ``fallback`` (signal) → ``y`` (signal). Parses numbers from text/booleans; invalid parses use ``fallback``.
@@ -160,6 +164,11 @@ Pointwise arithmetic and math operations on signals:
 - ``saturation`` (``u`` → ``y``; ``min``, ``max``)
 - ``map_range`` (``u``, ``in_min``, ``in_max``, ``out_min``, ``out_max`` → ``y``; optional ``clamp``)
 - ``lerp`` (``a``, ``b``, ``t`` → ``y``: linear interpolation)
+- ``deg_to_rad`` and ``rad_to_deg`` (``u`` → ``y``)
+- ``wrap_angle`` (``u`` → ``y``: radians wrapped into [-π, π])
+- ``angle_diff`` (``a``, ``b`` → ``y``: shortest signed ``a - b``, in [-π, π])
+- ``atan2`` (``y``, ``x`` → ``y``: radians) and ``hypot`` (``a``, ``b`` → ``y``: √(a²+b²))
+- ``deadband`` (``u`` → ``y``)
 - ``random_number`` (``min``, ``max`` → ``y``; params: ``min``, ``max``, ``integer``, ``seed``)
 - ``random_boolean`` (``p`` → ``y``; params: ``p``, ``seed``)
 

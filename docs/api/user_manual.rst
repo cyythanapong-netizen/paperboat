@@ -209,7 +209,10 @@ The Run Dock floats gracefully at the bottom of the canvas, rendered in semi-tra
 - **Run / Pause**: Click :kbd:`▶ Run` or press :kbd:`Space`.
 - **Cancel**: Click :kbd:`■ Cancel` to stop the current run immediately.
 - **Duration**: Edit the run duration in seconds (e.g., `10 s`). Set to `0` or leave empty
-  for continuous runs if supported by the backend.
+  to run until you cancel. If the computation falls behind real time, an amber delay badge
+  appears and the Console warns once (see :doc:`cli`).
+- **Controls**: Variables marked *dock* have their controls here; *tunable* ones can be
+  changed mid-run.
 - **Speed Multiplier**: Toggle execution pacing between `0.5×`, `1×`, `2×`, or uncapped `Max`.
 
 The Console

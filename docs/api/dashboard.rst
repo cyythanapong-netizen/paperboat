@@ -18,7 +18,7 @@ subclassing :py:class:`paperboat.Monitor`.
 Layout
 ------
 
-The Dashboard lays itself out; there is no layout to edit. Readouts (displays) go in a
+Without a layout it lays itself out. Readouts (displays) go in a
 strip of small cards on top, then pictures, then plots, as equal tiles in a grid that fits
 the width. Within a kind, instruments follow their monitor blocks on the Flow canvas, left
 to right, then top to bottom: a pipeline's stages read in order, and moving a block moves
@@ -40,6 +40,15 @@ edits them; while editing text, click a value chip (or drag it in) to put ``{nam
 caret; variables have their own chips. Renaming a variable rewrites ``{old}`` in labels and
 section titles, deleting one replaces it with its value, and the variables sheet lists them
 under "Used by".
+
+Controls
+--------
+
+A variable marked ``exposed`` gets a control (a slider, checkbox, dropdown or text field) in the
+**Controls** tile, a ``controls`` decoration the layout places like an instrument (default
+4×3). A ``tunable`` one can be dragged during a run and takes effect between two steps;
+others apply from the next run. A variable marked ``dock`` has its control in the run dock
+too. See :doc:`descriptor` for the flags.
 
 The Console
 -----------

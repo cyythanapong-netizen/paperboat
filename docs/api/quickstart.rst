@@ -162,4 +162,4 @@ it; Ctrl+C clears the line, and twice quits, asking first when jobs are still ru
 The console runs the same ``paperboat`` commands you would type in a shell, through their
 machine-readable forms: ``paperboat backends --json``, ``paperboat commands --json``, and
 ``--json-stream`` on ``check``, ``pack`` and ``unpack`` (one JSON event per line, then a
-``result`` event). Scripts can use them the same way.
+``result`` event). Scripts can use them the same way. Every command is listed in :doc:`cli`.
