@@ -74,7 +74,12 @@ class RandomBoolean final : public Block {
 }  // namespace
 
 void add_arithmetic(Registry& registry) {
-  registry.add(make_template(
+  // Pointwise: each takes vectors too, element by element (#164).
+  const auto pointwise = [&](Template t) {
+    t.def.elementwise = true;
+    registry.add(std::move(t));
+  };
+  pointwise(make_template(
       "math", "gain", "Gain", {"u"}, {"y"}, {{"k", 1.0}},
       [](const Values& p, const Config&) {
         const double k = get_or(p, "k");
@@ -97,9 +102,9 @@ void add_arithmetic(Registry& registry) {
       },
       "Adds a and b.", {.compact = true, .glyph = "plus"});
   sum.def.ports_from = "signs";
-  registry.add(std::move(sum));
+  pointwise(std::move(sum));
 
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "threshold", "Threshold", {"u"}, {"y"}, {{"level", 0.5}},
       [](const Values& p, const Config&) {
         double level = get_or(p, "level");
@@ -109,7 +114,7 @@ void add_arithmetic(Registry& registry) {
       },
       "1 above a level, else 0.", {.compact = true, .glyph = "step", .value = "{level}"}));
 
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "saturation", "Saturation", {"u"}, {"y"}, {{"min", -1.0}, {"max", 1.0}},
       [](const Values& p, const Config&) {
         double lo = get_or(p, "min"), hi = get_or(p, "max");
@@ -120,7 +125,7 @@ void add_arithmetic(Registry& registry) {
       "Keeps its input between a minimum and a maximum.", {.compact = true, .glyph = "clamp", .value = "{min}…{max}"}));
 
   // math/arithmetic
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "arithmetic", "Arithmetic", {"a", "b"}, {"y"},
       {{.id = "op", .type = "enum", .default_text = "+", .options = {"+", "-", "*", "/", "%", "^"}}},
       [](const Values& p, const Config&) {
@@ -143,7 +148,7 @@ void add_arithmetic(Registry& registry) {
       "Applies an arithmetic operator to a and b.", {.compact = true, .glyph = "{op}", .value = "{op}"}));
 
   // math/absolute
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "absolute", "Absolute", {"u"}, {"y"}, {},
       [](const Values&, const Config&) {
         return std::make_unique<Stateless>([](const Context&, const Values& in) {
@@ -153,7 +158,7 @@ void add_arithmetic(Registry& registry) {
       "Computes the absolute value of u.", {.compact = true, .glyph = "abs"}));
 
   // math/round
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "round", "Round", {"u"}, {"y"},
       {{.id = "mode", .type = "enum", .default_text = "round", .options = {"round", "floor", "ceil", "truncate"}}},
       [](const Values& p, const Config&) {
@@ -192,10 +197,10 @@ void add_arithmetic(Registry& registry) {
       },
       "Selects the minimum or maximum among inputs.", {.compact = true, .glyph = "{mode}", .value = "{mode}"});
   min_max.def.ports_from = "inputs";
-  registry.add(std::move(min_max));
+  pointwise(std::move(min_max));
 
   // math/clamp
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "clamp", "Clamp", {"u", "min", "max"}, {"y"},
       {{.id = "min", .default_value = 0.0, .type = "number"},
        {.id = "max", .default_value = 1.0, .type = "number"}},
@@ -212,7 +217,7 @@ void add_arithmetic(Registry& registry) {
       "Restricts u between min and max.", {.compact = true, .glyph = "clamp", .value = "{min}…{max}"}));
 
   // math/map_range
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "map_range", "Map Range", {"u", "in_min", "in_max", "out_min", "out_max"}, {"y"},
       {{.id = "in_min", .default_value = 0.0, .type = "number"},
        {.id = "in_max", .default_value = 1.0, .type = "number"},
@@ -239,7 +244,7 @@ void add_arithmetic(Registry& registry) {
       {.compact = true, .glyph = "ramp", .value = "{out_min}…{out_max}"}));
 
   // math/lerp
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "lerp", "Lerp", {"a", "b", "t"}, {"y"}, {},
       [](const Values&, const Config&) {
         return std::make_unique<Stateless>([](const Context&, const Values& in) {
@@ -268,7 +273,7 @@ void add_arithmetic(Registry& registry) {
       "Generates random booleans with probability p.", {.compact = true, .glyph = "~B", .value = "{p}"}));
 
   // math/deg_to_rad
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "deg_to_rad", "Deg to Rad", {"u"}, {"y"}, {},
       [](const Values&, const Config&) {
         return std::make_unique<Stateless>([](const Context&, const Values& in) {
@@ -278,7 +283,7 @@ void add_arithmetic(Registry& registry) {
       "Converts an angle from degrees to radians.", {.compact = true, .glyph = "°→rad"}));
 
   // math/rad_to_deg
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "rad_to_deg", "Rad to Deg", {"u"}, {"y"}, {},
       [](const Values&, const Config&) {
         return std::make_unique<Stateless>([](const Context&, const Values& in) {
@@ -288,7 +293,7 @@ void add_arithmetic(Registry& registry) {
       "Converts an angle from radians to degrees.", {.compact = true, .glyph = "rad→°"}));
 
   // math/wrap_angle
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "wrap_angle", "Wrap Angle", {"u"}, {"y"}, {},
       [](const Values&, const Config&) {
         return std::make_unique<Stateless>([](const Context&, const Values& in) {
@@ -299,7 +304,7 @@ void add_arithmetic(Registry& registry) {
       "Wraps an angle in radians into the range [-pi, pi].", {.compact = true, .glyph = "wrap∠"}));
 
   // math/angle_diff
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "angle_diff", "Angle Diff", {"a", "b"}, {"y"}, {},
       [](const Values&, const Config&) {
         return std::make_unique<Stateless>([](const Context&, const Values& in) {
@@ -310,7 +315,7 @@ void add_arithmetic(Registry& registry) {
       "Computes the shortest signed difference (a - b) normalized to [-pi, pi].", {.compact = true, .glyph = "Δ∠"}));
 
   // math/atan2
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "atan2", "Atan2", {"y", "x"}, {"y"}, {},
       [](const Values&, const Config&) {
         return std::make_unique<Stateless>([](const Context&, const Values& in) {
@@ -321,7 +326,7 @@ void add_arithmetic(Registry& registry) {
       "Computes the 2-argument arctangent atan2(y, x) in radians.", {.compact = true, .glyph = "atan2"}));
 
   // math/hypot
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "hypot", "Hypot", {"a", "b"}, {"y"}, {},
       [](const Values&, const Config&) {
         return std::make_unique<Stateless>([](const Context&, const Values& in) {
@@ -333,7 +338,7 @@ void add_arithmetic(Registry& registry) {
       "Computes the Euclidean distance hypot(a, b) = sqrt(a*a + b*b).", {.compact = true, .glyph = "hypot"}));
 
   // math/deadband
-  registry.add(make_template(
+  pointwise(make_template(
       "math", "deadband", "Deadband", {"u"}, {"y"},
       {{.id = "width", .default_value = 0.1, .type = "number"}},
       [](const Values& p, const Config&) {

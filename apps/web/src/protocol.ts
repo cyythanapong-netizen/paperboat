@@ -18,6 +18,8 @@ export type PortDef = {
   dimension?: number;
   /** A vector's ordered component labels and optional per-component units; its length fixes the dimension. */
   components?: VectorComponent[];
+  /** A signal port of an elementwise block: it also joins a vector port (the block runs element by element). Absent: false. */
+  broadcast?: boolean;
 };
 
 /** A setting on a block, or a property of a station object. number and boolean reach the block as numbers (boolean: a checkbox, 1 or 0); text, key (a KeyboardEvent.code, picked by pressing it) and file (a path, relative to the descriptor) as text; enum (one of options, a dropdown) as its name (and to an expression, its index). */
@@ -67,10 +69,14 @@ export type BlockDef = {
   };
   /** A magic block's forms; its inputs and outputs are the first's, and its form param (an enum) picks one. */
   forms?: Form[];
-  /** The id of a text param that decides the inputs: one per sign character in it (+ adds, - or − subtracts; at most 26; none reads as ++), ids a, b, c… of the first input's type. Sum's signs. */
+  /** The id of a text param that decides the inputs: one per sign character in it (+ adds, - or − subtracts; at most 26; none reads as ++), ids a, b, c… of the first input's type. Sum's signs. A param called names gives one input per name instead (Mux), see outputs_from. */
   ports_from?: string;
   /** The id of a text param whose expression's free names are the inputs: one per identifier in it (other than pi, e and built-in functions, in order of first appearance), of the first input's type. f(t)'s f. */
   inputs_from?: string;
+  /** The id of a text param of names (split on spaces and commas: "x v theta") that are the outputs, ids in that order; the first vector input gets one component per name, units by position from a `units` param. Demux's names. (ports_from "names" does the same for the inputs: Mux.) */
+  outputs_from?: string;
+  /** It works element by element: its signal ports take vectors too (they are marked broadcast), scalars broadcast, and with any vector in, its outputs are vectors of that length, one instance per element. Absent: false. */
+  elementwise?: boolean;
   /** false: its outputs this step don't depend on its inputs this step (an integrator, a delay), so a feedback loop may pass through it. Absent: true. */
   feedthrough?: boolean;
   /** One line in plain words: what it does. Shown on its card in the block browser. Optional. */
@@ -189,6 +195,30 @@ export type GraphEdge = {
   to: [string, string];
 };
 
+/** How a Scope instrument draws (#37): presentation, kept in the Board layout (it changes during a run without a graph edit and saves with the project). Zoom, cursors and freeze are not saved. Every key is optional. */
+export type ScopeSettings = {
+  /** time: channels over time (default); xy: the first channel on x, the others on y; fft: dB magnitude of the visible window. */
+  mode?: "time" | "xy" | "fft";
+  /** Seconds of time shown while following the run. Absent: the whole run. */
+  window?: number;
+  /** A log y axis (time mode). */
+  ylog?: boolean;
+  /** Channels not drawn, by id (an input, or input.component for a vector). */
+  hidden?: string[];
+  /** line: straight lines between samples (default); line+points: also a ring on each sample; points: samples only; smooth: a monotone cubic that never overshoots. */
+  draw?: "line" | "line+points" | "points" | "smooth";
+  trigger?: {
+    edge?: "rising" | "falling";
+    /** The channel it watches. */
+    source: string;
+    level: number;
+    /** Where the trigger point sits, % of the window. Absent: 10. */
+    position?: number;
+    /** Freeze on the first trigger (single); absent: keep re-triggering (auto). */
+    single?: boolean;
+  };
+};
+
 /** The Dashboard's grid: where each monitor block's instrument sits and how big it is, plus decorations (sections, separators, labels) and tabs. A backend ships one as its default (the descriptor's [dashboard]); an instrument not listed falls in where the automatic order puts it, and a block that does not exist is ignored. Decorations and tabs belong to the layout, not the flow: the Flow canvas still decides which instruments exist. */
 export type DashboardLayout = {
   /** Grid columns; the UI fits fewer on a narrow screen. */
@@ -202,6 +232,7 @@ export type DashboardLayout = {
     at?: [number, number];
     /** The tab it is on (one of `tabs`); absent: the first. */
     tab?: string;
+    scope?: ScopeSettings;
   })[];
   /** Pages of the Dashboard, each with its own grid. A tab strip shows when there are two or more. Absent: one page. */
   tabs?: string[];
@@ -430,10 +461,12 @@ export type ServerMsg =
     type: "signal";
     node: string;
     t: number;
-    /** The latest scalar or text sample, or a whole numeric vector on a Display monitor. */
+    /** The latest scalar or text sample, or a whole numeric vector: on a Display, and on a Graph in a clock run (one trace per component). */
     v: number | string | number[];
-    /** Labels and units for a vector Display sample, in vector order. */
+    /** Labels and units for a vector sample, in vector order. */
     components?: VectorComponent[];
+    /** The monitor's input this sample came in by, for one with several (a Scope's a, b…). Absent: in. */
+    port?: string;
   }
   | {
     type: "node.state";

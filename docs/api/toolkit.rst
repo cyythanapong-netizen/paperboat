@@ -17,7 +17,7 @@ Package Quick Reference
      - Block Templates
      - Functional Role
    * - :ref:`pkg-base`
-     - ``constant``, ``text``, ``boolean``, ``key``, ``key_hold``, ``to_number``, ``to_text``, ``to_boolean``, ``type_of``, ``now``, ``interval``, ``timeout``, ``delay``, ``if``, ``and``, ``or``, ``xor``, ``not``, ``compare``, ``in_range``
+     - ``constant``, ``text``, ``boolean``, ``key``, ``key_hold``, ``to_number``, ``to_text``, ``to_boolean``, ``type_of``, ``mux``, ``demux``, ``now``, ``interval``, ``timeout``, ``delay``, ``if``, ``and``, ``or``, ``xor``, ``not``, ``compare``, ``in_range``
      - Fundamental values, type conversions, runtime clock delays, and dual signal/step logic gates.
    * - :ref:`pkg-signal`
      - ``clock``, ``sine``, ``step``, ``ramp``, ``square``, ``ease``, ``function``, ``noise``, ``generator``
@@ -32,7 +32,7 @@ Package Quick Reference
      - ``pid``, ``rate_limiter``, ``deadband``, ``hysteresis``, ``lowpass``, ``integrator``
      - Dynamic feedback controllers, signal filters, and rate-of-change limiters.
    * - :ref:`pkg-dashboard`
-     - ``graph``, ``display``, ``image``
+     - ``graph``, ``display``, ``scope``, ``image``
      - Telemetry instruments piping signals to real-time oscilloscopes, digital readouts, and visual frames.
    * - :ref:`pkg-step`
      - ``start``, ``when``, ``wait``, ``if``, ``repeat``, ``while``, ``say``, ``join``, ``stop``
@@ -74,6 +74,19 @@ Type conversions and inspection:
 - ``to_text``: ``in`` (any) → ``y`` (text). Formats numbers, booleans, vectors, and handles as clean text.
 - ``to_boolean``: ``in`` (any) → ``y`` (signal). Truthiness coercion (numbers != 0, non-empty text, non-empty vectors).
 - ``type_of``: ``in`` (any) → ``y`` (text). Returns ``"number"``, ``"text"``, ``"vector"``, ``"table"``, ``"handle"``, or ``"empty"``.
+
+Vectors (#164):
+
+- ``mux``: one signal input per name → ``y`` (vector). Param ``names`` (``"x v theta"``,
+  space- or comma-separated; default ``"a b"``) gives the inputs, in order, and the vector's
+  dimension and component labels; ``units`` (``"m m/s rad"``, ``-`` for none) gives each a
+  unit by position, so units are checked on both sides.
+- ``demux``: ``u`` (vector) → one signal output per name. The same ``names`` and ``units``;
+  ``u`` has that dimension, so a vector of another length is refused when the wire is drawn.
+
+Bad ``names`` (a name twice, one that isn't an identifier, ``y`` on a Mux or ``u`` on a
+Demux, more than 64) fail the run on the block. Between a Mux and a Demux, any
+:ref:`elementwise <elementwise>` block works on the whole vector at once.
 
 Time blocks:
 - ``now``: → ``y`` (signal: current run clock in milliseconds).
@@ -148,7 +161,8 @@ pow``.
 math
 ----
 
-Pointwise arithmetic and math operations on signals:
+Pointwise arithmetic and math operations on signals. All but the two random blocks are
+:ref:`elementwise <elementwise>`: wire a vector in and each output is a vector.
 - ``gain`` (``u`` → ``y``; ``k``)
 - ``sum`` (``a``, ``b``… → ``y``; signs param)
 - ``arithmetic`` (``a``, ``b`` → ``y``; ``op``: ``+``, ``-``, ``*``, ``/``, ``%``, ``^``, division-by-zero safe)
@@ -162,6 +176,22 @@ Pointwise arithmetic and math operations on signals:
 - ``lerp`` (``a``, ``b``, ``t`` → ``y``: linear interpolation)
 - ``random_number`` (``min``, ``max`` → ``y``; params: ``min``, ``max``, ``integer``, ``seed``)
 - ``random_boolean`` (``p`` → ``y``; params: ``p``, ``seed``)
+
+.. _elementwise:
+
+Elementwise blocks
+^^^^^^^^^^^^^^^^^^
+
+A block marked ``elementwise`` (a catalog flag; its signal ports carry ``broadcast``) is
+written for one number but takes a vector wire too: Gain on a 6-vector scales all six.
+With only numbers in, it works as before. With a vector in, every vector into it must
+have one length N, numbers broadcast to every element, and the outputs are vectors of N
+with the input vector's component labels. Stateful ones keep one state per element: an
+Integrator fed a 3-vector holds three integrals, a PID three controllers. The length is
+found from the wires before the run, so a vector loop through an Integrator works; if it
+can't be (a vector of a length known only at run time feeding an Integrator), the run fails
+naming the block. Elementwise: the ``math`` blocks above but the random ones, ``function``
+and the ``signal`` generators, ``integrator``, ``lag`` and ``pid``.
 
 .. _pkg-string:
 
@@ -184,7 +214,10 @@ Text processing and manipulation blocks:
 dashboard
 ---------
 
-Monitors: ``graph`` (plots ``in`` over time) and ``display`` (its latest number or text).
+Monitors: ``graph`` (plots ``in`` over time; a vector in a clock run as one trace per
+component, in a run-once by index), ``display`` (its latest number, text or vector) and
+``scope`` (inputs ``a``, ``b``… by its ``inputs`` param, 2–26, each a channel, a vector one per
+component; see :doc:`dashboard`).
 Control: ``switch`` (output ``y``, 0 or 1), a Board switch the user flips during a run. Param
 ``mode`` is ``toggle`` (a click flips it) or ``momentary`` (on while held); ``initial`` is its
 state at the start of a run; ``key`` also binds a keyboard key. A Monitor that declares outputs,
@@ -195,7 +228,7 @@ like ``switch``, runs as an ordinary block and is shown from its first output.
 control
 -------
 
-Dynamics on a clock: ``pid`` (``e`` → ``u``; ``kp``, ``ki``, ``kd``), ``integrator`` (``u`` → ``y``;
+Dynamics on a clock (all but ``delay`` :ref:`elementwise <elementwise>`): ``pid`` (``e`` → ``u``; ``kp``, ``ki``, ``kd``), ``integrator`` (``u`` → ``y``;
 ``initial``), ``lag`` (``u`` → ``y``; ``tau``; 0 is a one-step delay) and ``delay`` (``u`` → ``y``:
 its input ``steps`` clock steps ago, ``initial`` before then; any value). The last three have
 no direct feedthrough (they output their state, then take the input), so a feedback loop

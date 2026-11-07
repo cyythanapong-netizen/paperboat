@@ -29,13 +29,15 @@ struct VectorComponent {
 // "numbers"…), and step ports only to step ports; "any" takes (or gives) any value but a
 // step. With a `unit` on both ends ("N", "m", "rad"…) they must agree; a port without one
 // connects to anything of its type. A vector port may declare a fixed `dimension`, and
-// optionally ordered `components` with labels and per-component units.
+// optionally ordered `components` with labels and per-component units. A `broadcast`
+// signal port (on an elementwise block) also joins a vector port: see BlockDef::elementwise.
 struct PortDef {
   std::string id = {};
   std::string type = "signal";
   std::string unit = {};
   std::optional<std::size_t> dimension = {};
   std::vector<VectorComponent> components = {};
+  bool broadcast = false;
 };
 
 // Why a wire may not join output `from` to input `to`, if it may not.
@@ -126,6 +128,15 @@ struct BlockDef {
   // The id of a text param whose expression's free names are the inputs, in order of first
   // appearance (see Expression::free_names). Empty: the inputs are the definition's. f(t)'s `f`.
   std::string inputs_from = {};
+  // The id of a text param of names ("x v theta") that are the outputs, ids in that order (see
+  // parse_names). Empty: the outputs are the definition's. Demux's `names`. (Mux takes its
+  // inputs the same way: `ports_from = "names"`.)
+  std::string outputs_from = {};
+  // The block works on numbers one at a time and the engine lifts it to vectors: its signal
+  // ports also take a vector wire; scalars broadcast; with any vector in, it runs as N
+  // instances ("lanes", one per element, each with its own state) and its outputs are vectors
+  // of N. With only numbers in, nothing changes. Gain, Sum, Integrator, PID…
+  bool elementwise = false;
   // False for a block whose outputs this step don't depend on its inputs this step (an
   // integrator, a delay): its Block gives outputs() during the pass and reads its inputs
   // after it, so a feedback loop through it is allowed (no algebraic loop).
@@ -145,6 +156,11 @@ BlockDef in_form(const BlockDef& def, std::string_view form);
 // The signs in `text`, one per input: '+' is +1, '-' (or '−') is −1; anything else (spaces)
 // is skipped. At most 26 (inputs a–z); none at all reads as "++".
 std::vector<int> parse_signs(std::string_view text);
+
+// The names in `text`, split on spaces and commas ("x v theta", "x, v"): what a `names` param
+// makes ports of. Throws std::invalid_argument on an empty list, a name used twice, one that
+// isn't an identifier, one in `reserved` (the block's fixed port ids), or more than 64.
+std::vector<std::string> parse_names(std::string_view text, const std::vector<std::string>& reserved = {});
 
 // Scans `text` for {placeholder} tokens, skipping escaped {{ and }}, returning unique names.
 std::vector<std::string> parse_placeholders(std::string_view text);
@@ -212,7 +228,10 @@ using Values = std::map<std::string, Value, std::less<>>;        // port or para
 using Config = std::map<std::string, std::string, std::less<>>;  // set once in a descriptor
 using KeySet = std::set<std::string, std::less<>>;               // KeyboardEvent.code values
 
-// Generalizes dynamic inputs: supports count (inputs = N), template ("{a} + {b}"), and signs ("+-+").
+// The ports its params give a block (see ports_from, outputs_from): a count of inputs
+// ("inputs" = N), a template's placeholders ("template"), names ("names": one port per name,
+// the vector port on the other side gets one component per name; `units` gives their units
+// by position), else signs ("+-+"). Throws std::invalid_argument on bad names.
 BlockDef with_dynamic_ports(const BlockDef& def, const Values& params, const Config& text);
 
 // Why a value doesn't fit a declared vector port, if it doesn't. Used on block inputs and
@@ -313,6 +332,26 @@ class Step {
   // block that a path is in waits.
   virtual bool shared() const { return false; }
 };
+
+// The block an elementwise def (BlockDef::elementwise) runs as on vectors: `lanes` instances
+// made by `make`, each fed its element of every vector input and the whole of every scalar
+// one, its outputs gathered into vectors. `lanes` 0: made on the first step, from the length
+// of the vectors that arrive. Vectors of different lengths fail, naming the port. A param
+// change goes to every lane. (The engine makes these; a block never needs to.)
+std::unique_ptr<Block> make_lanes(std::function<std::unique_ptr<Block>(const Values& params)> make, Values params,
+                                  std::size_t lanes);
+
+// The element-wise def as it runs on vectors of `lanes` (0: a length known only at run time):
+// its outputs become vector ports of that length, labelled with `components` (a vector
+// input's) when they are as many.
+BlockDef lifted(const BlockDef& def, std::size_t lanes, const std::vector<VectorComponent>& components = {});
+
+// The def with `broadcast` set on its signal ports if it is elementwise (what the catalog
+// sends, so a UI lets a vector wire into one), else `def`.
+BlockDef with_broadcast(const BlockDef& def);
+
+// The numbers at `id` as a vector: a vector as it is, a number as one element, else empty.
+Vector as_vector(const Values& values, std::string_view id);
 
 // The number at `id`, or `fallback` when absent or not a number (an unconnected input
 // reads as 0).

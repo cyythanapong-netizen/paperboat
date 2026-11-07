@@ -154,7 +154,7 @@ std::string Run::go(const json& graph_given, const json& station_given, const js
           for (const auto& id : *order) {
             auto& node = g_.nodes.at(id);
             const auto call = calling(id);
-            if (node.block) node.block = node.entry->make(node.params, node.text);
+            if (node.block) node.block = make_block(node);
             if (node.monitor) node.monitor = node.entry->make(node.params, node.text);
             outputs_.erase(id);
           }
@@ -320,14 +320,17 @@ json Run::pass_over(const std::vector<std::string>& order) {
   json samples = json::array();
   // What an instrument shows, `in` of `shown`, as `signal` samples. `port` is the output it
   // came from, for a vector's component names.
-  const auto sample = [&](const Node& node, const toolkit::Values& shown, const toolkit::PortDef* port) {
+  // `input` names the monitor's input it came in by, for one with several (a Scope); "" is `in`.
+  const auto sample = [&](const Node& node, const toolkit::Values& shown, const toolkit::PortDef* port, const std::string& input = {}) {
     const double t = std::round(ctx_.t * 1e4) / 1e4;
+    const auto first = samples.size();
     if (const auto* text = toolkit::get_if<std::string>(shown, "in")) {
       samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", *text}});
     } else if (const auto* vector = toolkit::get_vector(shown, "in")) {
-      if (node.def.instrument == "display") {
-        // A Display is a readout: preserve the vector as one value. A Graph keeps its
-        // existing list-as-samples behavior (index is x), useful for point series.
+      if (node.def.instrument == "display" || node.def.instrument == "scope" || settings_.mode == RunSettings::Mode::Clock) {
+        // A Display is a readout, and a Graph in a clock run draws one trace per component
+        // over time: the vector is one sample. A Graph in a run-once plots it by index (x is
+        // the index), useful for point series.
         json item = {{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", *vector}};
         if (port != nullptr && !port->components.empty()) {
           json components = json::array();
@@ -346,6 +349,16 @@ json Run::pass_over(const std::vector<std::string>& order) {
     } else {
       samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", toolkit::get_or(shown, "in")}});
     }
+    if (!input.empty())
+      for (auto i = first; i < samples.size(); ++i) samples[i]["port"] = input;
+  };
+  // The output port wired into `node`'s input `input`, for a vector's component names.
+  const auto source_port = [&](const std::string& id, const std::string& input) -> const toolkit::PortDef* {
+    const auto wire = g_.wires.find({id, input});
+    if (wire == g_.wires.end()) return nullptr;
+    const auto& source = g_.nodes.at(wire->second.first);
+    const auto it = std::ranges::find(source.def.outputs, wire->second.second, &toolkit::PortDef::id);
+    return it == source.def.outputs.end() ? nullptr : &*it;
   };
   for (const auto& id : order) {
     auto& node = g_.nodes.at(id);
@@ -379,15 +392,14 @@ json Run::pass_over(const std::vector<std::string>& order) {
       validate_vector_outputs(node, outputs_[id]);
     } else {  // a monitor: what it shows is its "value" output, or its input
       auto in = inputs_of(node);
+      if (node.def.instrument == "scope") {  // one sample per wired input, tagged with it
+        for (const auto& p : node.def.inputs)
+          if (const auto v = in.find(p.id); v != in.end()) sample(node, {{"in", v->second}}, source_port(id, p.id), p.id);
+        continue;
+      }
       if (node.monitor)
         if (auto shown = node.monitor->step(ctx_, in); shown.contains("value")) in["in"] = shown.at("value");
-      const toolkit::PortDef* port = nullptr;
-      if (const auto wire = g_.wires.find({id, "in"}); wire != g_.wires.end()) {
-        const auto& source = g_.nodes.at(wire->second.first);
-        const auto it = std::ranges::find(source.def.outputs, wire->second.second, &toolkit::PortDef::id);
-        if (it != source.def.outputs.end()) port = &*it;
-      }
-      sample(node, in, port);
+      sample(node, in, source_port(id, "in"));
       continue;
     }
     // A block with an instrument and outputs (a Switch) shows its first output.

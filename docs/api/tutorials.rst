@@ -393,3 +393,49 @@ Tutorial 5: Running the System
 
 Congratulations! You have created a complete, end-to-end Paperboat application with custom
 physics, 3D visualization, closed-loop control, and real-time telemetry.
+
+Tutorial 6: One Wire for a Whole State
+--------------------------------------
+
+A flow can carry several numbers on one wire as a **vector**. Here three numbers are joined,
+scaled as one and split again; no custom code is needed.
+
+1. Add three **Number** blocks (``constant``) with values 1, 2 and 3.
+2. Add a **Mux** and set its ``names`` param to ``x v theta`` (and ``units`` to
+   ``m m/s rad`` if you want the units checked). It now has inputs ``x``, ``v`` and
+   ``theta``; wire the numbers into them. Its output ``y`` is a vector of 3, labelled
+   ``[3]`` on the card.
+3. Add a **Gain** with ``k = 2`` and wire the Mux's ``y`` into its ``u``. Gain is
+   elementwise: it scales each element, and its output is a vector of 3 too.
+4. Add a **Demux** with the same ``names`` and wire the Gain into its ``u``. Its outputs
+   ``x``, ``v``, ``theta`` read 2, 4 and 6; wire any of them to a **Display**.
+5. Wire the Gain into a **Graph** as well: in a clock run it draws one trace per element.
+
+Put an **Integrator** after the Gain and you integrate all three at once, each with its own
+state; feed the Integrator back through a **Sum** and the loop still works, because the
+vector length is found from the wires before the run. The same vector can drive a station
+object whose linked block has a vector input (``vector_port("u", 3)``): one wire, the whole
+input.
+
+In descriptor TOML:
+
+.. code-block:: toml
+
+   [graph]
+   nodes = [
+     { id = "x", type = "constant", params = { value = 1 } },
+     { id = "v", type = "constant", params = { value = 2 } },
+     { id = "theta", type = "constant", params = { value = 3 } },
+     { id = "join", type = "mux", params = { names = "x v theta", units = "m m/s rad" } },
+     { id = "k", type = "gain", params = { k = 2 } },
+     { id = "split", type = "demux", params = { names = "x v theta" } },
+     { id = "angle", type = "display" },
+   ]
+   edges = [
+     { from = ["x", "y"], to = ["join", "x"] },
+     { from = ["v", "y"], to = ["join", "v"] },
+     { from = ["theta", "y"], to = ["join", "theta"] },
+     { from = ["join", "y"], to = ["k", "u"] },
+     { from = ["k", "y"], to = ["split", "u"] },
+     { from = ["split", "theta"], to = ["angle", "in"] },
+   ]

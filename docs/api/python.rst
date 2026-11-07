@@ -155,6 +155,23 @@ Blocks
 
       The name of a text param whose expression's free names are the block's inputs ("f").
 
+   .. py:attribute:: outputs_from
+      :type: str
+
+      The name of a text param of names (``"x v theta"``, space- or comma-separated) that are
+      the block's outputs, in order; ``outputs`` is only the default. The first vector input
+      gets one component per name, and a ``units`` param gives their units by position.
+
+   .. py:attribute:: elementwise
+      :type: bool
+
+      ``True`` for a block written for one number that should also work on vectors: its
+      signal ports then take a vector wire too. With a vector of N in, the engine makes N
+      instances of the class (each with its own ``self.params`` and state), gives each its
+      element (and every number input whole), and gathers each output into a vector of N;
+      ``step`` still sees floats. With only numbers in, nothing changes. A block that needs
+      the whole vector declares :py:func:`vector_port` ports instead and gets a list.
+
    .. py:attribute:: feedthrough
       :type: bool
 

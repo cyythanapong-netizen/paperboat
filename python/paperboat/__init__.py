@@ -119,6 +119,13 @@ class Block:
     ports_from: str = ""
     # The name of a text param whose expression's free names are the block's inputs ("f").
     inputs_from: str = ""
+    # The name of a text param of names ("x v theta") that are the block's outputs.
+    outputs_from: str = ""
+    # True for a block that works on numbers one at a time: the engine lifts it to vectors.
+    # Its signal ports also take a vector wire (scalars broadcast); with a vector in it runs
+    # as one instance per element, each with its own self.params and state, and each output
+    # is gathered into a vector. step() still sees floats.
+    elementwise: bool = False
 
     def __init__(self, params: dict) -> None:
         self.params = params

@@ -7,6 +7,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,10 +28,16 @@ struct Node {
   std::unique_ptr<toolkit::Block> monitor;    // monitors that convert what they show
   toolkit::Values params = {};                // what it was made with, to make it again
   toolkit::Config text = {};
+  // An elementwise block fed a vector runs as lanes (toolkit::make_lanes): how many (0: the
+  // length is known only at run time). Unset: it runs as itself, on numbers.
+  std::optional<std::size_t> lanes = {};
   bool commented = false;
   std::string comment_mode = "out";  // "out" (omitted from execution) or "through" (bypassed)
   std::string comment = {};          // user notes or documentation
 };
+
+// A fresh instance of a signal block `node` (as it was made: lanes, if it runs as lanes).
+std::unique_ptr<toolkit::Block> make_block(const Node& node);
 
 // A story group's step: when a path arrives it runs the story's blocks (`pass`, set by
 // the run) once per clock step for `seconds` (0: once), then leaves by "next". With its

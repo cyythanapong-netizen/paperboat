@@ -6,16 +6,19 @@ import type { BlockDef, ParamValue, PortDef, PortSides } from "./protocol";
  * uses it while dragging so a wire only snaps where it fits.
  *
  * A wire joins ports of one type (signal, image, points…); `any` joins anything but a step;
- * step ports only join step ports. With a unit on both ends they must agree.
+ * step ports only join step ports. With a unit on both ends they must agree. A `broadcast`
+ * port (an elementwise block's signal port) also joins a vector port: the engine runs the
+ * block element by element and checks the lengths when the graph runs.
  */
 export function wireMismatch(from: PortDef, to: PortDef): string | null {
   const a = from.type ?? "signal";
   const b = to.type ?? "signal";
-  const vectors = (type: string) => type === "vector" || type === "numbers";
-  const sameType = a === b || (vectors(a) && vectors(b));
+  // A broadcast port (an elementwise block's signal port) also takes, or gives, a vector.
+  const vectorish = (p: PortDef, type: string) => type === "vector" || type === "numbers" || !!p.broadcast;
+  const sameType = a === b || (vectorish(from, a) && vectorish(to, b));
   if ((a === "step") !== (b === "step")) return `joins ${article(a)} port to ${article(b)} port`;
   if (a !== "step" && !sameType && a !== "any" && b !== "any") return `joins ${article(a)} port to ${article(b)} port`;
-  if (vectors(a) && vectors(b)) {
+  if (vectorish(from, a) && vectorish(to, b)) {
     const fromDimension = from.dimension ?? from.components?.length;
     const toDimension = to.dimension ?? to.components?.length;
     if (fromDimension !== undefined && toDimension !== undefined && fromDimension !== toDimension)
@@ -155,11 +158,44 @@ export function parseInputs(text: ParamValue | undefined): string[] {
   return out;
 }
 
-/** A block's definition as its params make it: a magic block in the form its `form` param picks, a block with `ports_from` (signs, template placeholders, or multi-input count), or a block with `inputs_from` with one input per free name in its expression. */
+/**
+ * The names in a `names` param, split on spaces and commas ("x v theta"), as ports: only
+ * identifiers, each once, at most 64. Mirrors the engine's parse_names, which also fails the
+ * run on a bad list; here the bad ones are skipped so the card still draws while typing.
+ */
+export function parseNames(text: ParamValue | undefined, reserved: string[] = []): string[] {
+  const out: string[] = [];
+  for (const name of String(text ?? "").split(/[\s,]+/))
+    if (/^[A-Za-z_]\w*$/.test(name) && !out.includes(name) && !reserved.includes(name) && out.length < 64) out.push(name);
+  return out;
+}
+
+/** `names` as the ports of one side (units by position from `units`; "-" is none), and the first vector port of the other side with one component per name. */
+function namePorts(side: PortDef[], other: PortDef[], text: ParamValue | undefined, unitText: ParamValue | undefined): [PortDef[], PortDef[]] {
+  const names = parseNames(text, other.map((p) => p.id));
+  const units = String(unitText ?? "").split(/[\s,]+/).filter(Boolean);
+  const proto = side[0] ?? { id: "a" };
+  const unitOf = (i: number) => (units[i] && units[i] !== "-" ? units[i] : undefined);
+  const ports = names.map((id, i) => { const { unit: _, ...rest } = proto; return unitOf(i) ? { ...rest, id, unit: unitOf(i) } : { ...rest, id }; });
+  const v = other.findIndex((p) => p.type === "vector" || p.type === "numbers");
+  if (v < 0) return [ports, other];
+  const components = names.map((id, i) => (unitOf(i) ? { id, unit: unitOf(i) } : { id }));
+  return [ports, other.map((p, i) => (i === v ? { ...p, dimension: names.length, components } : p))];
+}
+
+/** A block's definition as its params make it: a magic block in the form its `form` param picks, a block with `ports_from` (signs, template placeholders, multi-input count, or names), `outputs_from` (names), or `inputs_from` with one input per free name in its expression. */
 export function inForm(def: BlockDef, params: Record<string, ParamValue>): BlockDef {
   const form = def.forms?.find((f) => f.name === params.form);
   let out = form ? { ...def, inputs: form.inputs, outputs: form.outputs } : def;
-  if (def.ports_from) {
+  const param = (id: string) => params[id] ?? def.params.find((p) => p.id === id)?.default;
+  if (def.outputs_from) {
+    const [outputs, inputs] = namePorts(out.outputs, out.inputs, param(def.outputs_from), param("units"));
+    out = { ...out, inputs, outputs };
+  }
+  if (def.ports_from === "names") {
+    const [inputs, outputs] = namePorts(out.inputs, out.outputs, param(def.ports_from), param("units"));
+    out = { ...out, inputs, outputs };
+  } else if (def.ports_from) {
     if (def.ports_from === "template") {
       const tmpl = params.template ?? def.params.find((p) => p.id === "template")?.default ?? "Hello {name}";
       const names = parsePlaceholders(tmpl);

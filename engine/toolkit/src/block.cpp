@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdio>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <string_view>
 
@@ -84,8 +85,69 @@ std::vector<std::string> parse_placeholders(std::string_view text) {
   return out;
 }
 
-BlockDef with_dynamic_ports(const BlockDef& def, const Values& params, const Config& text) {
-  if (def.ports_from.empty()) return def;
+std::vector<std::string> parse_names(std::string_view text, const std::vector<std::string>& reserved) {
+  std::vector<std::string> out;
+  std::string name;
+  const auto take = [&] {
+    if (name.empty()) return;
+    const bool ident = !std::isdigit(static_cast<unsigned char>(name[0])) &&
+                       std::ranges::all_of(name, [](char c) { return std::isalnum(static_cast<unsigned char>(c)) || c == '_'; });
+    if (!ident) throw std::invalid_argument("names: \"" + name + "\" isn't a name (letters, digits and _, not starting with a digit)");
+    if (std::ranges::find(out, name) != out.end()) throw std::invalid_argument("names: \"" + name + "\" is there twice");
+    if (std::ranges::find(reserved, name) != reserved.end())
+      throw std::invalid_argument("names: \"" + name + "\" is the id of the block's other port; pick another");
+    out.push_back(std::move(name));
+    name.clear();
+  };
+  for (const char c : text) {
+    if (c == ' ' || c == ',' || c == '\t' || c == '\n') take();
+    else name += c;
+  }
+  take();
+  if (out.empty()) throw std::invalid_argument("names: give at least one name");
+  if (out.size() > 64) throw std::invalid_argument("names: at most 64 names, not " + std::to_string(out.size()));
+  return out;
+}
+
+namespace {
+
+// A text param's value: given in `text`, else its default.
+std::string text_param(const BlockDef& def, const Config& text, const std::string& id) {
+  if (auto it = text.find(id); it != text.end()) return it->second;
+  auto p = std::ranges::find(def.params, id, &ParamDef::id);
+  return p == def.params.end() ? std::string{} : p->default_text;
+}
+
+// `names` become ports of one side (`side`), units by position from the `units` param; the
+// first vector port of the other side (`other`) gets one component per name.
+void name_ports(const BlockDef& def, const Config& text, const std::string& param, std::vector<PortDef>& side,
+                std::vector<PortDef>& other) {
+  std::vector<std::string> reserved;
+  for (const auto& p : other) reserved.push_back(p.id);
+  const auto names = parse_names(text_param(def, text, param), reserved);
+  // Units by position, split like names ("m m/s rad", "m, -, rad"); "-" is none.
+  std::string unit_text = text_param(def, text, "units");
+  std::ranges::replace(unit_text, ',', ' ');
+  std::istringstream split(unit_text);
+  std::vector<std::string> units;
+  for (std::string u; split >> u;) units.push_back(u);
+  const PortDef proto = side.empty() ? PortDef{} : side.front();
+  side.clear();
+  std::vector<VectorComponent> components;
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    PortDef p = proto;
+    p.id = names[i];
+    p.unit = i < units.size() && units[i] != "-" ? units[i] : "";
+    components.push_back({.id = names[i], .unit = p.unit});
+    side.push_back(std::move(p));
+  }
+  if (auto v = std::ranges::find_if(other, [](const PortDef& p) { return is_vector_type(p.type); }); v != other.end()) {
+    v->dimension = names.size();
+    v->components = std::move(components);
+  }
+}
+
+BlockDef with_ports_from(const BlockDef& def, const Values& params, const Config& text) {
   BlockDef out = def;
 
   if (def.ports_from == "template") {
@@ -144,6 +206,16 @@ BlockDef with_dynamic_ports(const BlockDef& def, const Values& params, const Con
     p.id = std::string(1, static_cast<char>('a' + i));
     out.inputs.push_back(std::move(p));
   }
+  return out;
+}
+
+}  // namespace
+
+BlockDef with_dynamic_ports(const BlockDef& def, const Values& params, const Config& text) {
+  BlockDef out = def;
+  if (!def.outputs_from.empty()) name_ports(def, text, def.outputs_from, out.outputs, out.inputs);
+  if (def.ports_from == "names") name_ports(def, text, def.ports_from, out.inputs, out.outputs);
+  else if (!def.ports_from.empty()) out = with_ports_from(out, params, text);
   return out;
 }
 
@@ -217,10 +289,12 @@ std::string a_port(const std::string& type) {
 std::optional<std::string> wire_mismatch(const PortDef& from, const PortDef& to) {
   const bool step_from = from.type == "step", step_to = to.type == "step";
   if (step_from != step_to) return "joins " + a_port(from.type) + " to " + a_port(to.type);
-  const bool same_type = from.type == to.type || (is_vector_type(from.type) && is_vector_type(to.type));
+  // A broadcast port (an elementwise block's signal port) also takes, or gives, a vector.
+  const auto vectorish = [](const PortDef& p) { return is_vector_type(p.type) || p.broadcast; };
+  const bool same_type = from.type == to.type || (vectorish(from) && vectorish(to));
   if (!step_from && !same_type && from.type != "any" && to.type != "any")
     return "joins " + a_port(from.type) + " to " + a_port(to.type);
-  if (is_vector_type(from.type) && is_vector_type(to.type)) {
+  if (vectorish(from) && vectorish(to)) {
     const auto from_size = vector_dimension(from);
     const auto to_size = vector_dimension(to);
     if (from_size && to_size && *from_size != *to_size)
@@ -272,6 +346,141 @@ std::optional<std::string> vector_value_mismatch(const PortDef& port, const Valu
   if (const auto dimension = vector_dimension(port); dimension && vector->size() != *dimension)
     return "has " + std::to_string(vector->size()) + " values, expected " + std::to_string(*dimension);
   return std::nullopt;
+}
+
+namespace {
+
+// See make_lanes.
+class Lanes final : public Block {
+ public:
+  using Make = std::function<std::unique_ptr<Block>(const Values& params)>;
+  Lanes(Make make, Values params, std::size_t lanes) : make_(std::move(make)), params_(std::move(params)), n_(lanes) {
+    if (n_ > 0) made(n_);
+  }
+
+  Values step(const Context& ctx, const Values& in) override {
+    std::size_t n = 0;
+    std::string first;
+    for (const auto& [port, value] : in) {
+      const auto* v = std::get_if<Vector>(&value);
+      if (!v) continue;
+      if (n == 0) {
+        n = v->size();
+        first = port;
+      } else if (v->size() != n) {
+        throw std::invalid_argument("input " + port + " has " + std::to_string(v->size()) + " values, but " + first +
+                                    " has " + std::to_string(n) + ": the vectors into an element-wise block are one length");
+      }
+    }
+    if (n == 0) n = lanes_.empty() ? std::max<std::size_t>(n_, 1) : lanes_.size();  // only numbers: each lane takes them
+    if (n_ > 0 && n != n_)
+      throw std::invalid_argument("input " + first + " has " + std::to_string(n) + " values, expected " + std::to_string(n_));
+    made(n);
+    std::vector<Values> out;
+    out.reserve(n);
+    for (std::size_t i = 0; i < n; ++i) {
+      Values lane;
+      for (const auto& [port, value] : in) {
+        const auto* v = std::get_if<Vector>(&value);
+        lane.emplace(port, v ? Value{(*v)[i]} : value);
+      }
+      out.push_back(lanes_[i]->step(ctx, lane));
+    }
+    return gathered(out);
+  }
+
+  Values outputs() const override {
+    std::vector<Values> out;
+    for (const auto& lane : lanes_) out.push_back(lane->outputs());
+    return gathered(out);
+  }
+
+  std::vector<Entity> entities() const override {
+    std::vector<Entity> out;
+    for (const auto& lane : lanes_)
+      for (auto& e : lane->entities()) out.push_back(std::move(e));
+    return out;
+  }
+
+  // Each lane takes it, or (a stateless one) is made again with it.
+  bool set_param(std::string_view id, double value) override {
+    auto params = params_;
+    params.insert_or_assign(std::string(id), value);
+    for (auto& lane : lanes_) {
+      if (lane->set_param(id, value)) continue;
+      if (!lane->stateless()) return false;
+      lane = make_(params);
+    }
+    params_ = std::move(params);
+    return true;
+  }
+
+ private:
+  void made(std::size_t n) {
+    if (!lanes_.empty()) return;
+    for (std::size_t i = 0; i < n; ++i) lanes_.push_back(make_(params_));
+  }
+
+  // The lanes' outputs as one: numbers into a vector; anything else is lane 0's.
+  static Values gathered(const std::vector<Values>& lanes) {
+    Values out;
+    if (lanes.empty()) return out;
+    for (const auto& [port, first] : lanes.front()) {
+      if (!std::holds_alternative<double>(first)) {
+        out.emplace(port, first);
+        continue;
+      }
+      Vector v;
+      v.reserve(lanes.size());
+      for (const auto& lane : lanes) v.push_back(get_or(lane, port));
+      out.emplace(port, std::move(v));
+    }
+    return out;
+  }
+
+  Make make_;
+  Values params_;
+  std::size_t n_;  // 0: from the first step's vectors
+  std::vector<std::unique_ptr<Block>> lanes_;
+};
+
+}  // namespace
+
+std::unique_ptr<Block> make_lanes(std::function<std::unique_ptr<Block>(const Values& params)> make, Values params,
+                                  std::size_t lanes) {
+  return std::make_unique<Lanes>(std::move(make), std::move(params), lanes);
+}
+
+BlockDef lifted(const BlockDef& def, std::size_t lanes, const std::vector<VectorComponent>& components) {
+  BlockDef out = with_broadcast(def);
+  for (auto& p : out.outputs) {
+    if (p.type != "signal") continue;
+    p.type = "vector";
+    p.broadcast = false;
+    if (lanes > 0) p.dimension = lanes;
+    // The labels of the vector that came in; not its units: what a block makes of them
+    // (an integral, a gain) is in other units. The output's own unit, if any, holds for all.
+    if (lanes > 0 && components.size() == lanes)
+      for (const auto& c : components) p.components.push_back({.id = c.id});
+  }
+  return out;
+}
+
+BlockDef with_broadcast(const BlockDef& def) {
+  if (!def.elementwise) return def;
+  BlockDef out = def;
+  for (auto* side : {&out.inputs, &out.outputs})
+    for (auto& p : *side)
+      if (p.type == "signal") p.broadcast = true;
+  return out;
+}
+
+Vector as_vector(const Values& values, std::string_view id) {
+  auto it = values.find(id);
+  if (it == values.end()) return {};
+  if (const auto* v = std::get_if<Vector>(&it->second)) return *v;
+  if (const auto* d = std::get_if<double>(&it->second)) return {*d};
+  return {};
 }
 
 }  // namespace paperboat::toolkit

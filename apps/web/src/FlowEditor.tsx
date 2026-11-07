@@ -426,7 +426,7 @@ export function syncLinked(nodes: FlowNode[], station: Station | null, objects: 
   return kept.length === nodes.length && added.length === 0 ? nodes : [...kept, ...added];
 }
 
-function makeWire(c: Connection, type: string): Wire {
+export function makeWire(c: Connection, type: string): Wire {
   const step = type === "step";
   return {
     id: `${c.source}.${c.sourceHandle}-${c.target}.${c.targetHandle}`,

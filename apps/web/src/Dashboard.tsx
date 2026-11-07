@@ -1,6 +1,9 @@
 import { useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import type { EngineState, Series } from "./engine";
+import type { EngineState } from "./engine";
+import type { Channel } from "./scope/trace";
+import { BoardScope } from "./scope/BoardScope";
+import type { TapPort } from "./scope/Scope";
 import {
   CELLS,
   DEFAULT_COLUMNS,
@@ -21,6 +24,7 @@ import {
   resizeDecoration,
   resizeInstrument,
   rowsOf,
+  setScope,
   tabIsEmpty,
 } from "./dashboardLayout";
 import type { Monitor, PlacedDeco } from "./dashboardLayout";
@@ -39,28 +43,45 @@ const GAP = 12; // px between cells
 const ROW = 116; // px, one cell's height
 const MIN_CELL = 96; // px: a screen too narrow for the layout's columns gets fewer
 
-const NO_SERIES: Series = { t: [], v: [] };
-
-function Plot({ name, series, idle }: { name: string; series: Series; idle: boolean }) {
+/** A Graph: the glance. One trace, or one per component of a vector (a clock run), and the latest values. */
+function Plot({ name, channels, idle }: { name: string; channels: readonly Channel[]; idle: boolean }) {
   const W = 300;
   const H = 100;
-  const tMax = Math.max(...series.t, 1e-9);
-  const vMin = Math.min(...series.v, 0);
-  const vMax = Math.max(...series.v, 0);
+  let tMax = 1e-9, vMin = 0, vMax = 0;
+  for (const c of channels)
+    for (let i = 0; i < c.buf.n; i++) {
+      tMax = Math.max(tMax, c.buf.t[i]);
+      vMin = Math.min(vMin, c.buf.v[i]);
+      vMax = Math.max(vMax, c.buf.v[i]);
+    }
   const span = vMax - vMin || 1;
-  const points = series.t.map((t, i) => `${(t / tMax) * W},${H - ((series.v[i] - vMin) / span) * H}`).join(" ");
-  const last = series.v[series.v.length - 1];
+  const points = (c: Channel) => {
+    let out = "";
+    for (let i = 0; i < c.buf.n; i++) out += `${(c.buf.t[i] / tMax) * W},${H - ((c.buf.v[i] - vMin) / span) * H} `;
+    return out;
+  };
+  const lasts = channels.map((c) => c.buf.last);
+  const readout =
+    lasts[0] === undefined
+      ? idle ? "graph" : "–"
+      : channels.length === 1
+        ? lasts[0].toFixed(3)
+        : channels.map((c, i) => `${c.label} ${lasts[i]?.toFixed(2)}`).join("  ");
   return (
     <figure className={`instrument graph${idle ? " idle" : ""}`}>
       <div className="screen">
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
           <line className="zero" x1={0} x2={W} y1={H - (-vMin / span) * H} y2={H - (-vMin / span) * H} />
-          <polyline className="trace" points={points} fill="none" vectorEffect="non-scaling-stroke" />
+          {channels.map((c, i) => (
+            <polyline key={c.id} className={`trace trace-${i % 4}`} points={points(c)} fill="none" vectorEffect="non-scaling-stroke">
+              {channels.length > 1 && <title>{c.label}</title>}
+            </polyline>
+          ))}
         </svg>
       </div>
       <figcaption>
         <span>{name}</span>
-        <output>{last === undefined ? (idle ? "graph" : "–") : last.toFixed(3)}</output>
+        <output>{readout}</output>
       </figcaption>
     </figure>
   );
@@ -187,7 +208,7 @@ function Instrument({ name, kind, state, send, params }: { name: string; kind: s
         </figcaption>
       </figure>
     );
-  return <Plot name={name} series={state.signals[name] ?? NO_SERIES} idle={idle} />;
+  return <Plot name={name} channels={state.traces.channels(name)} idle={idle} />;
 }
 
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
@@ -300,6 +321,8 @@ export function Dashboard({
   subscribe,
   send,
   gridOn = true,
+  taps,
+  onTap,
 }: {
   state: EngineState;
   monitors: Record<string, Monitor>;
@@ -313,6 +336,9 @@ export function Dashboard({
   subscribe?: (listen: (m: ServerMsg) => void) => () => void;
   send?: (m: ClientMsg) => void;
   gridOn?: boolean;
+  /** What a Scope's + tap offers, and how it wires one in (#37). */
+  taps?: readonly TapPort[];
+  onTap?: (scope: string, id: string) => void;
 }) {
   const vars = useContext(VarsContext);
   const layout = saved ?? state.dashboard;
@@ -752,7 +778,21 @@ export function Dashboard({
               onDragStart={(e) => startDrag(e, { kind: "instrument", id: p.block, col: p.col, row: p.row })}
               onDragEnd={stop}
             >
-              <Instrument name={p.block} kind={all[p.block].kind} state={state} send={send} params={all[p.block].params} />
+              {all[p.block].kind === "scope" ? (
+                <BoardScope
+                  name={p.block}
+                  state={state}
+                  settings={p.scope}
+                  onSettings={(next) => commit(setScope(arranged, p.block, next))}
+                  small={p.size === "normal" || p.size === "compact"}
+                  sources={all[p.block].sources}
+                  inputs={all[p.block].inputs}
+                  taps={taps}
+                  onTap={onTap && ((id) => onTap(p.block, id))}
+                />
+              ) : (
+                <Instrument name={p.block} kind={all[p.block].kind} state={state} send={send} params={all[p.block].params} />
+              )}
               {canEdit && (
                 <div className="switch cell-tools" role="group" aria-label={`Size of ${p.block}`}>
                   {SIZES.map((s) => (

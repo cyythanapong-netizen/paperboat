@@ -133,6 +133,12 @@ initializers may leave any out.
        Optional ordered component labels and units. Names are descriptive; dimensions and
        units, not labels, decide whether two vector ports fit.
 
+    .. cpp:member:: bool broadcast = false
+
+       Set on the signal ports of an :cpp:member:`elementwise <BlockDef::elementwise>` block
+       (see :cpp:func:`with_broadcast`): the port also joins a vector port. The engine sets
+       it; a block author never does.
+
 .. cpp:struct:: VectorComponent
 
    .. cpp:member:: std::string id
@@ -254,6 +260,30 @@ initializers may leave any out.
       :cpp:func:`with_inputs`), of the first input's type. Empty: the inputs are the definition's.
       f(t)'s ``f``. A wire to an input that is removed or renamed is dropped.
 
+   .. cpp:member:: std::string outputs_from
+
+      The id of a text param of names (``"x v theta"``, see :cpp:func:`parse_names`) that are
+      the outputs, ids in that order. The first vector input gets one component per name, and
+      a ``units`` param (``"m m/s rad"``) gives each a unit by position. Demux's ``names``.
+      ``ports_from = "names"`` does the same for the inputs (Mux), giving the first vector
+      output the components.
+
+   .. cpp:member:: bool elementwise = false
+
+      The block works on one number at a time and the engine lifts it to vectors (#164). Its
+      signal ports also take a vector wire. With only numbers in, nothing changes. With any
+      vector in, all vectors must be one length N (else the run fails naming the block and
+      port), numbers broadcast to every element, and the block runs as N instances, *lanes*,
+      each fed its element and keeping its own state (one integral per element); its outputs
+      are vectors of N, labelled like the vector that came in. A param change reaches every
+      lane. N is found from the wires when the graph is compiled, so a block without
+      feedthrough in a loop knows it before its first step; if the length is known only at
+      run time (a vector port with no ``dimension``) such a block fails at compile, and any
+      other takes N from its first step. The built-in pointwise ``math`` blocks, f(t) and the
+      generators, Integrator, Lag and PID are elementwise; Delay is not (it moves whole
+      values). A block that needs the whole vector (a norm, a dot product) declares
+      :cpp:func:`vector_port` ports instead.
+
 .. cpp:struct:: Form
 
    One form of a magic block: the ports it has in that form, such as ``"signal"`` (values in
@@ -269,6 +299,17 @@ initializers may leave any out.
 
    The signs in ``text``, one per input: ``+`` is 1, ``-`` (or ``−``) is -1; anything else is
    skipped. At most 26; none at all reads as ``"++"``.
+
+.. cpp:function:: std::vector<std::string> parse_names(std::string_view text, const std::vector<std::string> &reserved = {})
+
+   The names in ``text``, split on spaces and commas: what a ``names`` param makes ports of.
+   Throws ``std::invalid_argument`` on none, a name used twice, one that isn't an identifier,
+   one in ``reserved`` (the block's other ports) or more than 64; in a run the block fails.
+
+.. cpp:function:: BlockDef with_broadcast(const BlockDef &def)
+
+   ``def`` with ``broadcast`` set on its signal ports if it is elementwise (what the catalog
+   sends), else ``def``.
 
 .. cpp:function:: BlockDef with_signs(const BlockDef &def, std::string_view text)
 
@@ -362,6 +403,12 @@ Values
 .. cpp:function:: const Vector *get_vector(const Values &values, std::string_view id)
 
    The numeric vector at ``id``, or null. A Python block reads the same value as a list.
+
+.. cpp:function:: Vector as_vector(const Values &values, std::string_view id)
+
+   The numbers at ``id`` as a vector: a vector as it is, a number as one element, otherwise
+   (absent, text…) empty. For a block with a :cpp:func:`vector_port` input that should also
+   take a plain number.
 
 .. cpp:function:: template<class T> const T *get_handle(const Values &values, std::string_view id, std::string_view kind)
 

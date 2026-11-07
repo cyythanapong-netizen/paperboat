@@ -339,3 +339,42 @@ def test_scene_and_solve_are_bound() -> None:
         assert "rk4, rk45" in str(err)
     else:
         raise AssertionError("an unknown solver must be refused")
+
+
+ELEMENTWISE_BACKEND = '''
+import paperboat
+
+class Scale(paperboat.Block):
+    type, label = "scale", "Scale"
+    inputs, outputs = ["u"], ["y"]
+    params = {"k": 10}
+    elementwise = True  # written for one number; the engine runs it per element of a vector
+    def step(self, ctx, inputs):
+        return {"y": inputs.get("u", 0.0) * self.params["k"]}
+
+paperboat.serve(paperboat.Backend(engine="test-elementwise", descriptor="descriptor.toml", blocks=[Scale], mode="once"))
+'''
+
+ELEMENTWISE_DESCRIPTOR = '''
+domain = "ew"
+import = ["base", "dashboard"]
+[graph]
+nodes = [
+  { id = "one", type = "constant", params = { value = 1 } }, { id = "two", type = "constant", params = { value = 2 } },
+  { id = "m", type = "mux", params = { names = "p q" } }, { id = "s", type = "scale" },
+  { id = "n", type = "scale" }, { id = "show", type = "display" }, { id = "num", type = "display" },
+]
+edges = [
+  { from = ["one", "y"], to = ["m", "p"] }, { from = ["two", "y"], to = ["m", "q"] },
+  { from = ["m", "y"], to = ["s", "u"] }, { from = ["s", "y"], to = ["show", "in"] },
+  { from = ["two", "y"], to = ["n", "u"] }, { from = ["n", "y"], to = ["num", "in"] },
+]
+'''
+
+
+def test_an_elementwise_python_block_takes_a_vector_and_stays_scalar_on_numbers(tmp_path: Path) -> None:
+    msgs = run_backend(tmp_path, backend=ELEMENTWISE_BACKEND, descriptor=ELEMENTWISE_DESCRIPTOR)
+    last = {m["node"]: m for m in msgs if m["type"] == "signal"}
+    assert last["show"]["v"] == [10.0, 20.0]
+    assert [c["id"] for c in last["show"]["components"]] == ["p", "q"]
+    assert last["num"]["v"] == 20.0  # numbers in: a number out, as before

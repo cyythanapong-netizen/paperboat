@@ -50,6 +50,65 @@ std::vector<std::string> sorted(const std::vector<std::string>& ids, std::map<st
   return order;
 }
 
+// What an output carries, for an elementwise block it feeds: a vector or numbers.
+struct Shape {
+  bool vector = false;
+  std::size_t n = 0;  // 0: a length known only at run time
+  std::vector<toolkit::VectorComponent> components = {};
+  std::string port = {};  // the input it came in by ("" for a block's own outputs)
+};
+
+// Elementwise blocks fed a vector (#164), straight or through other elementwise blocks, run
+// as lanes: how many, from the wires alone, so a block without feedthrough (an integrator)
+// in a loop knows its length before its first step. Lengths only grow from "numbers" to a
+// vector of N, so this ends. Two vectors of different lengths into one block fail here.
+void lift_elementwise(Graph& g, const json& edges) {
+  std::map<std::string, Shape> shapes;
+  for (const auto& [id, node] : g.nodes)
+    if (node.def.elementwise && node.block) shapes[id] = {};
+  if (shapes.empty()) return;
+  const auto source = [&](const std::string& node, const std::string& port) -> Shape {
+    if (auto it = shapes.find(node); it != shapes.end()) return it->second;
+    const auto& p = port_def(g.nodes.at(node), port, true);
+    if (!toolkit::is_vector_type(p.type)) return {};
+    return {.vector = true, .n = toolkit::vector_dimension(p).value_or(0), .components = p.components};
+  };
+  for (bool changed = true; changed;) {
+    changed = false;
+    for (const auto& e : edges) {
+      const std::string from = e.at("from")[0], to = e.at("to")[0];
+      auto dst = shapes.find(to);
+      if (dst == shapes.end() || !g.nodes.contains(from)) continue;
+      const Shape s = source(from, e.at("from")[1]);
+      Shape& d = dst->second;
+      const std::string port = e.at("to")[1];
+      if (!s.vector) continue;
+      if (!d.vector) {
+        d = {.vector = true, .n = s.n, .components = s.components, .port = port};
+        changed = true;
+      } else if (s.n > 0 && d.n > 0 && s.n != d.n) {
+        throw GraphError(to, to + ": input " + port + " gets a vector of " + std::to_string(s.n) + " values, but " +
+                                 (d.port.empty() ? std::string("its vectors have ") : d.port + " gets ") + std::to_string(d.n) +
+                                 ": the vectors into an element-wise block are one length");
+      } else if (d.n == 0 && s.n > 0) {
+        d.n = s.n;
+        if (d.components.empty()) d.components = s.components;
+        changed = true;
+      }
+    }
+  }
+  for (auto& [id, shape] : shapes) {
+    if (!shape.vector) continue;
+    Node& node = g.nodes.at(id);
+    if (shape.n == 0 && !node.def.feedthrough)
+      throw GraphError(id, id + " (" + node.def.label + ") gets a vector whose length is known only at run time, and it "
+                           "gives its outputs before its first input: feed it from a Mux or another block of fixed length");
+    node.def = toolkit::lifted(node.def, shape.n, shape.components);
+    node.lanes = shape.n;
+    node.block = make_block(node);
+  }
+}
+
 toolkit::BlockDef story_def() {
   return {.type = "story",
           .label = "Story",
@@ -107,11 +166,20 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     }
     // A magic block's ports are those of its form.
     node.def = toolkit::in_form(node.entry->def, text.contains("form") ? text.at("form") : "");
-    // A block whose param decides its inputs (Sum's signs, Format's template, multi-input And/Or).
-    node.def = toolkit::with_dynamic_ports(node.def, params, text);
+    // A block whose param decides its inputs (Sum's signs, Format's template, multi-input
+    // And/Or, Mux's names) or outputs (Demux's names).
+    try {
+      node.def = toolkit::with_dynamic_ports(node.def, params, text);
+    } catch (const std::invalid_argument& err) {
+      throw GraphError(node.id, node.id + ": " + err.what());
+    }
     // A block whose expression param decides its inputs (f(t)'s f) has one per free name in it.
     const auto& inputs_from = node.entry->def.inputs_from;
     node.def = toolkit::with_inputs(node.def, inputs_from.empty() || !text.contains(inputs_from) ? "" : text.at(inputs_from));
+    // An elementwise block's signal inputs take vectors too (its outputs follow, below).
+    if (node.def.elementwise)
+      for (auto& p : node.def.inputs)
+        if (p.type == "signal") p.broadcast = true;
     const auto& def = node.def;
 
     // Making a block can fail (a param it can't use, an expression that doesn't compile):
@@ -192,6 +260,8 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     if (it->second.step) throw GraphError(block, "step block " + block + " can't be inside a story: a story runs signal blocks");
   }
 
+  lift_elementwise(out, graph.at("edges"));
+
   std::map<std::string, std::vector<std::string>> deps;
   for (const auto& e : graph.at("edges")) {
     PortRef from{e.at("from")[0], e.at("from")[1]}, to{e.at("to")[0], e.at("to")[1]};
@@ -244,6 +314,12 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
   out.order = sorted(outside, deps, "");
   for (auto& [gid, story] : out.stories) story.order = sorted(inside[gid], deps, " in story " + gid);
   return out;
+}
+
+std::unique_ptr<toolkit::Block> make_block(const Node& node) {
+  if (!node.lanes) return node.entry->make(node.params, node.text);
+  return toolkit::make_lanes([entry = node.entry, text = node.text](const toolkit::Values& params) { return entry->make(params, text); },
+                             node.params, *node.lanes);
 }
 
 }  // namespace paperboat::core

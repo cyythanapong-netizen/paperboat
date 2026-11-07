@@ -261,7 +261,7 @@ void load_dashboard(const json& doc, Catalog& catalog) {
   for (std::size_t i = 0; i < list.size(); ++i) {
     const auto& e = list[i];
     const auto at = "dashboard.instruments[" + std::to_string(i) + "]";
-    only_fields(e, {"block", "size", "at", "tab"}, at);
+    only_fields(e, {"block", "size", "at", "tab", "scope"}, at);
     if (!e.contains("block") || !e["block"].is_string()) throw DescriptorError(at + ": needs \"block\", a monitor block's id");
     if (!seen.insert(e["block"].get<std::string>()).second)
       throw DescriptorError(at + ": block \"" + e["block"].get<std::string>() + "\" is placed twice");
@@ -278,6 +278,11 @@ void load_dashboard(const json& doc, Catalog& catalog) {
     }
     check_tab(e, at);
     if (e.contains("tab")) item["tab"] = e["tab"];
+    if (e.contains("scope")) {  // a Scope's settings (#37): the UI's to read; only its shape is checked here
+      if (!e["scope"].is_object()) throw DescriptorError(at + ": scope must be a table of settings (mode, window, trigger…)");
+      only_fields(e["scope"], {"mode", "window", "ylog", "hidden", "draw", "trigger"}, at + ".scope");
+      item["scope"] = e["scope"];
+    }
     instruments.push_back(std::move(item));
   }
   out["instruments"] = std::move(instruments);
@@ -757,6 +762,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
       json port = {{"id", p.id}, {"type", p.type}};
       if (!p.unit.empty()) port["unit"] = p.unit;
       if (p.dimension) port["dimension"] = *p.dimension;
+      if (p.broadcast) port["broadcast"] = true;
       if (!p.components.empty()) {
         json components = json::array();
         for (const auto& component : p.components) {
@@ -784,11 +790,12 @@ std::string catalog_message(const Catalog& catalog, int indent) {
   json blocks = json::array();
   for (const auto& e : catalog.entries) {
     json params = param_list(e.def.params);
+    const BlockDef shown = with_broadcast(e.def);  // an elementwise block's signal ports take vectors
     json block = {{"type", e.def.type},
                   {"label", e.def.label},
                   {"kind", to_string(e.def.kind)},
-                  {"inputs", ports(e.def.inputs)},
-                  {"outputs", ports(e.def.outputs)},
+                  {"inputs", ports(shown.inputs)},
+                  {"outputs", ports(shown.outputs)},
                   {"params", params}};
     if (!e.group.empty()) block["group"] = e.group;
     if (e.linked) block["linked"] = true;
@@ -797,6 +804,8 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.def.feedthrough) block["feedthrough"] = false;
     if (!e.def.ports_from.empty()) block["ports_from"] = e.def.ports_from;
     if (!e.def.inputs_from.empty()) block["inputs_from"] = e.def.inputs_from;
+    if (!e.def.outputs_from.empty()) block["outputs_from"] = e.def.outputs_from;
+    if (e.def.elementwise) block["elementwise"] = true;
     if (!e.def.view.empty()) {
       json view = json::object();
       if (e.def.view.compact) view["compact"] = *e.def.view.compact;

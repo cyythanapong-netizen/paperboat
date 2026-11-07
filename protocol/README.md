@@ -22,7 +22,7 @@ Default address: `ws://localhost:8765`.
 | `scene.patch`  | `entities: ({id} & Partial<Entity>)[]`      | during a run                 |
 | `run.started`  | `run: string`                               | when a run starts            |
 | `run.progress` | `run: string`, `fraction: number` (0–1)     | during a run                 |
-| `signal`       | `node: string`, `t: number`, `v: number \| string \| number[]`, `components?: VectorComponent[]` | per sample, for monitor nodes. `t` is the x value: time in a simulation, list index otherwise; a Display monitor may keep a whole vector as `number[]` with its source component labels |
+| `signal`       | `node: string`, `t: number`, `v: number \| string \| number[]`, `components?: VectorComponent[]`, `port?: string` | per sample, for monitor nodes. A Scope (several inputs) sends one per wired input, `port` naming it (absent: `in`), and keeps a vector whole. `t` is the x value: time in a simulation, list index otherwise; a Display monitor, and a Graph in a clock run (one trace per component), get a whole vector as `number[]` with its source component labels; a Graph in a run-once gets it by index. A layout instrument's optional `scope` holds a Scope's settings (`mode`, `window`, `ylog`, `hidden`, `draw`, `trigger`; schema `ScopeSettings`) |
 | `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them; any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
 | `node.progress` | `node: string`, `fraction: number` (0–1) | How far a block's long step has got (`Context::progress`), at most ~20 a second per block; the UI shows it on the running block |
 | `log`          | `level: "info" \| "warn" \| "error"`, `text`, `node?: string` | any time. `node`: the block or station object that wrote it, or that failed |
@@ -79,6 +79,16 @@ Default address: `ws://localhost:8765`.
   // the first input's type. f(t)'s "f". Deleting a name removes its port and drops any wire to
   // it; renaming a name (x → dx) drops the wire to the old name rather than moving it.
   "inputs_from": "f",
+  // optional: the id of a text param of names ("x v theta", space- or comma-separated) that
+  // become the outputs, in order; the first vector input gets one component per name, and a
+  // "units" param ("m m/s rad") gives each a unit by position. Demux's "names". With
+  // ports_from "names" the same goes for the inputs (Mux). Bad names fail the run on the block.
+  "outputs_from": "names",
+  // optional: the block works element by element (Gain, Sum, Integrator, PID…). Its signal
+  // ports carry "broadcast": true and also join a vector port. With a vector in, the backend
+  // runs it once per element and its outputs are vectors of that length; with numbers, as
+  // before. Lengths are the backend's to check; the UI never refuses a wire for one it can't know.
+  "elementwise": true,
   "forms": [
     { "name": "signal", "inputs": [{ "id": "cond" }, { "id": "a" }, { "id": "b" }], "outputs": [{ "id": "y" }] },
     { "name": "step", "inputs": [{ "id": "in", "type": "step" }, { "id": "cond" }],
@@ -122,7 +132,7 @@ and fails the run on the block at fault: an unknown variable (with the nearest n
 type that doesn't fit, an enum value not among the param's options, a bad formula. Port `type` is `signal` (a value), `step` (control,
 in a Step flow), a value shape (`image`, `points`, `vector`, …) or `any` (any value but a
 step). `vector` carries an ordered JSON array of numbers on one wire; legacy `numbers` ports
-remain compatible. A vector port may declare a fixed `dimension` and ordered `components`
+remain compatible (a `broadcast` signal port, on an elementwise block, also joins one). A vector port may declare a fixed `dimension` and ordered `components`
 (`{id, unit?}`); without them its length is dynamic and component labels/units are unknown.
 A port, and a number param, may have a `unit` (`"N"`, `"m"`, `"rad"`). On a vector, `unit`
 applies to every component unless that component has its own unit. A wire joins

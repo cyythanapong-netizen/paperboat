@@ -72,6 +72,7 @@ void add_waves(Registry& registry) {
   Template generator;
   generator.name = "signal/generator";
   generator.def = generator_def("generator", "Generator");
+  generator.def.elementwise = true;  // each variable a vector or a number, element by element
   generator.config = {{"f", "0"}};
   generator.extendable = true;
   generator.abstract = true;

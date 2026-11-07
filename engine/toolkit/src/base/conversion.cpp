@@ -170,6 +170,50 @@ void add_conversion(Registry& registry) {
   type_of.def.view = {.compact = true, .glyph = "type"};
   type_of.make = [](const Values&, const Config&) { return std::make_unique<TypeOf>(); };
   registry.add(std::move(type_of));
+
+  // base/mux and base/demux (#164): numbers into one vector and back. Their ports are the
+  // `names` ("x v theta"); `units` ("m m/s rad") gives each a unit, by position.
+  const std::vector<ParamDef> named = {{.id = "names", .type = "text", .default_text = "a b"},
+                                       {.id = "units", .type = "text", .default_text = ""}};
+  Template mux;
+  mux.name = "base/mux";
+  mux.def.type = "mux";
+  mux.def.label = "Mux";
+  mux.def.inputs = {{.id = "a"}, {.id = "b"}};
+  mux.def.outputs = {vector_port("y", {{.id = "a"}, {.id = "b"}})};
+  mux.def.params = named;
+  mux.def.ports_from = "names";
+  mux.def.description = "Joins numbers into one vector, one input per name.";
+  mux.make = [](const Values&, const Config& config) {
+    const auto names = parse_names(config.contains("names") ? config.at("names") : "a b", {"y"});
+    return std::make_unique<Stateless>([names](const Context&, const Values& in) {
+      Vector y;
+      y.reserve(names.size());
+      for (const auto& n : names) y.push_back(get_or(in, n));
+      return Values{{"y", std::move(y)}};
+    });
+  };
+  registry.add(std::move(mux));
+
+  Template demux;
+  demux.name = "base/demux";
+  demux.def.type = "demux";
+  demux.def.label = "Demux";
+  demux.def.inputs = {vector_port("u", {{.id = "a"}, {.id = "b"}})};
+  demux.def.outputs = {{.id = "a"}, {.id = "b"}};
+  demux.def.params = named;
+  demux.def.outputs_from = "names";
+  demux.def.description = "Splits a vector into numbers, one output per name.";
+  demux.make = [](const Values&, const Config& config) {
+    const auto names = parse_names(config.contains("names") ? config.at("names") : "a b", {"u"});
+    return std::make_unique<Stateless>([names](const Context&, const Values& in) {
+      const Vector u = as_vector(in, "u");  // unwired: zeros
+      Values out;
+      for (std::size_t i = 0; i < names.size(); ++i) out[names[i]] = i < u.size() ? u[i] : 0.0;
+      return out;
+    });
+  };
+  registry.add(std::move(demux));
 }
 
 }  // namespace paperboat::toolkit::base

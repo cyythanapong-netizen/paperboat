@@ -415,7 +415,7 @@ defaults = { level = 0.3 }
   CHECK(threshold["type"] == "threshold");
   CHECK(threshold["group"] == "math");
   CHECK(threshold["kind"] == "function");
-  CHECK(threshold["inputs"][0] == nlohmann::json{{"id", "u"}, {"type", "signal"}});
+  CHECK(threshold["inputs"][0] == nlohmann::json{{"id", "u"}, {"type", "signal"}, {"broadcast", true}});  // elementwise
   CHECK(threshold["params"][0] == nlohmann::json{{"id", "level"}, {"type", "number"}, {"default", 0.3}});
 }
 
