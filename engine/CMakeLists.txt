@@ -9,6 +9,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Off when a backend pulls the engine in with add_subdirectory: it only needs the libraries.
 option(PAPERBOAT_BUILD_TESTS "Build the Catch2 tests" ${PROJECT_IS_TOP_LEVEL})
 option(PAPERBOAT_BUILD_TOOLS "Build paperboat-catalog" ${PROJECT_IS_TOP_LEVEL})
+option(PAPERBOAT_BUILD_MODELICA "Build engine/modelica when omc is installed" ${PROJECT_IS_TOP_LEVEL})
 
 # Dependencies: use an installed copy if there is one, otherwise fetch a pinned release.
 include(FetchContent)
@@ -48,6 +49,10 @@ foreach(manifest IN LISTS optional_toolkit_manifests)
     add_subdirectory("${toolkit_dir}" "toolkit/${toolkit_name}")
   endif()
 endforeach()
+# The omc bridge and Modelica generator (#160): optional, needs omc to run.
+if(PAPERBOAT_BUILD_MODELICA)
+  add_subdirectory(modelica)
+endif()
 if(PAPERBOAT_BUILD_TOOLS)
   add_subdirectory(tools)
 endif()

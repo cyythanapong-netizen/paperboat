@@ -18,3 +18,7 @@ if(TARGET paperboat_toolkit_opencv)
   target_link_libraries(paperboat PRIVATE paperboat::toolkit_opencv)
   target_compile_definitions(paperboat PRIVATE PAPERBOAT_HAS_OPENCV)
 endif()
+if(TARGET paperboat_modelica)  # paperboat modelica / paperboat squero
+  target_link_libraries(paperboat PRIVATE paperboat::modelica)
+  target_compile_definitions(paperboat PRIVATE PAPERBOAT_HAS_MODELICA)
+endif()

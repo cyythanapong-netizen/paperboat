@@ -24,6 +24,10 @@
 #include "paperboat/toolkit/opencv.hpp"
 #endif
 #include "paperboat_tui.hpp"
+#ifdef PAPERBOAT_HAS_MODELICA
+#include "paperboat/modelica/generate.hpp"
+#include "paperboat/modelica/squero.hpp"
+#endif
 
 namespace {
 
@@ -100,6 +104,14 @@ Verification & Packaging:
   unpack <pkg> [--dir <dir>] [--json-stream]
                              Unpack and verify .ppk archive
                              --json-stream prints one JSON event per line as work goes
+
+Modelica (Squero Studio OM, needs OpenModelica):
+  modelica generate <Model.mo> [--model <Q.Name>] [--out <model>-cpp/] [--path fmu|ode|auto]
+                             Make a backend from a Modelica model (ODE when it can, else FMU)
+  modelica check <Model.mo> [--model <Q.Name>]
+                             omc's checkModel on it
+  squero [--port <N>] [--app <dir>]
+                             Squero Studio OM's server, squero/0 (default port 8790)
 
 Console:
   (no command)               Open the interactive console (apps/cli) on a terminal;
@@ -782,6 +794,87 @@ int cmd_unpack(const std::vector<std::string_view>& args) {
   return 0;
 }
 
+#ifdef PAPERBOAT_HAS_MODELICA
+namespace mo = paperboat::modelica;
+#endif
+
+constexpr const char* kNoModelica =
+    "paperboat was built without engine/modelica: install OpenModelica (omc on PATH) and rebuild\n";
+
+// paperboat modelica generate <Model.mo> [--model Q.Name] [--out dir] [--path fmu|ode|auto]
+// paperboat modelica check <Model.mo> [--model Q.Name]
+int cmd_modelica(const std::vector<std::string_view>& args) {
+#ifndef PAPERBOAT_HAS_MODELICA
+  (void)args;
+  std::cerr << kNoModelica;
+  return 1;
+#else
+  if (args.size() < 2 || (args[0] != "generate" && args[0] != "check")) {
+    std::cerr << "usage: paperboat modelica generate <Model.mo> [--model <Qualified.Name>] [--out <model>-cpp/] "
+                 "[--path fmu|ode|auto]\n       paperboat modelica check <Model.mo> [--model <Qualified.Name>]\n";
+    return 2;
+  }
+  mo::GenerateOptions o{.source = std::string(args[1])};
+  for (std::size_t i = 2; i < args.size(); ++i) {
+    const auto flag = args[i];
+    if (i + 1 >= args.size()) {
+      std::cerr << "error: " << flag << " needs a value\n";
+      return 2;
+    }
+    const std::string value(args[++i]);
+    if (flag == "--model") o.model = value;
+    else if (flag == "--out") o.out = value;
+    else if (flag == "--path") o.path = value;
+    else {
+      std::cerr << "error: unknown option " << flag << '\n';
+      return 2;
+    }
+  }
+  try {
+    mo::Omc omc;
+    if (args[0] == "check") {
+      const auto r = mo::check(omc, o.source, o.model);
+      (r.ok ? std::cout : std::cerr) << r.message << '\n';
+      return r.ok ? 0 : 1;
+    }
+    const auto r = mo::generate(omc, o);
+    std::cout << r.model << " -> " << r.out.string() << "/ (" << r.reason << ")\n";
+    for (const auto& n : r.notices) std::cout << "  note: " << n << '\n';
+    for (const auto& f : r.written) std::cout << "  wrote " << f.string() << '\n';
+    std::cout << "next: paperboat build " << r.out.string() << " && paperboat run " << r.out.string() << '\n';
+    return 0;
+  } catch (const std::exception& e) {
+    std::cerr << "error: " << e.what() << '\n';
+    return 1;
+  }
+#endif
+}
+
+// paperboat squero [--port N] [--app dir]: Squero Studio OM's server (squero/0), serving
+// the built Studio app (apps/studio/dist) on the same port when there is one.
+int cmd_squero(const std::vector<std::string_view>& args) {
+#ifndef PAPERBOAT_HAS_MODELICA
+  (void)args;
+  std::cerr << kNoModelica;
+  return 1;
+#else
+  int port = 8790;
+  fs::path app;
+  for (std::size_t i = 0; i + 1 < args.size(); ++i) {
+    if (args[i] == "--port") port = std::stoi(std::string(args[++i]));
+    else if (args[i] == "--app") app = std::string(args[++i]);
+  }
+  if (app.empty()) {
+    const fs::path root = tk::find_repo_root();
+    if (!root.empty() && fs::is_regular_file(root / "apps" / "studio" / "dist" / "index.html"))
+      app = root / "apps" / "studio" / "dist";
+    else
+      std::cerr << "note: Studio isn't built (apps/studio/dist); serving squero/0 only\n";
+  }
+  return mo::serve_squero(port, app);
+#endif
+}
+
 int cmd_commands(const std::vector<std::string_view>& args);
 int cmd_top(const std::vector<std::string_view>&);
 
@@ -821,6 +914,9 @@ const std::vector<CommandSpec>& command_table() {
        {"--fast", "--json", "--json-stream"}, "backend"},
       {"pack", cmd_pack, "Package a backend as .ppk", {}, {}, {"--out", "--json-stream"}, "backend"},
       {"unpack", cmd_unpack, "Unpack and verify a .ppk", {}, {}, {"--dir", "--json-stream"}, "ppk"},
+      {"modelica", cmd_modelica, "Make a backend from a Modelica model", {}, {"generate", "check"},
+       {"--model", "--out", "--path"}, "file"},
+      {"squero", cmd_squero, "Run Squero Studio OM's server", {"studio"}, {}, {"--port", "--app"}},
       {"top", cmd_top, "Process dashboard (console)"},
       {"commands", cmd_commands, "The command table", {}, {}, {"--json"}},
   };
