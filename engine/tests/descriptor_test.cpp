@@ -123,6 +123,14 @@ groups = [{ id = "outer", kind = "subsystem", nodes = ["s"], ports = { left = ["
                     ContainsSubstring("which isn't in the story"));
   CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "story", nodes = ["s"], release = ["s.y"] }])")),
                     ContainsSubstring("release lists outputs as [node, port]"));
+  // Exposed ports: { side, to = [node, port] } on a subsystem or story, wired or not.
+  CHECK_NOTHROW(tk::load_descriptor(bad(R"([{ id = "a", kind = "subsystem", nodes = ["s"], expose = [{ side = "out", to = ["s", "y"] }] }])")));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "visual", nodes = ["s"], expose = [{ side = "out", to = ["s", "y"] }] }])")),
+                    ContainsSubstring("only a subsystem or story exposes ports"));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "subsystem", nodes = ["s"], expose = [{ side = "up", to = ["s", "y"] }] }])")),
+                    ContainsSubstring("side must be in or out"));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad(R"([{ id = "a", kind = "subsystem", nodes = ["s"], expose = [{ side = "in", to = ["nope", "u"] }] }])")),
+                    ContainsSubstring("no node \"nope\""));
 }
 
 TEST_CASE("import adds every template of a package; a customised entry wins") {

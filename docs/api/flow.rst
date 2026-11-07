@@ -38,7 +38,11 @@ path passes.
 Groups
 ------
 
-``graph.groups`` holds groups of blocks (a block is in at most one).
+``graph.groups`` holds groups of blocks (a block is in at most one). Groups nest (``parent``). A
+subsystem's or story's ports are the wires crossing its edge, plus any listed in ``expose``
+(``{ side = "in" | "out", to = [node, port] }``): ports shown on the block with no wire yet. In the UI,
+select a block inside an open group and use **Expose port**. Copy and paste take a group with
+everything in it.
 
 **Visual groups** tidy the canvas. The backend runs their blocks as if ungrouped, in the
 sheet's flow type. Collapsed, the UI draws a group as one block whose ports are the wires

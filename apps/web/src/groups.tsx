@@ -30,12 +30,15 @@ export type GroupData = {
   release?: [string, string][];
   /** A frame's size when open. */
   size: { w: number; h: number };
+  /** Ports shown as a block's even with no wire yet: an input or output inside it. */
+  expose?: Expose[];
   /** Where the user put its ports (as a block's `ports`). */
   sides?: PortSides;
   /** Filled for display: the ports it shows as a block (`node::port` ids). */
   ports?: { inputs: PortDef[]; outputs: PortDef[] };
 };
 export type GroupNode = Node<GroupData, "frame">;
+export type Expose = { side: "in" | "out"; to: [string, string] };
 
 /** The step ports a story has, as a block definition. */
 export const STORY_DEF: BlockDef = {
@@ -269,6 +272,16 @@ export function display<N extends AnyNode, E extends Edge>(
   const ports = new Map<string, { inputs: Map<string, PortDef>; outputs: Map<string, PortDef> }>();
   const portsOf = (g: string) => ports.get(g) ?? ports.set(g, { inputs: new Map(), outputs: new Map() }).get(g)!;
   const bounds = new Map<string, BoundaryData>();
+  // Ports the user exposed come first, in their order, wired or not.
+  for (const g of nodes) {
+    if (!isFrame(g) || !closed(g) || at(g.id) !== "here") continue;
+    for (const x of g.data.expose ?? []) {
+      if (at(x.to[0]) !== g.id) continue; // the block is gone, or in a group of its own
+      const id = portHandle(x.to[0], x.to[1]);
+      const side = x.side === "in" ? "inputs" : "outputs";
+      portsOf(g.id)[side].set(id, { id, type: portType(x.to[0], x.to[1], side) });
+    }
+  }
   const shownEdges = edges.flatMap((e) => {
     const sp = at(e.source);
     const tp = at(e.target);
@@ -372,7 +385,7 @@ export function frameAround<N extends AnyNode>(
   id: string,
   kind: GroupData["kind"],
   children: N[],
-  options: { label?: string; collapsed?: boolean; seconds?: number; reset?: boolean; release?: [string, string][]; pos?: [number, number]; sides?: PortSides; inFrame?: boolean } = {},
+  options: { label?: string; collapsed?: boolean; seconds?: number; reset?: boolean; release?: [string, string][]; pos?: [number, number]; sides?: PortSides; expose?: Expose[]; inFrame?: boolean } = {},
 ): { frame: GroupNode; children: N[] } {
   const xs = children.map((n) => n.position.x);
   const ys = children.map((n) => n.position.y);
@@ -399,6 +412,7 @@ export function frameAround<N extends AnyNode>(
       ...(options.release ? { release: options.release } : {}),
       size,
       ...(options.sides ? { sides: options.sides } : {}),
+      ...(options.expose?.length ? { expose: options.expose } : {}),
     },
   };
   return {
@@ -461,6 +475,7 @@ export function toGroups(nodes: AnyNode[]): GraphGroup[] {
       ...(g.data.kind === "story" ? { params: { seconds: g.data.seconds, reset: g.data.reset } } : {}),
       ...(g.data.kind === "story" && g.data.release ? { release: g.data.release } : {}),
       ...(g.data.sides ? { ports: g.data.sides } : {}),
+      ...(g.data.kind !== "visual" && g.data.expose?.length ? { expose: g.data.expose } : {}),
     };
   });
 }
