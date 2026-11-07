@@ -152,11 +152,14 @@ plain plate. The shapes are `IconDef`, `Prim`, `IconPort` and `ConnectorDef` in 
 
 ```jsonc
 "view": { "icon": {
-  "w": 2, "h": 1,                       // plate cells: 1x1 (64x56), 2x1 or 1x2; 2x2 is invalid
+  "w": 2, "h": 1,                       // plate cells: 1x1 (64x56), 2x1 (128x56) or 1x2 (64x112); 2x2 is invalid
   "g": [                                // primitives in a 0..100 box, coordinates multiples of 5
-    { "t": "line", "p": [[0, 50], [20, 50]] },
-    { "t": "rect", "x": 20, "y": 30, "w": 60, "h": 40, "fill": "raised" },
-    { "t": "text", "x": 50, "y": 85, "s": "{R}", "font": "mono" }   // {param} is filled like a caption
+    { "t": "line", "p": [[0, 50], [20, 50]], "stroke": "ink", "weight": "normal" },
+    { "t": "poly", "p": [[20, 30], [80, 30], [50, 70]], "fill": "raised" },
+    { "t": "rect", "x": 20, "y": 30, "w": 60, "h": 40, "corner": "md", "fill": "none" },
+    { "t": "ellipse", "x": 25, "y": 25, "w": 50, "h": 50, "stroke": "muted" },
+    { "t": "arc", "x": 10, "y": 10, "w": 80, "h": 80, "a0": 0, "a1": 180 },
+    { "t": "text", "x": 50, "y": 85, "s": "{R}", "font": "mono", "size": 12 }   // {param} is filled like a caption
   ],
   "ports": [                            // handles on the plate's edge
     { "id": "p", "class": "PositivePin", "side": "left", "at": 50, "variant": "filled" },
@@ -165,25 +168,112 @@ plain plate. The shapes are `IconDef`, `Prim`, `IconPort` and `ConnectorDef` in 
 } }
 ```
 
-- Primitives: `line`, `poly`, `rect` (`corner`), `ellipse`, `arc` (`a0`, `a1`), `text` (`font`,
-  `size`). Every style is a token, never a colour or a path: `stroke` ink / muted / signal,
-  `weight` thin / normal / wire, `dash` solid / axis, `fill` none / ink / raised / sunken. An unknown
-  primitive, token or size, a 2x2 plate or an off-grid coordinate makes the UI draw the plain plate
-  (and warn once in the console).
-- An icon port has `side` and `at` (0..100 along the edge). `class` names an entry of the catalog's
-  `connectors`; `variant` is `hollow` or `filled` (the a/b or p/n side, never state). `array` names
-  the param holding n: the port draws once with a count badge (the vector port). `if` names a param:
-  the port exists while it is true; when false it is hidden, the rest of its side re-spread, and its
-  wires stay, drawn dashed red as missing.
-- `connectors` (in `catalog`, next to `blocks`) maps a class to `{ kind: "acausal" | "input" |
-  "output" | "expandable", handle: "square" | "diamond" | "ring2" | "triangle" | "circle", size:
-  8 | 10 | 12, weight: 1.2 | 1.8 | 2, dash?, alt?, potential?, flow?, stream? }`. Hovering a port
-  shows its id and the potential, flow and stream names with units.
-- Wires: an acausal port joins only an acausal port of the same class family (Pin, PositivePin and
-  NegativePin are one; Flange_a and Flange_b are one); causal ports join output to input, never
-  input to input; the UI refuses a wrong target and says why. Many wires may meet at one port, and
-  three or more draw a 4px junction dot. An acausal port has no direction, so a wire may start at
-  either end.
+### Primitives (`Prim`)
+
+Each primitive in `g` is positioned on a 0..100 grid (coordinates in multiples of 5, inset 8px on the plate)
+and accepts optional styling attributes:
+
+- `line`: `{ "t": "line", "p": [[0, 50], [20, 50]] }` — a multi-segment line along point list `p`.
+- `poly`: `{ "t": "poly", "p": [[20, 20], [80, 20], [50, 80]] }` — a closed polygon along point list `p`.
+- `rect`: `{ "t": "rect", "x": 20, "y": 20, "w": 60, "h": 60, "corner": "md" }` — a rectangle with optional corner radius.
+- `ellipse`: `{ "t": "ellipse", "x": 10, "y": 20, "w": 80, "h": 60 }` — an ellipse bounding box.
+- `arc`: `{ "t": "arc", "x": 10, "y": 10, "w": 80, "h": 80, "a0": 0, "a1": 180 }` — an elliptical arc from angle `a0` to `a1` (degrees).
+- `text`: `{ "t": "text", "x": 50, "y": 50, "s": "M", "font": "sans", "size": 12 }` — text label; `s` may interpolate block params via `{param}`.
+
+### Token Table
+
+All primitive visual styles must be token names; raw colors, hex codes, or arbitrary SVG path strings are strictly rejected:
+
+| Property | Values | Description |
+| --- | --- | --- |
+| `stroke` | `"ink"` (default), `"muted"`, `"signal"` | `--text`, `--line-strong`, `--signal` (live state only, never decoration) |
+| `weight` | `"thin"`, `"normal"` (default), `"wire"` | 1px, 1.5px, 2px |
+| `dash` | `"solid"` (default), `"axis"` | Solid or `2 2` axis dash (never red; dashed red is reserved for missing) |
+| `fill` | `"none"` (default), `"ink"`, `"raised"`, `"sunken"` | `--text`, `--surface-raised`, `--surface-sunken` |
+| `corner` | `"0"` (default), `"sm"`, `"md"` | 0px, 3px, 5px radius |
+| `font` | `"sans"` (default), `"mono"` | `--font-sans`, `--font-mono` |
+| `size` | `12` (default), `12.5`, `13`, `15`, `30` | Text font size in pixels |
+
+Defaults: stroke `ink`, weight `normal`, dash `solid`, fill `none`, corner `0`, font `sans`, size `12`. Stroke caps and joins are always round.
+
+**Fallback rule:** An unknown primitive kind, unrecognized token or size, a 2x2 plate (valid sizes are 1x1, 2x1, 1x2), or an off-grid coordinate causes the UI to drop the entire icon, fall back to drawing the plain plate with a glyph, and log a `console.warn` once per block type. Live execution state (selected, running, failed) is displayed exclusively by the plate container, never by the icon graphic.
+
+### Ports (`IconPort`)
+
+Handles are placed on the plate boundary:
+- `id`: unique port identifier.
+- `class`: key matching an entry in `catalog.connectors`.
+- `side`: `"left"` | `"right"` | `"top"` | `"bottom"`.
+- `at`: 0..100 along the designated edge, in multiples of 5.
+- `variant`: `"hollow"` | `"filled"` (identifies a/b or positive/negative side, never live state).
+- `array`: parameter ID holding count `n` (#164 vector port; draws a single port handle with a count badge and fan-out behavior).
+- `if`: parameter ID controlling presence; when falsy, the port is hidden, remaining ports on that side re-spread evenly, and any connected wires render as dashed red (`missing`).
+
+### Connectors (`ConnectorDef`)
+
+Top-level `connectors` in `catalog` defines the physical/causal domain connector classes:
+- `kind`: `"acausal"` | `"input"` | `"output"` | `"expandable"` (reserved).
+- `handle`: `"square"` | `"diamond"` | `"ring2"` | `"triangle"` | `"circle"`.
+- `alt`: optional swap look for `"filled"` / `"hollow"` variants.
+- `size`: handle dimension (8, 10, or 12 px; hit area is always 40px `wireSnap` radius).
+- `weight`: wire line thickness (1.2, 1.8, or 2.0 px).
+- `dash`: optional wire dash (`"solid"` | `"dashed"` for thermal grey wires).
+- `potential`, `flow`, `stream`: optional quantities list (`[{ id, unit }]`).
+
+Built-in class table:
+
+| Class | Kind | Handle | Size | Wire | Variant |
+| --- | --- | --- | --- | --- | --- |
+| `Pin`, `PositivePin`, `NegativePin` | acausal | square | 8 | 1.2 | p filled, n hollow |
+| `Flange_a`, `Flange_b` | acausal | square | 10 | 1.8 | a filled, b hollow |
+| `HeatPort_a`, `HeatPort_b` | acausal | diamond | 8 | 1.2 dashed | |
+| `FluidPort_a`, `FluidPort_b` | acausal | ring2 | 12 | 2.0 | |
+| `RealInput`, `IntegerInput`, `BooleanInput` | input | triangle | 8 | 1.2 + arrow | |
+| `RealOutput`, `IntegerOutput`, `BooleanOutput` | output | circle (filled) | 8 | 1.2 | |
+
+**Wire rules:**
+- Acausal ports connect only to acausal ports of the same connector class family (`Pin` family counts as one; `Flange_a`/`Flange_b` count as one). Acausal connections are bidirectional.
+- Causal ports connect output → input only; input → input and output → output are rejected with clear word messages (e.g. `an output joins only an input`). Inside connectors of a composite model connect through.
+- Multiple wires may meet at one port; 3 or more wires render a 4px filled junction dot.
+
+## squero/0
+
+Squero Studio OM communicates with its server (`squero-om` / `paperboat squero`) over a dedicated WebSocket using protocol `squero/0`, distinct from `paperboat/0`.
+
+The server hosts one long-lived `omc` process with serialized execution. Plain expressions pass through `allowed()` which permits only safe model introspection and mutation calls (`loadModel`, `loadFile`, `getClassNames`, `getComponents`, `getIconAnnotation`, `getDiagramAnnotation`, `getConnectionCount`, `getNthConnection`, `checkModel`, `addComponent`, `deleteComponent`, `addConnection`, `deleteConnection`, `setComponentModifierValue`, `list`, `dumpXMLDAE`, `buildModelFMU`, `getVersion`, etc.). Arbitrary system commands (`system()`, `runScript()`) are rejected.
+
+### Status Pushes
+
+On connection and whenever compiler state changes, the server pushes:
+```jsonc
+{ "op": "status", "state": "ready" | "checking" | "failed", "version": "1.27.0~dev-5-g5f1d2c5" }
+```
+
+### Operations
+
+Each request is an object with an `id` and `op`; replies return `{ id, ok: true, result }` or `{ id, ok: false, error: "…" }`.
+
+- **`omc`**: Evaluates an allowed OpenModelica expression:
+  - Request: `{ "id": 1, "op": "omc", "expr": "getClassNames()" }`
+  - Reply: `{ "id": 1, "ok": true, "result": "{Modelica}" }`
+- **`open`**: Opens the target `.mo` file specified at startup (default `./Untitled.mo`):
+  - Request: `{ "id": 2, "op": "open" }`
+  - Reply: `{ "id": 2, "ok": true, "result": { "file": "Untitled.mo", "model": "Untitled" } }`
+- **`save`**: Saves the active user model to its `.mo` file on disk (`save(model)`). Refuses the Modelica Standard Library (Studio edits only user files):
+  - Request: `{ "id": 3, "op": "save", "model": "Untitled" }`
+  - Reply: `{ "id": 3, "ok": true, "result": { "file": "Untitled.mo" } }`
+- **`icon`**: Retrieves the imported visual icon, connectors, and conversion notices for a Modelica class (`paperboat modelica icon`):
+  - Request: `{ "id": 4, "op": "icon", "class": "Modelica.Electrical.Analog.Basic.Resistor" }`
+  - Reply: `{ "id": 4, "ok": true, "result": { "icon": { ... }, "connectors": { ... }, "notice": null } }`
+- **`set_icon`**: Converts an `IconDef` into a Modelica `Icon(graphics)` annotation (the inverse of the importer; updates `g` and plate size):
+  - Request: `{ "id": 5, "op": "set_icon", "model": "Untitled", "icon": { ... } }`
+  - Reply: `{ "id": 5, "ok": true, "result": {} }`
+- **`generate`**: Generates a Paperboat C++ backend (`<model>-cpp/`) via ODE compilation or FMU export. When `dry` is true, writes nothing to disk and returns virtual files in `result.files`. Emits streaming progress notifications (`{ "op": "progress", "id": 6, "stage": "check"|"flatten"|"generate"|"build", "fraction": 0.0..1.0 }`) before the final reply:
+  - Request: `{ "id": 6, "op": "generate", "source": "Untitled.mo", "model": "Untitled", "out": "untitled-cpp", "dry": true }`
+  - Reply: `{ "id": 6, "ok": true, "result": { "model": "Untitled", "path": "ode", "reason": "ODE: no events, no torn systems, no external functions", "out": "untitled-cpp", "notices": [], "files": { ... } } }`
+- **`simulate`**: Runs a quick check simulation with omc (500 intervals) and returns time and variable series:
+  - Request: `{ "id": 7, "op": "simulate", "model": "Untitled", "stop": 1.0, "vars": ["R1.i", "R1.v"] }`
+  - Reply: `{ "id": 7, "ok": true, "result": { "t": [0.0, ...], "series": { "R1.i": [...], "R1.v": [...] }, "names": ["R1.i", "R1.v", ...] } }`
 
 ## Station objects
 

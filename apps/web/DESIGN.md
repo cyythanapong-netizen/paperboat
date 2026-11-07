@@ -252,6 +252,39 @@ positions and lines.
 - A backend's own look belongs in a web station (`[station] view = "web"`).
 - Still open (#33): the signal colour, the Monitor mode.
 
+## Squero Studio OM
+
+Squero Studio: OpenModelica (everyday **Squero Studio OM**, launched by `squero-om` and
+`paperboat squero`) is a separate app for building the equipment models that Paperboat runs.
+Following the ISA-88 boundary (GUIDELINES §4): Studio builds equipment and exports `<model>-cpp/`
+backends; Paperboat runs procedures (PID, step stories) and monitors them on the Board. Studio's
+Simulate is a local check, never a second Flow page.
+
+The top bar shows `squero studio [ OM ]` (lowercase wordmark, light `studio`, rounded ink `Om` badge)
+along with the project name and an `omc <ver> · ready | checking | failed` status chip on the right.
+Studio has no modal dialogs; refusals and notices appear in plain words.
+
+Surfaces:
+- **Library** (left): lazily loads Modelica Standard Library packages and project classes; each leaf
+  displays its imported `view.icon`. Filter input searches by name then qualified path.
+- **Acausal canvas**: diagram authoring on `@xyflow/react` with shared `Compact`, `Icon`, and ports.
+  Undirected acausal wires, directional causal arrows, junction dots on 3+ wires, and clear word errors
+  on refused connections (`an output joins only an input`). Quick add (`/`) adds parts at the cursor or
+  splices directly into a selected wire (`Insert R2: R1.n -> p, n -> L1.p`) as a single undo step.
+  Every edit calls `omc` directly (`addComponent`, `addConnection`, `setComponentModifierValue`),
+  keeping `.mo` files OMEdit-compatible.
+- **Split view** (right): inspects `[ .mo ]` code alongside generated `c++` (`ode` or `fmu`) from a dry run.
+  Simulate runs a local omc simulation (uPlot check plot of chosen variables); variable chips toggle traces.
+- **Component popover**: opens on clicking a canvas part. Shows parameters as `NumberField` rows; `=` binds
+  a parameter to a top-level parameter (creating it if absent); ports provide `+ Probe` and `+ Input` actions.
+- **Interface sheet** (`Alt+V`): edits Station properties (top-level parameters and default values),
+  configures entry pills (inputs on the left, outputs on the right), provides a live linked-block preview
+  card, and includes the **Look tab** for editing custom block icons (§3 primitives on a 5-unit grid,
+  with `Choice` pickers for stroke, weight, fill, and dash, plus light and dark preview tiles).
+- **Dock**: live equation/unknown balance from `checkModel` (e.g. `balanced · 76 / 76`), dangling flow
+  connectors with domain fixes (`L1.n unconnected [ Fix: Ground ]`), and `Export backend` with a 2px signal
+  progress bar.
+
 ## Docs
 
 The docs follow the same design system (#72): the API reference (`docs/api`, Sphinx) and the

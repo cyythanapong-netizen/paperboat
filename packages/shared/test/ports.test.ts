@@ -33,6 +33,8 @@ test("validity: causal goes output to input only", () => {
   assert.equal(connectError(signalEnd("out"), signalEnd("in")), null);
   assert.match(connectError(inp, inp) ?? "", /input.*input/);
   assert.match(connectError(out, out) ?? "", /output.*output/);
+  assert.equal(connectError(out, end(Resistor, "n")), "an output joins only an input");
+  assert.equal(connectError(signalEnd("out"), end(Resistor, "n")), "an output joins only an input");
   assert.equal(connectError({ ...inp, inside: true }, inp), null, "a composite's inside connector connects through");
   assert.ok(connectError({ kind: "expandable", cls: "X" }, inp));
 });
