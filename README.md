@@ -5,16 +5,17 @@
   </picture>
 </h1>
 
-<p align="center">A framework for engineering apps: set up a scene, wire a node graph, run it and
+<p align="center">A framework for engineering apps: set up a scene, wire a node graph, run it and<br>
 watch the results live. Backends are written in C++ or Python; the web UI builds itself from
-what they send.</p>
+what they send.<br><br>
+<strong><a href="https://cyythanapong-netizen.github.io/paperboat/">Documentation &rarr;</a></strong></p>
 
 | Check | What it runs | `dev` |
 | --- | --- | --- |
 | Engine | C++ build and the engine tests | [![engine](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/engine.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/engine.yml?query=branch%3Adev) |
 | Python | the bindings and the protocol schema | [![python](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/python.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/python.yml?query=branch%3Adev) |
 | Web and console | typecheck, tests and build of `apps/web` and `apps/cli` | [![web](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/web.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/web.yml?query=branch%3Adev) |
-| Docs | the API reference, warnings as errors | [![docs](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
+| Docs | the [API reference](https://cyythanapong-netizen.github.io/paperboat/), warnings as errors | [![docs](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/cyythanapong-netizen/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
 
 Every app follows one shape:
 

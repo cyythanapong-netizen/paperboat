@@ -11,7 +11,7 @@ author = "Paperboat"
 release = "0"
 version = "0 (protocol paperboat/0)"
 
-extensions = []
+extensions = ["sphinx.ext.githubpages"]
 exclude_patterns = ["_build"]
 
 html_theme = "furo"
@@ -19,12 +19,17 @@ templates_path = ["_templates"]
 html_static_path = ["../_static"]
 html_css_files = ["tokens.css", "docs.css"]
 html_title = "Paperboat"
+html_baseurl = "https://cyythanapong-netizen.github.io/paperboat/"
+html_favicon = "../_static/favicon.svg"
 html_show_sphinx = False
 highlight_language = "none"
 primary_domain = None
 cpp_index_common_prefix = ["paperboat::"]
 
 html_theme_options = {
+    "source_repository": "https://github.com/cyythanapong-netizen/paperboat/",
+    "source_branch": "dev",
+    "source_directory": "docs/api/",
     "sidebar_hide_name": True,
     "navigation_with_keys": True,
     "light_css_variables": {
