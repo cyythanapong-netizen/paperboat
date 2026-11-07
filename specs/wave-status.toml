@@ -1,0 +1,149 @@
+# Epic #160 coordination. Lanes edit only their own [lanes.*] block and append [[requests]].
+# state: pending | active | blocked | review | done
+
+contracts = "specs/issue-160-contracts.md"
+contracts_rev = 2
+current_wave = 2
+omc_version = "1.27.0~dev-5-g5f1d2c5"
+
+[waves.0]
+state = "done"
+owner = "orchestrator"
+deliverables = ["specs/issue-160-contracts.md", "specs/wave-status.toml"]
+
+[waves.1]
+state = "done"
+integrated = "merged to dev 2026-11-07: lane A 3beb3a5, lane B c0bbca7; #170 edits ported to packages/shared; paperboat_cli.cpp auto-merged"
+verified = """Orchestrator re-ran 2026-11-07:
+A (worktree epic160-lane-a, uncommitted): engine build clean; paperboat_tests 1341/138 pass;
+  [modelica] 47/5 pass; golden dc-motor-cpp PASS.
+B (branch epic160/lane-b-w1 @ c0bbca7): typecheck, build, web tests 96/96 pass; built CSS
+  byte-identical to base 736e1f3 (sha1 40456809...), so no style regression.
+FAILS: B broke two sync gates required by CLAUDE.md:
+  python3 protocol/gen_ts.py --check   -> OUT still apps/web/src/protocol.ts (now a shim)
+  python3 docs/gen_tokens.py --check   -> source still apps/web/src/tokens.css (now a shim)
+  and packages/shared/src/protocol.ts hand-adds the §3/§4 types, so regenerating drops them.
+Minor (accepted): B copied + left re-export shims instead of git mv (history not kept);
+  Dashboard.tsx not extracted (new 20-line DashboardShell stub, web Dashboard untouched)."""
+integration = [
+  "commit lane A on epic160/lane-a-w1",
+  "merge epic160/lane-a-w1 and epic160/lane-b-w1 into dev",
+  "port dev's post-736e1f3 edits to apps/web/src/{protocol.ts,Menus.tsx,commands.ts} (#170) into packages/shared copies",
+  "resolve engine/tools/paperboat_cli.cpp (A modelica subcommand vs #170 solver change)",
+  "requests: schema ToolkitStatus.builtin (A->orch)",
+]
+gate_wave2 = "integration done on dev; gen_ts/gen_tokens fixes land as Wave 2 lane A step 1"
+gate = "both lanes done + orchestrator review; apps/web zero visual diff; generator builds dc-motor-cpp"
+
+[waves.2]
+state = "active"
+prompts = ["specs/prompts/wave2_lane_a.md", "specs/prompts/wave2_lane_b.md"]
+gate = "importer tests green on MSL set; icon renderer token test green"
+
+[waves.3]
+state = "pending"
+gate = "contracts §8 expanded by orchestrator before start"
+
+[lanes.A]
+cli = "claude"
+model = "sonnet-5.5"
+effort = "medium"
+wave = 2
+state = "ready"
+task = "omc bridge (engine/modelica) + paperboat modelica generate/check (ODE + FMU) + squero-om / paperboat squero wiring"
+contracts = ["§0", "§1", "§5", "§6"]
+branch = "epic160/lane-a-w2"
+blocker = ""
+notes = """No specs/prompts task file existed: worked from contracts §5/§6. Uncommitted on branch
+epic160/lane-a-w1 in worktree .claude/worktrees/epic160-lane-a. Allow-list adds getErrorString
+(read-only; how Studio words a failed call). Generated backends default to port 8780; squero to
+8790. paperboat check's smoke stage fails on dev for every backend until the ToolkitStatus
+schema request below lands (verified green with it patched in, then reverted). FMU path verified
+end to end only via a mirrored omc: this machine's OM install has root-only buildproject/config.*
+(see GUIDELINES Lessons). GUIDELINES.md and ARCHITECTURE.md are gitignored; edited in the main tree."""
+modified_files = [
+  "engine/modelica/CMakeLists.txt",
+  "engine/modelica/include/paperboat/modelica/omc.hpp",
+  "engine/modelica/include/paperboat/modelica/generate.hpp",
+  "engine/modelica/include/paperboat/modelica/squero.hpp",
+  "engine/modelica/src/omc.cpp",
+  "engine/modelica/src/generate.cpp",
+  "engine/modelica/src/squero.cpp",
+  "engine/CMakeLists.txt",
+  "engine/tools/CMakeLists.txt",
+  "engine/tools/paperboat_cli.cpp",
+  "engine/tests/CMakeLists.txt",
+  "engine/tests/modelica_test.cpp",
+  "apps/cli/src/model.ts",
+  "apps/studio/src/omc/omc.ts",
+  "bin/squero-om",
+  "examples/dc-motor-cpp/ (generated + descriptor PID starter + expected.json)",
+  "docs/api/tutorials.rst",
+  "GUIDELINES.md (untracked)",
+  "ARCHITECTURE.md (untracked)",
+]
+verification = """
+cmake --build engine/build/dev                      no errors, no warnings (-Wall -Wextra -Wpedantic -Wshadow -Wconversion)
+engine/build/dev/tests/paperboat_tests              All tests passed (1341 assertions in 138 test cases)
+paperboat_tests '[modelica]'                        All tests passed (47 assertions in 5 test cases)
+paperboat modelica generate .../DCMotor.mo          ODE: no events, no torn systems, no external functions
+cmake --build examples/dc-motor-cpp/build           no errors, no warnings
+open-loop step vs omc simulate                      w(10) 1.9999693 = 1.9999693, phi(10) 17.5201202 = 17.5201202, i(1.2) 0.3038288 = 0.3038289
+python3 protocol/golden.py examples/dc-motor-cpp    ok dc-motor-cpp / PASS (PID speed loop: w 1.5, v 0.75)
+paperboat check examples/dc-motor-cpp               manifest ok, catalog ok, smoke ok, golden ok (smoke needs the ToolkitStatus schema fix)
+--path fmu (mirrored omc)                           builds, runs: w(10) 1.99985 vs ODE 1.99997
+squero/0 live                                       status pushes, getVersion/loadModel ok, system() rejected, omc kill -9 -> restart + replay
+npm test -w @paperboat/cli                          10 pass
+./scripts/build_docs.sh                             built with -W, no warnings; gen_tokens --check current
+"""
+
+[lanes.B]
+cli = "agy"
+model = "argon-4"
+effort = "high"
+wave = 2
+state = "ready"
+task = ".mo loader, extends resolver, iconTransformation + Icon(graphics) quantisers, engine passthrough"
+contracts = ["§0", "§3", "§4", "§5", "§6", "§7"]
+branch = "epic160/lane-b-w2"
+blocker = ""
+notes = "Wave 1 (epic160/lane-b-w1 @ c0bbca7) done and awaiting orchestrator integration into dev; dev (0a0f38b) has neither engine/modelica/ nor packages/shared/. Held off creating epic160/lane-b-w2 worktree until Wave 1 merges into dev."
+modified_files = [
+  "package.json",
+  "package-lock.json",
+  "apps/web/package.json",
+  "apps/web/src/**",
+  "packages/shared/**",
+]
+verification = "npm run typecheck (all 3 workspaces green), npm run build (vite build and cli build green), npm test -w @paperboat/web (96 tests pass)"
+
+# Model routing (contracts rev 2): lane A = Anthropic only, lane B = Google only.
+[routing]
+wave2 = { a = { model = "sonnet-5.5", effort = "medium", task = "view.icon renderer + first-class ports in @paperboat/shared" }, b = { model = "argon-4", effort = "high", task = ".mo loader, extends resolver, iconTransformation + Icon(graphics) quantisers, engine passthrough" } }
+wave3 = { a = { model = "sonnet-5.5", effort = "high", task = "apps/studio: library tree, acausal canvas, split view + Simulate" }, b = { model = "argon-4", effort = "medium", task = "component popover, interface sheet + Look tab, dock balance + Export backend" } }
+wave4 = { a = { model = "sonnet-5.5", effort = "medium", task = "E2E golden dc_drive-cpp with control/pid + dashboard/graph" }, b = { model = "flash-3.8", effort = "low", task = "DESIGN.md, protocol/README.md, cross-repo CI workflows" } }
+
+# Cross-lane asks. Append only; orchestrator resolves.
+# [[requests]]
+# from = "A"
+# to = "B"
+# what = "add ConnectorDef to packages/shared/src/protocol.ts"
+# state = "open"   # open | accepted | done | rejected
+
+[[requests]]
+from = "A"
+to = "orchestrator"
+what = "(moved to Wave 2 lane A step 1) protocol/schema/paperboat-0.schema.json: add `builtin: boolean` to $defs.ToolkitStatus. Pre-existing since 3a2a978 (#157): the engine sends it in hello/catalog toolkits and smoke rejects it, so `paperboat check`/`npm run smoke` fail for every backend on dev."
+state = "open"
+
+[[requests]]
+from = "A"
+to = "B"
+what = "protocol/README.md: note squero/0 (Studio <-> Studio server, separate from paperboat/0): {id, op: omc, expr} -> {id, ok, result|error}; {op: status, state, version} pushes; allow-list in engine/modelica (omc.cpp allowed_calls)."
+state = "open"
+
+[[requests]]
+from = "A"
+to = "B"
+what = "apps/studio: the top bar chip can use chip(status) from apps/studio/src/omc/omc.ts; the client is OmcClient(url, onStatus). Default server ws://localhost:8790. Optional root package.json script \"studio\": \"./bin/squero-om\"."
+state = "open"
