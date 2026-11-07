@@ -796,7 +796,7 @@ int cmd_update(const std::vector<std::string_view>& args) {
     } else {
       std::string latest;
       if (tk::run_command({"npm", "view", "@paperboat/cli", "version"}, {}, {}, &latest) != 0) {
-        say("paperboat", std::string(tui::kVersion) + ", cannot reach the npm registry");
+        say("paperboat", std::string(tui::kVersion) + ", cannot read @paperboat/cli from the npm registry (offline, or not published yet)");
         ++failed;
       } else if (latest == tui::kVersion) {
         say("paperboat", std::string(tui::kVersion) + ", up to date (npm)");

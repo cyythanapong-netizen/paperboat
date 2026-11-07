@@ -1,0 +1,99 @@
+# Release packages: .deb and .tar.gz (Linux), npm packages (@paperboat/cli + one per platform), a GitHub release.
+# A tag v<version> publishes; pull requests and manual runs only build and check the packages.
+# The version is engine/CMakeLists.txt's project(paperboat VERSION ...); the tag must match it.
+# Publishing to npm needs the NPM_TOKEN secret (an automation token for the @paperboat scope); without it
+# the release is made and npm is skipped.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths:
+      - "npm/**"
+      - "scripts/build_release.sh"
+      - "scripts/pack_npm.py"
+      - "engine/CMakeLists.txt"
+      - "engine/tools/CMakeLists.txt"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (.deb, .tar.gz, npm)
+    runs-on: ubuntu-22.04  # glibc 2.35: the binary runs on Debian 12, Ubuntu 22.04+, Fedora, ...
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Version
+        id: version
+        run: |
+          v=$(sed -nE 's/^project\(paperboat VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' engine/CMakeLists.txt)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "v$v" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match the CMake version $v"; exit 1
+          fi
+      - run: sudo apt-get update && sudo apt-get install -y g++-12 ninja-build dpkg-dev file
+      - name: Build, test, package (.deb, .tar.gz)
+        run: CC=gcc-12 CXX=g++-12 scripts/build_release.sh dist
+      - name: npm packages
+        run: |
+          v=${{ steps.version.outputs.version }}
+          python3 scripts/pack_npm.py --version "$v" --out dist/npm --target linux-x64 --binary engine/build/tools/paperboat
+          python3 scripts/pack_npm.py --version "$v" --out dist/npm --main
+      - name: The .deb installs on a clean Debian 12 and runs
+        run: |
+          docker run --rm -v "$PWD/dist:/dist:ro" debian:bookworm sh -c '
+            apt-get update -qq && apt-get install -y -qq /dist/*.deb >/dev/null &&
+            paperboat --version && paperboat pkg list && paperboat commands | grep -q squero'
+      - name: The npm packages install on a clean Node and run
+        run: |
+          prefix=$(mktemp -d)
+          npm install -g --prefix "$prefix" dist/npm/paperboat-cli-linux-x64-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz
+          "$prefix/bin/paperboat" --version
+          "$prefix/bin/paperboat" pkg list
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/
+
+  publish:
+    name: Publish (tags only)
+    needs: [linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      id-token: write  # npm provenance
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes \
+            dist/*.deb dist/*.tar.gz dist/*.zip dist/npm/*.tgz
+      - name: npm (platform packages first, the launcher last)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::notice::NPM_TOKEN is not set; skipping npm"; exit 0; fi
+          for f in dist/npm/paperboat-cli-*-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz; do
+            npm publish "$f" --access public --provenance
+          done

@@ -110,6 +110,16 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ./bin/paperboat squero              # Squero Studio OM; fetches and builds it on first use (needs omc, git, npm)
 ```
 
+### Install
+
+```sh
+npm install -g @paperboat/cli        # Linux x64 (and Windows x64); the native binary comes as an optional dependency
+sudo apt install ./paperboat_<version>_amd64.deb   # Debian / Ubuntu, from the GitHub release
+```
+
+A package install is the CLI: `pkg`, `squero`, `update`, `check`, `pack`, `modelica`. Building C++ backends
+and installing toolkits (they compile into the engine) need paperboat built from source.
+
 ### The console
 
 `./bin/paperboat` with no command opens the console: run, build and check backends without

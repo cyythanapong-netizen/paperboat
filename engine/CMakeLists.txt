@@ -33,6 +33,7 @@ endif()
 # WebSocket for engine/core's server.
 set(USE_TLS OFF CACHE BOOL "" FORCE)
 set(USE_ZLIB OFF CACHE BOOL "" FORCE)
+set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)  # keep its headers and library out of our packages
 FetchContent_Declare(ixwebsocket SYSTEM  # SYSTEM goes right after the name: CMake 3.25 reads it at the end as a URL
   URL https://github.com/machinezone/IXWebSocket/archive/refs/tags/v12.1.0.tar.gz)
 FetchContent_MakeAvailable(ixwebsocket)
