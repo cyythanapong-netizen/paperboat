@@ -1,11 +1,17 @@
 // The Paperboat unified CLI: build and start backends, list running backends,
 // manage the web application, orchestrate examples, and install/browse toolkits.
 
+#include <algorithm>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iomanip>
-#include <utility>
 #include <iostream>
+#include <map>
 #include <string>
 #include <string_view>
+#include <unistd.h>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -22,6 +28,9 @@ using nlohmann::json;
 namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
 namespace tui = paperboat::tui;
+namespace fs = std::filesystem;
+
+bool launch_console(const std::vector<std::string>& args);
 
 void print_help() {
   std::cout << R"(paperboat - Unified Paperboat command-line tool
@@ -40,6 +49,8 @@ Backend Commands:
                                --verbose       Verbose build output
                                --var <key=val> Set default variable value
 
+  build [path] [--clean]     Compile a C++ backend (rebuild: the same with --clean)
+  backends [--json]          List the backends you can run (examples, installed)
   list, ps [--json]          List all running Paperboat backends
   restart [path | port]      Restart a running backend
   stop [path | port | --all] Stop a running backend or all backends
@@ -61,15 +72,26 @@ Examples Orchestration:
 Toolkits:
   toolkit list [--json]      List all available and installed toolkits
   toolkit install <name>     Install an optional toolkit (e.g. opencv)
-  toolkit update <name>      Update an installed toolkit
+  toolkit update <name|--all>
+                             Update an installed toolkit, or every installed one
   toolkit uninstall <name>   Remove an optional toolkit
   toolkit versions <name>    Query remote versions/tags for a toolkit
 
 Verification & Packaging:
-  check [path] [--fast] [--json]
+  check [path] [--fast] [--json | --json-stream]
                              4-stage verification (manifest, catalog, smoke, golden)
-  pack [path] [--out <pkg>]  Package backend into .ppk archive
-  unpack <pkg> [--dir <dir>] Unpack and verify .ppk archive
+  pack [path] [--out <pkg>] [--json-stream]
+                             Package backend into .ppk archive
+  unpack <pkg> [--dir <dir>] [--json-stream]
+                             Unpack and verify .ppk archive
+                             --json-stream prints one JSON event per line as work goes
+
+Console:
+  (no command)               Open the interactive console (apps/cli) on a terminal;
+                             the basic prompt when it isn't built or PAPERBOAT_NO_CONSOLE is set
+  repl                       The basic prompt
+  top                        The console's process dashboard
+  commands [--json]          The command table (for completion)
 
 General:
   version, --version         Show CLI version
@@ -104,7 +126,105 @@ int cmd_run(const std::vector<std::string_view>& args) {
     }
   }
 
+  if (path.empty() && core::BackendManager::detect_backend_kind(fs::current_path()) == core::BackendKind::Unknown) {
+    launch_console({"run"});  // the backend picker; returns only when the console can't open
+  }
   return core::BackendManager::run_backend(path, opts);
+}
+
+int cmd_build(const std::vector<std::string_view>& args) {
+  std::string path;
+  bool clean = false;
+  for (auto a : args) {
+    if (a == "--clean") clean = true;
+    else if (!a.starts_with("-") && path.empty()) path = std::string(a);
+  }
+  const fs::path dir = core::BackendManager::resolve_backend_dir(path);
+  if (core::BackendManager::detect_backend_kind(dir) != core::BackendKind::Cpp) {
+    std::cerr << "error: not a C++ backend: " << (path.empty() ? dir.string() : path) << '\n';
+    return 2;
+  }
+  std::string err;
+  double elapsed = 0.0;
+  if (!core::BackendManager::ensure_built(dir, clean, /*verbose=*/true, &err, &elapsed)) {
+    std::cerr << "error: build failed: " << err << '\n';
+    return 1;
+  }
+  std::cout << "[ok] built " << dir.filename().string() << " in " << std::fixed << std::setprecision(1) << elapsed
+            << " s\n";
+  return 0;
+}
+
+int cmd_rebuild(const std::vector<std::string_view>& args) {
+  auto with_clean = args;
+  with_clean.emplace_back("--clean");
+  return cmd_build(with_clean);
+}
+
+// The first sentence of a descriptor's opening comment ("# Pole on a cart, balanced by PID
+// blocks. Served by ..."): the one-line description the picker shows.
+std::string describe(const fs::path& dir) {
+  std::ifstream in(dir / "descriptor.toml");
+  std::string line;
+  if (!std::getline(in, line) || !line.starts_with("# ")) return {};
+  line = line.substr(2);
+  if (auto dot = line.find(". "); dot != std::string::npos) line = line.substr(0, dot);
+  if (!line.empty() && line.back() == '.') line.pop_back();
+  return line;
+}
+
+int cmd_backends(const std::vector<std::string_view>& args) {
+  bool json_out = false;
+  for (auto a : args) {
+    if (a == "--json") json_out = true;
+  }
+
+  // Examples first (in their port order), then the user's installed backends; by name.
+  std::map<std::string, json> found;
+  std::vector<std::string> order;
+  const auto add = [&](const fs::path& dir, std::string source, int fallback_port) {
+    const auto kind = core::BackendManager::detect_backend_kind(dir);
+    if (kind == core::BackendKind::Unknown) return;
+    const auto manifest = core::BackendManager::load_manifest(dir);
+    std::string name = manifest.has_manifest && !manifest.name.empty() ? manifest.name : dir.filename().string();
+    for (std::string_view suffix : {"-cpp", "-python"}) {
+      if (name.ends_with(suffix)) name.resize(name.size() - suffix.size());
+    }
+    if (found.contains(name)) return;
+    order.push_back(name);
+    found[name] = {
+        {"name", name},
+        {"language", kind == core::BackendKind::Cpp ? "cpp" : "python"},
+        {"port", manifest.has_manifest && manifest.port > 0 ? manifest.port : fallback_port},
+        {"dir", dir.string()},
+        {"description", describe(dir)},
+        {"source", std::move(source)},
+    };
+  };
+  for (const auto& ex : core::BackendManager::get_examples()) add(ex.dir, "example", ex.port);
+  std::error_code ec;
+  for (const auto& entry : fs::directory_iterator(core::BackendManager::user_backends_dir(), ec)) {
+    if (entry.is_directory()) add(entry.path(), "installed", 8765);
+  }
+
+  if (json_out) {
+    json arr = json::array();
+    for (const auto& name : order) arr.push_back(found[name]);
+    std::cout << arr.dump(2) << '\n';
+    return 0;
+  }
+  if (order.empty()) {
+    std::cout << "No backends found. Set PAPERBOAT_EXAMPLES_DIR or unpack a .ppk.\n";
+    return 0;
+  }
+  std::cout << std::left << std::setw(20) << "NAME" << std::setw(9) << "TYPE" << std::setw(7) << "PORT"
+            << "DESCRIPTION\n";
+  for (const auto& name : order) {
+    const auto& b = found[name];
+    std::cout << std::left << std::setw(20) << name << std::setw(9) << b["language"].get<std::string>()
+              << std::setw(7) << b["port"].get<int>() << b["description"].get<std::string>() << '\n';
+  }
+  return 0;
 }
 
 int cmd_list(const std::vector<std::string_view>& args) {
@@ -262,18 +382,21 @@ int cmd_examples(const std::vector<std::string_view>& args) {
 
 int cmd_toolkit(const std::vector<std::string_view>& args) {
   if (args.empty()) {
+    launch_console({"toolkit"});  // the toolkit manager; returns only when the console can't open
     std::cerr << "usage: paperboat toolkit <list|install|update|uninstall|versions> [args...]\n";
     return 2;
   }
   auto sub = args[0];
   bool json_out = false;
   bool rebuild = true;
+  bool all = false;
   std::string name;
   std::string version;
 
   for (std::size_t i = 1; i < args.size(); ++i) {
     auto a = args[i];
     if (a == "--json") json_out = true;
+    else if (a == "--all") all = true;
     else if (a == "--no-build") rebuild = false;
     else if ((a == "--version" || a == "-v") && i + 1 < args.size()) {
       version = std::string(args[++i]);
@@ -311,6 +434,17 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
     return 0;
   }
 
+  if (sub == "update" && all) {
+    int failed = 0;
+    for (const auto& t : tk::list_toolkits()) {
+      if (!t.installed) continue;
+      std::vector<std::string_view> one = {"update", t.name};
+      if (!rebuild) one.emplace_back("--no-build");
+      failed += cmd_toolkit(one) != 0;
+    }
+    return failed ? 1 : 0;
+  }
+
   if (name.empty()) {
     std::cerr << "error: toolkit name required\n";
     return 2;
@@ -338,29 +472,40 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
   return 0;
 }
 
+json step_json(const core::CheckStep& s) {
+  return {{"name", s.name}, {"ok", s.ok}, {"skipped", s.skipped}, {"message", s.message}, {"duration", s.duration_seconds}};
+}
+
+// One line of `--json-stream`: an event object, flushed so a reader sees it at once.
+void emit(json event) {
+  std::cout << event.dump() << std::endl;
+}
+
 int cmd_check(const std::vector<std::string_view>& args) {
   std::string path;
   bool fast = false;
   bool json_out = false;
+  bool stream = false;
 
   for (auto a : args) {
     if (a == "--fast") fast = true;
     else if (a == "--json") json_out = true;
+    else if (a == "--json-stream") stream = true;
     else if (!a.starts_with("-") && path.empty()) path = std::string(a);
   }
 
-  auto res = core::BackendManager::check_backend(path, fast);
-  if (json_out) {
+  core::CheckProgress progress;
+  if (stream) {
+    progress = [](const core::CheckStep& step, bool done) {
+      json e = step_json(step);
+      e["event"] = done ? "step" : "step-start";
+      emit(std::move(e));
+    };
+  }
+  auto res = core::BackendManager::check_backend(path, fast, progress);
+  if (json_out || stream) {
     json steps_json = json::array();
-    for (const auto& s : res.steps) {
-      steps_json.push_back({
-          {"name", s.name},
-          {"ok", s.ok},
-          {"skipped", s.skipped},
-          {"message", s.message},
-          {"duration", s.duration_seconds},
-      });
-    }
+    for (const auto& s : res.steps) steps_json.push_back(step_json(s));
     json doc = {
         {"ok", res.ok},
         {"name", res.name},
@@ -377,7 +522,12 @@ int cmd_check(const std::vector<std::string_view>& args) {
         {"warnings", res.warnings},
         {"missing_toolkits", res.missing_toolkits},
     };
-    std::cout << doc.dump(2) << '\n';
+    if (stream) {
+      doc["event"] = "result";
+      emit(std::move(doc));
+    } else {
+      std::cout << doc.dump(2) << '\n';
+    }
     return res.ok ? 0 : 1;
   }
 
@@ -416,17 +566,34 @@ int cmd_check(const std::vector<std::string_view>& args) {
   }
 }
 
+core::PackProgress progress_events() {
+  return [](int files, int total, uint64_t bytes) {
+    emit({{"event", "progress"}, {"files", files}, {"total", total}, {"bytes", bytes}});
+  };
+}
+
 int cmd_pack(const std::vector<std::string_view>& args) {
   std::string path;
   std::string out_path;
 
+  bool stream = false;
   for (std::size_t i = 0; i < args.size(); ++i) {
     auto a = args[i];
     if (a == "--out" && i + 1 < args.size()) {
       out_path = std::string(args[++i]);
+    } else if (a == "--json-stream") {
+      stream = true;
     } else if (!a.starts_with("-") && path.empty()) {
       path = std::string(a);
     }
+  }
+
+  if (stream) {
+    auto res = core::BackendManager::pack_backend(path, out_path, /*fast=*/true, progress_events());
+    emit({{"event", "result"}, {"ok", res.ok}, {"package", res.package_path.string()}, {"name", res.name},
+          {"version", res.version}, {"files", res.file_count}, {"bytes", res.total_bytes}, {"sha256", res.sha256},
+          {"errors", res.errors}});
+    return res.ok ? 0 : 1;
   }
 
   std::cout << "==> Packing backend " << (path.empty() ? "." : path) << "…\n";
@@ -453,10 +620,13 @@ int cmd_unpack(const std::vector<std::string_view>& args) {
   std::string archive;
   std::string dest_dir;
 
+  bool stream = false;
   for (std::size_t i = 0; i < args.size(); ++i) {
     auto a = args[i];
     if (a == "--dir" && i + 1 < args.size()) {
       dest_dir = std::string(args[++i]);
+    } else if (a == "--json-stream") {
+      stream = true;
     } else if (!a.starts_with("-") && archive.empty()) {
       archive = std::string(a);
     }
@@ -465,6 +635,13 @@ int cmd_unpack(const std::vector<std::string_view>& args) {
   if (archive.empty()) {
     std::cerr << "error: package archive path required (e.g. `paperboat unpack my-backend-0.1.0.ppk`)\n";
     return 2;
+  }
+
+  if (stream) {
+    auto res = core::BackendManager::unpack_backend(archive, dest_dir, /*verify=*/true, progress_events());
+    emit({{"event", "result"}, {"ok", res.ok}, {"dir", res.destination_dir.string()}, {"name", res.name},
+          {"version", res.version}, {"files", res.file_count}, {"errors", res.errors}});
+    return res.ok ? 0 : 1;
   }
 
   std::cout << "==> Unpacking package " << archive << "…\n";
@@ -483,24 +660,120 @@ int cmd_unpack(const std::vector<std::string_view>& args) {
   return 0;
 }
 
+int cmd_commands(const std::vector<std::string_view>& args);
+int cmd_top(const std::vector<std::string_view>&);
+
 using Command = int (*)(const std::vector<std::string_view>&);
 
-// The subcommands the command line and the interactive prompt share, with their aliases.
-Command find_command(std::string_view name) {
-  static constexpr std::pair<std::string_view, Command> commands[] = {
-      {"run", cmd_run},         {"start", cmd_run},   {"list", cmd_list},     {"ps", cmd_list},
-      {"restart", cmd_restart}, {"stop", cmd_stop},   {"app", cmd_app},       {"examples", cmd_examples},
-      {"toolkit", cmd_toolkit}, {"check", cmd_check}, {"pack", cmd_pack},     {"unpack", cmd_unpack},
+// What a command's free argument names, for completion: a backend, a toolkit, something
+// running (name or port), a .ppk file, or nothing.
+struct CommandSpec {
+  std::string_view name;
+  Command run;
+  std::string_view summary;
+  std::vector<std::string_view> aliases = {};
+  std::vector<std::string_view> subcommands = {};
+  std::vector<std::string_view> flags = {};
+  std::string_view arg = {};
+};
+
+// The subcommands the command line, the basic prompt and the console share (`commands --json`).
+const std::vector<CommandSpec>& command_table() {
+  static const std::vector<CommandSpec> table = {
+      {"run", cmd_run, "Build and run a backend", {"start"}, {},
+       {"--port", "--no-build", "--clean", "--time", "--verbose", "--var"}, "backend"},
+      {"build", cmd_build, "Compile a C++ backend", {}, {}, {"--clean"}, "backend"},
+      {"rebuild", cmd_rebuild, "Clean and compile a C++ backend", {}, {}, {}, "backend"},
+      {"backends", cmd_backends, "List the backends you can run", {}, {}, {"--json"}},
+      {"list", cmd_list, "List running backends", {"ps"}, {}, {"--json"}},
+      {"restart", cmd_restart, "Restart a running backend", {}, {}, {"--port"}, "target"},
+      {"stop", cmd_stop, "Stop a running backend", {}, {}, {"--all"}, "target"},
+      {"app", cmd_app, "Manage the web app dev server", {}, {"start", "stop", "restart", "build"},
+       {"--port", "--host", "--daemon"}},
+      {"examples", cmd_examples, "Run all example backends", {}, {"start", "stop", "status"}, {"--dir"}},
+      {"toolkit", cmd_toolkit, "Manage optional toolkits", {}, {"list", "install", "update", "uninstall", "versions"},
+       {"--json", "--all", "--no-build", "--version"}, "toolkit"},
+      {"check", cmd_check, "Verify a backend (manifest, catalog, smoke, golden)", {}, {},
+       {"--fast", "--json", "--json-stream"}, "backend"},
+      {"pack", cmd_pack, "Package a backend as .ppk", {}, {}, {"--out", "--json-stream"}, "backend"},
+      {"unpack", cmd_unpack, "Unpack and verify a .ppk", {}, {}, {"--dir", "--json-stream"}, "ppk"},
+      {"top", cmd_top, "Process dashboard (console)"},
+      {"commands", cmd_commands, "The command table", {}, {}, {"--json"}},
   };
-  for (const auto& [n, command] : commands) {
-    if (n == name) return command;
+  return table;
+}
+
+Command find_command(std::string_view name) {
+  for (const auto& c : command_table()) {
+    if (c.name == name || std::ranges::find(c.aliases, name) != c.aliases.end()) return c.run;
   }
   return nullptr;
+}
+
+int cmd_commands(const std::vector<std::string_view>& args) {
+  const bool json_out = std::ranges::find(args, std::string_view("--json")) != args.end();
+  json arr = json::array();
+  for (const auto& c : command_table()) {
+    if (!json_out) {
+      std::cout << std::left << std::setw(10) << c.name << c.summary << '\n';
+      continue;
+    }
+    const auto strings = [](const std::vector<std::string_view>& v) {
+      return std::vector<std::string>(v.begin(), v.end());
+    };
+    arr.push_back({{"name", c.name}, {"summary", c.summary}, {"aliases", strings(c.aliases)},
+                   {"subcommands", strings(c.subcommands)}, {"flags", strings(c.flags)}, {"arg", c.arg}});
+  }
+  if (json_out) std::cout << arr.dump(2) << '\n';
+  return 0;
+}
+
+int cmd_top(const std::vector<std::string_view>&) {
+  launch_console({"top"});
+  std::cerr << "paperboat top needs the console on a terminal (npm run build:cli); `paperboat list` "
+               "shows the same backends\n";
+  return 2;
+}
+
+// The console (apps/cli, Ink) replaces this process on a terminal. Returns only when it
+// can't: not a terminal, PAPERBOAT_NO_CONSOLE set, not built, or no `node` on PATH.
+bool launch_console(const std::vector<std::string>& args) {
+  if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO) || std::getenv("PAPERBOAT_NO_CONSOLE")) return false;
+  std::error_code ec;
+  const fs::path exe = fs::read_symlink("/proc/self/exe", ec);
+  fs::path script;
+  if (const char* env = std::getenv("PAPERBOAT_CONSOLE"); env && *env) {
+    script = env;
+  } else {
+    // engine/build/tools/paperboat in a checkout, else the checkout this is run from.
+    for (const fs::path& root : {exe.parent_path() / ".." / ".." / "..", tk::find_repo_root()}) {
+      if (root.empty() || !fs::is_directory(root / "apps" / "cli")) continue;
+      script = fs::weakly_canonical(root / "apps" / "cli" / "dist" / "main.js", ec);
+      if (!fs::is_regular_file(script)) {
+        std::cerr << "note: the console isn't built (npm install && npm run build:cli); using the basic prompt\n";
+        return false;
+      }
+      break;
+    }
+  }
+  if (script.empty() || !fs::is_regular_file(script)) return false;
+
+  setenv("PAPERBOAT_BIN", exe.c_str(), 1);
+  std::vector<std::string> owned = {"node", script.string()};
+  owned.insert(owned.end(), args.begin(), args.end());
+  std::vector<char*> argv;
+  for (auto& a : owned) argv.push_back(a.data());
+  argv.push_back(nullptr);
+  execvp("node", argv.data());
+  std::cerr << "note: `node` not found on PATH; using the basic prompt\n";
+  return false;
 }
 
 void print_interactive_help() {
   std::cout << R"(Interactive Commands:
   run, start <target>      Build and start backend (or .ppk package)
+  build, rebuild <target>  Compile a C++ backend (rebuild cleans first)
+  backends                 List the backends you can run
   list (or ps)             List running Paperboat backends
   restart <target>         Restart backend on port or name
   stop <target|--all>      Stop running backend
@@ -578,6 +851,7 @@ int run_interactive_prompt() {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
+    launch_console({});
     return run_interactive_prompt();
   }
 

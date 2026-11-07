@@ -133,3 +133,33 @@ Run it
 
 Open the UI on it: ``http://localhost:3047/?backend=ws://localhost:8780``. Press **Run**.
 Then write ``expected.json`` and pass the tests (:doc:`testing`).
+
+The console
+-----------
+
+``paperboat`` with no command, on a terminal, opens the console: one place to run, build,
+check and stop backends and the web app while you keep typing. Build it once with
+``npm install && npm run build:cli``; until then, and in scripts, ``paperboat`` falls back to
+the plain prompt (set ``PAPERBOAT_NO_CONSOLE=1`` to choose it).
+
+.. code-block:: text
+
+   › run counter-cpp          a job: builds, starts, and hands the prompt straight back
+   › app start                the web app, as another job
+   › check counter-cpp        each stage as it runs (manifest, catalog, smoke, golden)
+   › logs counter-cpp         the job's last lines; logs -f follows them
+   › top                      every running backend: r restarts, s stops, Enter opens its log
+   › run                      no name: pick a backend from a list
+   › toolkit                  no subcommand: tick the toolkits to install or remove
+
+Jobs never print over what you type: a job says when it is ready, and when it fails it shows
+its last lines. The bar at the bottom lists what is running and what is compiling.
+
+**Keys:** Tab completes commands, backends, toolkits and flags (again to cycle); the grey
+suggestion comes from your history, and → takes it; ↑ ↓ walk the history and Ctrl+R searches
+it; Ctrl+C clears the line, and twice quits, asking first when jobs are still running.
+
+The console runs the same ``paperboat`` commands you would type in a shell, through their
+machine-readable forms: ``paperboat backends --json``, ``paperboat commands --json``, and
+``--json-stream`` on ``check``, ``pack`` and ``unpack`` (one JSON event per line, then a
+``result`` event). Scripts can use them the same way.

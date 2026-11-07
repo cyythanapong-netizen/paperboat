@@ -1,0 +1,25 @@
+{
+  "name": "@paperboat/cli",
+  "private": true,
+  "version": "0.0.1",
+  "description": "The Paperboat developer console: an Ink front end that drives the C++ paperboat CLI",
+  "type": "module",
+  "bin": {
+    "paperboat-console": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p . --noEmit",
+    "test": "node --test test/*.test.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "ink": "^8.0.0",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}

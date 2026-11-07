@@ -51,6 +51,10 @@ TEST_CASE("ProcessRunner stream and detached runs pass cwd, env and output throu
   CHECK(lines["stdout"] == std::vector<std::string>{"a", "b", "on " + fs::canonical(dir).string()});
   CHECK(lines["stderr"] == std::vector<std::string>{"e1"});
 
+  // The exit code survives the pump reaping the child.
+  CHECK(core::ProcessRunner::run_stream({"sh", "-c", "exit 0"}) == 0);
+  CHECK(core::ProcessRunner::run_stream({"sh", "-c", "exit 3"}) == 3);
+
   const fs::path log = dir / "detached.log";
   fs::remove(log);
   const int pid = core::ProcessRunner::run_detached({"sh", "-c", "echo \"$PB_PROBE $(pwd)\"; echo err >&2"}, dir, env, log);
@@ -306,4 +310,33 @@ TEST_CASE("WaveSpinner starts and stops cleanly") {
 
 TEST_CASE("render_banner non-interactive executes cleanly without exception") {
   CHECK_NOTHROW(paperboat::tui::render_banner(false));
+}
+
+TEST_CASE("check_backend reports each stage as it starts and ends") {
+  const fs::path dir = fs::temp_directory_path() / "pb_check_progress";
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  std::ofstream(dir / "backend.toml") << "[backend]\nformat = 0\nname = \"probe\"\nlanguage = \"python\"\n"
+                                         "run = \"server.py\"\ndescriptor = \"descriptor.toml\"\n";
+  std::ofstream(dir / "descriptor.toml") << "domain = \"probe\"\nimport = [\"math\"]\n";
+  std::ofstream(dir / "server.py") << "\n";
+
+  std::vector<std::string> events;
+  const auto res = core::BackendManager::check_backend(dir, /*fast=*/true, [&](const core::CheckStep& s, bool done) {
+    events.push_back(s.name + (done ? (s.skipped ? ":skipped" : ":done") : ":start"));
+  });
+  CHECK(res.ok);
+  CHECK(events == std::vector<std::string>{"manifest:start", "manifest:done", "catalog:start", "catalog:done",
+                                           "smoke:skipped", "golden:skipped"});
+  fs::remove_all(dir);
+}
+
+TEST_CASE("resolve_backend_dir makes a relative backend path absolute") {
+  const fs::path rel = "pb_rel_backend";
+  fs::create_directories(rel);
+  std::ofstream(rel / "server.py") << "\n";
+  const auto dir = core::BackendManager::resolve_backend_dir(rel);
+  CHECK(dir.is_absolute());
+  CHECK(fs::equivalent(dir, rel));
+  fs::remove_all(rel);
 }
