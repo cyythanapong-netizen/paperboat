@@ -80,36 +80,6 @@ export type Action = ServerMsg | { type: "signals"; list: SignalMsg[] } | { type
 /** Max Console lines kept in memory. */
 export const MAX_LOGS = 200;
 
-export const DEFAULT_TOOLKITS: ToolkitStatus[] = [
-  {
-    name: "opencv",
-    repo: "https://github.com/cyythanapong-netizen/paperboat-toolkit-opencv.git",
-    description: "Image processing blocks, view monitor, and image station object (OpenCV).",
-    installed: false,
-  },
-];
-
-/** Known block types belonging to optional external toolkits, so missing blocks in a project or graph can identify their toolkit. */
-const TOOLKIT_BLOCKS: Record<string, readonly string[]> = {
-  opencv: [
-    "gray",
-    "blur",
-    "median",
-    "threshold",
-    "adaptive_threshold",
-    "hsv_range",
-    "canny",
-    "erode",
-    "dilate",
-    "open",
-    "close",
-    "invert",
-    "distance",
-    "view",
-    "image",
-  ],
-};
-
 /**
  * Return all toolkits that are required by the current backend or by missing blocks in the
  * open graph/project and are not currently installed.
@@ -118,14 +88,8 @@ export function missingRequiredToolkits(
   toolkits: ToolkitStatus[],
   missingBlockTypes: Iterable<string> = [],
 ): ToolkitStatus[] {
-  const list = toolkits.length > 0 ? toolkits : DEFAULT_TOOLKITS;
   const missingTypes = new Set(missingBlockTypes);
-  return list.filter((t) => {
-    if (t.installed) return false;
-    if (t.required) return true;
-    const known = TOOLKIT_BLOCKS[t.name];
-    return !!known?.some((type) => missingTypes.has(type));
-  });
+  return toolkits.filter((t) => !t.installed && (t.required || !!t.blocks?.some((type) => missingTypes.has(type))));
 }
 
 function pushLog(logs: EngineState["logs"], entry: EngineState["logs"][number]): EngineState["logs"] {
