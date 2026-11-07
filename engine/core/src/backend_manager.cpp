@@ -839,9 +839,6 @@ fs::path BackendManager::find_examples_dir(const fs::path& hint) {
     }
   }
 
-  const fs::path fallback = "/home/cyyth/.local/share/opencode/worktree/f0d43b/paperboat-examples";
-  if (is_examples_dir(fallback)) return fallback;
-
   if (!root.empty() && is_examples_dir(root / "examples" / "backends")) {
     return root / "examples" / "backends";
   }
