@@ -121,7 +121,9 @@ npm install -g @paperboatlabs/cli        # Linux x64 today; Windows x64 is being
 sudo apt install ./paperboat_<version>_amd64.deb   # Debian / Ubuntu, from the GitHub release
 ```
 
-A package install is the CLI: `pkg`, `start`, `update`, `check`, `pack`. Building C++ backends
+A package install is the CLI and the apps: `paperboat` opens the console (needs `node`),
+`paperboat start` serves the web app on http://localhost:3047 (no npm, no checkout), and `pkg`,
+`update`, `check`, `pack`. Building C++ backends
 and installing toolkits (they compile into the engine) need paperboat built from source.
 
 ### The console

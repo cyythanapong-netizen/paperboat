@@ -12,6 +12,7 @@ ARCHITECTURE.md
 # --- Builds ---
 build/
 dist/
+apps/cli/bundle/
 docs/api/_build/
 *.egg-info/
 python/paperboat/_engine*.so

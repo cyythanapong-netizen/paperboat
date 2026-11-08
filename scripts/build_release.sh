@@ -8,6 +8,10 @@ src="$(cd "$(dirname "$0")/.." && pwd)"
 out="$(realpath -m "${1:-$src/dist}")"  # absolute: cpack runs from the build directory
 build="$src/engine/build"   # where bin/paperboat and the CLI tests look for it
 
+# The web app and the console go into the packages (share/paperboat/{web,cli}); they need npm and
+# the sibling paperboat-shared checkout. WEB=OFF packages without them.
+if [ "${WEB:-ON}" = ON ]; then (cd "$src" && npm ci --no-audit --no-fund && npm run build:release); fi
+
 cmake -S "$src/engine" -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
   -DPAPERBOAT_STATIC_RUNTIME=ON \
   -DPAPERBOAT_BUILD_TESTS="${TESTS:-ON}"
