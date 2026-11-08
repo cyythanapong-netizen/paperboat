@@ -12,7 +12,7 @@ if(TARGET paperboat_toolkit_opencv)
   target_compile_definitions(paperboat-toolkit PRIVATE PAPERBOAT_HAS_OPENCV)
 endif()
 
-add_executable(paperboat paperboat_cli.cpp examples.cpp)
+add_executable(paperboat paperboat_cli.cpp cli_backends.cpp cli_pkg.cpp paperboat_tui.cpp examples.cpp)
 target_compile_definitions(paperboat PRIVATE PAPERBOAT_VERSION="${PROJECT_VERSION}")
 if(PAPERBOAT_STATIC_RUNTIME AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_link_options(paperboat PRIVATE -static-libstdc++ -static-libgcc)

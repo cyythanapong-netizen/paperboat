@@ -24,6 +24,12 @@ add_library(paperboat_core
   src/main.cpp
   ${PAPERBOAT_PROCESS_SOURCE}
   src/backend_manager.cpp
+  src/backend_ports.cpp
+  src/backend_build.cpp
+  src/backend_run.cpp
+  src/backend_check.cpp
+  src/backend_pack.cpp
+  src/webapp.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/station_js.cpp
 )
 add_library(paperboat::core ALIAS paperboat_core)

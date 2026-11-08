@@ -21,6 +21,7 @@ add_executable(paperboat_tests
   vector_test.cpp
   cli_test.cpp
   ../tools/examples.cpp
+  ../tools/paperboat_tui.cpp
   apps_test.cpp
   process_test.cpp
 )
