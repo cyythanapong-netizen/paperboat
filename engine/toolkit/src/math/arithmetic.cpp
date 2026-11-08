@@ -6,6 +6,7 @@
 #include <random>
 
 #include "common.hpp"
+#include "curve_icons.hpp"
 
 namespace paperboat::toolkit::math {
 namespace {
@@ -86,7 +87,7 @@ void add_arithmetic(Registry& registry) {
         return std::make_unique<Stateless>(
             [=](const Context&, const Values& in) { return Values{{"y", k * get_or(in, "u")}}; });
       },
-      "Multiplies its input by k.", {.compact = true, .glyph = "gain", .value = "{k}"}));
+      "Multiplies its input by k.", {.compact = true, .glyph = "gain", .value = "{k}", .icon = icons::gain()}));
 
   // Sum: one input per sign in `signs` ("+-+": a − b + c), ids a, b, c…
   auto sum = make_template(
@@ -100,7 +101,7 @@ void add_arithmetic(Registry& registry) {
           return Values{{"y", y}};
         });
       },
-      "Adds a and b.", {.compact = true, .glyph = "plus"});
+      "Adds a and b.", {.compact = true, .glyph = "plus", .icon = icons::plus()});
   sum.def.ports_from = "signs";
   pointwise(std::move(sum));
 
@@ -112,7 +113,7 @@ void add_arithmetic(Registry& registry) {
           return Values{{"y", get_or(in, "u") > level ? 1.0 : 0.0}};
         });
       },
-      "1 above a level, else 0.", {.compact = true, .glyph = "step", .value = "{level}"}));
+      "1 above a level, else 0.", {.compact = true, .glyph = "step", .value = "{level}", .icon = icons::step()}));
 
   pointwise(make_template(
       "math", "saturation", "Saturation", {"u"}, {"y"}, {{"min", -1.0}, {"max", 1.0}},
@@ -122,7 +123,7 @@ void add_arithmetic(Registry& registry) {
           return Values{{"y", std::min(std::max(get_or(in, "u"), lo), hi)}};
         });
       },
-      "Keeps its input between a minimum and a maximum.", {.compact = true, .glyph = "clamp", .value = "{min}…{max}"}));
+      "Keeps its input between a minimum and a maximum.", {.compact = true, .glyph = "clamp", .value = "{min}…{max}", .icon = icons::clamp()}));
 
   // math/arithmetic
   pointwise(make_template(
@@ -155,7 +156,7 @@ void add_arithmetic(Registry& registry) {
           return Values{{"y", std::abs(get_or(in, "u"))}};
         });
       },
-      "Computes the absolute value of u.", {.compact = true, .glyph = "abs"}));
+      "Computes the absolute value of u.", {.compact = true, .glyph = "abs", .icon = icons::abs()}));
 
   // math/round
   pointwise(make_template(
@@ -176,7 +177,7 @@ void add_arithmetic(Registry& registry) {
           return Values{{"y", y}};
         });
       },
-      "Rounds u to an integer using the chosen mode.", {.compact = true, .glyph = "staircase", .value = "{mode}"}));
+      "Rounds u to an integer using the chosen mode.", {.compact = true, .glyph = "staircase", .value = "{mode}", .icon = icons::staircase()}));
 
   // math/min_max
   auto min_max = make_template(
@@ -214,7 +215,7 @@ void add_arithmetic(Registry& registry) {
           return Values{{"y", std::clamp(u, lo, hi)}};
         });
       },
-      "Restricts u between min and max.", {.compact = true, .glyph = "clamp", .value = "{min}…{max}"}));
+      "Restricts u between min and max.", {.compact = true, .glyph = "clamp", .value = "{min}…{max}", .icon = icons::clamp()}));
 
   // math/map_range
   pointwise(make_template(
@@ -241,7 +242,7 @@ void add_arithmetic(Registry& registry) {
         });
       },
       "Maps u linearly from [in_min, in_max] to [out_min, out_max].",
-      {.compact = true, .glyph = "ramp", .value = "{out_min}…{out_max}"}));
+      {.compact = true, .glyph = "ramp", .value = "{out_min}…{out_max}", .icon = icons::ramp()}));
 
   // math/lerp
   pointwise(make_template(
@@ -252,7 +253,7 @@ void add_arithmetic(Registry& registry) {
           return Values{{"y", a + t * (b - a)}};
         });
       },
-      "Linearly interpolates between a and b by factor t.", {.compact = true, .glyph = "lerp"}));
+      "Linearly interpolates between a and b by factor t.", {.compact = true, .glyph = "lerp", .icon = icons::lerp()}));
 
   // math/random_number
   registry.add(make_template(

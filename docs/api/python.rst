@@ -142,8 +142,8 @@ Blocks
       :type: dict
 
       How the UI draws the block, a hint (absent: the normal card). Keys, all optional:
-      ``compact`` (a small plate with bare port dots and a caption), ``glyph`` (a curve name:
-      ``gain``, ``plus``, ``step``, ``clamp``, ``const``; or a few characters drawn as text)
+      ``compact`` (a small plate with bare port dots and a caption), ``glyph`` (a few
+      characters drawn as text; a curve is a ``view.icon``)
       and ``value`` (an expression of the params for the caption, such as ``"{k}"``).
 
    .. py:attribute:: ports_from

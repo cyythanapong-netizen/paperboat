@@ -175,7 +175,12 @@ export function ToolkitsButton({
       {open && (
         <section className="pop toolkits-pop" role="dialog" aria-label="Toolkits">
           <div className="head">Optional toolkits</div>
-          {items.map((t) => {
+          {items.length === 0 ? (
+            <p className="toolkit-desc" style={{ padding: "8px 12px", margin: 0 }}>
+              No optional toolkits registered.
+            </p>
+          ) : (
+            items.map((t) => {
             const busy = t.busy;
             const versions = t.versions ?? [];
             const curSelection =
@@ -275,7 +280,7 @@ export function ToolkitsButton({
                 </div>
               </div>
             );
-          })}
+          }))}
           <div className="foot toolkits-foot">
             <span>Restart the backend after installing or updating.</span>
             <button
