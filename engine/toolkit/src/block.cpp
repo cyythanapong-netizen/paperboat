@@ -184,7 +184,7 @@ BlockDef with_ports_from(const BlockDef& def, const Values& params, const Config
         }
       }
     }
-    count = std::clamp(count, 2, 26);
+    count = std::clamp(count, 1, 26);
     const PortDef proto = def.inputs.empty() ? PortDef{.id = "a", .type = "signal"} : def.inputs.front();
     out.inputs.clear();
     for (int i = 0; i < count; ++i) {

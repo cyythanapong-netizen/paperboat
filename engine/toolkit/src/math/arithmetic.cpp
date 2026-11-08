@@ -186,7 +186,7 @@ void add_arithmetic(Registry& registry) {
        {.id = "inputs", .default_value = 2.0, .type = "number"}},
       [](const Values& p, const Config&) {
         int mode = static_cast<int>(get_or(p, "mode", 0.0));
-        int n = std::clamp(static_cast<int>(get_or(p, "inputs", 2.0)), 2, 26);
+        int n = std::clamp(static_cast<int>(get_or(p, "inputs", 2.0)), 1, 26);
         return std::make_unique<Stateless>([mode, n](const Context&, const Values& in) {
           double res = get_or(in, "a");
           for (int i = 1; i < n; ++i) {

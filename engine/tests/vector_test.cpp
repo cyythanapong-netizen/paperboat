@@ -266,4 +266,11 @@ TEST_CASE("a Scope sends one sample per wired input, tagged with it; a vector st
   CHECK_NOTHROW(tk::load_descriptor("import = [\"dashboard\"]\n[dashboard]\ninstruments = [{ block = \"sc\", scope = { mode = \"xy\", window = 2 } }]\n"));
   CHECK_THROWS_WITH(tk::load_descriptor("import = [\"dashboard\"]\n[dashboard]\ninstruments = [{ block = \"sc\", scope = { modes = \"xy\" } }]\n"),
                     ContainsSubstring("modes"));
+
+  // Setting inputs to 1 gives a single input "a" (pb#189)
+  const auto* sc = catalog().find("scope");
+  REQUIRE(sc != nullptr);
+  const auto def1 = tk::with_dynamic_ports(sc->def, {{"inputs", 1.0}}, {});
+  REQUIRE(def1.inputs.size() == 1);
+  CHECK(def1.inputs[0].id == "a");
 }

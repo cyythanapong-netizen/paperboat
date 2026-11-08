@@ -309,7 +309,7 @@ void add_strings(Registry& registry) {
        {.id = "inputs", .default_value = 2.0, .type = "number"}},
       [](const Values& p, const Config& c) {
         std::string sep = c.contains("separator") ? c.at("separator") : "";
-        int n = std::clamp(static_cast<int>(get_or(p, "inputs", 2.0)), 2, 26);
+        int n = std::clamp(static_cast<int>(get_or(p, "inputs", 2.0)), 1, 26);
         return std::make_unique<Concat>(std::move(sep), n);
       },
       "Concatenates its inputs formatted as text.", {.compact = true, .glyph = "++", .value = "{separator}"});
