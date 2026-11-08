@@ -16,7 +16,7 @@ engine/
 ```
 
 A backend is a project of its own that calls `core::serve(backend)` with a catalog: see
-`examples/backends/cart-pole-cpp` and GUIDELINES §6. The engine never builds or reads a
+`paperboat-examples/cart-pole-cpp` and GUIDELINES §6. The engine never builds or reads a
 backend; its tests use their own fixtures (`tests/data`). Added with `add_subdirectory`,
 it builds only its libraries (`PAPERBOAT_BUILD_TESTS` and `PAPERBOAT_BUILD_TOOLS` default
 to on only when it is the top-level project). It serves

@@ -108,7 +108,7 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ./bin/paperboat toolkit list        # lists available and installed toolkits
 ./bin/paperboat update --check    # is this checkout (and its app checkouts) behind? `update` pulls and rebuilds
 ./bin/paperboat pkg list            # apps from other repositories (apps.toml): squero-studio-om, ...
-./bin/paperboat start squero-studio-om   # a program from apps.toml (= `paperboat squero`); fetched and built on first use
+./bin/paperboat start squero-studio-om   # a program from apps.toml; fetched and built on first use
 ./bin/paperboat stop squero-studio-om    # `start` and `stop` take a backend or a program; with no target, the web app
 ```
 
@@ -119,7 +119,7 @@ npm install -g @paperboat/cli        # Linux x64 today; Windows x64 is being bro
 sudo apt install ./paperboat_<version>_amd64.deb   # Debian / Ubuntu, from the GitHub release
 ```
 
-A package install is the CLI: `pkg`, `squero`, `update`, `check`, `pack`, `modelica`. Building C++ backends
+A package install is the CLI: `pkg`, `start`, `update`, `check`, `pack`. Building C++ backends
 and installing toolkits (they compile into the engine) need paperboat built from source.
 
 ### The console

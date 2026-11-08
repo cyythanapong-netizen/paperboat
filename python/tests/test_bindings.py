@@ -427,7 +427,7 @@ def test_solve_ode_scalar_and_list():
     import paperboat
 
     # Exponential decay dx/dt = -x, x0 = 1.0
-    ode = paperboat.solve.ode(lambda x, t: [-x[0]], [1.0], solver="rk4")
+    ode = paperboat.solve.ode(lambda t, x: [-x[0]], [1.0], solver="rk4")
     assert ode.solver == "rk4"
     assert ode.t == 0.0
     assert ode.x == [1.0]
@@ -449,7 +449,7 @@ def test_solve_ode_numpy_and_rk45():
     import paperboat
 
     # Harmonic oscillator: dx/dt = v, dv/dt = -x
-    def f(state, t):
+    def f(t, state):
         x, v = state[0], state[1]
         return np.array([v, -x])
 
@@ -469,7 +469,7 @@ def test_solve_ode_step_with_explicit_time_and_euler():
     import paperboat
 
     # dx/dt = 2*t, x(0) = 0
-    ode = paperboat.solve.ode(lambda x, t: [2.0 * t], [0.0], solver="euler")
+    ode = paperboat.solve.ode(lambda t, x: [2.0 * t], [0.0], solver="euler")
     dt = 0.1
     for k in range(10):
         ode.step(k * dt, dt)
@@ -487,18 +487,28 @@ def test_backend_with_solver_setting():
 def test_solve_helper_functions():
     import paperboat
 
-    s_rk4 = paperboat.solve.rk4(lambda x: [-x[0]], [1.0])
+    s_rk4 = paperboat.solve.rk4(lambda t, x: [-x[0]], [1.0])
     assert s_rk4.solver == "rk4"
-    s_rk45 = paperboat.solve.rk45(lambda x: [-x[0]], [1.0])
+    s_rk45 = paperboat.solve.rk45(lambda t, x: [-x[0]], [1.0])
     assert s_rk45.solver == "rk45"
-    s_rk2 = paperboat.solve.rk2(lambda x: [-x[0]], [1.0])
+    s_rk2 = paperboat.solve.rk2(lambda t, x: [-x[0]], [1.0])
     assert s_rk2.solver == "rk2"
-    s_euler = paperboat.solve.euler(lambda x: [-x[0]], [1.0])
+    s_euler = paperboat.solve.euler(lambda t, x: [-x[0]], [1.0])
     assert s_euler.solver == "euler"
-    s_disc = paperboat.solve.discrete(lambda x: [x[0] * 0.5], [1.0])
+    s_disc = paperboat.solve.discrete(lambda t, x: [x[0] * 0.5], [1.0])
     assert s_disc.solver == "discrete"
     s_disc.step(0.1)
     assert abs(s_disc.x[0] - 0.5) < 1e-12
+
+
+def test_backend_toml_solver_is_read_by_the_engine(tmp_path: Path) -> None:
+    (tmp_path / "backend.toml").write_text('[backend]\nformat = 0\nname = "t"\nsolver = "nope"\n')
+    (tmp_path / "server.py").write_text(textwrap.dedent(BACKEND))
+    (tmp_path / "descriptor.toml").write_text(textwrap.dedent(DESCRIPTOR))
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
+    proc = subprocess.run([sys.executable, "server.py", "--run"], cwd=tmp_path, env=env, capture_output=True,
+                          text=True, timeout=120)
+    assert proc.returncode != 0 and "invalid solver 'nope'" in proc.stderr
 
 
 ICON_BACKEND = '''

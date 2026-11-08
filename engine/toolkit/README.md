@@ -124,7 +124,7 @@ outputs = ["theta", "omega", "x", "v"]
 ```
 
 A descriptor lives next to the backend that serves it
-(`examples/backends/<domain>-<language>/descriptor.toml`).
+(`<domain>-<language>/descriptor.toml`, as in the paperboat-examples repository).
 
 Top level: `domain` (name, also the palette group of its own blocks), `import` (list of
 packages: their blocks and station objects) and `[[objects]]` (station object types: a

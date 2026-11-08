@@ -6,7 +6,7 @@ example's result fails here. Every message is also checked against the protocol 
 
     python3 protocol/golden.py                 # every example with an expected.json
     python3 protocol/golden.py parts-cpp       # some of them
-    python3 protocol/golden.py --examples ../paperboat-examples   # backends kept elsewhere
+    python3 protocol/golden.py --examples DIR  # default: $PAPERBOAT_EXAMPLES_DIR, else ../paperboat-examples
 
 expected.json: {"run": "build/paperboat-parts" | "server.py", "status": "done",
                 "signals": {"node": value | [value, tolerance]},   # the node's last number
@@ -17,13 +17,15 @@ C++ examples must be built first (npm run backend:<name> builds them; or cmake).
 import json
 import os
 import subprocess
+import os
 import sys
 from pathlib import Path
 
 import jsonschema
 
 ROOT = Path(__file__).resolve().parent.parent
-EXAMPLES = ROOT / "examples" / "backends"  # or --examples DIR (the paperboat-examples repo)
+# The paperboat-examples repo: --examples DIR, else $PAPERBOAT_EXAMPLES_DIR, else a checkout next to this one.
+EXAMPLES = Path(os.environ.get("PAPERBOAT_EXAMPLES_DIR") or ROOT.parent / "paperboat-examples")
 SCHEMA = json.loads((ROOT / "protocol" / "schema" / "paperboat-0.schema.json").read_text())
 TO_UI = jsonschema.Draft202012Validator(SCHEMA)
 
@@ -96,6 +98,8 @@ def main() -> None:
         EXAMPLES = Path(args[i + 1]).resolve()
         args = args[:i] + args[i + 2:]
     names = args or sorted(p.parent.name for p in EXAMPLES.glob("*/expected.json"))
+    if not names:
+        sys.exit(f"no backends with an expected.json in {EXAMPLES} (pass --examples DIR)")
     failed = 0
     for name in names:
         p = Path(name)

@@ -53,5 +53,5 @@ Where things are
    python/              the Python bindings (paperboat._engine) and the paperboat package
    protocol/            the WebSocket protocol: README, JSON Schema, smoke and golden tests
    apps/web/            the UI (React): domain-free, built from what a backend sends
-   examples/backends/   example backends, each a project of its own
+   ../paperboat-examples/  example backends (own repository), each a project of its own
    GUIDELINES.md        rules and layout; open work is GitHub issues
