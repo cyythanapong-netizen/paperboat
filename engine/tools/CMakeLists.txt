@@ -17,14 +17,10 @@ target_compile_definitions(paperboat PRIVATE PAPERBOAT_VERSION="${PROJECT_VERSIO
 if(PAPERBOAT_STATIC_RUNTIME AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_link_options(paperboat PRIVATE -static-libstdc++ -static-libgcc)
 endif()
-target_link_libraries(paperboat PRIVATE paperboat::core paperboat::toolkit nlohmann_json::nlohmann_json tomlplusplus::tomlplusplus paperboat_warnings)
+target_link_libraries(paperboat PRIVATE paperboat::core paperboat::toolkit nlohmann_json::nlohmann_json tomlplusplus::tomlplusplus paperboat::warnings)
 if(TARGET paperboat_toolkit_opencv)
   target_link_libraries(paperboat PRIVATE paperboat::toolkit_opencv)
   target_compile_definitions(paperboat PRIVATE PAPERBOAT_HAS_OPENCV)
-endif()
-if(TARGET paperboat_modelica)  # paperboat modelica / paperboat squero
-  target_link_libraries(paperboat PRIVATE paperboat::modelica)
-  target_compile_definitions(paperboat PRIVATE PAPERBOAT_HAS_MODELICA)
 endif()
 
 # Installed layout: bin/paperboat and share/paperboat/{toolkits.toml,apps.toml}. The binary finds

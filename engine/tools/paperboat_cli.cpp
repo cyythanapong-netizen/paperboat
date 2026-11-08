@@ -27,11 +27,6 @@
 #include "paperboat/toolkit/opencv.hpp"
 #endif
 #include "paperboat_tui.hpp"
-#ifdef PAPERBOAT_HAS_MODELICA
-#include "paperboat/modelica/generate.hpp"
-#include "paperboat/modelica/import.hpp"
-#include "paperboat/modelica/squero.hpp"
-#endif
 
 namespace {
 
@@ -66,8 +61,8 @@ Usage:
 Start and stop (the web app, backends and programs):
   start [target] [options]   Without a target: the web app (dev server, port 3047).
                              A backend (folder, name or .ppk): build it and run it in the foreground.
-                             A program from apps.toml (squero-studio-om, or its command, squero): run it.
-                               --port <N>      Listen port (backend 8765, web app 3047, squero 8790)
+                             A program from apps.toml (e.g. squero-studio-om): run it.
+                               --port <N>      Listen port (backend 8765, web app 3047, squero-studio-om 8790)
                                --daemon        Run in the background (the web app and programs)
                                --host <H>      The web app's listen host (default 0.0.0.0)
                              Backend only:
@@ -117,19 +112,6 @@ Verification & Packaging:
                              Unpack and verify .ppk archive
                              --json-stream prints one JSON event per line as work goes
 
-Modelica (Squero Studio OM, needs OpenModelica):
-  modelica generate <Model.mo> [--model <Q.Name>] [--out <model>-cpp/] [--path fmu|ode|auto]
-                             Make a backend from a Modelica model (ODE when it can, else FMU)
-  modelica check <Model.mo> [--model <Q.Name>]
-                             omc's checkModel on it
-  modelica icon <Model.mo | Q.Name> [--class <Name>]
-                             Import a Modelica class's icon and connectors as JSON
-  squero [Model.mo] [--port <N>] [--app <dir>] [--version <V>]
-                             Squero Studio OM: the squero/0 server and the app (squero-studio-om,
-                             fetched on first use; default port 8790); opens Model.mo
-                             (default ./Untitled.mo, created if missing).
-                             The same as `start squero-studio-om`; `stop squero-studio-om` ends it
-
 Updating:
   update [--check] [--no-build]
                              Pull this repository (fast-forward only), rebuild the engine and console
@@ -156,6 +138,9 @@ General:
   help, --help               Show this help message
 )";
 }
+
+int cmd_start(const std::vector<std::string_view>& args);
+std::optional<tk::AppEntry> find_program(std::string_view target);
 
 int cmd_run(const std::vector<std::string_view>& args) {
   core::BackendRunOptions opts;
@@ -184,6 +169,7 @@ int cmd_run(const std::vector<std::string_view>& args) {
     }
   }
 
+  if (find_program(path)) return cmd_start(args);  // run squero-studio-om: a program, started as `start` does
   if (path.empty() && core::BackendManager::detect_backend_kind(fs::current_path()) == core::BackendKind::Unknown) {
     launch_console({"run"});  // the backend picker; returns only when the console can't open
   }
@@ -517,6 +503,55 @@ int stop_program(tk::AppEntry app, const std::vector<std::string_view>& args = {
   return 0;
 }
 
+fs::path find_in_path(std::string_view name) {
+  if (name.empty()) return {};
+  const char* path_env = std::getenv("PATH");
+  if (!path_env) return {};
+  std::stringstream ss(path_env);
+  std::string dir;
+  std::error_code ec;
+#ifdef _WIN32
+  constexpr char delim = ';';
+#else
+  constexpr char delim = ':';
+#endif
+  while (std::getline(ss, dir, delim)) {
+    if (dir.empty()) continue;
+    const fs::path p = fs::path(dir) / name;
+    if (fs::is_regular_file(p, ec)) return p;
+#ifdef _WIN32
+    const fs::path p_exe = fs::path(dir) / (std::string(name) + ".exe");
+    if (fs::is_regular_file(p_exe, ec)) return p_exe;
+#endif
+  }
+  return {};
+}
+
+fs::path resolve_app_binary(const tk::AppEntry& app) {
+  const fs::path root = tk::find_repo_root();
+  std::error_code ec;
+  // 1. Sibling checkout
+  if (!root.empty()) {
+    const fs::path sibling = root.parent_path() / app.name;
+    const fs::path cand1 = sibling / app.launch;
+    if (fs::is_regular_file(cand1, ec)) return cand1;
+    const fs::path cand2 = sibling / "server" / "build" / fs::path(app.launch).filename();
+    if (fs::is_regular_file(cand2, ec)) return cand2;
+  }
+  // 2. Installed app directory
+  const fs::path cand3 = tk::apps_dir() / app.name / app.launch;
+  if (fs::is_regular_file(cand3, ec)) return cand3;
+  const fs::path cand4 = tk::apps_dir() / app.name / "server" / "build" / fs::path(app.launch).filename();
+  if (fs::is_regular_file(cand4, ec)) return cand4;
+  // 3. System PATH
+  fs::path in_path = find_in_path(app.launch);
+  if (!in_path.empty()) return in_path;
+  in_path = find_in_path(fs::path(app.launch).filename().string());
+  if (!in_path.empty()) return in_path;
+
+  return {};
+}
+
 // Run a program in the foreground through its launch command, or --daemon: the same, detached, with a log.
 int start_program(const tk::AppEntry& app, std::vector<std::string_view> rest) {
   if (app.launch.empty()) {
@@ -524,25 +559,48 @@ int start_program(const tk::AppEntry& app, std::vector<std::string_view> rest) {
     return 1;
   }
   const auto daemon = std::ranges::find(rest, std::string_view("--daemon"));
-  if (daemon == rest.end()) {
-    const Command launch = find_command(app.launch);
-    if (!launch) {
-      std::cerr << "error: " << app.name << " launches with `paperboat " << app.launch << "`, which this build doesn't have\n";
+  const bool is_daemon = (daemon != rest.end());
+  if (const Command launch = find_command(app.launch)) {
+    if (!is_daemon) return launch(rest);
+    rest.erase(daemon);
+    std::vector<std::string> argv = {platform::exe_path().string(), "start", app.name};
+    for (auto a : rest) argv.emplace_back(a);
+    const fs::path log = platform::shared_tmp_dir() / ("paperboat-" + app.name + ".log");
+    const int pid = core::ProcessRunner::run_detached(argv, {}, {}, log);
+    if (pid <= 0) {
+      std::cerr << "error: could not start " << app.name << '\n';
       return 1;
     }
-    return launch(rest);
+    std::cout << "started " << app.name << " (pid " << pid << ", port " << port_of(app, rest) << ") · log " << log.string() << '\n';
+    return 0;
   }
-  rest.erase(daemon);
-  std::vector<std::string> argv = {platform::exe_path().string(), "start", app.name};
-  for (auto a : rest) argv.emplace_back(a);
-  const fs::path log = platform::shared_tmp_dir() / ("paperboat-" + app.name + ".log");
-  const int pid = core::ProcessRunner::run_detached(argv, {}, {}, log);
-  if (pid <= 0) {
-    std::cerr << "error: could not start " << app.name << '\n';
+
+  const fs::path bin = resolve_app_binary(app);
+  if (bin.empty()) {
+    std::cerr << "error: cannot find " << app.launch << " for " << app.name
+              << " (run `paperboat pkg install " << app.name << "`)\n";
     return 1;
   }
-  std::cout << "started " << app.name << " (pid " << pid << ", port " << port_of(app, rest) << ") · log " << log.string() << '\n';
-  return 0;
+
+  if (is_daemon) rest.erase(daemon);
+  std::vector<std::string> argv = {bin.string()};
+  for (auto a : rest) argv.emplace_back(a);
+
+  if (is_daemon) {
+    const fs::path log = platform::shared_tmp_dir() / ("paperboat-" + app.name + ".log");
+    const int pid = core::ProcessRunner::run_detached(argv, {}, {}, log);
+    if (pid <= 0) {
+      std::cerr << "error: could not start " << app.name << '\n';
+      return 1;
+    }
+    std::cout << "started " << app.name << " (pid " << pid << ", port " << port_of(app, rest) << ") · log " << log.string() << '\n';
+    return 0;
+  }
+
+  return core::ProcessRunner::run_stream(argv, {}, {}, [](std::string_view stream, std::string_view line) {
+    if (stream == "stderr") std::cerr << line << '\n';
+    else std::cout << line << '\n';
+  });
 }
 
 int cmd_restart(const std::vector<std::string_view>& args) {
@@ -1187,140 +1245,6 @@ int cmd_unpack(const std::vector<std::string_view>& args) {
   return 0;
 }
 
-#ifdef PAPERBOAT_HAS_MODELICA
-namespace mo = paperboat::modelica;
-#endif
-
-constexpr const char* kNoModelica =
-    "paperboat was built without engine/modelica: install OpenModelica (omc on PATH) and rebuild\n";
-
-// paperboat modelica generate <Model.mo> [--model Q.Name] [--out dir] [--path fmu|ode|auto]
-// paperboat modelica check <Model.mo> [--model Q.Name]
-// paperboat modelica icon <Model.mo|Qualified.Name> [--class X]
-int cmd_modelica(const std::vector<std::string_view>& args) {
-#ifndef PAPERBOAT_HAS_MODELICA
-  (void)args;
-  std::cerr << kNoModelica;
-  return 1;
-#else
-  if (args.size() < 2 || (args[0] != "generate" && args[0] != "check" && args[0] != "icon")) {
-    std::cerr << "usage: paperboat modelica generate <Model.mo> [--model <Qualified.Name>] [--out <model>-cpp/] "
-                 "[--path fmu|ode|auto]\n"
-                 "       paperboat modelica check <Model.mo> [--model <Qualified.Name>]\n"
-                 "       paperboat modelica icon <Model.mo|Qualified.Name> [--class <Name>]\n";
-    return 2;
-  }
-  if (args[0] == "icon") {
-    const std::string_view target = args[1];
-    std::string cls;
-    for (std::size_t i = 2; i < args.size(); ++i) {
-      const auto flag = args[i];
-      if (flag == "--json") continue;
-      if (i + 1 >= args.size()) {
-        std::cerr << "error: " << flag << " needs a value\n";
-        return 2;
-      }
-      const std::string value(args[++i]);
-      if (flag == "--class" || flag == "--model") cls = value;
-      else {
-        std::cerr << "error: unknown option " << flag << '\n';
-        return 2;
-      }
-    }
-    try {
-      mo::Omc omc;
-      const bool is_file = fs::is_regular_file(target) || target.ends_with(".mo") ||
-                           target.find('/') != std::string_view::npos || target.find('\\') != std::string_view::npos;
-      const mo::ImportedModel imp = is_file ? mo::import_model(omc, fs::path(target), cls)
-                                            : mo::import_model(omc, {}, cls.empty() ? target : std::string_view(cls));
-      std::cout << imp.to_json().dump(2) << '\n';
-      return 0;
-    } catch (const std::exception& e) {
-      std::cerr << "error: " << e.what() << '\n';
-      return 1;
-    }
-  }
-  mo::GenerateOptions o{.source = std::string(args[1])};
-  for (std::size_t i = 2; i < args.size(); ++i) {
-    const auto flag = args[i];
-    if (i + 1 >= args.size()) {
-      std::cerr << "error: " << flag << " needs a value\n";
-      return 2;
-    }
-    const std::string value(args[++i]);
-    if (flag == "--model") o.model = value;
-    else if (flag == "--out") o.out = value;
-    else if (flag == "--path") o.path = value;
-    else {
-      std::cerr << "error: unknown option " << flag << '\n';
-      return 2;
-    }
-  }
-  try {
-    mo::Omc omc;
-    if (args[0] == "check") {
-      const auto r = mo::check(omc, o.source, o.model);
-      (r.ok ? std::cout : std::cerr) << r.message << '\n';
-      return r.ok ? 0 : 1;
-    }
-    const auto r = mo::generate(omc, o);
-    std::cout << r.model << " -> " << r.out.string() << "/ (" << r.reason << ")\n";
-    for (const auto& n : r.notices) std::cout << "  note: " << n << '\n';
-    for (const auto& f : r.written) std::cout << "  wrote " << f.string() << '\n';
-    std::cout << "next: paperboat build " << r.out.string() << " && paperboat run " << r.out.string() << '\n';
-    return 0;
-  } catch (const std::exception& e) {
-    std::cerr << "error: " << e.what() << '\n';
-    return 1;
-  }
-#endif
-}
-
-// paperboat squero [start|run] [Model.mo] [--port N] [--app dir] [--version V]: Squero Studio OM, the
-// squero/0 server and the Studio app on one port. The app is --app, else a squero-studio-om checkout
-// next to this repo (its dist/, for developing it), else the one `paperboat pkg` installed, fetched
-// on first use (--version V fetches that release).
-int cmd_squero(const std::vector<std::string_view>& args) {
-#ifndef PAPERBOAT_HAS_MODELICA
-  (void)args;
-  std::cerr << kNoModelica;
-  return 1;
-#else
-  constexpr const char* kApp = "squero-studio-om";
-  int port = 8790;
-  fs::path app;
-  fs::path file;
-  std::string version;
-  for (std::size_t i = 0; i < args.size(); ++i) {
-    if (args[i] == "--port" && i + 1 < args.size()) port = std::stoi(std::string(args[++i]));
-    else if (args[i] == "--app" && i + 1 < args.size()) app = std::string(args[++i]);
-    else if (args[i] == "--version" && i + 1 < args.size()) version = std::string(args[++i]);
-    else if (i == 0 && (args[i] == "start" || args[i] == "run")) continue;
-    else if (!args[i].starts_with("--")) file = std::string(args[i]);
-  }
-  if (version.starts_with('v')) version.erase(0, 1);
-  if (app.empty()) {
-    const fs::path root = tk::find_repo_root();
-    const fs::path sibling = root.empty() ? fs::path{} : root.parent_path() / kApp / "dist";
-    if (version.empty() && fs::is_regular_file(sibling / "index.html")) {
-      app = sibling;
-    } else {
-      std::string have;
-      for (const auto& a : tk::list_apps()) if (a.name == kApp && a.installed) have = a.version;
-      if (have.empty() || (!version.empty() && version != have)) {
-        const auto r = tk::install_app(kApp, version, {}, [](std::string_view, std::string_view t) {
-          std::cerr << "squero: " << t << '\n';
-        });
-        if (!r.ok) std::cerr << "squero: " << r.message << '\n';
-      }
-      app = tk::app_output(kApp);
-      if (app.empty()) std::cerr << "note: Studio isn't installed (paperboat pkg install " << kApp << ", or pass --app); serving squero/0 only\n";
-    }
-  }
-  return mo::serve_squero(port, app, {}, file);
-#endif
-}
-
 int cmd_commands(const std::vector<std::string_view>& args);
 int cmd_top(const std::vector<std::string_view>&);
 
@@ -1361,10 +1285,6 @@ const std::vector<CommandSpec>& command_table() {
        {"--fast", "--json", "--json-stream"}, "backend"},
       {"pack", cmd_pack, "Package a backend as .ppk", {}, {}, {"--out", "--json-stream"}, "backend"},
       {"unpack", cmd_unpack, "Unpack and verify a .ppk", {}, {}, {"--dir", "--json-stream"}, "ppk"},
-      {"modelica", cmd_modelica, "Make a backend from a Modelica model", {}, {"generate", "check", "icon"},
-       {"--model", "--out", "--path", "--class"}, "file"},
-      {"squero", cmd_squero, "Run Squero Studio OM (server and app)", {"studio"}, {"start", "run"},
-       {"--port", "--app", "--version"}, "file"},
       {"update", cmd_update, "Pull this repository and its app checkouts, rebuild", {}, {}, {"--check", "--no-build"}},
       {"pkg", cmd_pkg, "Apps from other repositories (package manager)", {},
        {"list", "install", "update", "uninstall", "versions", "path"}, {"--json", "--all", "--version"}},

@@ -576,6 +576,8 @@ TEST_CASE("start names what it could not find, and a library is not a program") 
   const auto lib = core::ProcessRunner::run_sync({cli.string(), "start", "paperboat-shared"});
   CHECK(lib.exit_code == 1);
   CHECK(lib.stderr_text.find("is a library") != std::string::npos);
+  const auto run_lib = core::ProcessRunner::run_sync({cli.string(), "run", "paperboat-shared"});  // run knows programs too
+  CHECK(run_lib.stderr_text.find("is a library") != std::string::npos);
 }
 
 TEST_CASE("list --json says what kind each running thing is") {

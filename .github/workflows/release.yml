@@ -59,7 +59,7 @@ jobs:
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" debian:bookworm sh -c '
             apt-get update -qq && apt-get install -y -qq /dist/paperboat_*.deb >/dev/null &&
-            paperboat --version && paperboat pkg list && paperboat commands | grep -q squero'
+            paperboat --version && paperboat pkg list && paperboat commands | grep -q pkg'
       # The SDK (pb#177): with only the packages installed, a C++ backend builds and passes paperboat check.
       - name: "SDK: paperboat + paperboat-dev on Debian 12 build and check a backend"
         run: |
@@ -105,12 +105,12 @@ jobs:
         run: |
           v=$(sed -nE 's/^project\(paperboat VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' engine/CMakeLists.txt)
           echo "version=$v" >> "$GITHUB_OUTPUT"
-      # The CLI, the core and the toolkit; engine/modelica (omc) is POSIX-only for now (pb#178), and of the
+      # The CLI, the core and the toolkit, and of the
       # tests only the process layer's run here (engine/tests/process_test.cpp).
       - name: Build
         run: |
           cmake -S engine -B engine/build -G "Visual Studio 17 2022" -A x64 \
-            -DPAPERBOAT_STATIC_RUNTIME=ON -DPAPERBOAT_BUILD_TESTS=ON -DPAPERBOAT_BUILD_MODELICA=OFF
+            -DPAPERBOAT_STATIC_RUNTIME=ON -DPAPERBOAT_BUILD_TESTS=ON
           cmake --build engine/build --config Release --parallel
       - name: The process layer works (CreateProcess, pipes, job objects, kill)
         run: ctest --test-dir engine/build -C Release --output-on-failure
