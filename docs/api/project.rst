@@ -69,8 +69,8 @@ it. The bar shows the project's name, with a dot while there are changes not sav
   user chose. Elsewhere Save downloads a copy and Open uses a file input.
 * Opening checks the file first and changes nothing if it can't be read: not JSON, not a
   project, a newer format, or damaged (the message names where). It asks first when the
-  project comes from another backend or replaces unsaved changes. A toast then offers **Undo**,
-  which brings back everything that was open.
+  project comes from another backend or replaces unsaved changes. Edit > **Undo open project**
+  brings back everything that was open.
 * A block whose type the opening backend lacks stays on the canvas as a lost block, with its
   params and wires, so opening a project on a backend with fewer blocks loses nothing.
 * The browser keeps unsaved work as it happens, per backend, and offers it back after a reload
