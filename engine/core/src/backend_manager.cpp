@@ -682,6 +682,22 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
     }
   }
 
+  // Check matching directory in examples_dir with prefix or numeric shorthand (e.g. 01, 1, 02, 2)
+  if (!edir.empty() && fs::is_directory(edir, ec)) {
+    std::string prefix = name;
+    if (prefix.size() == 1 && std::isdigit(static_cast<unsigned char>(prefix[0]))) {
+      prefix = "0" + prefix;
+    }
+    for (const auto& entry : fs::directory_iterator(edir, ec)) {
+      if (entry.is_directory(ec)) {
+        const std::string fn = entry.path().filename().string();
+        if (fn.starts_with(prefix + "-") || (fn.find(name) != std::string::npos && fn.find('-') != std::string::npos)) {
+          if (is_valid_backend_dir(entry.path())) return entry.path();
+        }
+      }
+    }
+  }
+
   return p_check;
 }
 
@@ -911,6 +927,8 @@ fs::path BackendManager::find_examples_dir(const fs::path& hint) {
   const fs::path root = toolkit::find_repo_root();
   auto is_examples_dir = [](const fs::path& p) {
     return fs::is_directory(p) && (
+        fs::is_regular_file(p / "01-smart-thermostat-python" / "backend.toml") ||
+        fs::is_regular_file(p / "02-cart-pole-cpp" / "backend.toml") ||
         fs::is_regular_file(p / "cart-pole-cpp" / "CMakeLists.txt") ||
         fs::is_regular_file(p / "mass-spring-python" / "server.py")
     );
@@ -931,27 +949,55 @@ fs::path BackendManager::find_examples_dir(const fs::path& hint) {
 
 std::vector<ExampleBackend> BackendManager::get_examples(const fs::path& examples_dir) {
   const fs::path edir = find_examples_dir(examples_dir);
-  struct Known {
-    int port;
-    const char* name;
-    const char* type;
-  };
-  static constexpr Known known[] = {
-      {8765, "mass-spring-python", "python"}, {8766, "cart-pole-cpp", "cpp"},
-      {8767, "parametric-python", "python"},  {8768, "runner-python", "python"},
-      {8769, "animation-python", "python"},   {8770, "parts-cpp", "cpp"},
-      {8771, "chain-python", "python"},       {8772, "supply-python", "python"},
-      {8773, "double-pendulum-cpp", "cpp"},
-  };
-
   std::vector<ExampleBackend> list;
-  for (const auto& k : known) {
-    ExampleBackend item{k.port, k.name, k.type, edir / k.name, false, 0, ws_url(k.port)};
-    if (is_port_listening(item.port)) {
-      item.running = true;
-      item.pid = find_pid_by_port(item.port);
+
+  if (!edir.empty() && fs::is_directory(edir)) {
+    std::vector<fs::path> subdirs;
+    std::error_code ec;
+    for (const auto& entry : fs::directory_iterator(edir, ec)) {
+      if (entry.is_directory(ec) && (fs::is_regular_file(entry.path() / "backend.toml", ec) ||
+                                     fs::is_regular_file(entry.path() / "descriptor.toml", ec))) {
+        subdirs.push_back(entry.path());
+      }
     }
-    list.push_back(std::move(item));
+    std::sort(subdirs.begin(), subdirs.end());
+
+    for (const auto& sdir : subdirs) {
+      BackendManifest m = load_manifest(sdir);
+      int port = m.port > 0 ? m.port : 8765;
+      std::string name = sdir.filename().string();
+      std::string type = m.language.empty() ? (fs::is_regular_file(sdir / "CMakeLists.txt") ? "cpp" : "python") : m.language;
+      ExampleBackend item{port, name, type, sdir, false, 0, ws_url(port)};
+      if (is_port_listening(item.port)) {
+        item.running = true;
+        item.pid = find_pid_by_port(item.port);
+      }
+      list.push_back(std::move(item));
+    }
+  }
+
+  if (list.empty()) {
+    struct Known {
+      int port;
+      const char* name;
+      const char* type;
+    };
+    static constexpr Known known[] = {
+        {8765, "mass-spring-python", "python"}, {8766, "cart-pole-cpp", "cpp"},
+        {8767, "parametric-python", "python"},  {8768, "runner-python", "python"},
+        {8769, "animation-python", "python"},   {8770, "parts-cpp", "cpp"},
+        {8771, "chain-python", "python"},       {8772, "supply-python", "python"},
+        {8773, "double-pendulum-cpp", "cpp"},
+    };
+
+    for (const auto& k : known) {
+      ExampleBackend item{k.port, k.name, k.type, edir / k.name, false, 0, ws_url(k.port)};
+      if (is_port_listening(item.port)) {
+        item.running = true;
+        item.pid = find_pid_by_port(item.port);
+      }
+      list.push_back(std::move(item));
+    }
   }
   return list;
 }
