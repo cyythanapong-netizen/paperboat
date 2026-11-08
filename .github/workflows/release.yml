@@ -135,7 +135,7 @@ jobs:
           cp -r engine/tests/sdk-backend "$RUNNER_TEMP/sdk-backend" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
           "$exe" build "$RUNNER_TEMP/sdk-backend"
           "$exe" check "$RUNNER_TEMP/sdk-backend"
-          python scripts/pack_npm.py --version "$v" --out dist/npm --main
+          cd "$GITHUB_WORKSPACE" && python scripts/pack_npm.py --version "$v" --out dist/npm --main
       - name: The npm packages install and run through the launcher
         run: |
           prefix=$(mktemp -d)
