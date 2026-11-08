@@ -18,9 +18,21 @@ import { findTrigger, spectrum, toCsv, valueAt } from "./math";
 import type { Channel, TapPort } from "@paperboat/host";
 
 export type ScopeMode = "time" | "xy" | "fft";
+export type TimeSpanMode = "tracking" | "squishing";
+export type ScopeTool = "pan" | "zoom";
 export type DrawStyle = "line" | "line+points" | "points" | "smooth";
 export type Trigger = { edge?: "rising" | "falling"; source: string; level: number; position?: number; single?: boolean };
-export type ScopeSettings = { mode?: ScopeMode; window?: number; ylog?: boolean; hidden?: string[]; draw?: DrawStyle; trigger?: Trigger };
+export type ScopeSettings = {
+  mode?: ScopeMode;
+  timeSpanMode?: TimeSpanMode;
+  window?: number;
+  grid?: boolean;
+  tool?: ScopeTool;
+  ylog?: boolean;
+  hidden?: string[];
+  draw?: DrawStyle;
+  trigger?: Trigger;
+};
 
 type Props = {
   name: string;
@@ -68,6 +80,7 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
 
   const [frozen, setFrozen] = useState(false);
   const [cursors, setCursors] = useState<[number, number] | null>(null);
+  const [tool, setTool] = useState<ScopeTool>(settings.tool ?? "pan");
   const [menu, setMenu] = useState<"" | "more" | "trigger" | "tap">("");
   const [tapQuery, setTapQuery] = useState("");
   const [triggered, setTriggered] = useState<number | null>(null);
@@ -76,6 +89,7 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
   const plot = useRef<uPlot | null>(null);
   const view = useRef<View>({ x: null, y: null });
   const liveWindow = useRef<number | undefined>(settings.window);
+  const timeSpanMode = settings.timeSpanMode ?? (settings.window ? "tracking" : "squishing");
   /** Each channel's highest FFT peak (Hz), as the last fft data had it: the legend reads it. */
   const peaksNow = useRef(new Map<string, number>());
   const draws = useRef<{ cursors: [number, number] | null; triggered: number | null; trigger?: Trigger; mode: ScopeMode }>({ cursors, triggered, trigger: settings.trigger, mode });
@@ -114,7 +128,7 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
     const b = bounds();
     if (!b) return null;
     if (isFrozen && view.current.x) return view.current.x;
-    const W = liveWindow.current;
+    const W = liveWindow.current ?? (timeSpanMode === "tracking" ? 10 : undefined);
     const trig = settings.trigger;
     if (trig && mode === "time") {
       const src = channels.find((c) => c.id === trig.source);
@@ -130,7 +144,10 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
       }
       return view.current.x ?? [b[1] - width, b[1]];
     }
-    return W ? [b[1] - W, b[1]] : b;
+    if (timeSpanMode === "tracking" && W) {
+      return [b[1] - W, b[1]];
+    }
+    return b;
   };
   const data = (): uPlot.AlignedData => {
     if (mode === "xy") {
@@ -160,7 +177,8 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
   };
 
   // ---- The plot: made again when what it draws changes shape, fed on every version ----
-  const shape = JSON.stringify([mode, draw, settings.ylog ?? false, units, shown.map(({ c, k }) => [c.id, k, c.label]), theme, small]);
+  const showGrid = settings.grid !== false;
+  const shape = JSON.stringify([mode, draw, settings.ylog ?? false, showGrid, tool, units, shown.map(({ c, k }) => [c.id, k, c.label]), theme, small]);
   useLayoutEffect(() => {
     const el = host.current;
     if (!el || !shown.length) return;
@@ -169,7 +187,9 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
     const dim = css.getPropertyValue("--text-on-screen-muted").trim() || "#5d5d58";
     const font = `11px ${css.getPropertyValue("--font-mono").trim() || "monospace"}`;
     const screen = css.getPropertyValue("--surface-screen").trim() || "#050505";
-    const grid = { stroke: css.getPropertyValue("--grid-line").trim() || "#222", width: 1, dash: [1, 3] };
+    const grid = showGrid
+      ? { stroke: css.getPropertyValue("--grid-line").trim() || "#222", width: 1, dash: [1, 3] }
+      : { show: false };
     // Units are written in the screen's corners (see the JSX), not as axis titles.
     const axis = (scale: string, side: 1 | 2 | 3): uPlot.Axis => ({
       scale, side, stroke: dim, font, grid: side === 1 ? { show: false } : grid, ticks: { show: false }, size: side === 2 ? 22 : small ? 36 : 44, gap: 4,
@@ -236,9 +256,9 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
         points: { show: false },
         drag: { x: true, y: true, setScale: false },
         bind: {
-          // A plain drag pans (pointer handlers below); Ctrl-drag draws uPlot's zoom box.
+          // A plain drag pans (pointer handlers below); zoom tool or Ctrl-drag draws uPlot's zoom box.
           mousedown: (_u, _t, handler) => (e: MouseEvent) => {
-            if (e.ctrlKey || e.metaKey) handler(e);
+            if (tool === "zoom" || e.ctrlKey || e.metaKey) handler(e);
             return null;
           },
           dblclick: () => () => {
@@ -252,8 +272,12 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
           (u) => {
             const s = u.select;
             if (s.width > 4 && s.height > 4) {
-              view.current.x = [u.posToVal(s.left, "x"), u.posToVal(s.left + s.width, "x")];
-              view.current.y = [u.posToVal(s.top + s.height, "y"), u.posToVal(s.top, "y")];
+              const x0 = u.posToVal(s.left, "x");
+              const x1 = u.posToVal(s.left + s.width, "x");
+              view.current.x = [Math.min(x0, x1), Math.max(x0, x1)];
+              const y0 = u.posToVal(s.top + s.height, "y");
+              const y1 = u.posToVal(s.top, "y");
+              view.current.y = [Math.min(y0, y1), Math.max(y0, y1)];
               setFrozen(true);
               u.redraw(true);
             }
@@ -389,6 +413,7 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
     if (near >= 0) drag.current = { kind: "cursor", i: near, x0: p.x, min, max };
     else if (trig && p.x > p.w - 18 && Math.abs(u.valToPos(trig.level, scaleOf(channels.find((c) => c.id === trig.source)?.unit)) - p.y) < 9)
       drag.current = { kind: "level", x0: p.y, min, max };
+    else if (tool === "zoom") return; // Square cursor drag zoom: uPlot handler draws the zoom box
     else drag.current = { kind: "pan", x0: p.x, min, max };
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     e.stopPropagation(); // outside Arrange the Board must not start a drag of the cell
@@ -461,7 +486,12 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
     else if (k === "c") toggleCursors();
     else if (k === "t") setMenu((m) => (m === "trigger" ? "" : "trigger"));
     else if (k === "a") autoscale();
-    else if (k === "escape") setMenu("");
+    else if (k === "g") set({ grid: settings.grid === false ? true : false });
+    else if (k === "z") setTool((t) => (t === "zoom" ? "pan" : "zoom"));
+    else if (k === "escape") {
+      if (tool === "zoom") setTool("pan");
+      setMenu("");
+    }
     else return;
     e.preventDefault();
     e.stopPropagation();
@@ -551,7 +581,7 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
         )}
         <div
           ref={host}
-          className="scope-plot"
+          className={`scope-plot${tool === "zoom" ? " tool-zoom" : ""}`}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
@@ -599,11 +629,59 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
                   </button>
                 ))}
               </span>
+              {mode === "time" && (
+                <span className="scope-spans" role="radiogroup" aria-label="Span mode">
+                  {(["track", "squish"] as const).map((m) => {
+                    const active = (m === "track" && timeSpanMode === "tracking") || (m === "squish" && timeSpanMode === "squishing");
+                    return (
+                      <button
+                        key={m}
+                        role="radio"
+                        aria-checked={active}
+                        className={active ? "on" : ""}
+                        title={m === "track" ? "Tracking: constant tspan window follows current time" : "Squishing: tspan equals current time, fitting entire run"}
+                        onClick={() => {
+                          if (m === "track") {
+                            const nextW = settings.window ?? liveWindow.current ?? 10;
+                            liveWindow.current = nextW;
+                            set({ timeSpanMode: "tracking", window: nextW });
+                          } else {
+                            liveWindow.current = undefined;
+                            set({ timeSpanMode: "squishing", window: undefined });
+                          }
+                        }}
+                      >
+                        {active ? `[ ${m} ]` : m}
+                      </button>
+                    );
+                  })}
+                </span>
+              )}
+              <span className="scope-tools" role="radiogroup" aria-label="Tool">
+                {(["pan", "zoom"] as const).map((t) => {
+                  const on = tool === t;
+                  return (
+                    <button
+                      key={t}
+                      role="radio"
+                      aria-checked={on}
+                      className={on ? "on" : ""}
+                      title={t === "pan" ? "Pan: drag to pan along time" : "Zoom: drag a rectangle to zoom in (Z)"}
+                      onClick={() => setTool(t)}
+                    >
+                      {on ? `[ ${t} ]` : t}
+                    </button>
+                  );
+                })}
+              </span>
               {onTap && (
                 <button className="key small" title="Wire an output into this Scope" onClick={() => setMenu(menu === "tap" ? "" : "tap")}>
                   + tap
                 </button>
               )}
+              <button className={`key small${settings.grid !== false ? " on" : ""}`} title="Show or hide grid (G)" onClick={() => set({ grid: settings.grid === false ? true : false })}>
+                {toggle(settings.grid !== false, "grid")}
+              </button>
               <button className={`key small${isFrozen && live ? " on" : ""}`} disabled={!live} title="Freeze or follow (F)" onClick={toggleFreeze}>
                 {toggle(frozen && live, "freeze")}
               </button>
@@ -649,6 +727,9 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
                 onBlur={(e) => set({ window: Number(e.target.value) > 0 ? Number(e.target.value) : undefined })}
               />
               s
+            </label>
+            <label className="scope-row">
+              <input type="checkbox" checked={settings.grid !== false} onChange={(e) => set({ grid: e.target.checked })} /> grid
             </label>
             <label className="scope-row">
               <input type="checkbox" checked={!!settings.ylog} disabled={mode !== "time"} onChange={(e) => set({ ylog: e.target.checked || undefined })} /> log y

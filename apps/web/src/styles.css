@@ -305,7 +305,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
    opens the gestures as a short list. Nothing permanent under the canvas. */
 .canvas-empty { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 4; font: var(--size-sm) var(--font-sans); color: var(--text-muted); }
 .canvas-empty .kbd { margin: 0 2px; }
-.help-key { position: absolute; left: var(--space-3); bottom: var(--space-3); z-index: 6; width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); font: 500 var(--size-xs) var(--font-mono); }
+.key.help-key { position: absolute; left: var(--space-3); bottom: var(--space-3); z-index: 6; width: 26px; height: 26px; min-width: 26px; padding: 0; display: inline-grid; place-items: center; border-radius: var(--radius-round); font: 500 var(--size-xs) var(--font-mono); line-height: 1; text-align: center; }
 .help-pop {
   position: absolute; left: var(--space-3); bottom: calc(var(--space-3) + 34px); z-index: 7; width: min(480px, calc(100% - 24px));
   padding: var(--space-3) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-lg);
@@ -783,6 +783,15 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .mode-commander .pages:has(.drawer-bottom.closed) > .dock { bottom: calc(var(--panel-head-height) + 2px + var(--gutter) + var(--space-3)); }
 .backend-window { height: auto; width: min(520px, calc(100vw - 32px)); }
 .backend-form { display: flex; align-items: center; gap: var(--space-3); padding: var(--panel-pad) var(--panel-pad) var(--space-2); }
+.backend-presets { display: flex; align-items: center; gap: 6px; padding: 0 var(--panel-pad) var(--space-3); font-size: var(--size-2xs); }
+.backend-presets button { font-family: var(--font-mono); font-size: var(--size-2xs); }
+.backend-card { margin: 0 var(--panel-pad) var(--space-3); padding: var(--space-3); background: var(--surface-sunken); border: 1px solid var(--line); border-radius: var(--radius-md); font: var(--size-2xs) var(--font-sans); }
+.backend-card.muted { color: var(--text-muted); font-style: italic; }
+.backend-card-head { font-weight: 600; font-family: var(--font-mono); color: var(--text); margin-bottom: var(--space-2); display: flex; align-items: center; justify-content: space-between; }
+.backend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px var(--space-3); }
+.backend-grid-item { display: flex; flex-direction: column; gap: 2px; }
+.backend-grid-item .lbl { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.backend-grid-item .val { color: var(--text); font-family: var(--font-mono); word-break: break-all; }
 .backend-note { margin: 0; padding: 0 var(--panel-pad) var(--panel-pad); }
 
 /* ---- Projects (#82): the name and the unsaved dot, notices, the undo toast ---------- */
