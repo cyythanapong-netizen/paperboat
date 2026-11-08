@@ -30,7 +30,7 @@ import { ownKeys } from "./commands";
 import { CompactBlock } from "./Compact";
 import { copySelection, pasteClip, type Clip } from "./clipboard";
 import { connectError, iconEnd, inForm, netWireType, placePorts, SIDES, signalEnd, signOf, wireMismatch, type PortSides, type WireEnd } from "./ports";
-import { flipSideX, flipSideY, iconValid, placeIconPorts, rotateIcon, rotateSideCCW, rotateSideCW, useCanvasHotkeys, type RotationDeg } from "@paperboat/shared";
+import { flipPlacement, flipSideX, flipSideY, iconValid, placeIconPorts, rotateIcon, rotatePlacement, rotateSideCCW, rotateSideCW, useCanvasHotkeys, type RotationDeg } from "@paperboat/shared";
 import { usePortLayout } from "./portLayout";
 import { Bindable, draggedVariable, NumberOrFormula, VAR_DRAG, VarsContext } from "./Variables";
 import { isRef } from "./bindings";
@@ -141,7 +141,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   // Ports that follow a param come and go: have the canvas measure the handles again.
   const updateInternals = useUpdateNodeInternals();
   const portKey = [...def.inputs, ...def.outputs].map((p) => p.id).join(",");
-  useEffect(() => updateInternals(id), [portKey, id, updateInternals, data.rotation, data.mirror]);
+  useEffect(() => updateInternals(id), [portKey, id, updateInternals, data.rotation, data.mirror, data.ports]);
   // A simple block draws as a small plate (#70) until double-clicked open; fold puts it back.
   const [expanded, setExpanded] = useState(false);
   const ports = usePortLayout({
@@ -159,6 +159,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
       <CompactBlock
         id={id}
         def={viewDef}
+        sides={data.ports}
         params={params}
         selected={!!selected}
         commented={commented}
@@ -1139,7 +1140,8 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
       ns.map((n) => {
         if (!ids.has(n.id) || !isBlock(n)) return n;
         const currentRot = (n.data.rotation ?? 0) as RotationDeg;
-        const nextRot = (((currentRot + (cw ? 270 : 90)) % 360) as RotationDeg);
+        const currentMirror = Boolean(n.data.mirror);
+        const { rotation: nextRot, mirror: nextMirror } = rotatePlacement({ rotation: currentRot, mirror: currentMirror }, cw);
         const def = inForm(n.data.def, n.data.params);
         const placed = placePorts(def, n.data.ports);
         const nextPorts: PortSides = {};
@@ -1153,6 +1155,7 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
           data: {
             ...n.data,
             rotation: nextRot,
+            mirror: nextMirror,
             ports: nextPorts,
           },
         };
@@ -1169,34 +1172,27 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
         if (!ids.has(n.id) || !isBlock(n)) return n;
         const currentRot = (n.data.rotation ?? 0) as RotationDeg;
         const currentMirror = Boolean(n.data.mirror);
+        const { rotation: nextRot, mirror: nextMirror } = flipPlacement({ rotation: currentRot, mirror: currentMirror }, axis);
         const def = inForm(n.data.def, n.data.params);
         const placed = placePorts(def, n.data.ports);
         const nextPorts: PortSides = {};
         for (const side of SIDES) {
           const nextSide = axis === "x" ? flipSideX(side) : flipSideY(side);
-          const list = placed[side].map((e) => e.port.id);
+          let list = placed[side].map((e) => e.port.id);
+          if ((axis === "x" && (side === "top" || side === "bottom")) || (axis === "y" && (side === "left" || side === "right"))) {
+            list = [...list].reverse();
+          }
           if (list.length > 0) nextPorts[nextSide] = list;
         }
-        if (axis === "x") {
-          return {
-            ...n,
-            data: {
-              ...n.data,
-              mirror: !currentMirror,
-              ports: nextPorts,
-            },
-          };
-        } else {
-          return {
-            ...n,
-            data: {
-              ...n.data,
-              mirror: !currentMirror,
-              rotation: (((currentRot + 180) % 360) as RotationDeg),
-              ports: nextPorts,
-            },
-          };
-        }
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            mirror: nextMirror,
+            rotation: nextRot,
+            ports: nextPorts,
+          },
+        };
       }),
     );
     pickedBlocks.forEach((b) => updateNodeInternals(b.id));
@@ -1535,38 +1531,6 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
             className="selection-dialog nodrag nopan nowheel"
           >
             <span className="lbl">{summary}</span>
-            <button
-              className="key small"
-              disabled={pickedBlocks.length === 0}
-              title="Rotate 90° clockwise (R)"
-              onClick={() => rotateSelected(true)}
-            >
-              Rotate
-            </button>
-            <button
-              className="key small"
-              disabled={pickedBlocks.length === 0}
-              title="Flip horizontal (F)"
-              onClick={() => flipSelected("x")}
-            >
-              Flip
-            </button>
-            <button
-              className="key small"
-              disabled={pickedBlocks.length === 0}
-              title="Flip vertical (Alt+F)"
-              onClick={() => flipSelected("y")}
-            >
-              Flip ⇅
-            </button>
-            <button
-              className="key small"
-              disabled={pickedBlocks.length === 0}
-              title="Duplicate (Ctrl+D)"
-              onClick={() => duplicateSelected()}
-            >
-              Duplicate
-            </button>
             <button
               className="key small"
               disabled={pickedBlocks.length === 0}
