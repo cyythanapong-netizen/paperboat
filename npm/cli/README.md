@@ -1,6 +1,6 @@
 # @paperboat/cli
 
-The [Paperboat](https://github.com/cyythanapong-netizen/paperboat) command line.
+The [Paperboat](https://github.com/paperboatlab/paperboat) command line.
 
 ```sh
 npm install -g @paperboat/cli
