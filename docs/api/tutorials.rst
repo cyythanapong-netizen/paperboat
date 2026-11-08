@@ -490,7 +490,7 @@ The same backend, drawn instead of typed
 
 ``dc-drive-cpp`` was authored in Squero Studio OM, with no ``.mo`` written by hand
 except where noted. Start the server from the studio's ``examples/`` so the dock's default export folder
-(``dc-drive-cpp``) lands next to the model, then open http://localhost:8790:
+(``dc-drive-cpp``) lands next to the model, then open http://localhost:59201:
 
 .. code-block:: bash
 

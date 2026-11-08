@@ -62,7 +62,7 @@ Start and stop (the web app, backends and programs):
   start [target] [options]   Without a target: the web app (dev server, port 3047).
                              A backend (folder, name or .ppk): build it and run it in the foreground.
                              A program from apps.toml (e.g. squero-studio-om): run it.
-                               --port <N>      Listen port (backend 8765, web app 3047, squero-studio-om 8790)
+                               --port <N>      Listen port (backend 8765, web app 3047, squero-studio-om 59201)
                                --daemon        Run in the background (the web app and programs)
                                --host <H>      The web app's listen host (default 0.0.0.0)
                              Backend only:
