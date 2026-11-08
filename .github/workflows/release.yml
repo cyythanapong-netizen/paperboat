@@ -42,6 +42,8 @@ jobs:
         id: version
         run: |
           v=$(sed -nE 's/^project\(paperboat VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' engine/CMakeLists.txt)
+          pre=$(sed -nE 's/^set\(PAPERBOAT_PRERELEASE "([^"]*)".*/\1/p' engine/CMakeLists.txt)
+          v=$v${pre:+-$pre}
           echo "version=$v" >> "$GITHUB_OUTPUT"
           if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "v$v" ]; then
             echo "::error::tag ${GITHUB_REF_NAME} does not match the CMake version $v"; exit 1
@@ -104,6 +106,8 @@ jobs:
         id: version
         run: |
           v=$(sed -nE 's/^project\(paperboat VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' engine/CMakeLists.txt)
+          pre=$(sed -nE 's/^set\(PAPERBOAT_PRERELEASE "([^"]*)".*/\1/p' engine/CMakeLists.txt)
+          v=$v${pre:+-$pre}
           echo "version=$v" >> "$GITHUB_OUTPUT"
       # The CLI, the core and the toolkit, and of the
       # tests only the process layer's run here (engine/tests/process_test.cpp).
@@ -170,13 +174,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           shopt -s nullglob
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes \
+          case "$GITHUB_REF_NAME" in *-*) pre=--prerelease;; esac   # v0.1.0-alpha.1
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes $pre \
             dist/*.deb dist/*.tar.gz dist/*.zip dist/npm/*.tgz
       - name: npm (platform packages first, the launcher last)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::notice::NPM_TOKEN is not set; skipping npm"; exit 0; fi
+          case "$GITHUB_REF_NAME" in *-*) tag=--tag=${GITHUB_REF_NAME#*-}; tag=${tag%%.*};; esac   # alpha.1 -> --tag alpha, never "latest"
           for f in dist/npm/paperboat-cli-*-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz; do
-            npm publish "$f" --access public --provenance
+            npm publish "$f" --access public --provenance $tag
           done

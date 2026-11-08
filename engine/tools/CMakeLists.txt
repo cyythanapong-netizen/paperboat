@@ -13,7 +13,7 @@ if(TARGET paperboat_toolkit_opencv)
 endif()
 
 add_executable(paperboat paperboat_cli.cpp)
-target_compile_definitions(paperboat PRIVATE PAPERBOAT_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(paperboat PRIVATE PAPERBOAT_VERSION="${PAPERBOAT_VERSION}")
 if(PAPERBOAT_STATIC_RUNTIME AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_link_options(paperboat PRIVATE -static-libstdc++ -static-libgcc)
 endif()
