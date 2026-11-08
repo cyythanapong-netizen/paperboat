@@ -999,14 +999,14 @@ int cmd_update(const std::vector<std::string_view>& args) {
       say("paperboat", std::string(tui::kVersion) + ", installed from a package: update it with your package manager");
     } else {
       std::string latest;
-      if (tk::run_command({"npm", "view", "@paperboat/cli", "version"}, {}, {}, &latest) != 0) {
-        say("paperboat", std::string(tui::kVersion) + ", cannot read @paperboat/cli from the npm registry (offline, or not published yet)");
+      if (tk::run_command({"npm", "view", "@paperboatlabs/cli", "version"}, {}, {}, &latest) != 0) {
+        say("paperboat", std::string(tui::kVersion) + ", cannot read @paperboatlabs/cli from the npm registry (offline, or not published yet)");
         ++failed;
       } else if (latest == tui::kVersion) {
         say("paperboat", std::string(tui::kVersion) + ", up to date (npm)");
       } else {
         say("paperboat", std::string(tui::kVersion) + ", " + latest + " is available (npm)");
-        if (!check_only) step("npm install -g @paperboat/cli@latest", {"npm", "install", "-g", "@paperboat/cli@latest"}, root);
+        if (!check_only) step("npm install -g @paperboatlabs/cli@latest", {"npm", "install", "-g", "@paperboatlabs/cli@latest"}, root);
       }
     }
   }

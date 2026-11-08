@@ -15,7 +15,7 @@ A backend builds against the engine in one of two ways:
 * **From a checkout**: ``add_subdirectory(<paperboat>/engine paperboat EXCLUDE_FROM_ALL)``.
 * **From an installed package**: ``find_package(Paperboat 0.1 CONFIG REQUIRED)``. The SDK is the
   ``paperboat-dev`` ``.deb``, or the ``lib/``, ``include/`` and ``lib/cmake/Paperboat`` parts of the
-  ``.tar.gz``, the ``.zip`` and the ``@paperboat/cli`` platform package. It has static, Release libraries,
+  ``.tar.gz``, the ``.zip`` and the ``@paperboatlabs/cli`` platform package. It has static, Release libraries,
   so nothing is rebuilt and nothing is downloaded at configure time.
 
 Either way the targets are ``paperboat::core`` (links ``paperboat::toolkit``) and ``paperboat::warnings``

@@ -1,5 +1,5 @@
 {
-  "name": "@paperboat/cli",
+  "name": "@paperboatlabs/cli",
   "version": "0.0.0",
   "description": "Paperboat: a framework for engineering apps. The paperboat command line (native binary per platform).",
   "license": "UNLICENSED",

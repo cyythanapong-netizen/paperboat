@@ -3,8 +3,8 @@
 
     cmake --install engine/build --prefix dist/root
     python3 scripts/pack_npm.py --version 0.1.0 --out dist/npm --target linux-x64 \\
-        --prefix dist/root                             # @paperboat/cli-linux-x64 (binary + SDK)
-    python3 scripts/pack_npm.py --version 0.1.0 --out dist/npm --main     # @paperboat/cli
+        --prefix dist/root                             # @paperboatlabs/cli-linux-x64 (binary + SDK)
+    python3 scripts/pack_npm.py --version 0.1.0 --out dist/npm --main     # @paperboatlabs/cli
 
 Each runs `npm pack`, leaving a .tgz in --out. Publish the platform packages first, the launcher last
 (it lists them as optionalDependencies). Needs npm.
@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SCOPE = "@paperboat"  # one place to rename the scope
+SCOPE = "@paperboatlabs"  # one place to rename the scope
 LICENSE = "UNLICENSED"  # no LICENSE file in the repository yet; set the SPDX id when one is chosen
 REPO = "git+https://github.com/paperboatlab/paperboat.git"
 
