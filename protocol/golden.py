@@ -48,6 +48,8 @@ def run(example: Path, expected: dict) -> list[str]:
             cmd += ["--duration", str(expected["duration"])]
         env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
     else:
+        if os.name == "nt" and not Path(target).suffix:  # a C++ backend's run names it without .exe
+            target += ".exe"
         if not (example / target).exists():
             return [f"not built: {target}"]
         cmd, env = [str(example / target), "--run"], os.environ
