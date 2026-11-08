@@ -16,7 +16,7 @@ if (!bin) {
     console.error(
       `paperboat: no prebuilt binary for ${key} (@paperboat/cli-${key} is not installed).\n` +
         "It is an optional dependency: reinstall without --omit=optional / --no-optional, or build from source:\n" +
-        "https://github.com/cyythanapong-netizen/paperboat",
+        "https://github.com/paperboatlab/paperboat",
     );
     process.exit(1);
   }

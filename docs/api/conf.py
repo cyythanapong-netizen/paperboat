@@ -15,7 +15,7 @@ html_theme = "shibuya"
 html_static_path = ["../_static"]
 html_css_files = ["fonts.css"]
 html_title = "Paperboat"
-html_baseurl = "https://cyythanapong-netizen.github.io/paperboat/"
+html_baseurl = "https://paperboatlab.github.io/paperboat/"
 html_favicon = "../_static/favicon.svg"
 html_show_sphinx = False
 highlight_language = "none"
@@ -27,7 +27,7 @@ html_theme_options = {
     "color_mode": "auto",
     "light_logo": "_static/logo-light.svg",
     "dark_logo": "_static/logo-dark.svg",
-    "github_url": "https://github.com/cyythanapong-netizen/paperboat",
+    "github_url": "https://github.com/paperboatlab/paperboat",
     "nav_links": [
         {
             "title": "Manuals",
