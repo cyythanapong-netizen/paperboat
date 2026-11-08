@@ -9,8 +9,6 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Off when a backend pulls the engine in with add_subdirectory: it only needs the libraries.
 option(PAPERBOAT_BUILD_TESTS "Build the Catch2 tests" ${PROJECT_IS_TOP_LEVEL})
 option(PAPERBOAT_BUILD_TOOLS "Build paperboat-catalog" ${PROJECT_IS_TOP_LEVEL})
-option(PAPERBOAT_BUILD_MODELICA "Build engine/modelica when omc is installed" ${PROJECT_IS_TOP_LEVEL})
-option(PAPERBOAT_MODELICA_WITHOUT_OMC "Build engine/modelica even when omc is not installed (release packages: omc is only needed at run time)" OFF)
 option(PAPERBOAT_STATIC_RUNTIME "Link libstdc++ and libgcc statically, so a release binary needs only glibc" OFF)
 # The SDK (pb#177): install paperboat::core, paperboat::toolkit and their headers, so a backend can
 # find_package(Paperboat) instead of building the engine from source.
@@ -82,10 +80,6 @@ foreach(manifest IN LISTS optional_toolkit_manifests)
     add_subdirectory("${toolkit_dir}" "toolkit/${toolkit_name}")
   endif()
 endforeach()
-# The omc bridge and Modelica generator (#160): optional, needs omc to run.
-if(PAPERBOAT_BUILD_MODELICA)
-  add_subdirectory(modelica)
-endif()
 if(PAPERBOAT_BUILD_TOOLS)
   add_subdirectory(tools)
 endif()
@@ -107,7 +101,7 @@ if(PROJECT_IS_TOP_LEVEL)
   set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
   set(CPACK_DEBIAN_PACKAGE_SECTION science)
   set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-  set(CPACK_DEBIAN_PACKAGE_SUGGESTS "git, nodejs, npm, openmodelica")
+  set(CPACK_DEBIAN_PACKAGE_SUGGESTS "git, nodejs, npm")
   # Two .debs: paperboat (bin, share) and paperboat-dev (the SDK). The .tar.gz and .zip hold both.
   set(CPACK_DEB_COMPONENT_INSTALL ON)
   set(CPACK_COMPONENTS_ALL runtime dev)

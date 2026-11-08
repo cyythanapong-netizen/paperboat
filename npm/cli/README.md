@@ -5,7 +5,7 @@ The [Paperboat](https://github.com/cyythanapong-netizen/paperboat) command line.
 ```sh
 npm install -g @paperboat/cli
 paperboat --version
-paperboat squero            # Squero Studio OM; fetches the app on first run
+paperboat start squero-studio-om  # Squero Studio OM
 paperboat pkg list          # apps from other repositories
 paperboat update --check    # is a newer paperboat on npm?
 ```

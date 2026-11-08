@@ -443,18 +443,18 @@ In descriptor TOML:
 Tutorial 7: From Modelica to a Paperboat backend
 ------------------------------------------------
 
-A Modelica model can become a backend without writing its equations again. With
-OpenModelica installed (``omc`` on ``PATH``, which also builds ``engine/modelica``):
+A Modelica model can become a backend without writing its equations again. Using
+Squero Studio OM's CLI (`squero-om`, in ``squero-studio-om/``):
 
 .. code-block:: bash
 
-   paperboat modelica check DCDrive.mo
-   paperboat modelica icon DCDrive.mo
-   paperboat modelica icon Modelica.Electrical.Analog.Basic.Resistor
-   paperboat modelica generate DCDrive.mo --out dc-drive-cpp/
+   squero-om check DCDrive.mo
+   squero-om icon DCDrive.mo
+   squero-om icon Modelica.Electrical.Analog.Basic.Resistor
+   squero-om generate DCDrive.mo --out dc-drive-cpp/
    paperboat build dc-drive-cpp && paperboat run dc-drive-cpp
 
-``paperboat modelica icon <Model.mo | Qualified.Name> [--class <Name>]`` inspects a local
+``squero-om icon <Model.mo | Qualified.Name> [--class <Name>]`` inspects a local
 ``.mo`` file or a Modelica Standard Library class and prints ``{icon, connectors, notice}`` as
 JSON: inherited connectors resolved through ``extends``, ``iconTransformation`` placements
 snapped onto 5-unit edge slots, and ``Icon(graphics)`` primitives quantised onto Paperboat's
@@ -519,24 +519,24 @@ variable that is not a port: the parameter bindings (``R1(R = R)``, ``L1(L = L, 
 fixed = true))``, ...), the top-level ``parameter`` declarations and the armature current
 ``Real i = L1.i annotation(__paperboat(probe = true))`` were typed into the ``.mo``.
 
-Squero Studio OM, the Modelica editor, talks to the same omc through ``paperboat squero``
-(or ``bin/squero-om`` in ``squero-studio-om``), a WebSocket server speaking ``squero/0``:
+Squero Studio OM, the Modelica editor, talks to omc through ``squero-om``
+(or ``paperboat start squero-studio-om``), a WebSocket server speaking ``squero/0``:
 ``{"id", "op": "omc", "expr"}`` answered by ``{"id", "ok", "result" | "error"}``, plus
 ``{"op": "status", "state", "version"}`` pushes. Only an allow-list of omc calls passes.
 
-``paperboat squero [Model.mo]`` (or ``bin/squero-om``) also serves the Studio app on the same port: ``--app DIR``,
+``squero-om [Model.mo]`` (or ``paperboat start squero-studio-om``) also serves the Studio app on the same port: ``--app DIR``,
 else a ``squero-studio-om`` checkout next to this repository (its ``dist/``), else the release ``paperboat pkg``
-fetched from GitHub into ``~/.local/share/paperboat/apps`` (the first run does it; ``apps.toml`` lists the apps) and opens ``Model.mo``, default ``./Untitled.mo``. Beyond ``omc``
+fetched from GitHub into ``~/.local/share/paperboat/apps`` and opens ``Model.mo``, default ``./Untitled.mo``. Beyond ``omc``
 it has six ops of its own, written in C++ and confined to the opened model, each answered by
 ``{"id", "ok": true, "result": {…}}`` or ``{"id", "ok": false, "error"}``:
 
 - ``open`` ``{}`` gives ``{file, model}``, the model the server was started on.
 - ``save`` ``{model}`` saves it to its own ``.mo`` (never the Standard Library).
 - ``icon`` ``{class}`` gives ``{icon, connectors, notice}``, the imported look of a class
-  (what ``paperboat modelica icon`` prints).
+  (what ``squero-om icon`` prints).
 - ``set_icon`` ``{model, icon}`` writes an ``IconDef``'s graphics back as the model's ``Icon``
   annotation, the inverse of the importer: the same tokens round-trip.
-- ``generate`` ``{source, model, out, dry?, path?}`` is ``paperboat modelica generate``. It first
+- ``generate`` ``{source, model, out, dry?, path?}`` is ``squero-om generate``. It first
   pushes ``{"op": "progress", "id", "stage", "fraction"}`` (stage ``check``, ``flatten``,
   ``generate`` or ``build``), then answers ``{model, path, reason, out, notices, files?}``. With
   ``dry`` nothing is written; ``files`` maps each relative path to its text (none on the FMU path).
