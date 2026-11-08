@@ -29,10 +29,6 @@ if(TARGET paperboat_toolkit_opencv)
   target_link_libraries(paperboat_tests PRIVATE paperboat::toolkit_opencv)
   target_compile_definitions(paperboat_tests PRIVATE PAPERBOAT_HAS_OPENCV)
 endif()
-if(TARGET paperboat_modelica)
-  target_sources(paperboat_tests PRIVATE modelica_test.cpp)
-  target_link_libraries(paperboat_tests PRIVATE paperboat::modelica)
-endif()
 target_compile_definitions(paperboat_tests
   PRIVATE PAPERBOAT_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
 
