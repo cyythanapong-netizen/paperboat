@@ -397,7 +397,7 @@ Bound from the engine's toolkit (C++: :cpp:class:`Model`, ``paperboat::solve``,
 
 .. py:function:: ode(f, x0, solver="rk4", **options) -> ODE
 
-   Bootstrap an ODE system :math:`dx/dt = f(x, t)` or :math:`f(t, x)` with a built-in solver
+   Bootstrap an ODE system :math:`dx/dt = f(t, x)` with a built-in solver
    (``"rk4"``, ``"rk45"``, ``"rk2"``, ``"euler"``, or ``"discrete"``). Returns an :py:class:`ODE`
    instance whose state is advanced by ``ode.step(dt)`` or ``ode.step(t, dt)``.
 

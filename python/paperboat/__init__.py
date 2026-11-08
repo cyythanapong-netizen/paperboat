@@ -290,26 +290,12 @@ class ODE:
     """An ODE system dx/dt = f(t, x) integrated with a built-in solver (rk4, rk45, rk2, euler, discrete)."""
 
     def __init__(self, f: Callable, x0, solver: str = "rk4", **options):
-        import inspect
-
         self._f = f
         self.solver = solver
         self._solver = solve.Solver(solver, **options)
         self._is_numpy = hasattr(x0, "__array__")
         self.x = list(x0)
         self.t = 0.0
-
-        try:
-            sig = inspect.signature(f)
-            params = list(sig.parameters.keys())
-            if len(params) == 1:
-                self._mode = "x"
-            elif len(params) >= 2 and params[0] in ("t", "time"):
-                self._mode = "tx"
-            else:
-                self._mode = "xt"
-        except Exception:
-            self._mode = "auto"
 
     def step(self, t_or_dt: float, dt: float | None = None):
         """Advance the ODE state by one step. Can be called as step(t, dt) or step(dt)."""
@@ -321,30 +307,17 @@ class ODE:
             step_dt = float(dt)
             self.t = t
 
-        def call_f(at: float, cur_x):
-            if self._mode == "x":
-                return self._f(cur_x)
-            elif self._mode == "tx":
-                return self._f(at, cur_x)
-            elif self._mode == "xt":
-                return self._f(cur_x, at)
-            else:
-                try:
-                    return self._f(cur_x, at)
-                except TypeError:
-                    return self._f(at, cur_x)
-
         def wrapped_f(at: float, current_x: list[float]):
             if self._is_numpy:
                 try:
                     import numpy as np
-                    val = call_f(at, np.array(current_x))
+                    val = self._f(at, np.array(current_x))
                     if hasattr(val, "tolist"):
                         return val.tolist()
                     return list(val)
                 except ImportError:
                     pass
-            val = call_f(at, current_x)
+            val = self._f(at, current_x)
             if hasattr(val, "tolist"):
                 return val.tolist()
             return list(val)
@@ -411,7 +384,7 @@ class Backend:
     view: dict | None = None                     # the scene's camera hint, e.g. {"mode": "2d", …}
     connectors: dict | None = None               # Modelica connector definitions (§4), keyed by short name
     port: int = 8765
-    solver: str = "rk4"                          # default solver: rk4 | rk45 | rk2 | euler | discrete
+    solver: str = ""                             # default solver: rk4 | rk45 | rk2 | euler | discrete ("": backend.toml's, else rk4)
 
 
 def serve(backend: Backend) -> None:
@@ -424,21 +397,8 @@ def serve(backend: Backend) -> None:
     except ValueError as err:
         print(err, file=sys.stderr)
         sys.exit(2)
-    solver = backend.solver
-    if solver == "rk4":
-        desc_path = Path(backend.descriptor)
-        manifest_path = desc_path.parent / "backend.toml" if desc_path.parent != Path(".") else Path("backend.toml")
-        if manifest_path.is_file():
-            try:
-                import tomllib
-                doc = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
-                toml_solver = doc.get("backend", {}).get("solver") or doc.get("run", {}).get("solver")
-                if toml_solver:
-                    solver = str(toml_solver)
-            except Exception:
-                pass
     hosted = make(backend.engine, str(backend.descriptor), list(backend.blocks), list(backend.objects), backend.state,
-                  backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view, backend.speed, solver,
+                  backend.mode, backend.dt, backend.duration, backend.emit_every, backend.view, backend.speed, backend.solver,
                   backend.connectors)
     if run:
         try:
