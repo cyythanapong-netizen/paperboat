@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { inForm, parseInputs, parseNames, parsePlaceholders, parseSigns, portHint, portLabel, wireMismatch } from "../src/ports.ts";
+import { hasIconPorts, inForm, parseInputs, parseNames, parsePlaceholders, parseSigns, portHint, portLabel, wireMismatch } from "../src/ports.ts";
 import type { BlockDef, PortDef } from "../src/protocol.ts";
 
 const state: PortDef = {
@@ -140,4 +140,21 @@ test("dynamic ports match the engine's on the shared fixture", () => {
   assert.deepEqual(mux.inputs.map((p) => p.unit), ["m", "m/s", "rad"]);
   assert.equal(mux.outputs[0].dimension, 3);
   assert.deepEqual(mux.outputs[0].components?.[2], { id: "theta", unit: "rad" });
+});
+
+test("hasIconPorts reports true only when view.icon has connector ports declared (pb#195)", () => {
+  assert.equal(hasIconPorts(undefined), false);
+  assert.equal(hasIconPorts({ g: [] }), false);
+  assert.equal(hasIconPorts({ g: [], ports: [] }), false);
+  assert.equal(
+    hasIconPorts({
+      g: [],
+      ports: [{ id: "u", class: "RealInput", side: "left", at: 50 }],
+    }),
+    true,
+  );
+  // Curve icons from fixture (e.g. sum) declare view.icon without ports
+  const sumFixture = fixture.find((f) => f.type === "sum");
+  assert.ok(sumFixture?.def.view?.icon);
+  assert.equal(hasIconPorts(sumFixture?.def.view?.icon), false);
 });
