@@ -4,7 +4,7 @@ How the web app looks and why. The look is **flat mono, like a well-made instrum
 grey panels with hairlines, clear sentence-case labels, recessed grey fields for what you
 type, black displays for output, and one colour that means "live". It takes its spirit from hardware such as Teenage
 Engineering's: honest, precise and quiet, with a little character in the type and the
-displays. Flat: no bevels, no indicator lights, no shadows.
+displays. Flat: no bevels, no indicator lights; shadows only on what floats.
 
 Tokens live in [`src/tokens.css`](src/tokens.css), the rules in [`src/styles.css`](src/styles.css),
 and the frame (view modes, rail, panels, switches) in [`src/Shell.tsx`](src/Shell.tsx).
@@ -120,14 +120,16 @@ Three layers. Components use semantic and component tokens only: never a primiti
 never a raw hex.
 
 **Primitives**: greys (`--grey-50` to `--grey-900`) for light, `--night-*` for dark,
-`--black` and `--screen-*` for displays, `--orange` (placeholder) and `--red`; fonts
+`--black`, `--white` and `--screen-*` for displays, `--orange` (placeholder) and `--red`; fonts
 `--font-sans` (Geist) and `--font-mono` (Geist Mono), both self-hosted; sizes
 12 / 12.5 / 13 / 15 / 30 px; a 4px spacing grid.
 
 **Semantic**: `--surface-ground | panel | raised | sunken | well | screen | float`, `--well-shadow`, `--float-blur`, `--text`,
 `--text-muted`, `--text-on-screen(-muted)`, `--line` (dividers), `--line-strong` (keys,
 blocks, fields), `--line-ink` (wires, switches, selection), `--dots`, `--signal`,
-`--danger`, `--focus`, `--scene-bg`, `--scene-grid`, radii, `--motion`. Dark redefines these
+`--danger`, `--focus`, `--text-on-signal` (text on a signal fill), `--shadow-0 | 1 | 2 | up`
+(elevation: knob, popover, dialog, rising sheet; stronger in dark), `--grid-line` and `--screen-line`
+(plot grid, and hairlines and selections on the black screen), `--scene-bg`, `--scene-grid`, radii, `--motion`. Dark redefines these
 (`html[data-theme="dark"]`, or the system's dark preference when the user chose auto).
 
 **Component**: `--bar-height`, `--rail-width` (fits "station" with room for the brackets),

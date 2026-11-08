@@ -168,7 +168,8 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
     const ink = css.getPropertyValue("--text-on-screen").trim() || "#f2f2ee";
     const dim = css.getPropertyValue("--text-on-screen-muted").trim() || "#5d5d58";
     const font = `11px ${css.getPropertyValue("--font-mono").trim() || "monospace"}`;
-    const grid = { stroke: "rgba(255,255,255,0.07)", width: 1, dash: [1, 3] };
+    const screen = css.getPropertyValue("--surface-screen").trim() || "#050505";
+    const grid = { stroke: css.getPropertyValue("--grid-line").trim() || "#222", width: 1, dash: [1, 3] };
     // Units are written in the screen's corners (see the JSX), not as axis titles.
     const axis = (scale: string, side: 1 | 2 | 3): uPlot.Axis => ({
       scale, side, stroke: dim, font, grid: side === 1 ? { show: false } : grid, ticks: { show: false }, size: side === 2 ? 22 : small ? 36 : 44, gap: 4,
@@ -199,7 +200,7 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
         scale: mode === "fft" ? "y" : scaleOf(c.unit),
         spanGaps: true,
         paths: mode === "xy" ? trail : pathOf(),
-        points: { show: draw === "points" || draw === "line+points", size: draw === "points" ? 4 : 5, width: 1, stroke, fill: draw === "points" ? stroke : "#050505" },
+        points: { show: draw === "points" || draw === "line+points", size: draw === "points" ? 4 : 5, width: 1, stroke, fill: draw === "points" ? stroke : screen },
       });
     }
     const yRange: uPlot.Scale.Range = (_u, min, max) => {
@@ -287,6 +288,7 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
     const { left, top, width, height } = u.bbox;
     const d = draws.current;
     const r = devicePixelRatio || 1;
+    const screen = getComputedStyle(u.root).getPropertyValue("--surface-screen").trim() || "#050505";
     ctx.save();
     ctx.font = `${10 * r}px monospace`;
     if (d.mode === "time" && d.cursors) {
@@ -302,7 +304,7 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
         ctx.setLineDash([]);
         ctx.fillStyle = ink;
         ctx.fillRect(x - 6 * r, top, 12 * r, 13 * r);
-        ctx.fillStyle = "#050505";
+        ctx.fillStyle = screen;
         ctx.fillText(String(i + 1), x - 3 * r, top + 10 * r);
       });
     }
@@ -329,7 +331,7 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
         ctx.lineTo(left + width - 8 * r, y + 6 * r);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = "#050505";
+        ctx.fillStyle = screen;
         ctx.fillText("T", left + width - 8 * r, y + 4 * r);
       }
       if (d.triggered !== null) {
@@ -487,10 +489,10 @@ export function Scope({ name, channels, version, live, settings, onSettings, sma
     canvas.width = u.ctx.canvas.width;
     canvas.height = u.ctx.canvas.height;
     const g = canvas.getContext("2d")!;
-    g.fillStyle = "#050505";
+    const css = getComputedStyle(u.root);
+    g.fillStyle = css.getPropertyValue("--surface-screen").trim() || "#050505";
     g.fillRect(0, 0, canvas.width, canvas.height);
     g.drawImage(u.ctx.canvas, 0, 0);
-    const css = getComputedStyle(u.root);
     g.font = `${11 * (devicePixelRatio || 1)}px monospace`;
     let x = 8;
     shown.forEach(({ c, k }) => {

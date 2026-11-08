@@ -31,6 +31,7 @@
   --night-600: #a3a39d;
   --night-900: #e9e9e4;
   --black: #0d0d0d;
+  --white: #ffffff;
   --screen-text: #f2f2ee;
   --screen-dim: #5d5d58;
   --orange: #ff5a1f;      /* placeholder for the one colour (#48) */
@@ -86,6 +87,18 @@
   --signal: var(--orange);        /* live or look here: running, traces, warnings */
   --danger: var(--red);           /* failed, missing, errors */
   --focus: var(--grey-900);
+  --text-on-signal: var(--white); /* text on a --signal fill (an active key) */
+
+  /* Elevation: what floats gets a shadow (0 a switch knob, 1 popovers and menus, 2 dialogs,
+     up a sheet rising from the bottom edge). Stronger in dark, where a shadow barely shows. */
+  --shadow-0: 0 1px 3px rgb(0 0 0 / 0.4);
+  --shadow-1: 0 8px 22px rgb(0 0 0 / 0.16);
+  --shadow-2: 0 16px 40px rgb(0 0 0 / 0.18);
+  --shadow-up: 0 -8px 24px rgb(0 0 0 / 0.2);
+
+  /* On the screen, which is black in both themes: plot grid, and hairlines and selections. */
+  --grid-line: rgb(255 255 255 / 0.07);
+  --screen-line: rgb(255 255 255 / 0.12);
 
   --scene-bg: #e3e3df;            /* read by SceneView */
   --scene-grid: #a9a9a3;
@@ -136,6 +149,9 @@
   --focus: var(--night-900);
   --scene-bg: #1d1d1d;
   --scene-grid: #3c3c3c;
+  --shadow-1: 0 8px 22px rgb(0 0 0 / 0.5);
+  --shadow-2: 0 16px 40px rgb(0 0 0 / 0.6);
+  --shadow-up: 0 -8px 24px rgb(0 0 0 / 0.5);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -159,6 +175,9 @@
     --focus: var(--night-900);
     --scene-bg: #1d1d1d;
     --scene-grid: #3c3c3c;
+    --shadow-1: 0 8px 22px rgb(0 0 0 / 0.5);
+    --shadow-2: 0 16px 40px rgb(0 0 0 / 0.6);
+    --shadow-up: 0 -8px 24px rgb(0 0 0 / 0.5);
   }
 }
 

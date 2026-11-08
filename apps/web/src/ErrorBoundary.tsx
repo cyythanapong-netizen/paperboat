@@ -22,9 +22,9 @@ export class ErrorBoundary extends Component<Props, State> {
   override render() {
     if (this.state.error) {
       return (
-        <div style={{ padding: "2rem", color: "#e53e3e", fontFamily: "sans-serif" }}>
+        <div style={{ padding: "2rem", color: "var(--danger)", fontFamily: "var(--font-sans)" }}>
           <h2>Something went wrong in the application.</h2>
-          <pre style={{ background: "#2d3748", color: "#f7fafc", padding: "1rem", borderRadius: "4px" }}>
+          <pre style={{ background: "var(--surface-screen)", color: "var(--text-on-screen)", padding: "1rem", borderRadius: "4px" }}>
             {this.state.error.message}
           </pre>
           <button
@@ -32,8 +32,8 @@ export class ErrorBoundary extends Component<Props, State> {
             style={{
               marginTop: "1rem",
               padding: "0.5rem 1rem",
-              background: "#3182ce",
-              color: "#fff",
+              background: "var(--signal)",
+              color: "var(--text-on-signal)",
               border: "none",
               borderRadius: "4px",
               cursor: "pointer",
