@@ -19,7 +19,8 @@ function dispose(obj: THREE.Object3D) {
 }
 
 function createObject(e: Entity, flat = false): THREE.Object3D {
-  const color = new THREE.Color(e.color ?? "#888888");
+  // An entity with no colour of its own takes the theme's muted ink.
+  const color = new THREE.Color(e.color ?? (getComputedStyle(document.documentElement).getPropertyValue("--text-muted").trim() || "#888888"));
   if (e.shape === "line") {
     const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
     return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color }));
@@ -72,6 +73,7 @@ export function SceneView({ entities, view, grid }: { entities: Record<string, E
     const css = getComputedStyle(document.documentElement);
     const token = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
     scene.background = new THREE.Color(token("--scene-bg", "#e3e3df"));
+    // Light is white in both themes: it is physics, not theme.
     scene.add(new THREE.AmbientLight(0xffffff, 1.2), new THREE.DirectionalLight(0xffffff, 2));
 
     let camera: THREE.PerspectiveCamera | THREE.OrthographicCamera;

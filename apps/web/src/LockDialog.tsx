@@ -114,7 +114,7 @@ export function LockDialog({
       <div className="notice-body" style={{ padding: "16px 20px" }}>
         {isLocked ? (
           <form onSubmit={handleUnlock}>
-            <p style={{ margin: "0 0 12px", color: "var(--color-fg-muted)" }}>
+            <p style={{ margin: "0 0 12px", color: "var(--text-muted)" }}>
               Parts of the interface are locked by this project. Enter the passcode to unlock them for this session.
             </p>
             {lock?.passcode ? (
@@ -131,16 +131,16 @@ export function LockDialog({
                 />
               </div>
             ) : (
-              <p style={{ margin: "0 0 12px", fontStyle: "italic", color: "var(--color-fg-muted)" }}>
+              <p style={{ margin: "0 0 12px", fontStyle: "italic", color: "var(--text-muted)" }}>
                 This project has no passcode set. Click Unlock to restore full controls.
               </p>
             )}
             {unlockError && (
-              <div style={{ color: "var(--color-danger, #e5484d)", marginBottom: 12, fontSize: 13 }}>
+              <div style={{ color: "var(--danger)", marginBottom: 12, fontSize: 13 }}>
                 {unlockError}
               </div>
             )}
-            <p style={{ margin: "0 0 16px", fontSize: 11, color: "var(--color-fg-subtle, #888)" }}>
+            <p style={{ margin: "0 0 16px", fontSize: 11, color: "var(--text-muted)" }}>
               Note: This is a convenience lock for demos and kiosks, not security protection.
             </p>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -154,7 +154,7 @@ export function LockDialog({
           </form>
         ) : (
           <form onSubmit={handleSave}>
-            <p style={{ margin: "0 0 12px", color: "var(--color-fg-muted)" }}>
+            <p style={{ margin: "0 0 12px", color: "var(--text-muted)" }}>
               Lock controls so end users cannot rearrange the Board or leave the designated pages during demos or presentations.
             </p>
 
@@ -209,7 +209,7 @@ export function LockDialog({
               </div>
             </div>
 
-            <div style={{ marginBottom: 14, paddingTop: 8, borderTop: "1px solid var(--color-border-subtle, #333)" }}>
+            <div style={{ marginBottom: 14, paddingTop: 8, borderTop: "1px solid var(--line)" }}>
               <label style={{ display: "block", marginBottom: 6, fontSize: 13, fontWeight: 500 }}>
                 {lock?.passcode ? "Change Passcode (leave blank to keep current)" : "Set Unlock Passcode (optional)"}
               </label>
@@ -234,12 +234,12 @@ export function LockDialog({
             </div>
 
             {configError && (
-              <div style={{ color: "var(--color-danger, #e5484d)", marginBottom: 12, fontSize: 13 }}>
+              <div style={{ color: "var(--danger)", marginBottom: 12, fontSize: 13 }}>
                 {configError}
               </div>
             )}
 
-            <p style={{ margin: "0 0 16px", fontSize: 11, color: "var(--color-fg-subtle, #888)" }}>
+            <p style={{ margin: "0 0 16px", fontSize: 11, color: "var(--text-muted)" }}>
               Note: This is a convenience lock for demos and kiosks, not security protection.
             </p>
 

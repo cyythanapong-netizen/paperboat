@@ -36,7 +36,7 @@
   border-radius: 50%;
   background: var(--night-900);
   transition: transform 0.15s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  box-shadow: var(--shadow-0);
 }
 .switch-pill.on .switch-knob {
   transform: translateX(42px);
