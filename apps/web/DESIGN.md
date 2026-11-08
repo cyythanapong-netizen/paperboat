@@ -264,7 +264,7 @@ Following the ISA-88 boundary (GUIDELINES §4): Studio builds equipment and expo
 backends; Paperboat runs procedures (PID, step stories) and monitors them on the Board. Studio's
 Simulate is a local check, never a second Flow page.
 
-The top bar shows `squero studio [ OM ]` (lowercase wordmark, light `studio`, rounded ink `Om` badge)
+The top bar shows the Squero Studio lockup (W3 Water wordmark: "squero" in bold ink over five signal dots that ripple every 5 s when idle and continuously while Simulate runs, light "studio", and the square B3 Mono "OM" product badge)
 along with the project name and an `omc <ver> · ready | checking | failed` status pill (the same `StatusPill`) and the theme key on the right.
 Studio has no modal dialogs; refusals and notices appear in plain words.
 
