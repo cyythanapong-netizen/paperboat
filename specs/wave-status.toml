@@ -75,7 +75,7 @@ gate = "dc-drive-cpp authored in Studio passes check + smoke + golden; docs buil
 
 [split]
 state = "done"
-repos = ["paperboat (dev)", "../paperboat-shared (main, @paperboat/shared)", "../squero-studio-om (main, bin squero-om)"]
+repos = ["paperboat (dev)", "../paperboat-shared (main, @paperboat/shared)", "../squero-studio-om (dev, bin squero-om)"]
 notes = """packages/shared and apps/studio removed from paperboat. apps/web consumes
 file:../../../paperboat-shared (relative to apps/web). Studio launcher bin/squero-om runs
 `paperboat squero --app dist`. protocol.ts and docs tokens.css are generated across repos
