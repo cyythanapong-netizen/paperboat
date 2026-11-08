@@ -32,7 +32,7 @@ Views
 ``graph``
    Station objects as nodes and their links as wires: drag from an object's right handle
    onto another's slot to link it; delete a wire to unlink. For structures built from
-   parts, tested from the Flow (``examples/backends/chain-python``).
+   parts, tested from the Flow (``paperboat-examples/chain-python``).
 
 ``web``
    The backend's own page, for a station the built-in views can't show (a map, a
@@ -82,4 +82,4 @@ the engine decides**: it may send back only what the Station could (a station ed
    are forwarded automatically, so Key blocks work.
 
 When the page loads, the bridge posts ``station.ready`` and the UI replays ``hello``,
-``catalog``, the current ``scene`` and ``station.load``. See ``examples/backends/runner-python/station``.
+``catalog``, the current ``scene`` and ``station.load``. See ``paperboat-examples/runner-python/station``.

@@ -2,7 +2,7 @@
 
 // Apps that live in other repositories (squero-studio-om, paperboat-shared): declared in apps.toml
 // at the repository root, fetched with git at a release tag (or main) into a per-user store, and
-// built there. The package manager behind `paperboat pkg` and the app fetch of `paperboat squero`.
+// built there. The package manager behind `paperboat pkg` and `paperboat start <program>`.
 
 #include <filesystem>
 #include <string>
@@ -19,9 +19,9 @@ struct AppEntry {
   std::string description;
   std::vector<std::string> deps;   // apps that must sit next to this one when it builds
   std::vector<std::string> build;  // commands run in the app's folder after the clone
-  std::string output;              // folder the build makes (what `paperboat squero` serves)
+  std::string output;              // folder the build makes (a program serves it)
   std::string kind = "program";    // "program" runs (start/stop it); "library" only builds
-  std::string launch;              // the paperboat command that runs a program (`squero`)
+  std::string launch;              // what runs a program: a paperboat command or a binary path
   int port = 0;                    // where a running program listens (`stop` and `list` find it there)
   bool installed = false;
   std::string version;             // installed: a release ("0.1.0") or "dev" (main)
