@@ -54,6 +54,21 @@ test("what is written is read back unchanged", () => {
   assert.deepEqual(ok(stringify(p)), p);
 });
 
+test("flow node rotation and mirror are validated and preserved", () => {
+  const rotatedFlow = {
+    nodes: [{ id: "n1", type: "t", rotation: 90 as const, mirror: true, params: {} }],
+    edges: [],
+  };
+  const p = buildProject({ backend: "b", flow: rotatedFlow });
+  const read = ok(stringify(p));
+  assert.equal(read.flow.nodes[0].rotation, 90);
+  assert.equal(read.flow.nodes[0].mirror, true);
+
+  const base = { paperboat: 0, backend: "b" };
+  assert.match(bad({ ...base, flow: { nodes: [{ id: "a", type: "t", rotation: 45 }], edges: [] } }), /rotation must be 0, 90, 180, or 270/);
+  assert.match(bad({ ...base, flow: { nodes: [{ id: "a", type: "t", mirror: "yes" }], edges: [] } }), /mirror must be a boolean/);
+});
+
 test("the text is indented and ends with a newline, so a diff reads", () => {
   const text = stringify(buildProject({ backend: "b", flow }));
   assert.ok(text.includes('\n  "backend": "b"'));
