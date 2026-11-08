@@ -15,10 +15,10 @@
 namespace paperboat::toolkit::control {
 namespace {
 
-// A first-order lag, tau y' = u - y, integrated with a built-in solver (default euler). tau 0: a one-step delay.
+// A first-order lag, tau y' = u - y, integrated with a built-in solver (default: the run's). tau 0: a one-step delay.
 class Lag : public Block {
  public:
-  explicit Lag(double tau, std::string solver = "euler")
+  explicit Lag(double tau, std::string solver = "auto")
       : tau_(tau), solver_name_(std::move(solver)), solver_(solve::make(solver_name_)) {}
   Values outputs() const override { return {{"y", y_}}; }
   Values step(const Context& ctx, const Values& in) override {
@@ -47,9 +47,9 @@ class Lag : public Block {
 void add_lag(Registry& registry) {
   add_without_feedthrough(registry, make_template(
       "control", "lag", "Lag", {"u"}, {"y"},
-      {{.id = "tau", .default_value = 1.0}, solve::param("euler")},
+      {{.id = "tau", .default_value = 1.0}, solve::param()},
       [](const Values& p, const Config&) {
-        return std::make_unique<Lag>(get_or(p, "tau"), get_text(p, "solver", "euler"));
+        return std::make_unique<Lag>(get_or(p, "tau"), get_text(p, "solver", "auto"));
       },
       "Smooths its input with a time constant: a first-order lag."));
 }

@@ -581,6 +581,24 @@ RunSettings with_overrides(RunSettings base, const json& settings) {
     }
     base.solver = s;
   }
+  if (settings.contains("solver_options")) {
+    const auto& o = settings.at("solver_options");
+    if (!o.is_object()) throw std::invalid_argument("run setting solver_options must be an object");
+    auto& into = base.solver_options;
+    for (const auto& [key, v] : o.items()) {
+      const bool whole = key == "max_steps" || key == "sub_steps";
+      if (!v.is_number() || (whole && !v.is_number_integer()))
+        throw std::invalid_argument("solver option " + key + " must be " + (whole ? "a whole number" : "a number"));
+      if (key == "rtol") into.rtol = v.get<double>();
+      else if (key == "atol") into.atol = v.get<double>();
+      else if (key == "min_step") into.min_step = v.get<double>();
+      else if (key == "max_step") into.max_step = v.get<double>();
+      else if (key == "max_steps") into.max_steps = v.get<int>();
+      else if (key == "sub_steps") into.sub_steps = v.get<int>();
+      else throw std::invalid_argument("no solver option " + key + " (rtol, atol, min_step, max_step, max_steps, sub_steps)");
+    }
+    toolkit::solve::check(into);
+  }
   if (base.duration > 0 && base.duration / base.dt > 1e7)
     throw std::invalid_argument("run settings: more than 10 million clock steps (duration / dt)");
   return base;
@@ -591,6 +609,9 @@ json settings_json(const RunSettings& s) {
   if (!s.solver.empty()) {
     j["solver"] = s.solver;
   }
+  const auto& o = s.solver_options;
+  j["solver_options"] = {{"rtol", o.rtol},         {"atol", o.atol},           {"min_step", o.min_step},
+                         {"max_step", o.max_step}, {"max_steps", o.max_steps}, {"sub_steps", o.sub_steps}};
   return j;
 }
 
@@ -606,6 +627,7 @@ std::string run(const std::string& id, const json& graph, const json& station, c
     emit({{"type", "run.finished"}, {"run", id}, {"status", "failed"}});
     return "failed";
   }
+  toolkit::solve::set_defaults({s.solver, s.solver_options});  // this thread's "auto" solvers
   return Run(id, backend, s, emit, keys, stop, tune).go(graph, station, variables);
 }
 

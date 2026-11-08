@@ -31,6 +31,7 @@
 #include <toml++/toml.hpp>
 
 #include "paperboat/core/process.hpp"
+#include "paperboat/core/run.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
 #include "paperboat/toolkit/installer.hpp"
 #include "paperboat/toolkit/platform.hpp"
@@ -70,6 +71,12 @@ bool connect_pending() { return errno == EINPROGRESS; }
 
 using nlohmann::json;
 namespace fs = std::filesystem;
+
+// backend.toml's [run] for the backend process (core main reads PAPERBOAT_RUN).
+std::vector<std::pair<std::string, std::string>> run_env(const BackendManifest& m) {
+  if (m.run_settings.empty()) return {};
+  return {{"PAPERBOAT_RUN", m.run_settings}};
+}
 
 // The installed SDK next to this binary: <prefix>/bin/paperboat, <prefix>/lib*/cmake/Paperboat (pb#177).
 fs::path sdk_dir() {
@@ -811,7 +818,7 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     append_vars(args, opts);
 
     std::cout << "paperboat running " << bin.filename().string() << " on " << ws_url(port) << std::endl;
-    return ProcessRunner::run_stream(args, dir, {}, log_cb);
+    return ProcessRunner::run_stream(args, dir, run_env(manifest), log_cb);
   } else {
     // Python backend
     const fs::path repo_root = toolkit::find_repo_root(dir);
@@ -836,7 +843,9 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     append_vars(args, opts);
 
     std::cout << "paperboat running python " << server_script.filename().string() << " on " << ws_url(port) << std::endl;
-    return ProcessRunner::run_stream(args, dir, py_env.env, log_cb);
+    auto env = py_env.env;
+    for (auto& e : run_env(manifest)) env.push_back(std::move(e));
+    return ProcessRunner::run_stream(args, dir, env, log_cb);
   }
 }
 
@@ -1213,6 +1222,29 @@ BackendManifest BackendManager::load_manifest(const fs::path& backend_dir, std::
         for (const auto& s : valid_solvers) list += (list.empty() ? "" : ", ") + s;
         if (error_msg) *error_msg = "backend.toml: invalid solver '" + m.solver + "' (expected one of: " + list + ")";
         return m;
+      }
+    }
+
+    {
+      json settings = json::object();
+      if (!m.solver.empty()) settings["solver"] = m.solver;
+      if (const auto* opts = doc["run"]["solver_options"].as_table()) {
+        json o = json::object();
+        for (const auto& [key, node] : *opts) {
+          if (const auto i = node.value_exact<int64_t>()) o[std::string(key.str())] = *i;
+          else if (const auto d = node.value_exact<double>()) o[std::string(key.str())] = *d;
+          else o[std::string(key.str())] = nullptr;  // not a number: with_overrides says so
+        }
+        settings["solver_options"] = o;
+      }
+      if (!settings.empty()) {
+        try {
+          with_overrides(RunSettings{}, settings);
+        } catch (const std::invalid_argument& err) {
+          if (error_msg) *error_msg = std::string("backend.toml [run]: ") + err.what();
+          return m;
+        }
+        m.run_settings = settings.dump();
       }
     }
 
@@ -1633,7 +1665,9 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   fs::path log_path = runtime_dir() / ("smoke-" + std::to_string(smoke_port) + ".log");
   fs::create_directories(runtime_dir());
 
-  int backend_pid = ProcessRunner::run_detached(launch_cmd, dir, py_env.env, log_path);
+  auto smoke_env = py_env.env;
+  for (auto& e : run_env(manifest)) smoke_env.push_back(std::move(e));
+  int backend_pid = ProcessRunner::run_detached(launch_cmd, dir, smoke_env, log_path);
   if (backend_pid <= 0) {
     return fail(step_smoke, "failed to start backend process");
   }

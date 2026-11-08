@@ -86,8 +86,54 @@ TEST_CASE("solvers say what's wrong") {
                     Catch::Matchers::ContainsSubstring("returned 1 values for a state of 2"));
   const ParamDef p = solve::param();
   CHECK(p.type == "enum");
-  CHECK(p.default_text == "rk4");
-  CHECK(p.options.size() == solve::names().size());
+  CHECK(p.default_text == "auto");  // the run's solver (Run menu), unless one is picked
+  CHECK(p.options.size() == solve::names().size() + 1);
+  CHECK_THROWS_WITH(solve::make("rk4", {.sub_steps = 0}), Catch::Matchers::ContainsSubstring("sub_steps"));
+  CHECK_THROWS_WITH(solve::make("rk45", {.min_step = 0.1, .max_step = 0.01}), Catch::Matchers::ContainsSubstring("min_step"));
+  CHECK_THROWS_WITH(solve::make("rk45", {.rtol = 0}), Catch::Matchers::ContainsSubstring("rtol"));
+}
+
+TEST_CASE("solver options: sub-steps, max and min step (#196)") {
+  // rk4 with 10 sub-steps of a 0.1 s clock step is rk4 at 0.01 s.
+  State a = {1, 0}, b = {1, 0};
+  auto sub = solve::make("rk4", {.sub_steps = 10});
+  auto fine = solve::make("rk4");
+  for (int k = 0; k < 10; ++k) sub->step(a, k * 0.1, 0.1, oscillator);
+  for (int k = 0; k < 100; ++k) fine->step(b, k * 0.01, 0.01, oscillator);
+  CHECK_THAT(a[0], WithinAbs(b[0], 1e-14));
+
+  // rk45 never takes a sub-step longer than max_step: 7 evaluations a sub-step, 1 s / 0.01 s of them.
+  int calls = 0;
+  auto counted = [&](double t, const State& x) { ++calls; return oscillator(t, x); };
+  State x = {1, 0};
+  solve::make("rk45", {.max_step = 0.01})->step(x, 0, 1.0, counted);
+  CHECK(calls >= 100 * 6);
+  CHECK_THAT(x[0], WithinAbs(std::cos(1.0), 1e-8));
+
+  // ... and gives up, saying so, when the error control wants a step below min_step.
+  const double mu = 1000;  // stiff Van der Pol
+  auto vdp = [mu](double, const State& s) { return State{s[1], mu * (1 - s[0] * s[0]) * s[1] - s[0]}; };
+  State y = {2, 0};
+  auto strict = solve::make("rk45", {.rtol = 1e-10, .min_step = 1e-3});
+  CHECK_THROWS_WITH([&] { for (int k = 0; k < 100; ++k) strict->step(y, k * 1.0, 1.0, vdp); }(),
+                    Catch::Matchers::ContainsSubstring("min_step"));
+}
+
+TEST_CASE("solver auto is the run's solver and options") {
+  CHECK(solve::make()->name() == "rk4");  // no run: rk4
+  solve::set_defaults({"euler", {.sub_steps = 10}});
+  CHECK(solve::make("auto")->name() == "euler");
+  CHECK(solve::make("")->name() == "euler");
+  CHECK(solve::make("rk2")->name() == "rk2");  // a solver picked by name stays
+  // the run's options too: euler in 10 sub-steps of 0.01 s is euler at 0.001 s
+  State a = {1, 0}, b = {1, 0};
+  solve::make()->step(a, 0, 0.01, oscillator);
+  auto e = solve::make("euler", {});
+  for (int k = 0; k < 10; ++k) e->step(b, k * 0.001, 0.001, oscillator);
+  CHECK_THAT(a[0], WithinAbs(b[0], 1e-15));
+  CHECK_THROWS(solve::set_defaults({"magic", {}}));
+  solve::set_defaults({});
+  CHECK(solve::make()->name() == "rk4");
 }
 
 TEST_CASE("fixed-size array solver overloads step correctly") {

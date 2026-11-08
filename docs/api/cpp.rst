@@ -723,8 +723,21 @@ Solvers
 
 .. cpp:struct:: solve::Options
 
-   ``rk45``'s error control: ``rtol`` (``1e-6``), ``atol`` (``1e-9``) per component, and
-   ``max_steps`` (``100000``) sub-steps in one clock step before it gives up.
+   ``rk45``'s error control: ``rtol`` (``1e-6``), ``atol`` (``1e-9``) per component,
+   ``min_step`` (``0``: automatic; it gives up below it), ``max_step`` (``0``: the clock step)
+   and ``max_steps`` (``100000``) sub-steps in one clock step before it gives up. The fixed-step
+   solvers (``rk4``, ``rk2``, ``euler``) take ``sub_steps`` (``1``) steps of ``dt / sub_steps``
+   per clock step.
+
+.. cpp:struct:: solve::Defaults
+
+   The run's solver: ``name`` (``"rk4"``) and ``options``, from ``graph.run``'s settings (the
+   Run menu's solver and Solver settings) over the backend's (``backend.toml`` ``[run]``). A run
+   sets them on its own thread before it makes its blocks and objects.
+
+.. cpp:function:: void solve::set_defaults(Defaults defaults)
+
+.. cpp:function:: const solve::Defaults &solve::defaults()
 
 .. cpp:class:: solve::Solver
 
@@ -737,26 +750,32 @@ Solvers
 
       Advance a fixed-size state vector without heap allocations.
 
-.. cpp:function:: std::unique_ptr<solve::Solver> solve::make(std::string_view name, Options options = {})
+.. cpp:function:: std::unique_ptr<solve::Solver> solve::make(std::string_view name = "auto")
+.. cpp:function:: std::unique_ptr<solve::Solver> solve::make(std::string_view name, Options options)
 
-   A solver by name: ``rk4`` (classic Runge–Kutta, the default), ``rk45`` (Dormand–Prince,
+   A solver by name, with the run's options unless given. ``auto`` (or ``""``) is the run's
+   solver (:cpp:struct:`solve::Defaults`); ``rk4`` (classic Runge–Kutta, the default), ``rk45`` (Dormand–Prince,
    MATLAB's ``ode45``: adaptive, it sub-steps inside the clock step to meet its tolerance, so
    signals still arrive on the clock), ``rk2`` (Heun), ``euler``, ``discrete`` (a difference
-   equation ``x[k+1] = f(t, x[k])``). Throws ``std::invalid_argument`` naming them.
+   equation ``x[k+1] = f(t, x[k])``). Throws ``std::invalid_argument`` naming them, or for an
+   option out of range.
 
-.. cpp:function:: void solve::step(std::string_view solver, State &x, double t, double dt, const Deriv &f, Options options = {})
+.. cpp:function:: void solve::step(std::string_view solver, State &x, double t, double dt, const Deriv &f, Options options)
 
    One step with a fresh solver of that name.
 
-.. cpp:function:: template <std::size_t N> void solve::step(std::string_view solver, std::array<double, N> &x, double t, double dt, const std::function<std::array<double, N>(double, const std::array<double, N>&)> &f, Options options = {})
+   Without ``options``: the run's.
+
+.. cpp:function:: template <std::size_t N> void solve::step(std::string_view solver, std::array<double, N> &x, double t, double dt, const std::function<std::array<double, N>(double, const std::array<double, N>&)> &f, Options options)
 
    Fixed-size state overload for stepping with a fresh solver of that name.
 
 .. cpp:function:: const std::vector<std::string> &solve::names()
 
-.. cpp:function:: ParamDef solve::param(std::string fallback = "rk4")
+.. cpp:function:: ParamDef solve::param(std::string fallback = "auto")
 
-   An enum param or prop ``solver``, so the user picks one on the Station page.
+   An enum param or prop ``solver``: ``auto`` (the run's, set in the Run menu) or one of
+   :cpp:func:`solve::names`, so the user may pick one for this block or object only.
 
 .. code-block:: cpp
 
@@ -776,9 +795,13 @@ Model
    block's inputs held through the step. It still implements ``read()`` and
    ``entities()``.
 
-   .. cpp:function:: explicit Model(solve::State initial, std::string_view solver = "rk4", solve::Options options = {})
+   .. cpp:function:: explicit Model(solve::State initial, std::string_view solver = "auto")
+   .. cpp:function:: Model(solve::State initial, std::string_view solver, solve::Options options)
 
-   .. cpp:function:: void set_solver(std::string_view solver, solve::Options options = {})
+      ``auto``: the run's solver and options.
+
+   .. cpp:function:: void set_solver(std::string_view solver)
+   .. cpp:function:: void set_solver(std::string_view solver, solve::Options options)
 
       Configure or switch the numerical solver for the model.
 
@@ -796,7 +819,7 @@ Model
 
    struct Mass final : paperboat::Model {
      explicit Mass(const paperboat::Values& p)
-         : Model({paperboat::get_or(p, "x0"), 0.0}, paperboat::get_text(p, "solver", "rk4")),
+         : Model({paperboat::get_or(p, "x0"), 0.0}, paperboat::get_text(p, "solver", "auto")),
            k(paperboat::get_or(p, "k")) {}
      paperboat::solve::State derivatives(double, const paperboat::solve::State& x,
                                          const paperboat::Values& in) const override {

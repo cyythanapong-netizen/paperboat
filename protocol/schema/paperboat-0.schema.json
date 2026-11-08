@@ -2086,6 +2086,12 @@
         "ports": {
           "$ref": "#/$defs/PortSides"
         },
+        "rotation": {
+          "enum": [0, 90, 180, 270]
+        },
+        "mirror": {
+          "type": "boolean"
+        },
         "commented": {
           "type": "boolean",
           "description": "Whether the block is commented out or bypassed."
@@ -2576,7 +2582,20 @@
             "euler",
             "discrete"
           ],
-          "description": "The solver used for continuous integration."
+          "description": "The run's solver: what a block or station object whose own solver is auto integrates with."
+        },
+        "solver_options": {
+          "type": "object",
+          "description": "The run's solver options (#196); each left out keeps the backend's.",
+          "properties": {
+            "rtol": { "type": "number", "exclusiveMinimum": 0, "description": "Relative tolerance (rk45)." },
+            "atol": { "type": "number", "minimum": 0, "description": "Absolute tolerance (rk45)." },
+            "min_step": { "type": "number", "minimum": 0, "description": "Smallest sub-step, s, before rk45 gives up (0: automatic)." },
+            "max_step": { "type": "number", "minimum": 0, "description": "Largest rk45 sub-step, s (0: the clock step)." },
+            "max_steps": { "type": "integer", "minimum": 1, "description": "rk45 sub-steps in one clock step before it gives up." },
+            "sub_steps": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "Fixed sub-steps per clock step (rk4, rk2, euler)." }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

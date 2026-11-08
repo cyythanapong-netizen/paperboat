@@ -89,6 +89,11 @@ function partsProblem(p: Record<string, unknown>): string | null {
   if (run !== undefined) {
     if (!isObj(run)) return "run must be an object";
     for (const k of ["duration", "dt", "speed"]) if (run[k] !== undefined && !isNum(run[k])) return `run.${k} must be a number`;
+    const o = run.solver_options;
+    if (o !== undefined) {
+      if (!isObj(o)) return "run.solver_options must be an object";
+      for (const [k, v] of Object.entries(o)) if (!isNum(v)) return `run.solver_options.${k} must be a number`;
+    }
   }
   if (ui !== undefined) {
     if (!isObj(ui)) return "ui must be an object";
@@ -189,3 +194,16 @@ export const saveRecent = (list: Stored[]) => write(RECENT_KEY, list);
 export const loadAutosave = (engine: string): Stored | undefined => read(autosaveKey(engine), isStored);
 export const saveAutosave = (engine: string, s: Stored) => write(autosaveKey(engine), s);
 export const clearAutosave = (engine: string) => write(autosaveKey(engine), undefined);
+
+/** Only the settings that differ from the backend's defaults (solver options one by one). */
+export function changed(value: RunSettings, defaults: RunSettings): RunSettings {
+  const out = Object.fromEntries(
+    Object.entries(value).filter(([k, v]) => v !== undefined && k !== "solver_options" && v !== defaults[k as keyof RunSettings]),
+  ) as RunSettings;
+  const given = value.solver_options ?? {};
+  const options = Object.fromEntries(
+    Object.entries(given).filter(([k, v]) => v !== undefined && v !== defaults.solver_options?.[k as keyof typeof given]),
+  );
+  if (Object.keys(options).length) out.solver_options = options;
+  return out;
+}

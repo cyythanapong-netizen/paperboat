@@ -26,7 +26,8 @@ import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
 import { isArrangeLocked, isModeAllowed, isPageAllowed, type LockConfig } from "./lock";
 import { LockDialog } from "./LockDialog";
-import { changed } from "./RunOptions";
+import { changed } from "./project";
+import { SOLVERS, SOLVER_LABELS, SolverDialog } from "./SolverDialog";
 
 const DEFAULT_URL =
   new URLSearchParams(location.search).get("backend") ??
@@ -89,16 +90,7 @@ const MODE_OPTIONS: { value: Mode; label: string; hint: string }[] = [
   { value: "lookout", label: "lookout", hint: "The Board, Station and Flow at its sides (Alt+M)" },
 ];
 
-const SOLVERS = ["rk4", "rk45", "rk2", "euler", "discrete"] as const;
 type SolverOption = (typeof SOLVERS)[number];
-
-const SOLVER_LABELS: Record<SolverOption, string> = {
-  rk4: "RK4 (Classic)",
-  rk45: "RK45 (Adaptive)",
-  rk2: "RK2 (Heun)",
-  euler: "Euler",
-  discrete: "Discrete",
-};
 
 /** "1 object", "2 objects". */
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -121,6 +113,7 @@ export function App() {
   const [projectLock, setProjectLock] = useState<LockConfig | null>(null);
   const [unlocked, setUnlocked] = useState(true);
   const [lockModalOpen, setLockModalOpen] = useState(false);
+  const [solverOpen, setSolverOpen] = useState(false);
   const locked = !!projectLock && !unlocked;
   const lockedArrange = isArrangeLocked(projectLock, unlocked);
   const allowedPages = projectLock && !unlocked && projectLock.pages && projectLock.pages.length > 0 ? projectLock.pages : PAGE_IDS;
@@ -1033,6 +1026,9 @@ export function App() {
           run: () => setRunSettings((prev) => changed({ ...prev, solver: s }, state.runDefaults)),
         }))
       : []),
+    ...(usesSolvers
+      ? [{ id: "run.solverSettings", label: "Solver settings…", menu: "run" as const, group: "solver-settings", run: () => setSolverOpen(true) }]
+      : []),
   ];
   useShortcuts(commands);
 
@@ -1222,6 +1218,9 @@ export function App() {
           onAdd={(it) => addObject(it)}
           onClose={() => setBrowser(null)}
         />
+      )}
+      {solverOpen && (
+        <SolverDialog defaults={state.runDefaults} value={runSettings} onChange={setRunSettings} onClose={() => setSolverOpen(false)} />
       )}
       {lockModalOpen && (
         <LockDialog

@@ -769,6 +769,17 @@ TEST_CASE("graph.run's settings override the backend's run settings") {
   CHECK_THROWS_WITH(core::with_overrides(base, json{{"duration", 1e6}, {"dt", 1e-3}}), ContainsSubstring("10 million"));
   CHECK(core::settings_json(base)["mode"] == "clock");
 
+  // The solver and its options (#196): given ones over the backend's, checked.
+  const auto o = core::with_overrides(base, json{{"solver", "rk45"}, {"solver_options", {{"rtol", 1e-8}, {"max_step", 0.001}}}});
+  CHECK(o.solver == "rk45");
+  CHECK(o.solver_options.rtol == 1e-8);
+  CHECK(o.solver_options.max_step == 0.001);
+  CHECK(o.solver_options.atol == paperboat::toolkit::solve::Options{}.atol);
+  CHECK(core::settings_json(o)["solver_options"]["max_step"] == 0.001);
+  CHECK_THROWS_WITH(core::with_overrides(base, json{{"solver_options", {{"tol", 1}}}}), ContainsSubstring("no solver option tol"));
+  CHECK_THROWS_WITH(core::with_overrides(base, json{{"solver_options", {{"sub_steps", 1.5}}}}), ContainsSubstring("whole number"));
+  CHECK_THROWS_WITH(core::with_overrides(base, json{{"solver_options", {{"sub_steps", 0}}}}), ContainsSubstring("sub_steps"));
+
   // A run takes them: a shorter clock run ends sooner, a bad one fails before it starts.
   const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = base};
   Collected out;
@@ -780,6 +791,11 @@ TEST_CASE("graph.run's settings override the backend's run settings") {
   Collected bad;
   CHECK(core::run("r", starter_graph(), starter_station(), backend, bad.emit(), nullptr, {}, json{{"dt", -1}}) == "failed");
   CHECK(bad.messages.back()["status"] == "failed");
+  // A run's "auto" solvers are its own (set on the thread that runs it)
+  Collected euler;
+  CHECK(core::run("r", starter_graph(), starter_station(), backend, euler.emit(), nullptr, {}, json{{"solver", "euler"}, {"duration", 0.1}}) == "done");
+  CHECK(paperboat::toolkit::solve::make()->name() == "euler");
+  paperboat::toolkit::solve::set_defaults({});
 
   // An infinite run (duration = 0) runs until cancelled
   std::stop_source stop;
