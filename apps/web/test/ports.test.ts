@@ -86,6 +86,20 @@ test("inForm dynamicDef resolves template, inputs count, and signs", () => {
   };
   const and4 = inForm(andDef, { inputs: 4 });
   assert.deepEqual(and4.inputs.map((p) => p.id), ["a", "b", "c", "d"]);
+  const and1 = inForm(andDef, { inputs: 1 });
+  assert.deepEqual(and1.inputs.map((p) => p.id), ["a"]);
+
+  const scopeDef: BlockDef = {
+    type: "scope",
+    label: "Scope",
+    kind: "monitor",
+    inputs: [{ id: "a", type: "any" }, { id: "b", type: "any" }],
+    outputs: [],
+    params: [{ id: "inputs", type: "number", default: 2 }],
+    ports_from: "inputs",
+  };
+  const scope1 = inForm(scopeDef, { inputs: 1 });
+  assert.deepEqual(scope1.inputs.map((p) => p.id), ["a"]);
 });
 
 test("parseInputs matches the engine's shared inputs_from test vector", () => {

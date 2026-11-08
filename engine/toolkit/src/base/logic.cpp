@@ -98,7 +98,7 @@ void add_logic(Registry& registry) {
       registry, "and", "And", {"a", "b"},
       {{.id = "inputs", .default_value = 2.0, .type = "number"}},
       [](const Values& in, const Values& p) {
-        int n = std::clamp(static_cast<int>(get_or(p, "inputs", 2.0)), 2, 26);
+        int n = std::clamp(static_cast<int>(get_or(p, "inputs", 2.0)), 1, 26);
         for (int i = 0; i < n; ++i) {
           if (!holds(in, std::string(1, static_cast<char>('a' + i)))) return false;
         }
@@ -110,7 +110,7 @@ void add_logic(Registry& registry) {
       registry, "or", "Or", {"a", "b"},
       {{.id = "inputs", .default_value = 2.0, .type = "number"}},
       [](const Values& in, const Values& p) {
-        int n = std::clamp(static_cast<int>(get_or(p, "inputs", 2.0)), 2, 26);
+        int n = std::clamp(static_cast<int>(get_or(p, "inputs", 2.0)), 1, 26);
         for (int i = 0; i < n; ++i) {
           if (holds(in, std::string(1, static_cast<char>('a' + i)))) return true;
         }
