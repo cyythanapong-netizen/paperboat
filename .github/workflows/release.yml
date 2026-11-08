@@ -1,4 +1,4 @@
-# Release packages: .deb and .tar.gz (Linux), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
+# Release packages: .deb, .rpm and .tar.gz (Linux), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
 # A tag v<version> publishes; pull requests and manual runs only build and check the packages.
 # The version is engine/CMakeLists.txt's project(paperboat VERSION ...); the tag must match it.
 # Publishing to npm needs the NPM_TOKEN secret (an automation token for the @paperboat scope); without it
@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   linux:
-    name: Linux (.deb, .tar.gz, npm)
+    name: Linux (.deb, .rpm, .tar.gz, npm)
     runs-on: ubuntu-22.04  # glibc 2.35: the binary runs on Debian 12, Ubuntu 22.04+, Fedora, ...
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -48,8 +48,8 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = tag ] && [ "${GITHUB_REF_NAME}" != "v$v" ]; then
             echo "::error::tag ${GITHUB_REF_NAME} does not match the CMake version $v"; exit 1
           fi
-      - run: sudo apt-get update && sudo apt-get install -y g++-12 ninja-build dpkg-dev file
-      - name: Build, test, package (.deb, .tar.gz)
+      - run: sudo apt-get update && sudo apt-get install -y g++-12 ninja-build dpkg-dev rpm file
+      - name: Build, test, package (.deb, .rpm, .tar.gz)
         run: CC=gcc-12 CXX=g++-12 scripts/build_release.sh dist
       - name: npm packages
         run: |
@@ -68,6 +68,13 @@ jobs:
           docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" debian:bookworm sh -ec '
             apt-get update -qq && apt-get install -y -qq /dist/paperboat_*.deb /dist/paperboat-dev_*.deb python3-pip >/dev/null
             pip install -q --break-system-packages websockets jsonschema
+            cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend'
+      - name: "The .rpms on Fedora: install, run, and build and check a backend"
+        run: |
+          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" fedora:latest sh -ec '
+            dnf install -y -q /dist/paperboat-[0-9]*.rpm /dist/paperboat-devel-*.rpm python3-pip >/dev/null
+            paperboat --version && paperboat pkg list && paperboat commands | grep -q pkg
+            pip install -q websockets jsonschema
             cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend'
       - name: "SDK: the .tar.gz on Fedora builds and checks a backend"
         run: |
@@ -177,7 +184,7 @@ jobs:
           shopt -s nullglob
           case "$GITHUB_REF_NAME" in *-*) pre=--prerelease;; esac   # v0.1.0-alpha.1
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes $pre \
-            dist/*.deb dist/*.tar.gz dist/*.zip dist/npm/*.tgz
+            dist/*.deb dist/*.rpm dist/*.tar.gz dist/*.zip dist/npm/*.tgz
       - name: npm (platform packages first, the launcher last)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
