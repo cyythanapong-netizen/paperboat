@@ -685,7 +685,7 @@ int cmd_app(const std::vector<std::string_view>& args) {
 
 int cmd_examples(const std::vector<std::string_view>& args) {
   if (args.empty()) {
-    std::cerr << "usage: paperboat examples <start|stop|status> [--dir <path>]\n";
+    std::cerr << "usage: paperboat examples <start|stop|status|fetch> [--dir <path>]\n";
     return 2;
   }
   auto sub = args[0];
@@ -696,7 +696,9 @@ int cmd_examples(const std::vector<std::string_view>& args) {
     }
   }
 
-  if (sub == "start") {
+  if (sub == "fetch") {
+    return core::BackendManager::fetch_examples() ? 0 : 1;
+  } else if (sub == "start") {
     return core::BackendManager::start_examples(dir) ? 0 : 1;
   } else if (sub == "stop") {
     return core::BackendManager::stop_examples() ? 0 : 1;
@@ -1278,7 +1280,7 @@ const std::vector<CommandSpec>& command_table() {
       {"list", cmd_list, "List what is running, backends and apps (KIND)", {"ps"}, {}, {"--json"}},
       {"app", cmd_app, "The web app: start, stop, restart, build (start/stop/restart do the same)", {},
        {"start", "stop", "restart", "build"}, {"--port", "--host", "--daemon"}},
-      {"examples", cmd_examples, "Run all example backends", {}, {"start", "stop", "status"}, {"--dir"}},
+      {"examples", cmd_examples, "Run all example backends, or fetch them", {}, {"start", "stop", "status", "fetch"}, {"--dir"}},
       {"toolkit", cmd_toolkit, "Manage optional toolkits", {}, {"list", "install", "update", "uninstall", "versions"},
        {"--json", "--all", "--no-build", "--version"}, "toolkit"},
       {"check", cmd_check, "Verify a backend (manifest, catalog, smoke, golden)", {}, {},

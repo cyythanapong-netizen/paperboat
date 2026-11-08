@@ -705,7 +705,29 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
     }
   }
 
+  // A bare name with no examples checkout anywhere: fetch the examples repository, then look again.
+  if (edir.empty() && !p_check.has_parent_path() && !fs::exists(p_check) && fetch_examples() &&
+      !find_examples_dir().empty()) {
+    return resolve_backend_dir(path_or_domain);
+  }
   return p_check;
+}
+
+fs::path BackendManager::fetched_examples_dir() {
+  return user_backends_dir().parent_path() / "examples";
+}
+
+bool BackendManager::fetch_examples() {
+  const fs::path dir = fetched_examples_dir();
+  const toolkit::ToolkitLog log = [](std::string_view, std::string_view line) { std::cerr << "  " << line << '\n'; };
+  if (fs::is_directory(dir / ".git")) {
+    std::cerr << "Updating examples in " << dir.string() << '\n';
+    return toolkit::run_command({"git", "-C", dir.string(), "pull", "--ff-only"}, {}, log) == 0;
+  }
+  std::cerr << "Fetching examples into " << dir.string() << '\n';
+  std::error_code ec;
+  fs::create_directories(dir.parent_path(), ec);
+  return toolkit::run_command({"git", "clone", "--depth", "1", std::string(kExamplesRepo), dir.string()}, {}, log) == 0;
 }
 
 int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRunOptions& opts) {
@@ -953,6 +975,7 @@ fs::path BackendManager::find_examples_dir(const fs::path& hint) {
     return root / "examples" / "backends";
   }
 
+  if (is_examples_dir(fetched_examples_dir())) return fetched_examples_dir();
   return {};
 }
 

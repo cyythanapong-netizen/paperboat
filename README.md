@@ -104,6 +104,8 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ./bin/paperboat list                # everything running, with a KIND: backend or app
 ./bin/paperboat start               # starts the web app on port 3047 (stop / restart: the same, no target)
 ./bin/paperboat examples start      # launches all example backends (ports 8765-8773)
+./bin/paperboat run cart-pole       # no paperboat-examples checkout? fetched to ~/.paperboat/examples, built, run
+./bin/paperboat examples fetch     # clone or pull ~/.paperboat/examples
 ./bin/paperboat examples status     # checks status of example backends
 ./bin/paperboat toolkit list        # lists available and installed toolkits
 ./bin/paperboat update --check    # is this checkout (and its app checkouts) behind? `update` pulls and rebuilds

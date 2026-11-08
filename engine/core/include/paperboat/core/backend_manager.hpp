@@ -168,6 +168,11 @@ class BackendManager {
 
   // Multi-backend orchestration (examples)
   static std::filesystem::path find_examples_dir(const std::filesystem::path& hint = {});
+  // The examples repository, cloned on first use when no local checkout exists.
+  static constexpr std::string_view kExamplesRepo = "https://github.com/paperboatlab/paperboat-examples.git";
+  static std::filesystem::path fetched_examples_dir();
+  // Clone it into fetched_examples_dir(), or pull when already there. False on a git failure.
+  static bool fetch_examples();
   static std::vector<ExampleBackend> get_examples(const std::filesystem::path& examples_dir = {});
   static bool start_examples(const std::filesystem::path& examples_dir = {});
   static bool stop_examples();
