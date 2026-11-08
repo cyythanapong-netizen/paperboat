@@ -53,16 +53,21 @@ function applyEntity(obj: THREE.Object3D, e: Entity) {
  * Renders the backend's scene entities. Knows shapes, not domains. The camera is fixed
  * at mount from `view`, so the parent remounts this component when the view changes.
  */
-export function SceneView({ entities, view, grid }: { entities: Record<string, Entity>; view: View; grid: boolean }) {
+export function SceneView({ entities, view, grid, projection = "persp" }: { entities: Record<string, Entity>; view: View; grid: boolean; projection?: "persp" | "iso" }) {
   const host = useRef<HTMLDivElement>(null);
   const world = useRef<World | null>(null);
   // The floor grid (3D only) shows or hides without rebuilding the view.
   const floorGrid = useRef<THREE.GridHelper | null>(null);
   const showGrid = useRef(grid);
+  const switchProjection = useRef<((proj: "persp" | "iso") => void) | null>(null);
   useEffect(() => {
     showGrid.current = grid;
     if (floorGrid.current) floorGrid.current.visible = grid;
   }, [grid]);
+
+  useEffect(() => {
+    switchProjection.current?.(projection);
+  }, [projection]);
 
   useEffect(() => {
     const el = host.current!;
@@ -95,10 +100,31 @@ export function SceneView({ entities, view, grid }: { entities: Record<string, E
       scene.add(floor);
       // The backend may say where the camera opens (and so where Home returns): view.camera.
       const cam = view.camera;
-      const persp = new THREE.PerspectiveCamera(cam?.fov ?? 50, 1, 0.1, 1000);
-      persp.position.set(...(cam?.eye ?? [2, 4, 8]));
-      fit = (aspect) => (persp.aspect = aspect);
-      camera = persp;
+      const fov = cam?.fov ?? 50;
+      const eyePos = cam?.eye ?? [2, 4, 8];
+      const targetPos = cam?.target ?? [0, 0, 0];
+      const initialDist = new THREE.Vector3(...eyePos).distanceTo(new THREE.Vector3(...targetPos));
+      const initialH = Math.max(0.1, initialDist * Math.tan((fov * Math.PI) / 360));
+
+      const persp = new THREE.PerspectiveCamera(fov, 1, 0.1, 1000);
+      persp.position.set(...eyePos);
+
+      const ortho = new THREE.OrthographicCamera(-initialH, initialH, initialH, -initialH, 0.1, 1000);
+      ortho.position.set(...eyePos);
+
+      camera = projection === "iso" ? ortho : persp;
+
+      fit = (aspect) => {
+        persp.aspect = aspect;
+        persp.updateProjectionMatrix();
+        const curDist = controls ? camera.position.distanceTo(controls.target) : initialDist;
+        const curH = Math.max(0.1, curDist * Math.tan((fov * Math.PI) / 360));
+        ortho.left = -curH * aspect;
+        ortho.right = curH * aspect;
+        ortho.top = curH;
+        ortho.bottom = -curH;
+        ortho.updateProjectionMatrix();
+      };
     }
     const controls = new OrbitControls(camera, renderer.domElement);
     if (view.mode === "2d") {
@@ -110,8 +136,34 @@ export function SceneView({ entities, view, grid }: { entities: Record<string, E
     controls.update(); // look at the target before the view cube takes it as home
     world.current = { scene, objects: new Map() };
 
+    if (view.mode === "3d") {
+      switchProjection.current = (proj) => {
+        const aspect = el.clientWidth / Math.max(el.clientHeight, 1);
+        const fov = view.camera?.fov ?? 50;
+        const curDist = camera.position.distanceTo(controls.target);
+        const curH = Math.max(0.1, curDist * Math.tan((fov * Math.PI) / 360));
+        if (proj === "iso" && camera instanceof THREE.PerspectiveCamera) {
+          const ortho = new THREE.OrthographicCamera(-curH * aspect, curH * aspect, curH, -curH, 0.1, 1000);
+          ortho.position.copy(camera.position);
+          ortho.quaternion.copy(camera.quaternion);
+          ortho.updateProjectionMatrix();
+          camera = ortho;
+          controls.object = ortho;
+          controls.update();
+        } else if (proj === "persp" && camera instanceof THREE.OrthographicCamera) {
+          const persp = new THREE.PerspectiveCamera(fov, aspect, 0.1, 1000);
+          persp.position.copy(camera.position);
+          persp.quaternion.copy(camera.quaternion);
+          persp.updateProjectionMatrix();
+          camera = persp;
+          controls.object = persp;
+          controls.update();
+        }
+      };
+    }
+
     // 3D only: the view cube in the corner (hidden in 2D views).
-    const cube = camera instanceof THREE.PerspectiveCamera ? viewCube(el, renderer, camera, controls, token) : null;
+    const cube = view.mode === "3d" ? viewCube(el, renderer, () => camera, controls, token) : null;
     renderer.autoClear = false;
 
     const resize = new ResizeObserver(() => {
@@ -128,6 +180,7 @@ export function SceneView({ entities, view, grid }: { entities: Record<string, E
     });
 
     return () => {
+      switchProjection.current = null;
       renderer.setAnimationLoop(null);
       resize.disconnect();
       cube?.dispose();

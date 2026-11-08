@@ -11,6 +11,7 @@
 .scope-entry:focus-visible { outline: 1px solid var(--text-on-screen); }
 .scope-plot { flex: 1; min-height: 0; position: relative; touch-action: none; cursor: grab; }
 .scope-plot:active { cursor: grabbing; }
+.scope-plot.tool-zoom, .scope-plot.tool-zoom .u-over, .scope-plot.tool-zoom:active { cursor: crosshair !important; }
 .scope-plot .uplot, .scope-plot .u-wrap { position: absolute; inset: 0; }
 .scope-plot .u-select { background: var(--screen-line); box-shadow: inset 0 0 0 1px var(--text-on-screen-muted); }
 .scope-placeholder { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--space-3); text-align: center; font: var(--size-2xs) var(--font-mono); color: var(--text-on-screen-muted); border: 1px dashed var(--text-on-screen-muted); border-radius: var(--radius-md); margin: var(--space-2); }
@@ -24,6 +25,10 @@
 .scope-modes button { all: unset; cursor: pointer; padding: 0 4px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: pre; }
 .scope-modes button.on { color: var(--text); font-weight: 600; }
 .scope-modes button:focus-visible { outline: 1px solid var(--line-ink); }
+.scope-spans, .scope-tools { display: inline-flex; gap: 2px; }
+.scope-spans button, .scope-tools button { all: unset; cursor: pointer; padding: 0 4px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: pre; }
+.scope-spans button.on, .scope-tools button.on { color: var(--text); font-weight: 600; }
+.scope-spans button:focus-visible, .scope-tools button:focus-visible { outline: 1px solid var(--line-ink); }
 .scope-pop { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; min-width: 220px; max-width: 320px; display: flex; flex-direction: column; gap: 6px; padding: var(--space-2); background: var(--surface-float); backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: var(--radius-md); box-shadow: var(--shadow-1); color: var(--text); font: var(--size-2xs) var(--font-sans); }
 .scope-pop hr { width: 100%; border: 0; border-top: 1px solid var(--line); margin: 2px 0; }
 .scope-pop .opt { all: unset; cursor: pointer; padding: 2px 4px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: pre; }

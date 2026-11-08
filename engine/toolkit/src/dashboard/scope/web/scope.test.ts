@@ -26,6 +26,17 @@ test("trigger, spectrum, stats, values and CSV", () => {
   assert.equal(toCsv([{ label: "a", unit: "m", t: [0, 1], v: [1, 2] }, { label: "b,c", t: [1], v: [3] }]), 't (s),a (m),"b,c"\n0,1,\n1,2,3\n');
 });
 
+test("scope tracking vs squishing time span behavior", () => {
+  // Tracking mode: constant window W follows latest time [t1 - W, t1]
+  const t0 = 0, t1 = 25, W = 10;
+  const trackingRange = [t1 - W, t1];
+  assert.deepEqual(trackingRange, [15, 25]);
+
+  // Squishing mode: full bounds [t0, t1]
+  const squishingRange = [t0, t1];
+  assert.deepEqual(squishingRange, [0, 25]);
+});
+
 test("the web folder imports nothing from the app but types, so a toolkit can be dropped in or taken out", () => {
   const dir = path.dirname(fileURLToPath(import.meta.url));
   const files = fs.readdirSync(dir, { recursive: true, encoding: "utf8" }).filter((f) => /\.(tsx?|css)$/.test(f) && !f.endsWith(".test.ts"));

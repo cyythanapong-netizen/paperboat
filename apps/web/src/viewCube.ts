@@ -19,11 +19,12 @@ const THIRD = 1 / 3;
 export function viewCube(
   host: HTMLElement,
   renderer: THREE.WebGLRenderer,
-  camera: THREE.PerspectiveCamera,
+  getCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera | (() => THREE.PerspectiveCamera | THREE.OrthographicCamera),
   controls: OrbitControls,
   token: (name: string, fallback: string) => string,
 ) {
-  const home = { position: camera.position.clone(), target: controls.target.clone() };
+  const getCam = () => (typeof getCamera === "function" ? getCamera() : getCamera);
+  const home = { position: getCam().position.clone(), target: controls.target.clone() };
 
   // The cube: a label on each face, ink edges.
   const scene = new THREE.Scene();
@@ -76,11 +77,11 @@ export function viewCube(
   const reduced = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
   const DURATION = 260;
   const goTo = (position: THREE.Vector3, target: THREE.Vector3) => {
-    const from = camera.position.clone().sub(controls.target);
+    const from = getCam().position.clone().sub(controls.target);
     const to = position.clone().sub(target);
     if (reduced()) {
       controls.target.copy(target);
-      camera.position.copy(position);
+      getCam().position.copy(position);
       controls.update();
       return;
     }
@@ -89,7 +90,7 @@ export function viewCube(
   const lookFrom = (dir: THREE.Vector3) => {
     const d = dir.clone().normalize();
     if (Math.abs(d.y) > 0.99) d.z += 0.001; // straight down or up: keep a heading
-    const dist = camera.position.distanceTo(controls.target);
+    const dist = getCam().position.distanceTo(controls.target);
     goTo(controls.target.clone().add(d.normalize().multiplyScalar(dist)), controls.target.clone());
   };
   const step = () => {
@@ -101,7 +102,7 @@ export function viewCube(
     const length = THREE.MathUtils.lerp(anim.from.length(), anim.to.length(), e);
     const offset = anim.from.clone().normalize().applyQuaternion(turn).multiplyScalar(length);
     controls.target.lerpVectors(anim.fromTarget, anim.toTarget, e);
-    camera.position.copy(controls.target).add(offset);
+    getCam().position.copy(controls.target).add(offset);
     controls.update();
     if (p === 1) anim = null;
   };
@@ -125,11 +126,11 @@ export function viewCube(
       if (!press.moved && Math.hypot(dx, dy) < 4) return;
       if (!press.moved) anim = null;
       press = { x: e.clientX, y: e.clientY, moved: true };
-      const offset = camera.position.clone().sub(controls.target);
+      const offset = getCam().position.clone().sub(controls.target);
       const s = new THREE.Spherical().setFromVector3(offset);
       s.theta -= dx * 0.012;
       s.phi = THREE.MathUtils.clamp(s.phi - dy * 0.012, 0.01, Math.PI - 0.01);
-      camera.position.copy(controls.target).add(offset.setFromSpherical(s));
+      getCam().position.copy(controls.target).add(offset.setFromSpherical(s));
       controls.update();
       return;
     }
@@ -160,11 +161,11 @@ export function viewCube(
     /** Draw the cube over the scene just rendered, `width` x `height` px. */
     draw(width: number, height: number) {
       step();
-      const atHome = camera.position.distanceToSquared(home.position) < 1e-6 && controls.target.distanceToSquared(home.target) < 1e-6;
+      const atHome = getCam().position.distanceToSquared(home.position) < 1e-6 && controls.target.distanceToSquared(home.target) < 1e-6;
       if (atHome !== homeKey.classList.contains("at-home")) homeKey.classList.toggle("at-home", atHome);
       // The cube's camera looks at it from where the scene's camera looks at its target.
-      eye.quaternion.copy(camera.quaternion);
-      eye.position.set(0, 0, 4).applyQuaternion(camera.quaternion);
+      eye.quaternion.copy(getCam().quaternion);
+      eye.position.set(0, 0, 4).applyQuaternion(getCam().quaternion);
       const x = width - SIZE - MARGIN;
       const y = height - SIZE - MARGIN; // from the bottom edge
       renderer.setViewport(x, y, SIZE, SIZE);

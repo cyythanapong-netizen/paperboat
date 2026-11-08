@@ -431,7 +431,19 @@ export function App() {
     setNodes((ns) => withBlock(ns, item.def, { x: at.x - 78 + (ns.length % 5) * 18, y: at.y - 30 + (ns.length % 5) * 18 }, flowLevel)[0]);
     if (mode === "navigator") setPage("flow");
   };
+  const [cameraProjection, setCameraProjection] = useState<"persp" | "iso">("persp");
   const gridOn = gridChoice === "auto" ? (state.view.mode === "3d" ? state.view.grid !== false : true) : gridChoice === "on";
+  const projectionKey =
+    view === "scene" && state.view.mode === "3d" ? (
+      <button
+        className={`key small${cameraProjection === "iso" ? " on" : ""}`}
+        aria-pressed={cameraProjection === "iso"}
+        title={cameraProjection === "iso" ? "Isometric (parallel) view: click for Perspective" : "Perspective view: click for Isometric (parallel)"}
+        onClick={() => setCameraProjection((p) => (p === "iso" ? "persp" : "iso"))}
+      >
+        {cameraProjection === "iso" ? "Iso" : "Persp"}
+      </button>
+    ) : null;
   const gridKey =
     view === "scene" && state.view.mode === "3d" ? (
       <button className={`key small${gridOn ? " on" : ""}`} aria-pressed={gridOn} title="Show or hide the floor grid" onClick={() => setGridChoice(gridOn ? "off" : "on")}>
@@ -981,6 +993,26 @@ export function App() {
       run: () => setGridChoice(gridOn ? "off" : "on"),
     },
     {
+      id: "view.camera.persp",
+      label: "Perspective Camera",
+      menu: "view",
+      group: "windows",
+      checked: cameraProjection === "persp",
+      enabled: view === "scene" && state.view.mode === "3d",
+      why: "The Station is not a 3D scene",
+      run: () => setCameraProjection("persp"),
+    },
+    {
+      id: "view.camera.iso",
+      label: "Isometric Camera",
+      menu: "view",
+      group: "windows",
+      checked: cameraProjection === "iso",
+      enabled: view === "scene" && state.view.mode === "3d",
+      why: "The Station is not a 3D scene",
+      run: () => setCameraProjection("iso"),
+    },
+    {
       id: "view.arrangeBlocks",
       label: "Arrange Blocks",
       menu: "view",
@@ -1085,7 +1117,7 @@ export function App() {
       <VarsContext.Provider value={varsApi}>
       <main className="pages">
         <div className="page-stack">
-        <Panel {...panel("station")} actions={<>{gridKey}{arrangeKey("station")}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
+        <Panel {...panel("station")} actions={<>{projectionKey}{gridKey}{arrangeKey("station")}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
           <div
             className={`station view-${view}`}
             onDragOver={(e) => {
@@ -1114,7 +1146,7 @@ export function App() {
               <StationGraph objects={state.objects} station={station ?? { objects: [] }} onChange={editStation} locked={running} controls={stationCanvas} />
             ) : (
               <Suspense fallback={null}>
-                <SceneView key={`${theme}:${JSON.stringify(state.view)}`} view={state.view} grid={gridOn} entities={state.entities} />
+                <SceneView key={`${theme}:${JSON.stringify(state.view)}`} view={state.view} grid={gridOn} projection={cameraProjection} entities={state.entities} />
               </Suspense>
             )}
             {station && state.objects.length > 0 && (
@@ -1204,7 +1236,26 @@ export function App() {
       {notice && <Notice key={notice.title + notice.text.join()} spec={notice} onClose={() => setNotice(null)} />}
       {toast && <Toast text={toast.text} undo="Undo" onUndo={toast.undo} onClose={() => setToast(null)} />}
       {searchOpen && <CommandSearch commands={commands} onClose={() => setSearchOpen(false)} />}
-      {backendOpen && <BackendWindow url={url} connection={state.connection} engine={state.engine} onConnect={setUrl} onClose={() => setBackendOpen(false)} />}
+      {backendOpen && (
+        <BackendWindow
+          url={url}
+          connection={state.connection}
+          engine={state.engine}
+          info={{
+            protocol: "paperboat/0",
+            blocksCount: state.blocks.length,
+            objectsCount: state.objects.length,
+            stationView: state.stationView.view ?? state.view.mode,
+            solver: state.runDefaults.solver,
+            dt: state.runDefaults.dt,
+            duration: state.runDefaults.duration,
+            toolkits: state.toolkits.map((t) => ({ name: t.name, installed: t.installed, version: t.version })),
+            variablesCount: state.variables.length,
+          }}
+          onConnect={setUrl}
+          onClose={() => setBackendOpen(false)}
+        />
+      )}
       {consoleShown && <ConsoleWindow logs={state.logs} errors={errors} onBlock={showBlock} onClose={() => setConsoleShown(false)} />}
       {browser === "flow" && (
         <BrowserWindow title="Add a block" items={blockItems} counts={counts(nodes.filter(isBlock).map((n) => ({ type: n.data.def.type })))} place="canvas" onAdd={addBlock} onClose={() => setBrowser(null)} />
