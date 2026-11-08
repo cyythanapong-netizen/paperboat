@@ -52,11 +52,18 @@ C++
    cmake_minimum_required(VERSION 3.25)
    project(counter LANGUAGES CXX)
    set(CMAKE_CXX_STANDARD 20)
-   set(PAPERBOAT_ENGINE_DIR "/path/to/paperboat/engine" CACHE PATH "")
-   add_subdirectory(${PAPERBOAT_ENGINE_DIR} paperboat EXCLUDE_FROM_ALL)
+   if(PAPERBOAT_ENGINE_DIR)  # a Paperboat checkout: build the engine from its sources
+     add_subdirectory(${PAPERBOAT_ENGINE_DIR} paperboat EXCLUDE_FROM_ALL)
+   else()                    # an installed package: the SDK
+     find_package(Paperboat 0.1 CONFIG REQUIRED)
+   endif()
    add_executable(counter main.cpp)
    target_link_libraries(counter PRIVATE paperboat::core)
    target_compile_definitions(counter PRIVATE PAPERBOAT_DESCRIPTOR="${CMAKE_CURRENT_SOURCE_DIR}/descriptor.toml")
+
+``paperboat build`` picks the engine for you: in a checkout it passes ``-DPAPERBOAT_ENGINE_DIR``, from an
+installed package (``.deb`` with ``paperboat-dev``, the ``.tar.gz``, the ``.zip`` or ``@paperboat/cli``) it
+passes ``-DPaperboat_DIR`` and builds Release. See :ref:`cpp-sdk`.
 
 Python
 ------
