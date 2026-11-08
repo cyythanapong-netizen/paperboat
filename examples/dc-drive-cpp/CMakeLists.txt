@@ -6,8 +6,9 @@ project(paperboat_dc_drive LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# The engine: -DPAPERBOAT_ENGINE_DIR=…, else the Paperboat checkout this sits in.
-if(NOT PAPERBOAT_ENGINE_DIR)
+# The engine: the sources of a Paperboat checkout (-DPAPERBOAT_ENGINE_DIR=…, or the checkout this
+# sits in), else an installed SDK (find_package(Paperboat), e.g. -DPaperboat_DIR=…).
+if(NOT PAPERBOAT_ENGINE_DIR AND NOT Paperboat_DIR)
   foreach(dir "${CMAKE_CURRENT_LIST_DIR}/../../engine" "${CMAKE_CURRENT_LIST_DIR}/../../../engine"
               "${CMAKE_CURRENT_LIST_DIR}/../../paperboat/engine")
     if(EXISTS "${dir}/CMakeLists.txt")
@@ -16,13 +17,17 @@ if(NOT PAPERBOAT_ENGINE_DIR)
     endif()
   endforeach()
 endif()
-if(NOT PAPERBOAT_ENGINE_DIR)
-  message(FATAL_ERROR "No Paperboat engine: set PAPERBOAT_ENGINE_DIR")
+if(PAPERBOAT_ENGINE_DIR)
+  set(PAPERBOAT_ENGINE_DIR "${PAPERBOAT_ENGINE_DIR}" CACHE PATH "Paperboat engine sources")
+  add_subdirectory(${PAPERBOAT_ENGINE_DIR} paperboat EXCLUDE_FROM_ALL)
+else()
+  find_package(Paperboat 0.1 CONFIG REQUIRED)
 endif()
-set(PAPERBOAT_ENGINE_DIR "${PAPERBOAT_ENGINE_DIR}" CACHE PATH "Paperboat engine sources")
-add_subdirectory(${PAPERBOAT_ENGINE_DIR} paperboat EXCLUDE_FROM_ALL)
+# The program lands in build/ under every generator (backend.toml's run), also multi-config ones.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}")
 
 add_executable(paperboat-dc-drive main.cpp domain/dc_drive.cpp)
-target_link_libraries(paperboat-dc-drive PRIVATE paperboat::core paperboat_warnings)
+target_link_libraries(paperboat-dc-drive PRIVATE paperboat::core paperboat::warnings)
 target_compile_definitions(paperboat-dc-drive PRIVATE
   PAPERBOAT_DESCRIPTOR="${CMAKE_CURRENT_SOURCE_DIR}/descriptor.toml")

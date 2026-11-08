@@ -9,6 +9,7 @@
 #include "paperboat/core/backend_manager.hpp"
 
 #include <paperboat/toolkit/installer.hpp>
+#include <paperboat/toolkit/platform.hpp>
 #include <paperboat/toolkit/variables.hpp>
 
 namespace paperboat::core {
@@ -44,20 +45,17 @@ struct Session::State {
   void log(const std::string& level, const std::string& text) {
     emit({{"type", "log"}, {"level", level}, {"text", text}});
   }
+  // The build this backend runs from: the nearest folder above its executable with a CMakeCache.txt,
+  // found at run time (no build-machine path is compiled in, pb#177).
   toolkit::HostBuild host_build() const {
-#if defined(PAPERBOAT_HOST_SOURCE_DIR) && defined(PAPERBOAT_HOST_BUILD_DIR)
-    return {PAPERBOAT_HOST_SOURCE_DIR, PAPERBOAT_HOST_BUILD_DIR};
-#else
+    std::error_code ec;
+    for (auto dir = platform::exe_path().parent_path(); !dir.empty(); dir = dir.parent_path()) {
+      if (std::filesystem::is_regular_file(dir / "CMakeCache.txt", ec)) return {.source_dir = {}, .build_dir = dir};
+      if (dir == dir.parent_path()) break;
+    }
     return {};
-#endif
   }
-  std::filesystem::path repo_root() const {
-#if defined(PAPERBOAT_REPO_ROOT)
-    return PAPERBOAT_REPO_ROOT;
-#else
-    return {};
-#endif
-  }
+  std::filesystem::path repo_root() const { return toolkit::find_repo_root(backend.catalog->dir); }
   json current_toolkits(std::string_view busy_name = {}, std::string_view busy_state = {}, bool fetch_versions = false) {
     std::string bname(busy_name);
     std::string bstate(busy_state);

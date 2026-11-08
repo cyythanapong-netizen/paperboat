@@ -28,15 +28,12 @@ add_library(paperboat_core
 )
 add_library(paperboat::core ALIAS paperboat_core)
 
-target_include_directories(paperboat_core PUBLIC include)
+target_include_directories(paperboat_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+set_target_properties(paperboat_core PROPERTIES EXPORT_NAME core)
 target_link_libraries(paperboat_core
-  PUBLIC paperboat::toolkit nlohmann_json::nlohmann_json tomlplusplus::tomlplusplus
-  PRIVATE ixwebsocket paperboat_warnings)
+  PUBLIC paperboat::toolkit nlohmann_json::nlohmann_json
+  PRIVATE ixwebsocket $<BUILD_INTERFACE:tomlplusplus::tomlplusplus> paperboat_warnings)
 if(WIN32)
   target_link_libraries(paperboat_core PRIVATE ws2_32 iphlpapi)  # port checks in backend_manager
 endif()
 
-target_compile_definitions(paperboat_core PRIVATE
-  PAPERBOAT_HOST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-  PAPERBOAT_HOST_BUILD_DIR="${CMAKE_BINARY_DIR}"
-  PAPERBOAT_REPO_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/../..")
