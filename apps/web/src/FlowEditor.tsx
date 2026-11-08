@@ -3,8 +3,6 @@ import {
   Background,
   BaseEdge,
   EdgeLabelRenderer,
-  getBezierPath,
-  getSmoothStepPath,
   MarkerType,
   MiniMap,
   NodeToolbar,
@@ -39,7 +37,8 @@ import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
 import { connectionOf, nearestAccepting, SNAP, WireDragContext, type Anchor } from "./wireSnap";
 import { arrangeFlowNodes, canArrangeFlow } from "./flowLayout";
-import { routeWires, type Obstacle, type RouteInput, type WireRoute } from "./wireRouting.ts";
+import { middleOfWire, orthoPoints, roundedPolyline, routeWires, squareUp, type Obstacle, type RouteInput, type WireRoute, type WirePoint } from "./wireRouting.ts";
+import { useWireBends } from "@paperboat/shared/components";
 import {
   absolute,
   Boundary,
@@ -82,8 +81,11 @@ export type BlockNode = Node<BlockData, "block">;
 /** What the Flow canvas holds: blocks, and the groups (frames) around some of them. */
 export type FlowNode = BlockNode | GroupNode;
 export const isBlock = (n: FlowNode): n is BlockNode => n.type === "block";
-/** `type`: the type of the ports it joins: `step` (control passes along it), `signal`, `image`… */
-export type Wire = Edge<{ type: string }, "wire">;
+/**
+ * `type`: the type of the ports it joins: `step` (control passes along it), `signal`, `image`…
+ * `points`: the bends the user dragged it to, source end first; absent, it is routed.
+ */
+export type Wire = Edge<{ type: string; points?: WirePoint[] }, "wire">;
 
 /** What the last run said about blocks (`node.state`): where a Step flow is, which failed. */
 export const RunStates = createContext<{
@@ -385,6 +387,10 @@ const Lit = createContext<ReadonlySet<string> | null>(null);
 /** Whole-canvas routed wire geometries computed in one pass. */
 const WireRoutes = createContext<Map<string, WireRoute> | null>(null);
 const CommentedOutContext = createContext<ReadonlySet<string>>(new Set());
+/** Save a wire's dragged bends; null when the canvas is locked (wires don't move). */
+const SetBends = createContext<((id: string, bends: WirePoint[]) => void) | null>(null);
+
+const sideOf = (p: Position): "left" | "right" | "top" | "bottom" => (p === Position.Left ? "left" : p === Position.Top ? "top" : p === Position.Bottom ? "bottom" : "right");
 
 function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire>) {
   const { deleteElements } = useReactFlow();
@@ -398,30 +404,16 @@ function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire
   const missing = useContext(IconWires).missing;
   const commentedClass = (wireCommented ? " wire-commented" : "") + (missing.has(`${geometry.source}:${geometry.sourceHandleId}`) || missing.has(`${geometry.target}:${geometry.targetHandleId}`) ? " wire-missing" : "");
 
-  let path: string;
-  let x: number;
-  let y: number;
-
-  if (route) {
-    path = route.path;
-    x = route.labelX;
-    y = route.labelY;
-  } else {
-    const step = data?.type === "step";
-    const back =
-      geometry.sourcePosition === Position.Right &&
-      geometry.targetPosition === Position.Left &&
-      geometry.targetX < geometry.sourceX + 8;
-    if (back) {
-      path = `M ${geometry.sourceX},${geometry.sourceY} L ${geometry.targetX},${geometry.targetY}`;
-      x = (geometry.sourceX + geometry.targetX) / 2;
-      y = Math.max(geometry.sourceY, geometry.targetY) + 28;
-    } else if (step) {
-      [path, x, y] = getSmoothStepPath(geometry);
-    } else {
-      [path, x, y] = getBezierPath(geometry);
-    }
-  }
+  const setBends = useContext(SetBends);
+  // The ports as the router saw them, else as React Flow does.
+  const from: WirePoint = route ? route.points[0] : [geometry.sourceX, geometry.sourceY];
+  const to: WirePoint = route ? route.points[route.points.length - 1] : [geometry.targetX, geometry.targetY];
+  const routed = data?.points
+    ? squareUp(from, data.points, to)
+    : (route?.points ?? orthoPoints(from, sideOf(geometry.sourcePosition), to, sideOf(geometry.targetPosition)));
+  const { points, handles } = useWireBends(routed, !!selected && !!setBends, (bends) => setBends?.(id, bends));
+  const path = roundedPolyline(points, 8);
+  const [x, y] = route && !data?.points && points === routed ? [route.labelX, route.labelY] : middleOfWire(points);
   return (
     <>
       {/* Casing: a wider stroke in the canvas colour, so where wires cross, one is seen to pass over the other. */}
@@ -434,13 +426,14 @@ function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire
           <button
             className="remove nodrag nopan"
             title="Delete wire"
-            style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
+            style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y - 16}px)` }}
             onClick={() => deleteElements({ edges: [{ id }] })}
           >
             <RemoveIcon />
           </button>
         </EdgeLabelRenderer>
       )}
+      {handles}
     </>
   );
 }
@@ -612,7 +605,11 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
     const p = n.parentId ? all.find((q) => q.id === n.parentId) : undefined;
     return p && isFrame(p) && p.data.kind === "visual" ? { ...n, extent: "parent" as const } : n;
   });
-  const edges = wires.map((w) => makeWire(w, portType(byId.get(w.source), w.sourceHandle, "outputs") ?? "signal"));
+  const edges = wires.map((w, i) => {
+    const wire = makeWire(w, portType(byId.get(w.source), w.sourceHandle, "outputs") ?? "signal");
+    const points = graph.edges[i].points;
+    return points ? { ...wire, data: { type: wire.data!.type, points } } : wire;
+  });
   return { nodes: ordered(all), edges };
 }
 
@@ -672,6 +669,7 @@ export function toFlow(nodes: FlowNode[], edges: Wire[]): Graph {
       const at = absolute(byId.get(n.id)!, byId);
       return { ...n, pos: [Math.round(at.x), Math.round(at.y)] };
     }),
+    edges: g.edges.map((e, i) => (edges[i].data?.points ? { ...e, points: edges[i].data!.points } : e)),
   };
 }
 
@@ -1308,6 +1306,10 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
     }
     return routeWires(routeInputs, obstacles);
   }, [shown.edges, nodeLookup]);
+  const setBends = useMemo(
+    () => (locked ? null : (id: string, bends: WirePoint[]) => setEdges((ws) => ws.map((w) => (w.id === id ? { ...w, data: { type: w.data?.type ?? "signal", ...w.data, points: bends } } : w)))),
+    [locked, setEdges],
+  );
 
   const box = wrap.current?.getBoundingClientRect();
   const rel = (x: number, y: number) => ({ x: x - (box?.left ?? 0), y: y - (box?.top ?? 0) });
@@ -1321,6 +1323,7 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
     <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
     <Lit.Provider value={lit}>
     <WireRoutes.Provider value={wireRoutes}>
+    <SetBends.Provider value={setBends}>
     <ConnectorsContext.Provider value={connectors}>
     <IconWires.Provider value={iconWires}>
     <CommentedOutContext.Provider value={commentedOut}>
@@ -1534,6 +1537,7 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
     </CommentedOutContext.Provider>
     </IconWires.Provider>
     </ConnectorsContext.Provider>
+    </SetBends.Provider>
     </WireRoutes.Provider>
     </Lit.Provider>
     </HotWire.Provider>

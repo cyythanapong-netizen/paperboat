@@ -45,7 +45,7 @@ open.
        first.
    * - ``flow``
      - The Flow canvas as a protocol ``Graph``, groups included. Every node has its place
-       (``pos``), which backends ignore.
+       (``pos``), and a wire the user moved has its bends (``points``); backends ignore both.
    * - ``station``
      - The Station, a protocol ``Station``.
    * - ``variables``

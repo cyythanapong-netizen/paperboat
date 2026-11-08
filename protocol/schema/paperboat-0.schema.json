@@ -2129,6 +2129,18 @@
           "minItems": 2,
           "maxItems": 2,
           "description": "[node, port]"
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "description": "The wire's bends on the canvas, [x, y] each, from the source end to the target end; a wire without them is routed automatically. Saved in a project; backends ignore it."
         }
       },
       "required": [
