@@ -80,7 +80,7 @@ jobs:
           npm install -g --prefix "$prefix" dist/npm/paperboat-cli-linux-x64-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz
           "$prefix/bin/paperboat" --version
           "$prefix/bin/paperboat" pkg list
-          pip install -q websockets jsonschema
+          pip install -q --upgrade websockets jsonschema   # the runner's jsonschema 3.2 predates Draft 2020-12
           cp -r examples/dc-drive-cpp "$RUNNER_TEMP/dc-drive" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
           CXX=g++-12 "$prefix/bin/paperboat" build "$RUNNER_TEMP/dc-drive"   # against the SDK in the platform package
           "$prefix/bin/paperboat" check "$RUNNER_TEMP/dc-drive"
