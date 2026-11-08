@@ -37,8 +37,8 @@ export function RunOptions({ defaults, value, onChange }: { defaults: RunSetting
         title={isInfinite ? "Infinite run active (0 s); click to restore finite duration" : "Set infinite run duration (0 s)"}
         style={{
           border: "none",
-          background: isInfinite ? "var(--accent, #0284c7)" : "transparent",
-          color: isInfinite ? "#fff" : "inherit",
+          background: isInfinite ? "var(--signal)" : "transparent",
+          color: isInfinite ? "var(--text-on-signal)" : "inherit",
           borderRadius: 3,
           cursor: "pointer",
           padding: "1px 5px",
