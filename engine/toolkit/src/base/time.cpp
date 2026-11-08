@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "common.hpp"
+#include "curve_icons.hpp"
 
 namespace paperboat::toolkit::base {
 namespace {
@@ -140,7 +141,7 @@ void add_time(Registry& registry) {
   intv.def.outputs = {{.id = "y", .type = "signal"}};
   intv.def.params = {{.id = "interval", .default_value = 1000.0, .type = "number"}};
   intv.def.description = "Pulses 1.0 periodically every interval milliseconds.";
-  intv.def.view = {.compact = true, .glyph = "pulse", .value = "{interval} ms"};
+  intv.def.view = {.compact = true, .glyph = "pulse", .value = "{interval} ms", .icon = icons::pulse()};
   intv.make = [](const Values& params, const Config&) {
     return std::make_unique<Interval>(get_or(params, "interval", 1000.0));
   };
@@ -156,7 +157,7 @@ void add_time(Registry& registry) {
   tout.def.outputs = {{.id = "y", .type = "signal"}};
   tout.def.params = {{.id = "delay", .default_value = 1000.0, .type = "number"}};
   tout.def.description = "Outputs 1.0 after a delay in milliseconds has elapsed.";
-  tout.def.view = {.compact = true, .glyph = "timer", .value = "{delay} ms"};
+  tout.def.view = {.compact = true, .glyph = "timer", .value = "{delay} ms", .icon = icons::timer()};
   tout.make = [](const Values& params, const Config&) {
     return std::make_unique<Timeout>(get_or(params, "delay", 1000.0));
   };

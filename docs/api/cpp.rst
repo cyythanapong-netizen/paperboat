@@ -230,8 +230,8 @@ initializers may leave any out.
    .. cpp:member:: View view
 
       How the UI draws the block: a hint, so a block without it is the normal card.
-      ``compact`` draws a small plate with a ``glyph`` (a curve name such as ``"gain"`` or a
-      few characters) and a caption with the name and ``value`` (an expression of the
+      ``compact`` draws a small plate with a ``glyph`` (a few characters drawn as text; a
+      curve is an ``icon``) and a caption with the name and ``value`` (an expression of the
       params, ``"{k}"``); ``icon`` (an opaque ``nlohmann::json`` object, ``null`` when
       absent) supplies a token-quantised vector icon (``{w, h, g, ports}``) rendered on the
       plate without raw colours or SVG path strings. Every key is optional: a definition
