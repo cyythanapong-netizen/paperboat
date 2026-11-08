@@ -1,6 +1,11 @@
 # Shared toolkit machinery. A package lives in src/<name>/ and is discovered from its
 # toolkit.toml: its C++ sources are globbed, and its registration functions are gathered
 # into one generated translation unit. Adding a package does not edit this file or registry.cpp.
+# One block, one folder: src/<name>/<block>/<block>.cpp defines paperboat::toolkit::<name>::add_<block>(Registry&),
+# found by the folder's name, so adding a block edits no list. The block's folder also holds whatever else
+# makes it work: its icon, its web/ (instruments, CSS, tests), its design. A `definitions` TOML file is
+# registered last.
+# (A manifest with an explicit `register = [...]` list keeps that list instead.)
 set(PAPERBOAT_TOOLKIT_CORE_SOURCES
   src/block.cpp
   src/bases.cpp
@@ -34,20 +39,39 @@ set(package_definition_sources "")
 foreach(manifest IN LISTS toolkit_manifests)
   file(STRINGS "${manifest}" name_line REGEX "^name[ \t]*=")
   file(STRINGS "${manifest}" register_line REGEX "^register[ \t]*=")
-  if(NOT name_line OR NOT register_line)
-    message(FATAL_ERROR "${manifest}: needs name and register fields")
+  file(STRINGS "${manifest}" definitions_line REGEX "^definitions[ \t]*=")
+  if(NOT name_line)
+    message(FATAL_ERROR "${manifest}: needs a name field")
   endif()
   string(REGEX REPLACE "^name[ \t]*=[ \t]*\"([A-Za-z_][A-Za-z0-9_]*)\"[ \t]*$" "\\1" package "${name_line}")
   if(NOT package MATCHES "^[A-Za-z_][A-Za-z0-9_]*$")
     message(FATAL_ERROR "${manifest}: name must be a C++ package identifier")
   endif()
-  string(REGEX REPLACE "^register[ \t]*=[ \t]*\\[(.*)\\][ \t]*$" "\\1" registrar_text "${register_line}")
-  string(REPLACE "\"" "" registrar_text "${registrar_text}")
-  string(REGEX REPLACE "[ \t]" "" registrar_text "${registrar_text}")
-  string(REPLACE "," ";" registrars "${registrar_text}")
-  list(FILTER registrars EXCLUDE REGEX "^$")
+  if(register_line)
+    string(REGEX REPLACE "^register[ \t]*=[ \t]*\\[(.*)\\][ \t]*$" "\\1" registrar_text "${register_line}")
+    string(REPLACE "\"" "" registrar_text "${registrar_text}")
+    string(REGEX REPLACE "[ \t]" "" registrar_text "${registrar_text}")
+    string(REPLACE "," ";" registrars "${registrar_text}")
+    list(FILTER registrars EXCLUDE REGEX "^$")
+  else()
+    # One add_<block> per block folder src/<package>/<block>/<block>.cpp (other folders and files are not blocks).
+    file(GLOB block_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/${package}/*/*.cpp")
+    list(SORT block_files)
+    set(registrars "")
+    foreach(block_file IN LISTS block_files)
+      get_filename_component(stem "${block_file}" NAME_WE)
+      get_filename_component(block_dir "${block_file}" DIRECTORY)
+      get_filename_component(block_dir_name "${block_dir}" NAME)
+      if(stem STREQUAL block_dir_name)
+        list(APPEND registrars "add_${stem}")
+      endif()
+    endforeach()
+    if(definitions_line)
+      list(APPEND registrars "add_definitions")
+    endif()
+  endif()
   if(NOT registrars)
-    message(FATAL_ERROR "${manifest}: register must name at least one package function")
+    message(FATAL_ERROR "${manifest}: no block folders (src/${package}/<block>/<block>.cpp) and no register list")
   endif()
 
   file(APPEND "${package_registry_cpp}" "namespace paperboat::toolkit::${package} {\n")
@@ -62,7 +86,6 @@ foreach(manifest IN LISTS toolkit_manifests)
 
   # A package may define blocks on a C++ parent in TOML. Embed those definitions in the
   # same library, using the package name for the symbol convention (signal -> kSignalBlocks).
-  file(STRINGS "${manifest}" definitions_line REGEX "^definitions[ \t]*=")
   if(definitions_line)
     string(REGEX REPLACE "^definitions[ \t]*=[ \t]*\"([^\"]+)\"[ \t]*$" "\\1" definitions_file "${definitions_line}")
     set(definitions_path "${CMAKE_CURRENT_SOURCE_DIR}/src/${package}/${definitions_file}")
@@ -75,6 +98,7 @@ foreach(manifest IN LISTS toolkit_manifests)
     string(SUBSTRING "${package}" 1 -1 package_rest)
     set(PAPERBOAT_EMBED_SYMBOL "k${package_first}${package_rest}Blocks")
     set(PAPERBOAT_EMBED_CONTENT "${embedded_definitions}")
+    set(PAPERBOAT_EMBED_PACKAGE "${package}")
     set(generated "${CMAKE_CURRENT_BINARY_DIR}/${package}_blocks.cpp")
     configure_file(src/embed_package.cpp.in "${generated}" @ONLY)
     list(APPEND package_definition_sources "${generated}")

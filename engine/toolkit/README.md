@@ -19,18 +19,27 @@ its domain state).
 
 ## Package layout
 
-Each built-in package lives in `src/<package>/` and has a TOML manifest:
+Each built-in package is one folder, `src/<package>/`; each block is a folder in it, with
+everything of the block in that folder:
 
-```toml
-name = "math"
-register = ["add_arithmetic"]
+```
+src/math/
+  toolkit.toml            name = "math"
+  arithmetic_shared.hpp   a helper a few blocks share
+  gain/
+    gain.cpp              one block, one .cpp: defines add_gain(Registry&) in paperboat::toolkit::math
+    icon.hpp              its look on the plate: a view.icon
+    web/                  its UI, if any (instrument, CSS, tests, package.json)
+    design.html           its design mockups and notes
 ```
 
-The manifest's `name` is its namespace and palette group. `register` lists the package's
-functions that add templates to a `Registry`; CMake discovers the manifest, compiles that
-folder's C++ files, and generates the registry dispatcher. A package can embed TOML
-definitions on a C++ parent with `definitions = "blocks.toml"` (see `signal`). There is no
-central list of packages, block descriptions or UI views to update.
+The manifest's `name` is its namespace and palette group. CMake finds each block's
+`add_<folder name>` from the folders (`<block>/<block>.cpp`), compiles the sources and generates
+the registry dispatcher. A package can embed TOML definitions on a C++ parent with
+`definitions = "blocks.toml"` (see `signal`; registered after the folders); an explicit
+`register = [...]` replaces the folder rule. There is no central list of packages, block
+descriptions, glyphs or UI views to update, and deleting the folder leaves everything else
+working.
 
 Descriptions and view defaults belong to the block definition in its source file. A
 descriptor that defines a block on a parent inherits its description/view and can override
@@ -222,12 +231,12 @@ graph and station).
 
 ## Adding a template
 
-1. Write the block in `src/<package>/<block>.cpp` as a small struct deriving from `Block`
-   (or `Step` for a Step flow's path); keep its state in the struct.
-2. Define its `BlockDef` (including description and optional view) and register it from a
-   function in the package namespace. If it is a new registration function, list it in that
-   package's `toolkit.toml`; adding another block to an existing function needs no manifest
-   change. CMake picks up new C++ files automatically.
+1. Write the block in `src/<package>/<block>/<block>.cpp` as a small struct deriving from
+   `Block` (or `Step` for a Step flow's path); keep its state in the struct. One block per folder.
+2. In the same file define its `BlockDef` (including description and optional view; a glyph
+   goes in `<block>/icon.hpp`) and register it from `void add_<block>(Registry&)` in the
+   package namespace. The folder name is the registration: no manifest, registry or list to
+   edit. A helper two blocks share goes in a `<topic>_shared.hpp` in the package folder.
 3. Add C++ tests in `engine/tests/`. If it is a new built-in package, create
-   `src/<package>/toolkit.toml` with its `name` and registrar functions; the built-in registry
-   and build discover it without edits to `registry.cpp` or the top-level toolkit source list.
+   `src/<package>/toolkit.toml` with its `name`; the built-in registry and build discover it
+   without edits to `registry.cpp` or the top-level toolkit source list.

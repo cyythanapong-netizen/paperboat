@@ -15,7 +15,7 @@ on:
       - "scripts/pack_npm.py"
       - "engine/CMakeLists.txt"
       - "engine/cmake/**"
-      - "examples/dc-drive-cpp/**"
+      - "engine/tests/sdk-backend/**"
       - "protocol/*.py"
       - "engine/core/**"
       - "engine/toolkit/**"
@@ -63,17 +63,17 @@ jobs:
       # The SDK (pb#177): with only the packages installed, a C++ backend builds and passes paperboat check.
       - name: "SDK: paperboat + paperboat-dev on Debian 12 build and check a backend"
         run: |
-          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/examples/dc-drive-cpp:/src:ro" debian:bookworm sh -ec '
+          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" debian:bookworm sh -ec '
             apt-get update -qq && apt-get install -y -qq /dist/paperboat_*.deb /dist/paperboat-dev_*.deb python3-pip >/dev/null
             pip install -q --break-system-packages websockets jsonschema
-            cp -r /src /tmp/dc-drive && paperboat build /tmp/dc-drive && paperboat check /tmp/dc-drive'
+            cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend'
       - name: "SDK: the .tar.gz on Fedora builds and checks a backend"
         run: |
-          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/examples/dc-drive-cpp:/src:ro" fedora:latest sh -ec '
+          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" fedora:latest sh -ec '
             dnf install -y -q cmake gcc-c++ make python3-pip tar gzip >/dev/null
             pip install -q websockets jsonschema
             mkdir /opt/pb && tar xzf /dist/paperboat-*.tar.gz -C /opt/pb --strip-components=1
-            cp -r /src /tmp/dc-drive && /opt/pb/bin/paperboat build /tmp/dc-drive && /opt/pb/bin/paperboat check /tmp/dc-drive'
+            cp -r /src /tmp/sdk-backend && /opt/pb/bin/paperboat build /tmp/sdk-backend && /opt/pb/bin/paperboat check /tmp/sdk-backend'
       - name: The npm packages install on a clean Node and run
         run: |
           prefix=$(mktemp -d)
@@ -81,9 +81,9 @@ jobs:
           "$prefix/bin/paperboat" --version
           "$prefix/bin/paperboat" pkg list
           pip install -q --upgrade websockets jsonschema   # the runner's jsonschema 3.2 predates Draft 2020-12
-          cp -r examples/dc-drive-cpp "$RUNNER_TEMP/dc-drive" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
-          CXX=g++-12 "$prefix/bin/paperboat" build "$RUNNER_TEMP/dc-drive"   # against the SDK in the platform package
-          "$prefix/bin/paperboat" check "$RUNNER_TEMP/dc-drive"
+          cp -r engine/tests/sdk-backend "$RUNNER_TEMP/sdk-backend" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
+          CXX=g++-12 "$prefix/bin/paperboat" build "$RUNNER_TEMP/sdk-backend"   # against the SDK in the platform package
+          "$prefix/bin/paperboat" check "$RUNNER_TEMP/sdk-backend"
       - uses: actions/upload-artifact@v4
         with:
           name: linux
@@ -132,9 +132,9 @@ jobs:
           pip install -q websockets jsonschema
           mkdir -p "$RUNNER_TEMP/pb" && unzip -q dist/paperboat-*.zip -d "$RUNNER_TEMP/pb"
           exe=$(ls "$RUNNER_TEMP"/pb/*/bin/paperboat.exe)
-          cp -r examples/dc-drive-cpp "$RUNNER_TEMP/dc-drive" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
-          "$exe" build "$RUNNER_TEMP/dc-drive"
-          "$exe" check "$RUNNER_TEMP/dc-drive"
+          cp -r engine/tests/sdk-backend "$RUNNER_TEMP/sdk-backend" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
+          "$exe" build "$RUNNER_TEMP/sdk-backend"
+          "$exe" check "$RUNNER_TEMP/sdk-backend"
           python scripts/pack_npm.py --version "$v" --out dist/npm --main
       - name: The npm packages install and run through the launcher
         run: |
