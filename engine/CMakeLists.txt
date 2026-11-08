@@ -12,6 +12,16 @@ option(PAPERBOAT_BUILD_TOOLS "Build paperboat-catalog" ${PROJECT_IS_TOP_LEVEL})
 option(PAPERBOAT_BUILD_MODELICA "Build engine/modelica when omc is installed" ${PROJECT_IS_TOP_LEVEL})
 option(PAPERBOAT_MODELICA_WITHOUT_OMC "Build engine/modelica even when omc is not installed (release packages: omc is only needed at run time)" OFF)
 option(PAPERBOAT_STATIC_RUNTIME "Link libstdc++ and libgcc statically, so a release binary needs only glibc" OFF)
+# The SDK (pb#177): install paperboat::core, paperboat::toolkit and their headers, so a backend can
+# find_package(Paperboat) instead of building the engine from source.
+option(PAPERBOAT_INSTALL "Install the SDK (libraries, headers, CMake config)" ${PROJECT_IS_TOP_LEVEL})
+
+include(GNUInstallDirs)
+if(PAPERBOAT_INSTALL)
+  # The libraries and their dependencies go to the "dev" component (paperboat-dev); bin/ and share/ name "runtime".
+  set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME dev)
+  set(JSON_Install ON CACHE BOOL "" FORCE)
+endif()
 
 if(MSVC AND PAPERBOAT_STATIC_RUNTIME)  # no vcruntime DLL to install next to the .exe; set before the dependencies are fetched
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -28,6 +38,8 @@ FetchContent_Declare(tomlplusplus
 FetchContent_MakeAvailable(nlohmann_json tomlplusplus)
 
 add_library(paperboat_warnings INTERFACE)
+add_library(paperboat::warnings ALIAS paperboat_warnings)
+set_target_properties(paperboat_warnings PROPERTIES EXPORT_NAME warnings)
 if(MSVC)
   target_compile_options(paperboat_warnings INTERFACE /W4 /permissive-)
 else()
@@ -37,13 +49,28 @@ endif()
 # WebSocket for engine/core's server.
 set(USE_TLS OFF CACHE BOOL "" FORCE)
 set(USE_ZLIB OFF CACHE BOOL "" FORCE)
-set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)  # keep its headers and library out of our packages
+set(IXWEBSOCKET_INSTALL ${PAPERBOAT_INSTALL} CACHE BOOL "" FORCE)  # the SDK links it: core uses it privately
 FetchContent_Declare(ixwebsocket SYSTEM  # SYSTEM goes right after the name: CMake 3.25 reads it at the end as a URL
   URL https://github.com/machinezone/IXWebSocket/archive/refs/tags/v12.1.0.tar.gz)
 FetchContent_MakeAvailable(ixwebsocket)
 
 add_subdirectory(toolkit)
 add_subdirectory(core)
+
+if(PAPERBOAT_INSTALL)
+  include(CMakePackageConfigHelpers)
+  set(PAPERBOAT_CMAKE_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/Paperboat)
+  install(TARGETS paperboat_core paperboat_toolkit paperboat_warnings EXPORT PaperboatTargets COMPONENT dev
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(DIRECTORY core/include/ toolkit/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT dev)
+  install(EXPORT PaperboatTargets NAMESPACE paperboat:: DESTINATION ${PAPERBOAT_CMAKE_DIR} COMPONENT dev)
+  configure_package_config_file(cmake/PaperboatConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfig.cmake
+                                INSTALL_DESTINATION ${PAPERBOAT_CMAKE_DIR})
+  # 0.x: a backend built against 0.1 needs a 0.1 engine (SameMinorVersion).
+  write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfigVersion.cmake COMPATIBILITY SameMinorVersion)
+  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfigVersion.cmake
+          DESTINATION ${PAPERBOAT_CMAKE_DIR} COMPONENT dev)
+endif()
 
 # Optional toolkit packages are self-contained folders with a toolkit.toml and a
 # CMakeLists.txt. The folder decides whether its dependency is available/enabled.
@@ -81,6 +108,14 @@ if(PROJECT_IS_TOP_LEVEL)
   set(CPACK_DEBIAN_PACKAGE_SECTION science)
   set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
   set(CPACK_DEBIAN_PACKAGE_SUGGESTS "git, nodejs, npm, openmodelica")
+  # Two .debs: paperboat (bin, share) and paperboat-dev (the SDK). The .tar.gz and .zip hold both.
+  set(CPACK_DEB_COMPONENT_INSTALL ON)
+  set(CPACK_COMPONENTS_ALL runtime dev)
+  set(CPACK_DEBIAN_RUNTIME_PACKAGE_NAME paperboat)
+  set(CPACK_DEBIAN_DEV_PACKAGE_NAME paperboat-dev)
+  set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "paperboat (= ${PROJECT_VERSION}), cmake (>= 3.25), g++ (>= 4:12)")
+  set(CPACK_DEBIAN_DEV_PACKAGE_SHLIBDEPS OFF)  # static libraries
+  set(CPACK_DEBIAN_DEV_PACKAGE_SECTION libdevel)
   include(CPack)
 endif()
 
