@@ -48,9 +48,9 @@ engine/                   C++20 engine: toolkit (reusable blocks and station obj
 python/                   Python bindings for the engine (pip install ./python): write a
                           backend's domain code in Python, the C++ engine runs it
 protocol/                 WebSocket protocol spec, JSON Schema, smoke_test.py and golden.py
-examples/backends/        example backends, each a project of its own that uses Paperboat
-                          (copy one anywhere and it still runs). Published separately, as
-                          the paperboat-examples repository; clone it next to this one
+../paperboat-examples/    example backends (their own repository), each a project of its own
+                          with a backend.toml (name, port); copy one anywhere and it still
+                          runs. Clone it next to this one, or `paperboat pkg install paperboat-examples`
   mass-spring-python/     simulation: a sine pushes a mass on a spring (Python)
   cart-pole-cpp/          simulation, closed loop: PID balances a pole. C++: the blocks
                           come from the toolkit, the Cart-pole station object is its own
@@ -103,7 +103,7 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ./bin/paperboat start cart-pole     # builds and runs the cart-pole backend (run is the same)
 ./bin/paperboat list                # everything running, with a KIND: backend or app
 ./bin/paperboat start               # starts the web app on port 3047 (stop / restart: the same, no target)
-./bin/paperboat examples start      # launches all example backends (ports 8765-8773)
+./bin/paperboat examples start      # launches every example backend, each on its backend.toml port
 ./bin/paperboat examples status     # checks status of example backends
 ./bin/paperboat toolkit list        # lists available and installed toolkits
 ./bin/paperboat update --check    # is this checkout (and its app checkouts) behind? `update` pulls and rebuilds

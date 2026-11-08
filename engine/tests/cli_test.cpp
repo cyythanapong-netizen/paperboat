@@ -15,6 +15,7 @@
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
 #endif
+#include "../tools/examples.hpp"
 #include "../tools/paperboat_tui.hpp"
 #include <nlohmann/json.hpp>
 
@@ -115,15 +116,6 @@ TEST_CASE("BackendManager check_backend validates missing vs valid descriptors")
   CHECK_FALSE(non_existent.ok);
   CHECK_FALSE(non_existent.errors.empty());
 
-  // Check example backends if available
-  auto ex_dir = core::BackendManager::find_examples_dir();
-  if (!ex_dir.empty() && fs::is_directory(ex_dir / "cart-pole-cpp")) {
-    auto res = core::BackendManager::check_backend(ex_dir / "cart-pole-cpp", /*fast=*/true);
-    CHECK(res.ok);
-    CHECK(res.domain == "cart-pole");
-    CHECK(res.manifest_ok);
-    CHECK(res.catalog_ok);
-  }
 }
 
 TEST_CASE("BackendManifest load_manifest validates schema and required fields") {
@@ -339,27 +331,36 @@ TEST_CASE("BackendManager check_backend handles toolkit = ['__all__'] importing 
   fs::remove_all(tmp_dir, ec);
 }
 
-TEST_CASE("BackendManager pack_backend and unpack_backend roundtrip excludes build junk") {
-  auto ex_dir = core::BackendManager::find_examples_dir();
-  if (ex_dir.empty() || !fs::is_directory(ex_dir / "cart-pole-cpp")) {
-    return;
-  }
+namespace {
+// A Python backend folder the engine can check without building anything.
+fs::path probe_backend(const fs::path& dir, const std::string& name, int port) {
+  fs::remove_all(dir);
+  fs::create_directories(dir);
+  std::ofstream(dir / "backend.toml") << "[backend]\nformat = 0\nname = \"" << name
+                                         << "\"\nlanguage = \"python\"\nrun = \"server.py\"\nport = " << port
+                                         << "\ndescriptor = \"descriptor.toml\"\n";
+  std::ofstream(dir / "descriptor.toml") << "domain = \"" << name << "\"\nimport = [\"math\"]\n";
+  std::ofstream(dir / "server.py") << "\n";
+  return dir;
+}
+}  // namespace
 
-  const fs::path src_dir = ex_dir / "cart-pole-cpp";
-  const fs::path pkg_path = fs::temp_directory_path() / "test_cart_pole_roundtrip.ppk";
-  const fs::path unpack_dir = fs::temp_directory_path() / "test_cart_pole_unpacked";
+TEST_CASE("BackendManager pack_backend and unpack_backend roundtrip excludes build junk") {
+  const fs::path src_dir = probe_backend(fs::temp_directory_path() / "pb_pack_src", "probe", 8765);
+  fs::create_directories(src_dir / "build");
+  std::ofstream(src_dir / "build" / "junk.o") << "x";
+  const fs::path pkg_path = fs::temp_directory_path() / "pb_pack_roundtrip.ppk";
+  const fs::path unpack_dir = fs::temp_directory_path() / "pb_pack_unpacked";
 
   std::error_code ec;
   fs::remove(pkg_path, ec);
   fs::remove_all(unpack_dir, ec);
 
-  // Pack backend
   auto pack_res = core::BackendManager::pack_backend(src_dir, pkg_path, /*fast=*/true);
   REQUIRE(pack_res.ok);
-  CHECK(pack_res.file_count >= 6);
+  CHECK(pack_res.file_count >= 3);
   CHECK(fs::is_regular_file(pkg_path));
 
-  // Unpack backend and verify checksums
   auto unpack_res = core::BackendManager::unpack_backend(pkg_path, unpack_dir, /*verify=*/true);
   REQUIRE(unpack_res.ok);
   CHECK(unpack_res.file_count == pack_res.file_count);
@@ -367,14 +368,37 @@ TEST_CASE("BackendManager pack_backend and unpack_backend roundtrip excludes bui
   CHECK(fs::is_regular_file(unpack_dir / "descriptor.toml"));
   CHECK_FALSE(fs::exists(unpack_dir / "build"));
 
-  // Check the unpacked directory passes verification
   auto check_unpacked = core::BackendManager::check_backend(unpack_dir, /*fast=*/true);
   CHECK(check_unpacked.ok);
-  CHECK(check_unpacked.name == "cart-pole");
+  CHECK(check_unpacked.name == "probe");
 
-  // Clean up
   fs::remove(pkg_path, ec);
   fs::remove_all(unpack_dir, ec);
+  fs::remove_all(src_dir, ec);
+}
+
+TEST_CASE("examples are the backend folders of an examples dir, by their backend.toml port") {
+  const fs::path dir = fs::temp_directory_path() / "pb_examples_fixture";
+  fs::remove_all(dir);
+  probe_backend(dir / "beta-python", "beta", 18902);
+  probe_backend(dir / "alpha-python", "alpha", 18901);
+  fs::create_directories(dir / "not-a-backend");
+
+  const auto list = paperboat::cli::list_examples(dir);
+  REQUIRE(list.size() == 2);
+  CHECK(list[0].name == "alpha");
+  CHECK(list[0].port == 18901);
+  CHECK(list[0].language == "python");
+  CHECK(list[1].name == "beta");
+
+  CHECK(fs::equivalent(paperboat::cli::find_examples_dir(dir), dir));
+  CHECK(paperboat::cli::list_examples(dir / "not-a-backend").empty());
+
+  // A name resolves through the search folders the CLI adds, with or without its language suffix.
+  core::BackendManager::search_dirs = {dir};
+  CHECK(fs::equivalent(core::BackendManager::resolve_backend_dir("alpha"), dir / "alpha-python"));
+  core::BackendManager::search_dirs.clear();
+  fs::remove_all(dir);
 }
 
 TEST_CASE("WaveSpinner starts and stops cleanly") {

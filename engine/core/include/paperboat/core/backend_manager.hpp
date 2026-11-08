@@ -39,16 +39,6 @@ enum class BackendKind {
   Unknown
 };
 
-struct ExampleBackend {
-  int port = 0;
-  std::string name;
-  std::string type;  // "cpp" or "python"
-  std::filesystem::path dir;
-  bool running = false;
-  int pid = 0;
-  std::string ws_url;
-};
-
 struct BackendManifest {
   int format = 0;
   std::string name;
@@ -155,6 +145,8 @@ class BackendManager {
   // Backend kind and directory resolution
   static BackendKind detect_backend_kind(const std::filesystem::path& path);
   static std::filesystem::path user_backends_dir();
+  // Extra folders a backend name is looked up in (the CLI adds the examples folder).
+  static inline std::vector<std::filesystem::path> search_dirs;
   static std::filesystem::path resolve_backend_dir(const std::filesystem::path& path_or_domain = {});
 
   // Lifecycle execution
@@ -162,13 +154,6 @@ class BackendManager {
                          const BackendRunOptions& opts = {});
   static bool stop_backend(const std::string& target, bool all = false);
   static bool restart_backend(const std::string& target, const BackendRunOptions& opts = {});
-
-  // Multi-backend orchestration (examples)
-  static std::filesystem::path find_examples_dir(const std::filesystem::path& hint = {});
-  static std::vector<ExampleBackend> get_examples(const std::filesystem::path& examples_dir = {});
-  static bool start_examples(const std::filesystem::path& examples_dir = {});
-  static bool stop_examples();
-  static std::vector<ExampleBackend> status_examples(const std::filesystem::path& examples_dir = {});
 
   // Web application management
   static bool start_app(int port = 3047, const std::string& host = "0.0.0.0", bool daemon = false);

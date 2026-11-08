@@ -18,3 +18,9 @@ port = 8790
 deps = ["paperboat-shared"]
 build = ["npm ci", "npm run build"]
 output = "dist"
+
+[[apps]]
+name = "paperboat-examples"
+repo = "https://github.com/paperboatlab/paperboat-examples.git"
+description = "The example backends: `paperboat examples start` finds them here, each by its backend.toml."
+kind = "library"

@@ -26,6 +26,7 @@
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
 #endif
+#include "examples.hpp"
 #include "paperboat_tui.hpp"
 
 namespace {
@@ -90,7 +91,7 @@ Web app:
   (start --daemon and app start --daemon keep it in the background; stop ends it)
 
 Examples Orchestration:
-  examples start [--dir <P>] Launch all example backends (ports 8765-8773)
+  examples start [--dir <P>] Launch all example backends (each on its backend.toml port)
   examples stop              Stop all example backends
   examples status            Show status of example backends
 
@@ -338,7 +339,7 @@ int cmd_backends(const std::vector<std::string_view>& args) {
         {"source", std::move(source)},
     };
   };
-  for (const auto& ex : core::BackendManager::get_examples()) add(ex.dir, "example", ex.port);
+  for (const auto& ex : paperboat::cli::list_examples(paperboat::cli::find_examples_dir())) add(ex.dir, "example", ex.port);
   std::error_code ec;
   for (const auto& entry : fs::directory_iterator(core::BackendManager::user_backends_dir(), ec)) {
     if (entry.is_directory()) add(entry.path(), "installed", 8765);
@@ -696,12 +697,13 @@ int cmd_examples(const std::vector<std::string_view>& args) {
     }
   }
 
+  const fs::path edir = paperboat::cli::find_examples_dir(dir);
   if (sub == "start") {
-    return core::BackendManager::start_examples(dir) ? 0 : 1;
+    return paperboat::cli::start_examples(edir) ? 0 : 1;
   } else if (sub == "stop") {
-    return core::BackendManager::stop_examples() ? 0 : 1;
+    return paperboat::cli::stop_examples(edir) ? 0 : 1;
   } else if (sub == "status") {
-    auto list = core::BackendManager::status_examples(dir);
+    auto list = paperboat::cli::list_examples(edir);
     std::cout << std::left << std::setw(8) << "PORT"
               << std::setw(26) << "NAME"
               << std::setw(10) << "TYPE"
@@ -711,10 +713,10 @@ int cmd_examples(const std::vector<std::string_view>& args) {
     for (const auto& item : list) {
       std::cout << std::left << std::setw(8) << item.port
                 << std::setw(26) << item.name
-                << std::setw(10) << item.type
+                << std::setw(10) << item.language
                 << std::setw(12) << (item.running ? "running" : "idle")
                 << std::setw(8) << (item.running ? std::to_string(item.pid) : "-")
-                << item.ws_url << '\n';
+                << "ws://localhost:" << item.port << '\n';
     }
     return 0;
   } else {
@@ -1437,6 +1439,11 @@ int main(int argc, char** argv) {
   if (argc < 2) {
     launch_console({});
     return run_interactive_prompt();
+  }
+
+  // A bare backend name (`paperboat run cart-pole`) is also looked up among the examples.
+  if (const fs::path edir = paperboat::cli::find_examples_dir(); !edir.empty()) {
+    core::BackendManager::search_dirs.push_back(edir);
   }
 
   std::vector<std::string_view> args(argv + 1, argv + argc);

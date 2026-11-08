@@ -344,7 +344,6 @@ void BackendManager::unregister_running_backend(int port) {
 
 std::vector<RunningBackend> BackendManager::list_running_backends() {
   std::vector<RunningBackend> result;
-  std::vector<int> found_ports;
   const auto rdir = runtime_dir();
 
   if (fs::is_directory(rdir)) {
@@ -380,50 +379,9 @@ std::vector<RunningBackend> BackendManager::list_running_backends() {
         b.started_at = doc.value("started_at", int64_t{0});
 
         result.push_back(std::move(b));
-        found_ports.push_back(port);
       } catch (...) {
         std::error_code rm_ec;
         fs::remove(path, rm_ec);
-      }
-    }
-  }
-
-  // Fallback probe for known example ports 8765..8773 (and any from 8765 to 8780)
-  for (int p = 8765; p <= 8780; ++p) {
-    if (std::ranges::find(found_ports, p) != found_ports.end()) continue;
-    if (is_port_listening(p)) {
-      int pid = find_pid_by_port(p);
-      if (pid > 0) {
-        std::string cmd = ProcessRunner::read_cmdline(pid);
-        RunningBackend b;
-        b.port = p;
-        b.pid = pid;
-        b.ws_url = ws_url(p);
-        b.executable = cmd;
-
-        // The first name found in the command line wins, so the order matters.
-        static constexpr std::pair<std::string_view, std::string_view> known[] = {
-            {"cart-pole", "paperboat/cart-pole-cpp"},
-            {"parts", "paperboat/parts-cpp"},
-            {"double-pendulum", "paperboat/double-pendulum-cpp"},
-            {"mass-spring", "python"},
-            {"runner", "python"},
-            {"animation", "python"},
-            {"chain", "python"},
-            {"supply", "python"},
-            {"parametric", "python"},
-        };
-        b.domain = "unknown";
-        b.engine = "paperboat";
-        for (const auto& [domain, engine] : known) {
-          if (cmd.find(domain) != std::string::npos) {
-            b.domain = domain;
-            b.engine = engine;
-            break;
-          }
-        }
-
-        result.push_back(std::move(b));
       }
     }
   }
@@ -651,22 +609,16 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
     if (is_valid_backend_dir(p_check) || fs::is_regular_file(p_check)) return fs::absolute(p_check);
   }
 
-  // Look in paperboat-examples, examples/backends, user backends, or sibling directory
-  const fs::path root = toolkit::find_repo_root();
-  const fs::path edir = find_examples_dir();
+  // Look in the extra search folders (the CLI adds the examples), user backends, or a sibling directory
   const std::string name = p_check.string();
   const fs::path ub_dir = user_backends_dir();
 
-  std::vector<fs::path> candidates = {
-      edir / name,
-      edir / (name + "-cpp"),
-      edir / (name + "-python"),
-      root / "examples" / "backends" / name,
-      root / "examples" / "backends" / (name + "-cpp"),
-      root / "examples" / "backends" / (name + "-python"),
-      ub_dir / name,
-      fs::current_path().parent_path() / name,
-  };
+  std::vector<fs::path> candidates;
+  for (const auto& d : search_dirs) {
+    for (const auto& n : {name, name + "-cpp", name + "-python"}) candidates.push_back(d / n);
+  }
+  candidates.push_back(ub_dir / name);
+  candidates.push_back(fs::current_path().parent_path() / name);
 
   for (const auto& c : candidates) {
     if (is_valid_backend_dir(c)) return c;
@@ -900,143 +852,6 @@ bool BackendManager::restart_backend(const std::string& target, const BackendRun
   BackendRunOptions run_opts = opts;
   if (port > 0 && run_opts.port <= 0) run_opts.port = port;
   return run_backend(backend_dir, run_opts) == 0;
-}
-
-fs::path BackendManager::find_examples_dir(const fs::path& hint) {
-  if (const char* env = std::getenv("PAPERBOAT_EXAMPLES_DIR"); env && *env && fs::is_directory(env)) {
-    return env;
-  }
-  if (!hint.empty() && fs::is_directory(hint)) return hint;
-
-  const fs::path root = toolkit::find_repo_root();
-  auto is_examples_dir = [](const fs::path& p) {
-    return fs::is_directory(p) && (
-        fs::is_regular_file(p / "cart-pole-cpp" / "CMakeLists.txt") ||
-        fs::is_regular_file(p / "mass-spring-python" / "server.py")
-    );
-  };
-
-  if (!root.empty()) {
-    if (is_examples_dir(root.parent_path() / "paperboat-examples")) {
-      return root.parent_path() / "paperboat-examples";
-    }
-  }
-
-  if (!root.empty() && is_examples_dir(root / "examples" / "backends")) {
-    return root / "examples" / "backends";
-  }
-
-  return {};
-}
-
-std::vector<ExampleBackend> BackendManager::get_examples(const fs::path& examples_dir) {
-  const fs::path edir = find_examples_dir(examples_dir);
-  struct Known {
-    int port;
-    const char* name;
-    const char* type;
-  };
-  static constexpr Known known[] = {
-      {8765, "mass-spring-python", "python"}, {8766, "cart-pole-cpp", "cpp"},
-      {8767, "parametric-python", "python"},  {8768, "runner-python", "python"},
-      {8769, "animation-python", "python"},   {8770, "parts-cpp", "cpp"},
-      {8771, "chain-python", "python"},       {8772, "supply-python", "python"},
-      {8773, "double-pendulum-cpp", "cpp"},
-  };
-
-  std::vector<ExampleBackend> list;
-  for (const auto& k : known) {
-    ExampleBackend item{k.port, k.name, k.type, edir / k.name, false, 0, ws_url(k.port)};
-    if (is_port_listening(item.port)) {
-      item.running = true;
-      item.pid = find_pid_by_port(item.port);
-    }
-    list.push_back(std::move(item));
-  }
-  return list;
-}
-
-bool BackendManager::start_examples(const fs::path& examples_dir) {
-  const fs::path edir = find_examples_dir(examples_dir);
-  if (edir.empty() || !fs::is_directory(edir)) {
-    std::cerr << "error: paperboat-examples directory not found. Please set PAPERBOAT_EXAMPLES_DIR.\n";
-    return false;
-  }
-
-  std::cout << "Using examples directory: " << edir.string() << '\n';
-  stop_examples();
-
-  const fs::path root = toolkit::find_repo_root();
-  auto py_env = prepare_python_env(root);
-
-  // Record a launched example so `paperboat list` and `stop` find it.
-  const auto launched = [](const ExampleBackend& ex, int pid, const std::string& engine, const std::string& domain,
-                           const fs::path& cwd, const std::string& executable) {
-    if (pid <= 0) return;
-    std::cout << "Started " << ex.name << " on port " << ex.port << " (PID " << pid << ")\n";
-    RunningBackend rb;
-    rb.port = ex.port;
-    rb.pid = pid;
-    rb.engine = engine;
-    rb.domain = domain;
-    rb.cwd = cwd;
-    rb.backend_dir = ex.dir;
-    rb.executable = executable;
-    rb.ws_url = ws_url(ex.port);
-    rb.started_at = current_timestamp();
-    register_running_backend(rb);
-  };
-
-  auto examples = get_examples(edir);
-  for (const auto& ex : examples) {
-    if (!fs::is_directory(ex.dir)) {
-      std::cout << "[skip] " << ex.name << " (directory not found: " << ex.dir << ")\n";
-      continue;
-    }
-
-    const fs::path log_path = platform::shared_tmp_dir() / ("backend-" + std::to_string(ex.port) + ".log");
-    if (ex.type == "cpp") {
-      std::cout << "==> Building " << ex.name << "…\n";
-      std::string err;
-      if (!ensure_built(ex.dir, false, false, &err)) {
-        std::cerr << "warning: " << ex.name << " build failed: " << err << '\n';
-        continue;
-      }
-
-      const fs::path bin = built_binary(ex.dir / "build");
-      if (bin.empty()) {
-        std::cerr << "warning: binary for " << ex.name << " not found\n";
-        continue;
-      }
-
-      int pid = ProcessRunner::run_detached({bin.string(), "--port", std::to_string(ex.port)}, root, {}, log_path);
-      launched(ex, pid, "paperboat/" + ex.name, ex.name.substr(0, ex.name.find("-cpp")), root, bin.string());
-    } else {
-      // Python
-      int pid = ProcessRunner::run_detached({py_env.python_bin.string(), "server.py", "--port", std::to_string(ex.port)},
-                                            ex.dir, py_env.env, log_path);
-      launched(ex, pid, "python", ex.name.substr(0, ex.name.find("-python")), ex.dir,
-               py_env.python_bin.string() + " server.py");
-    }
-  }
-
-  std::cout << "==> All example backends launched (ports 8765-8773).\n";
-  return true;
-}
-
-bool BackendManager::stop_examples() {
-  std::cout << "==> Stopping all example backends (ports 8765-8773)…\n";
-  for (int p = 8765; p <= 8773; ++p) {
-    stop_user_service("paperboat-backend-" + std::to_string(p) + ".service");
-    free_port(p, 1000);
-    unregister_running_backend(p);
-  }
-  std::cout << "==> All example backends stopped.\n";
-  return true;
-}
-
-std::vector<ExampleBackend> BackendManager::status_examples(const fs::path& examples_dir) {
-  return get_examples(examples_dir);
 }
 
 bool BackendManager::start_app(int port, const std::string& host, bool daemon) {

@@ -167,7 +167,7 @@ function Picker() {
           </Text>
         );
       })}
-      {!list.length && <Text dimColor>{S.backends.length ? 'nothing matches · backspace to widen' : 'no backends found · set PAPERBOAT_EXAMPLES_DIR'}</Text>}
+      {!list.length && <Text dimColor>{S.backends.length ? 'nothing matches · backspace to widen' : 'no backends found · paperboat pkg install paperboat-examples (or set PAPERBOAT_EXAMPLES_DIR)'}</Text>}
     </Panel>
   );
 }

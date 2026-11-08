@@ -83,8 +83,8 @@ endforeach()
 if(PAPERBOAT_BUILD_TOOLS)
   add_subdirectory(tools)
 endif()
-# Backends (examples/backends/*-cpp) are projects of their own that use the engine; the
-# engine never builds or reads them.
+# Backends (the paperboat-examples repository, or anyone's) are projects of their own that use
+# the engine; the engine never builds or reads them. Only the CLI finds the examples.
 
 # Packages (cpack -G DEB / TGZ / ZIP): the paperboat binary and the registries it reads (see tools/).
 if(PROJECT_IS_TOP_LEVEL)
