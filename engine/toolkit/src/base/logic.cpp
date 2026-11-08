@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "common.hpp"
+#include "curve_icons.hpp"
 #include "paperboat/toolkit/bases.hpp"
 
 namespace paperboat::toolkit::base {
@@ -154,7 +155,7 @@ void add_logic(Registry& registry) {
         const bool below = inc_max ? (u <= hi) : (u < hi);
         return above && below;
       },
-      "Holds when u is between min and max.", {.compact = true, .glyph = "window", .value = "{min}…{max}"});
+      "Holds when u is between min and max.", {.compact = true, .glyph = "window", .value = "{min}…{max}", .icon = icons::window()});
 }
 
 }  // namespace paperboat::toolkit::base

@@ -376,17 +376,28 @@ TEST_CASE("a block's view: built-in for simple maths, inherited, overridden one 
   };
   // Simple maths blocks are compact plates by default…
   const auto base = msg("[[blocks]]\nuse = \"math/gain\"\n[[blocks]]\nuse = \"math/sum\"\n[[blocks]]\nuse = \"control/pid\"\n");
-  CHECK(block(base, "gain")["view"] == nlohmann::json{{"compact", true}, {"glyph", "gain"}, {"value", "{k}"}});
-  CHECK(block(base, "sum")["view"] == nlohmann::json{{"compact", true}, {"glyph", "plus"}});
+  CHECK(block(base, "gain")["view"]["compact"] == true);
+  CHECK(block(base, "gain")["view"]["glyph"] == "gain");
+  CHECK(block(base, "gain")["view"]["value"] == "{k}");
+  CHECK(block(base, "gain")["view"].contains("icon"));
+  CHECK(block(base, "sum")["view"]["compact"] == true);
+  CHECK(block(base, "sum")["view"]["glyph"] == "plus");
+  CHECK(block(base, "sum")["view"].contains("icon"));
   // …and a block with no view is the normal card: the key is absent.
   CHECK_FALSE(block(base, "pid").contains("view"));
 
   // A definition inherits its parent's view and overrides single keys of it.
   const auto child = msg("[[blocks]]\nuse = \"math/gain\"\ntype = \"half\"\ndefaults = { k = 0.5 }\nview = { glyph = \"plus\" }\n");
-  CHECK(block(child, "half")["view"] == nlohmann::json{{"compact", true}, {"glyph", "plus"}, {"value", "{k}"}});
+  CHECK(block(child, "half")["view"]["compact"] == true);
+  CHECK(block(child, "half")["view"]["glyph"] == "plus");
+  CHECK(block(child, "half")["view"]["value"] == "{k}");
+  CHECK(block(child, "half")["view"]["icon"] == block(base, "gain")["view"]["icon"]);
   // compact = false turns a compact parent back into a card; the other keys stay.
   const auto card = msg("[[blocks]]\nuse = \"math/gain\"\nview = { compact = false }\n");
-  CHECK(block(card, "gain")["view"] == nlohmann::json{{"compact", false}, {"glyph", "gain"}, {"value", "{k}"}});
+  CHECK(block(card, "gain")["view"]["compact"] == false);
+  CHECK(block(card, "gain")["view"]["glyph"] == "gain");
+  CHECK(block(card, "gain")["view"]["value"] == "{k}");
+  CHECK(block(card, "gain")["view"]["icon"] == block(base, "gain")["view"]["icon"]);
 
   auto fails_with = [](const std::string& view, const std::string& text) {
     INFO(view);

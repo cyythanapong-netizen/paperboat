@@ -5,6 +5,7 @@
 #include <string>
 
 #include "common.hpp"
+#include "curve_icons.hpp"
 
 namespace paperboat::toolkit::base {
 namespace {
@@ -41,7 +42,7 @@ void add_values(Registry& registry) {
       "base", "constant", "Number", {}, {"y"}, {{"value", 1.0}}, [](const Values& p, const Config&) {
         double value = get_or(p, "value");
         return std::make_unique<Stateless>([=](const Context&, const Values&) { return Values{{"y", value}}; });
-      }, "A number you set.", {.compact = true, .glyph = "const", .value = "{value}"});
+      }, "A number you set.", {.compact = true, .glyph = "const", .value = "{value}", .icon = icons::constant()});
   registry.add(std::move(number));
 
   registry.add(make_template(
@@ -50,7 +51,7 @@ void add_values(Registry& registry) {
         const auto it = text.find("name");
         return std::make_unique<VariableValue>(it == text.end() ? "" : it->second);
       },
-      "A variable's value: constant for the run, or live if the variable is tunable.", {.compact = true, .glyph = "const", .value = "{name}"}));
+      "A variable's value: constant for the run, or live if the variable is tunable.", {.compact = true, .glyph = "const", .value = "{name}", .icon = icons::constant()}));
 
   Template text;
   text.name = "base/text";
