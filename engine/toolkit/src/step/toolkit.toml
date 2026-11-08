@@ -1,3 +1,2 @@
 # Step-flow control blocks.
 name = "step"
-register = ["add_flow"]

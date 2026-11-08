@@ -124,8 +124,15 @@ struct BlockDef {
   std::vector<PortDef> inputs = {};
   std::vector<PortDef> outputs = {};
   std::vector<ParamDef> params = {};
-  // A monitor's instrument on the Dashboard: "graph", "display", "image"…
+  // A monitor's instrument on the Dashboard: "graph", "display", "image"… Its kind is the name of a
+  // component a toolkit's web/index.tsx registers (the engine knows no instrument by name).
   std::string instrument = {};
+  // How the run samples this monitor for its instrument. A vector input is sent as one sample (a
+  // readout or a scope shows all its components) rather than, in a run-once, plotted by index.
+  bool whole_vector = false;
+  // One sample per wired input, each tagged with the input's id (the signal's `port`): a monitor
+  // with several inputs (a scope's a, b…). Otherwise one sample, from `in`.
+  bool sample_per_input = false;
   // A magic block's forms (its inputs and outputs are the first's); its `form` param picks one.
   std::vector<Form> forms = {};
   // The id of a text param that decides the inputs: one per sign character in it ("+-+": a, b,

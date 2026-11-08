@@ -2,7 +2,11 @@
   "name": "paperboat",
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "engine/toolkit/src/*/*/web",
+    "engine/toolkit/src/*/web",
+    "engine/toolkit/*/*/web",
+    "engine/toolkit/*/web"
   ],
   "scripts": {
     "dev": "npm run dev -w @paperboat/web --",

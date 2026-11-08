@@ -13,7 +13,8 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["vite/client"]
+    "types": ["vite/client"],
+    "paths": { "@paperboat/host": ["./src/host.ts"] }
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "../../engine/toolkit/src/*/*/web", "../../engine/toolkit/src/*/web", "../../engine/toolkit/*/*/web", "../../engine/toolkit/*/web"]
 }

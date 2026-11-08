@@ -1,0 +1,75 @@
+/* The switch instrument. The frame (.instrument, .screen, .idle) is the app's. */
+.instrument.switch-instrument .screen { display: flex; align-items: center; justify-content: center; padding: var(--space-3); }
+.switch-controls { display: flex; align-items: center; justify-content: center; gap: var(--space-3); width: 100%; }
+.switch-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 72px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 15px;
+  background: var(--night-50);
+  border: 1px solid var(--line-strong);
+  color: var(--text-on-screen-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.switch-pill.on {
+  background: color-mix(in srgb, var(--signal) 22%, var(--night-50));
+  border-color: var(--signal);
+  color: var(--text-on-screen);
+}
+.switch-pill .switch-text {
+  font: 600 var(--size-2xs) var(--font-mono);
+  letter-spacing: 0.05em;
+  z-index: 1;
+}
+.switch-pill .switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--night-900);
+  transition: transform 0.15s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+.switch-pill.on .switch-knob {
+  transform: translateX(42px);
+  background: var(--signal);
+}
+.switch-pill.on .switch-text {
+  margin-right: auto;
+  padding-left: 2px;
+}
+.switch-pill:not(.on) .switch-text {
+  margin-left: auto;
+  padding-right: 2px;
+}
+.switch-momentary-btn {
+  font: 600 var(--size-2xs) var(--font-mono);
+  letter-spacing: 0.05em;
+  padding: 4px 12px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--night-50);
+  border: 1px solid var(--line-strong);
+  color: var(--text-on-screen);
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  transition: all 0.1s ease;
+}
+.switch-momentary-btn.on,
+.switch-momentary-btn:not(:disabled):active {
+  background: var(--signal);
+  color: var(--black);
+  border-color: var(--signal);
+  transform: scale(0.96);
+}
+.switch-pill:disabled,
+.switch-momentary-btn:disabled { cursor: default; opacity: 0.5; }

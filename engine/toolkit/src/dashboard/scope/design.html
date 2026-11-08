@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paperboat · Graph and Scope (#37)</title>
+<!-- The app's real tokens and Geist fonts (generated from apps/web/src/tokens.css). -->
+<link rel="stylesheet" href="../../../../../../docs/_static/tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--surface-ground); color: var(--text); font: var(--size-sm)/1.45 var(--font-sans); -webkit-font-smoothing: antialiased; }
+  .page { width: 1328px; margin: 0 auto; padding: 24px; }
+  header.top { display: flex; align-items: end; justify-content: space-between; padding-bottom: 14px; border-bottom: 1px solid var(--line-strong); }
+  header.top h1 { margin: 0; font: 600 22px var(--font-sans); letter-spacing: -.02em; }
+  header.top p { margin: 4px 0 0; color: var(--text-muted); max-width: 900px; }
+  .choice { font: var(--size-xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+  .choice b { color: var(--text); font-weight: 600; }
+  .choice span, .choice b { margin: 0 4px; cursor: default; }
+  section.frame { margin: 28px 0 40px; }
+  section.frame > h2 { margin: 0 0 2px; font: 600 15px var(--font-sans); }
+  section.frame > p.note { margin: 0 0 14px; color: var(--text-muted); max-width: 1000px; }
+  .only section.frame { margin: 0; }
+  .only header.top { display: none; }
+
+  /* ---- app chrome (copied in spirit from styles.css) ---- */
+  .panel { background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+  .panel-head { height: var(--panel-head-height); display: flex; align-items: center; gap: 12px; padding: 0 var(--panel-pad); border-bottom: 1px solid var(--line); }
+  .panel-head h3 { margin: 0; font: 600 var(--size-sm) var(--font-sans); }
+  .panel-head .count { margin-left: auto; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
+  .k { display: inline-flex; align-items: center; height: 22px; padding: 0 7px; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-raised); color: var(--text); font: var(--size-2xs) var(--font-sans); white-space: nowrap; }
+  .k.ink { border-color: var(--line-ink); font-weight: 600; }
+  .k.on { border-color: var(--line-ink); font-weight: 600; }
+  .k.on::before { content: "[\00a0"; font-family: var(--font-mono); } .k.on::after { content: "\00a0]"; font-family: var(--font-mono); }
+  .k.ghost { border-color: transparent; background: transparent; color: var(--text-muted); }
+  .well { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; background: var(--surface-well); box-shadow: var(--well-shadow); border-radius: var(--radius-sm); font: var(--size-xs) var(--font-mono); color: var(--text); min-width: 48px; }
+  .unit { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
+
+  /* Board grid: 6 equal columns, 116px rows, 12px gap (Dashboard.tsx) */
+  .board { padding: var(--panel-pad); }
+  .grid { display: grid; grid-template-columns: repeat(6, 1fr); grid-auto-rows: 116px; gap: 12px; }
+  .instrument { margin: 0; min-width: 0; height: 100%; display: flex; flex-direction: column; }
+  .instrument .screen { flex: 1; min-height: 0; position: relative; background: var(--surface-screen); color: var(--text-on-screen); border-radius: var(--radius-md); overflow: hidden; }
+  .instrument figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; font: var(--size-2xs) var(--font-sans); color: var(--text-muted); min-height: 16px; }
+  .instrument figcaption output { font-family: var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; }
+  .instrument.display .screen { display: flex; align-items: flex-end; padding: 12px; }
+  .instrument.display .screen output { font: 500 var(--size-xl)/1 var(--font-mono); font-variant-numeric: tabular-nums; }
+  .instrument.graph .screen { padding: 12px; display: flex; }
+  .instrument.graph svg { display: block; width: 100%; height: 100%; }
+  .instrument .trace { stroke: var(--signal); stroke-width: 1.6; fill: none; }
+  .instrument .zero { stroke: var(--text-on-screen-muted); stroke-dasharray: 2 3; }
+  .instrument.idle .screen { background: transparent; border: 1px dashed var(--line-strong); color: var(--text-muted); }
+  .instrument.idle .zero { stroke: var(--line-strong); }
+
+  /* ---- the Scope ---- */
+  .scope figcaption { margin-top: 6px; justify-content: flex-start; }
+  .scope figcaption .name { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scope figcaption .state { font: var(--size-2xs) var(--font-mono); color: var(--text); }
+  .scope figcaption .state.live { color: var(--signal); }
+  .scope figcaption .gap { flex: 1; }
+  .scope figcaption .choice { margin-right: 2px; }
+  .scope .screen svg { position: absolute; inset: 0; display: block; }
+  .scope .screen text { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .scope.ringed .screen { outline: 2px solid var(--signal); outline-offset: 3px; }
+
+  /* glass: only what floats over live content */
+  .glass { background: var(--surface-float); backdrop-filter: var(--float-blur); -webkit-backdrop-filter: var(--float-blur); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); }
+  .pop { position: absolute; padding: 12px; min-width: 260px; font-size: var(--size-2xs); z-index: 5; }
+  .pop h4 { margin: 0 0 10px; font: 600 var(--size-sm) var(--font-sans); }
+  .pop .row { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 8px; margin: 7px 0; }
+  .pop .row > label { color: var(--text-muted); }
+  .pop .sep { height: 1px; background: var(--line); margin: 8px -12px; }
+  .pop .item { display: flex; justify-content: space-between; gap: 18px; padding: 5px 6px; border-radius: var(--radius-sm); }
+  .pop .item kbd { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
+  .pop .item.hot { outline: 1px solid var(--line-ink); }
+  .pop .foot { margin-top: 10px; display: flex; gap: 8px; justify-content: flex-end; }
+
+  /* callouts */
+  .call { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 999px; background: var(--line-ink); color: var(--surface-panel); font: 600 11px var(--font-mono); }
+  .anat { display: grid; grid-template-columns: 1fr 360px; gap: 24px; align-items: start; }
+  .anat ol { list-style: none; margin: 0; padding: 0; }
+  .anat li { display: grid; grid-template-columns: 24px 1fr; gap: 6px; margin: 0 0 12px; }
+  .anat li b { font-weight: 600; }
+  .anat li p { margin: 2px 0 0; color: var(--text-muted); }
+  .pin { position: absolute; z-index: 4; }
+
+  .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .cap { margin-top: 8px; color: var(--text-muted); font-size: var(--size-2xs); }
+  .cap b { color: var(--text); font-weight: 600; }
+
+  /* flow mock (taps frame) */
+  .canvas { position: relative; height: 230px; background-color: var(--surface-panel); background-image: radial-gradient(var(--dots) 1px, transparent 1px); background-size: 16px 16px; border-bottom: 1px solid var(--line); }
+  .blk { position: absolute; width: 150px; background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-md); font-size: var(--size-2xs); }
+  .blk .h { display: flex; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid var(--line); font-weight: 600; font-size: var(--size-xs); }
+  .blk .h i { font: normal var(--size-2xs) var(--font-mono); color: var(--text-muted); font-weight: 400; }
+  .blk .r { display: flex; justify-content: space-between; padding: 4px 8px; font-family: var(--font-mono); }
+  .blk .r .u { color: var(--text-muted); }
+  .blk.linked { border-top: 3px solid var(--line-ink); }
+  .dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: var(--line-ink); }
+  .dot.hot { width: 12px; height: 12px; background: var(--signal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--signal) 30%, transparent); }
+  .hint { position: absolute; padding: 4px 8px; background: var(--surface-raised); border: 1px dashed var(--line-ink); border-radius: var(--radius-sm); font: var(--size-2xs) var(--font-mono); white-space: nowrap; z-index: 6; }
+  .overlay { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+
+  /* studio mock */
+  .sbar { height: 44px; display: flex; align-items: center; gap: 18px; padding: 0 16px; border-bottom: 1px solid var(--line); }
+  .sbar .wm { font: 600 15px var(--font-sans); letter-spacing: -.01em; }
+  .sbar .tag { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); border: 1px solid var(--line-strong); border-radius: 3px; padding: 0 4px; margin-left: 4px; }
+  .sbar .menu { color: var(--text); font-size: var(--size-sm); }
+  .sbar .file { margin: 0 auto; font: var(--size-xs) var(--font-mono); color: var(--text-muted); }
+  table.spec { width: 100%; border-collapse: collapse; font-size: var(--size-2xs); }
+  table.spec th, table.spec td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.spec th { color: var(--text-muted); font-weight: 500; }
+  table.spec td code, .mono { font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+<div class="page">
+<header class="top">
+  <div>
+    <h1>Graph and Scope</h1>
+    <p>paperboat#37. The <b>Graph</b> stays as it is: the glance (shape and latest number). The <b>Scope</b> is new: the study (several signals, axes, zoom, cursors, triggers, X–Y, FFT, export). The Scope component is engine-agnostic so Studio (paperboat#160) reuses it for its Simulate check.</p>
+  </div>
+  <div class="choice" id="themes"><span data-t="light">light</span><span data-t="dark">dark</span></div>
+</header>
+
+<!-- 1 · Board ---------------------------------------------------------------------------- -->
+<section class="frame" id="board">
+  <h2>1 · The Board with both</h2>
+  <p class="note">A Scope defaults to <b>large</b>; here it is xlarge. Graph and Display are unchanged. Channels take colours in a fixed order, slot 1 the signal colour (frame 9).</p>
+  <div class="panel">
+    <div class="panel-head"><h3>Board</h3><span class="choice"><b>[ Main ]</b><span>Tuning</span></span><span class="count">6 instruments</span><span class="k">Arrange</span></div>
+    <div class="board">
+      <div class="grid">
+        <figure class="instrument scope" style="grid-column: 1 / span 3; grid-row: 1 / span 3" data-scope="boardScope"><div class="screen"></div></figure>
+        <figure class="instrument graph" style="grid-column: 4 / span 2"><div class="screen"><svg data-graph="th" preserveAspectRatio="none"></svg></div><figcaption><span>plant.θ</span><output>0.512</output></figcaption></figure>
+        <figure class="instrument display" style="grid-column: 6"><div class="screen"><output>0.512</output></div><figcaption><span>theta</span><span>display</span></figcaption></figure>
+        <figure class="instrument graph" style="grid-column: 4 / span 2"><div class="screen"><svg data-graph="u" preserveAspectRatio="none"></svg></div><figcaption><span>pid.u</span><output>3.104</output></figcaption></figure>
+        <figure class="instrument display" style="grid-column: 6"><div class="screen"><output>3.10</output></div><figcaption><span>torque</span><span>display</span></figcaption></figure>
+        <figure class="instrument graph idle" style="grid-column: 4 / span 2"><div class="screen"><svg viewBox="0 0 300 100" preserveAspectRatio="none"><line class="zero" x1="0" x2="300" y1="50" y2="50"/></svg></div><figcaption><span>cart.x</span><output style="color:var(--text-muted)">graph</output></figcaption></figure>
+        <figure class="instrument display idle" style="grid-column: 6"><div class="screen"><output style="color:var(--text-muted)">–</output></div><figcaption><span>error</span><span>display</span></figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 2 · Anatomy ---------------------------------------------------------------------------- -->
+<section class="frame" id="anatomy">
+  <h2>2 · Anatomy (frozen, cursors on, trigger set)</h2>
+  <p class="note">Displays are for output, wells are for input: the screen only shows (traces, axes, legend values, cursor readout); every control sits in the grey caption under it.</p>
+  <div class="anat">
+    <div class="panel" style="padding:24px 28px 16px; position:relative">
+      <figure class="instrument scope" style="height:430px" data-scope="anatScope"><div class="screen"></div></figure>
+      <span class="call pin" data-pin="legend" style="left:5px">1</span>
+      <span class="call pin" data-pin="axis" style="left:5px">2</span>
+      <span class="call pin" data-pin="trig" style="right:5px">3</span>
+      <span class="call pin" data-pin="cursor" style="top:3px">4</span>
+      <span class="call pin" data-pin="readout" style="left:5px">5</span>
+      <span class="call pin" data-pin="caption" style="left:5px">6</span>
+    </div>
+    <ol>
+      <li><span class="call">1</span><div><b>Legend</b><p>One entry per channel: its colour and line sample, the source port (<span class="mono">pid.u</span>, from the wire, no naming), the value and unit. Live: latest. Cursors on: the value at cursor 2. Click an entry to hide that trace (struck through).</p></div></li>
+      <li><span class="call">2</span><div><b>Axes</b><p>Time on x. One y axis per unit: the first unit left, a second unit right (here rad and N·m). Ticks in muted mono, a dashed zero line. Autoscale fits what is visible.</p></div></li>
+      <li><span class="call">3</span><div><b>Trigger</b><p><span class="mono">T</span> on the right edge at the level, a ▼ on the top edge at the trigger point. Drag <span class="mono">T</span> to change the level.</p></div></li>
+      <li><span class="call">4</span><div><b>Cursors</b><p>Two vertical cursors, dragged by their tabs. The strip at the bottom of the screen reads t1, t2, Δt, 1/Δt and Δ for each channel.</p></div></li>
+      <li><span class="call">5</span><div><b>Readout strip</b><p>Only while cursors are on. Copy from ⋯ › Copy cursor values.</p></div></li>
+      <li><span class="call">6</span><div><b>Caption</b><p>Name, the state in words (<span class="mono" style="color:var(--signal)">live</span>, <span class="mono">frozen</span>, <span class="mono" style="color:var(--signal)">armed</span>, <span class="mono" style="color:var(--signal)">triggered</span>), the mode choice and keys. A toggle that is on sits in brackets, never filled. Keys that don't fit fold into ⋯.</p></div></li>
+    </ol>
+  </div>
+</section>
+
+<!-- 3 · Modes ---------------------------------------------------------------------------- -->
+<section class="frame" id="modes">
+  <h2>3 · Modes: <span class="mono">[ time ]  xy  fft</span></h2>
+  <p class="note">One Scope, three ways to look at the same channels. The mode is part of the Board layout (saved with the project), not a block param, so it changes during a run without touching the graph.</p>
+  <div class="panel board">
+    <div class="trio">
+      <div><figure class="instrument scope" style="height:300px" data-scope="trigScope"><div class="screen"></div></figure>
+        <div class="cap"><b>time</b>, trigger auto on <span class="mono">gen.y</span> rising at 0, position 20%: a periodic signal stands still.</div></div>
+      <div><figure class="instrument scope" style="height:300px" data-scope="xyScope"><div class="screen"></div></figure>
+        <div class="cap"><b>xy</b>: the first channel on x, the others on y. The trail is the window; the head is a dot.</div></div>
+      <div><figure class="instrument scope" style="height:300px" data-scope="fftScope"><div class="screen"></div></figure>
+        <div class="cap"><b>fft</b>: magnitude in dB of the visible window (Hann), log frequency. The biggest peak per channel is marked and read in the legend.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · Sizes ---------------------------------------------------------------------------- -->
+<section class="frame" id="sizes">
+  <h2>4 · Sizes and before a run</h2>
+  <p class="note">The grid's sizes, no new ones. Smaller sizes drop chrome, never data: normal shows corner ranges instead of axes and keeps only ⋯ in the caption.</p>
+  <div class="panel board">
+    <div class="grid">
+      <figure class="instrument scope" style="grid-column: 1 / span 2" data-scope="normalScope"><div class="screen"></div></figure>
+      <figure class="instrument scope" style="grid-column: 3 / span 2; grid-row: 1 / span 2" data-scope="largeScope"><div class="screen"></div></figure>
+      <figure class="instrument scope idle" style="grid-column: 5 / span 2; grid-row: 1 / span 2"><div class="screen" style="display:grid;place-items:center"><span class="mono" style="font-size:var(--size-2xs)">scope · a b c</span></div><figcaption><span class="name">scope2</span><span class="gap"></span><span class="state" style="color:var(--text-muted)">–</span></figcaption></figure>
+      <div style="grid-column: 1 / span 2; grid-row: 2" class="cap"><b>normal</b> 2×1: traces, corner ranges, one-line legend; caption is name, state, ⋯.<br><br><b>large</b> 2×2 (default): axes, legend, mode choice, cursors, ⋯.<br><b>xlarge</b> 3×3: every key (see frame 1).<br><b>Before a run</b>: the placeholder frame, dashed and grey, naming its inputs.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 · Popovers ---------------------------------------------------------------------------- -->
+<section class="frame" id="popovers">
+  <h2>5 · Trigger, ⋯ and + tap</h2>
+  <p class="note">Glass popovers rise from their caption key (Esc or a click outside closes). No modal dialogs.</p>
+  <div class="panel board" style="position:relative; height:470px">
+    <figure class="instrument scope" style="position:absolute; left:16px; top:16px; width:620px; height:350px" data-scope="popScope"><div class="screen"></div></figure>
+
+    <div class="glass pop" style="left:346px; top:128px; width:290px">
+      <h4>Trigger</h4>
+      <div class="row"><label>edge</label><span class="choice"><b>[ rising ]</b><span>falling</span><span>off</span></span></div>
+      <div class="row"><label>source</label><span class="choice"><b>[ plant.θ ]</b><span>ref</span><span>pid.u</span></span></div>
+      <div class="row"><label>level</label><span><span class="well">0.80</span> <span class="unit">rad</span></span></div>
+      <div class="row"><label>position</label><span><span class="well">20</span> <span class="unit">% of window</span></span></div>
+      <div class="row"><label>mode</label><span class="choice"><b>[ auto ]</b><span>single</span></span></div>
+      <div class="foot"><span class="k">Arm single</span></div>
+    </div>
+
+    <div class="glass pop" style="left:660px; top:16px; width:250px">
+      <h4>⋯</h4>
+      <div class="item hot"><span>Autoscale</span><kbd>double-click</kbd></div>
+      <div class="item"><span>Follow live</span><kbd>F</kbd></div>
+      <div class="row" style="padding:0 6px"><label>y scale</label><span class="choice"><b>[ linear ]</b><span>log</span></span></div>
+      <div class="row" style="padding:0 6px"><label>window</label><span><span class="well">10</span> <span class="unit">s · all</span></span></div>
+      <div class="sep"></div>
+      <div class="item"><span>Export CSV…</span><kbd>visible · all</kbd></div>
+      <div class="item"><span>Export PNG…</span><kbd></kbd></div>
+      <div class="item"><span>Copy cursor values</span><kbd></kbd></div>
+      <div class="sep"></div>
+      <div class="item"><span>Reset view</span><kbd>Esc</kbd></div>
+    </div>
+
+    <div class="glass pop" style="left:930px; top:16px; width:340px">
+      <h4>Tap a port into scope1</h4>
+      <div class="well" style="width:100%; margin-bottom:8px">/ ω<span style="border-left:1.5px solid var(--line-ink); height:14px; margin-left:2px"></span></div>
+      <div class="item hot"><span class="mono">plant.ω</span><kbd>rad/s · ↵</kbd></div>
+      <div class="item"><span class="mono">motor.ω</span><kbd>rad/s</kbd></div>
+      <div class="item"><span class="mono">wheel.ω_ref</span><kbd>rad/s</kbd></div>
+      <div class="sep"></div>
+      <div class="cap" style="margin:0">Adds a wire to the next free input (c), and one more input if all are used. One undo step. Also on the Flow: drag a port onto the Scope.</div>
+    </div>
+    <div class="cap" style="position:absolute; left:16px; top:392px; width:600px">Caption keys at xlarge: <span class="mono">+ tap  freeze  cursors  [ trigger ]  ⋯</span>. A Scope is never dragged outside Arrange, so a drag on the screen pans; Ctrl-drag box-zooms; Ctrl+wheel (or pinch) zooms time around the pointer, Shift+Ctrl+wheel zooms y; a plain wheel still scrolls the Board.</div>
+  </div>
+</section>
+
+<!-- 6 · Taps ---------------------------------------------------------------------------- -->
+<section class="frame" id="taps">
+  <h2>6 · Taps in Commander: drag a port onto the Scope</h2>
+  <p class="note">A wire dragged from the Flow and dropped on a Scope on the Board (drawer open) becomes a channel. The Scope rings in the signal colour; the drop hint says it in words.</p>
+  <div class="panel" style="position:relative; overflow:hidden">
+    <div class="panel-head"><h3>Flow</h3><span class="count">4 blocks</span><span class="k">Arrange</span></div>
+    <div class="canvas">
+      <div class="blk" style="left:60px; top:40px"><div class="h">ref <i>source</i></div><div class="r"><span>step</span><span class="u">1.0</span></div><div class="r"><span></span><span>y</span></div></div>
+      <div class="blk" style="left:300px; top:60px"><div class="h">pid <i>fn</i></div><div class="r"><span>r</span><span>u</span></div><div class="r"><span>y</span><span class="u">kp 14</span></div></div>
+      <div class="blk linked" style="left:560px; top:40px; width:170px"><div class="h">plant <i>linked</i></div><div class="r"><span>u</span><span>θ <span class="u">rad</span></span></div><div class="r"><span></span><span>ω <span class="u">rad/s</span></span></div></div>
+      <div class="blk" style="left:900px; top:40px"><div class="h">scope1 <i>monitor</i></div><div class="r"><span>a <span class="u">ref.y</span></span><span></span></div><div class="r"><span>b <span class="u">plant.θ</span></span><span></span></div><div class="r"><span>c</span><span></span></div></div>
+      <span class="dot" style="left:206px; top:93px"></span><span class="dot" style="left:296px; top:88px"></span>
+      <span class="dot" style="left:446px; top:88px"></span><span class="dot" style="left:556px; top:68px"></span>
+      <span class="dot" style="left:726px; top:68px"></span><span class="dot hot" style="left:724px; top:91px"></span>
+      <span class="dot" style="left:896px; top:68px"></span><span class="dot" style="left:896px; top:92px"></span><span class="dot" style="left:896px; top:116px"></span>
+    </div>
+    <div class="panel-head" style="border-top:1px solid var(--line)"><h3>Board</h3><span class="count">θ 0.512 · u 3.10</span><span class="k">open</span></div>
+    <div class="board" style="height:290px">
+      <div class="grid" style="grid-auto-rows:116px">
+        <figure class="instrument scope ringed" style="grid-column: 1 / span 4; grid-row: 1 / span 2" data-scope="tapScope"><div class="screen"></div></figure>
+        <figure class="instrument graph" style="grid-column: 5 / span 2"><div class="screen"><svg data-graph="th" preserveAspectRatio="none"></svg></div><figcaption><span>plant.θ</span><output>0.512</output></figcaption></figure>
+        <figure class="instrument display" style="grid-column: 5"><div class="screen"><output>3.10</output></div><figcaption><span>torque</span><span>display</span></figcaption></figure>
+      </div>
+    </div>
+    <svg class="overlay" id="tapWire"></svg>
+    <div class="hint" style="left:560px; top:420px">Tap plant.ω → scope1.c</div>
+  </div>
+</section>
+
+<!-- 7 · Studio ---------------------------------------------------------------------------- -->
+<section class="frame" id="studio">
+  <h2>7 · The same Scope in Studio (paperboat#160)</h2>
+  <p class="note">Studio's Simulate check passes a finished <span class="mono">omc</span> result to the same component with <span class="mono">live={false}</span>: no freeze, trigger or tap, the state word is the run's (<span class="mono">done · 2.00 s</span>). Cursors, modes, zoom, export are the same.</p>
+  <div class="panel" style="overflow:hidden">
+    <div class="sbar"><span class="wm">paperboat<span class="tag">studio</span></span><span class="menu">File</span><span class="menu">Edit</span><span class="menu">Model</span><span class="menu">Simulate</span><span class="menu">View</span><span class="file">dc_drive.mo</span><span class="choice"><span>diagram</span><b>[ split ]</b><span>code</span></span></div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; min-height: 420px">
+      <div class="canvas" style="height:auto; border-bottom:0; border-right:1px solid var(--line); display:grid; place-items:center; color:var(--text-muted)"><span class="mono" style="font-size:var(--size-2xs)">acausal canvas (paperboat#160)</span></div>
+      <div style="display:flex; flex-direction:column">
+        <div class="panel-head"><h3>Simulate</h3><span class="mono" style="font-size:var(--size-2xs); color:var(--text-muted)">omc 1.24 · dassl · 0–2 s</span><span class="count">check only</span></div>
+        <div style="padding:16px; flex:1"><figure class="instrument scope" style="height:360px" data-scope="studioScope"><div class="screen"></div></figure></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 9 · Colours and draw styles ------------------------------------------------------------- -->
+<section class="frame" id="colours">
+  <h2>9 · Channel colours and draw styles</h2>
+  <p class="note">Eight colours in a fixed order, made for the black screen (it is black in both themes, so one list serves both). A channel keeps its colour when others are hidden or removed. No red: red means failed. Channels 1–4 are solid and stay apart for every pair, even for colour-blind readers. Channels 5–8 are dashed and 9–16 dotted, so traces that cross never rely on colour alone. Draw style is under ⋯: <span class="mono">[ line ]  line+points  points  smooth</span>.</p>
+  <div class="panel board">
+    <div id="swatches" style="display:grid; grid-template-columns: repeat(8, 1fr); gap: 10px; margin-bottom: 16px"></div>
+    <figure class="instrument scope" style="height:280px" data-scope="paletteScope"><div class="screen"></div></figure>
+    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 18px">
+      <div><figure class="instrument scope" style="height:190px" data-scope="drawLine"><div class="screen"></div></figure><div class="cap"><b>line</b> (default): straight segments between samples, what the run sent and nothing more.</div></div>
+      <div><figure class="instrument scope" style="height:190px" data-scope="drawBoth"><div class="screen"></div></figure><div class="cap"><b>line+points</b>: the same line with a ring on every sample, so you see the sample rate.</div></div>
+      <div><figure class="instrument scope" style="height:190px" data-scope="drawPoints"><div class="screen"></div></figure><div class="cap"><b>points</b>: samples only, for sparse or event data.</div></div>
+      <div><figure class="instrument scope" style="height:190px" data-scope="drawSmooth"><div class="screen"></div></figure><div class="cap"><b>smooth</b>: monotone cubic through the samples, never overshooting them. Cursors and values read the samples, not the curve.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- 8 · Spec table ---------------------------------------------------------------------------- -->
+<section class="frame" id="spec">
+  <h2>8 · Graph vs Scope</h2>
+  <div class="panel" style="padding:4px 8px">
+  <table class="spec">
+    <tr><th></th><th>Graph (kept)</th><th>Scope (new)</th></tr>
+    <tr><td>Block</td><td><code>dashboard/graph</code>, one input <code>in</code></td><td><code>dashboard/scope</code>, inputs <code>a, b, …</code> (<code>ports_from = "inputs"</code>, default 2)</td></tr>
+    <tr><td>Shows</td><td>The shape of one signal and its latest number. No axes, no controls</td><td>Several signals with axes, legend, units; time, xy, fft</td></tr>
+    <tr><td>Gestures</td><td>None</td><td>Drag pans · Ctrl+wheel / pinch zooms time · Shift+Ctrl+wheel zooms y · Ctrl-drag box zoom · double-click autoscale and follow · click a legend entry hides it</td></tr>
+    <tr><td>Keys</td><td>—</td><td><code>F</code> follow / freeze · <code>C</code> cursors · <code>T</code> trigger · <code>A</code> autoscale (when the Scope has focus)</td></tr>
+    <tr><td>Saved</td><td>Size and place (Board layout)</td><td>Size, place and <code>scope</code> settings: mode, window, y scale, trigger, hidden channels (Board layout). Zoom, cursors and freeze are not saved</td></tr>
+    <tr><td>Size</td><td>normal (default)</td><td>large (default); normal shows corner ranges</td></tr>
+    <tr><td>Vector input</td><td>Index as x (unchanged)</td><td>One trace per component, named from the port's <code>components</code></td></tr>
+  </table>
+  </div>
+</section>
+</div>
+
+<script>
+// ---------- theme / only ----------
+const q = new URLSearchParams(location.search);
+const setTheme = (t) => {
+  document.documentElement.dataset.theme = t;
+  document.querySelectorAll("#themes [data-t]").forEach((el) => {
+    const on = el.dataset.t === t;
+    el.outerHTML = on ? `<b data-t="${t}">[ ${t} ]</b>` : `<span data-t="${el.dataset.t}">${el.dataset.t}</span>`;
+  });
+  document.querySelectorAll("#themes [data-t]").forEach((el) => (el.onclick = () => { setTheme(el.dataset.t); }));
+};
+setTheme(q.get("theme") || "light");
+if (q.get("only")) {
+  document.body.classList.add("only");
+  document.querySelectorAll("section.frame").forEach((s) => { if (s.id !== q.get("only")) s.remove(); });
+}
+
+// ---------- data ----------
+function closedLoop() {
+  const dt = 0.01, d = { t: [], ref: [], th: [], w: [], u: [] };
+  let th = 0, w = 0, I = 0, seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5);
+  for (let i = 0; i <= 1000; i++) {
+    const t = i * dt, ref = t < 1 ? 0 : t < 6 ? 1 : 0.5, e = ref - th;
+    I += e * dt;
+    const u = Math.max(-12, Math.min(12, 14 * e + 3 * I - 2.2 * w)) + rnd() * 0.15;
+    d.t.push(t); d.ref.push(ref); d.th.push(th); d.w.push(w); d.u.push(u);
+    w += (u - 0.8 * w) * dt; th += w * dt;
+  }
+  return d;
+}
+const CL = closedLoop();
+const zip = (xs, ys) => xs.map((x, i) => [x, ys[i]]);
+
+function periodic() {
+  const xs = [], a = [], b = []; let lag = 0;
+  for (let i = 0; i <= 400; i++) {
+    const t = -0.4 + i * 0.005, ph = 2 * Math.PI * 1.5 * t;
+    const y = Math.sin(ph) + 0.3 * Math.sin(3 * ph) + 0.12 * Math.sin(5 * ph);
+    lag += (y - lag) * 0.06;
+    xs.push(t); a.push(y); b.push(lag * 1.6);
+  }
+  return { a: zip(xs, a), b: zip(xs, b) };
+}
+function phase() {
+  const p = []; let th = 1.2, w = 0;
+  for (let i = 0; i < 1200; i++) { w += (-9 * th - 0.45 * w) * 0.01; th += w * 0.01; p.push([th, w]); }
+  return p;
+}
+function spectrum() {
+  const N = 1024, dt = 0.01; let seed = 3;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647 - 0.5);
+  const a = [], b = [];
+  for (let i = 0; i < N; i++) {
+    const t = i * dt, n = rnd() * 0.08;
+    a.push(Math.sin(2 * Math.PI * 1.2 * t) + 0.35 * Math.sin(2 * Math.PI * 5 * t) + 0.12 * Math.sin(2 * Math.PI * 17 * t) + n);
+    b.push(0.8 * Math.sin(2 * Math.PI * 1.2 * t - 0.3) + 0.06 * Math.sin(2 * Math.PI * 5 * t) + n * 0.4);
+  }
+  const mag = (x) => {
+    const out = [];
+    for (let k = 1; k < N / 2; k++) {
+      let re = 0, im = 0;
+      for (let i = 0; i < N; i++) { const h = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (N - 1)); const ang = (-2 * Math.PI * k * i) / N; re += x[i] * h * Math.cos(ang); im += x[i] * h * Math.sin(ang); }
+      out.push([k / (N * dt), 20 * Math.log10(Math.max(1e-6, (2 * Math.hypot(re, im)) / (N * 0.5)))]);
+    }
+    return out;
+  };
+  return { a: mag(a), b: mag(b) };
+}
+function motor() {
+  const xs = [], w = [], i_ = []; let W = 0, I = 0;
+  for (let k = 0; k <= 400; k++) {
+    const t = k * 0.005, V = t < 0.1 ? 0 : 12;
+    xs.push(t); w.push(W); i_.push(I);
+    const dI = (V - 1.2 * I - 0.05 * W) / 0.05, dW = (0.05 * I - 0.002 * W - (t > 1.2 ? 0.04 : 0)) / 0.0008;
+    I += dI * 0.0005 * 10; W += dW * 0.0005 * 10;
+  }
+  return { w: zip(xs, w), i: zip(xs, i_) };
+}
+
+// ---------- the scope renderer (a mockup of what uPlot draws) ----------
+// Channel colours on the black screen (validated: adjacent CVD ΔE ≥ 10.6, slots 1–4 all-pairs ≥ 10.2,
+// all ≥ 3.6:1). Slot 1 is the signal token. 1–4 solid, 5–8 dashed, 9+ dotted, so crossing traces
+// past the fourth never rely on colour alone.
+const PALETTE = ["var(--signal)", "#05a5b3", "#606cdd", "#b23e88", "#b08e05", "#a376e9", "#24ae56", "#d861aa"];
+const STYLE = Array.from({ length: 16 }, (_, i) => ({ c: PALETTE[i % 8], w: 1.6, d: i < 4 ? "" : i < 8 ? "5 3" : "1.5 2.5" }));
+// Fritsch–Carlson monotone cubic: smooth, never overshoots the samples.
+function smoothPath(P) {
+  const n = P.length; if (n < 3) return "M" + P.map((p) => p.join(",")).join(" L");
+  const d = P.slice(1).map((p, i) => (p[1] - P[i][1]) / (p[0] - P[i][0]));
+  const m = P.map((_, i) => (i === 0 ? d[0] : i === n - 1 ? d[n - 2] : d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2));
+  for (let i = 0; i < n - 1; i++) { if (d[i] === 0) { m[i] = m[i + 1] = 0; continue; } const a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b; if (h > 9) { const t = 3 / Math.sqrt(h); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; } }
+  let out = `M${P[0][0]},${P[0][1]}`;
+  for (let i = 0; i < n - 1; i++) { const dx = (P[i + 1][0] - P[i][0]) / 3; out += ` C${P[i][0] + dx},${P[i][1] + m[i] * dx} ${P[i + 1][0] - dx},${P[i + 1][1] - m[i + 1] * dx} ${P[i + 1][0]},${P[i + 1][1]}`; }
+  return out;
+}
+const nice = (a, b, n) => {
+  const raw = (b - a) / n, p = 10 ** Math.floor(Math.log10(raw)), m = raw / p;
+  const step = (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p, out = [];
+  for (let v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) out.push(+v.toFixed(10));
+  return out;
+};
+const fmt = (v) => String(+v.toFixed(Math.abs(v) >= 100 ? 0 : Math.abs(v) >= 10 ? 1 : 2));
+const el = (tag, attrs, text = "") => `<${tag} ${Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(" ")}>${text}</${tag}>`;
+
+function drawScope(fig, s) {
+  const screen = fig.querySelector(".screen");
+  if (!fig.querySelector("figcaption")) fig.insertAdjacentHTML("beforeend", caption(s));
+  const W = screen.clientWidth, H = screen.clientHeight, small = s.size === "normal";
+  const legendH = s.legend === false ? 0 : 24, readH = s.cursors ? 26 : 0;
+  const L = small ? 34 : 44, R = small ? 8 : s.yr || s.trig ? 44 : 14, T = 10 + legendH, B = small ? 8 : 22 + readH;
+  const pw = W - L - R, ph = H - T - B;
+  const xlog = !!s.xlog;
+  const X = (x) => L + (xlog ? (Math.log10(x) - Math.log10(s.x[0])) / (Math.log10(s.x[1]) - Math.log10(s.x[0])) : (x - s.x[0]) / (s.x[1] - s.x[0])) * pw;
+  const Y = (y, axis) => { const r = axis === "r" ? s.yr : s.yl; return T + (1 - (y - r[0]) / (r[1] - r[0])) * ph; };
+  const dim = "var(--text-on-screen-muted)", txt = "var(--text-on-screen)";
+  let g = "";
+  // grid + ticks
+  if (!small) {
+    const xt = xlog ? [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50].filter((v) => v >= s.x[0] && v <= s.x[1]) : nice(s.x[0], s.x[1], Math.max(4, Math.round(pw / 90)));
+    for (const v of xt) {
+      g += el("line", { x1: X(v), x2: X(v), y1: T, y2: T + ph, stroke: dim, "stroke-opacity": 0.55, "stroke-dasharray": "1 3" });
+      if (X(v) < L + pw - 18 || !xlog) g += el("text", { x: X(v), y: T + ph + 14, "text-anchor": "middle", "font-size": 10.5, fill: txt, "fill-opacity": 0.6 }, fmt(v));
+    }
+    g += el("text", { x: L + pw, y: T + ph + 14, "text-anchor": "end", "font-size": 10.5, fill: txt, "fill-opacity": 0.6, dx: 0, dy: 0 }, "");
+    const yt = nice(s.yl[0], s.yl[1], Math.max(3, Math.round(ph / 55))).filter((v) => Y(v) > T + 8);
+    for (const v of yt) {
+      g += el("line", { x1: L, x2: L + pw, y1: Y(v), y2: Y(v), stroke: dim, "stroke-opacity": v === 0 ? 1 : 0.55, "stroke-dasharray": v === 0 ? "2 3" : "1 3" });
+      g += el("text", { x: L - 6, y: Y(v) + 3.5, "text-anchor": "end", "font-size": 10.5, fill: txt, "fill-opacity": 0.6 }, fmt(v));
+    }
+    if (s.yr) for (const v of nice(s.yr[0], s.yr[1], Math.max(3, Math.round(ph / 55))).filter((v) => Y(v, "r") > T + 8))
+      g += el("text", { x: L + pw + 6, y: Y(v, "r") + 3.5, "font-size": 10.5, fill: txt, "fill-opacity": 0.6 }, fmt(v));
+    // axis units
+    g += el("text", { x: L - 6, y: T - 4, "text-anchor": "end", "font-size": 10, fill: txt, "fill-opacity": 0.45 }, s.ylUnit || "");
+    if (s.yr) g += el("text", { x: L + pw + 6, y: T - 4, "font-size": 10, fill: txt, "fill-opacity": 0.45 }, s.yrUnit || "");
+    g += el("text", { x: L + pw, y: T + ph + 14, "text-anchor": "end", "font-size": 10, fill: txt, "fill-opacity": 0.45, dy: 0 }, "");
+    g += el("text", { x: W - R + (s.yr ? 40 : 10), y: T + ph + 14, "text-anchor": "end", "font-size": 10, fill: txt, "fill-opacity": 0.45 }, s.xUnit || "s");
+  } else {
+    g += el("line", { x1: L, x2: L + pw, y1: Y(0), y2: Y(0), stroke: dim, "stroke-dasharray": "2 3" });
+    g += el("text", { x: L - 6, y: T + 8, "text-anchor": "end", "font-size": 10, fill: txt, "fill-opacity": 0.55 }, fmt(s.yl[1]));
+    g += el("text", { x: L - 6, y: T + ph, "text-anchor": "end", "font-size": 10, fill: txt, "fill-opacity": 0.55 }, fmt(s.yl[0]));
+    g += el("text", { x: L + pw - 2, y: T + ph - 2, "text-anchor": "end", "font-size": 10, fill: txt, "fill-opacity": 0.55 }, s.span || "10 s");
+  }
+  // trigger level line (under traces)
+  if (s.trig) g += el("line", { x1: L, x2: L + pw, y1: Y(s.trig.y), y2: Y(s.trig.y), stroke: "var(--signal)", "stroke-opacity": 0.45, "stroke-dasharray": "4 4" });
+  // traces
+  g += `<clipPath id="c-${s.id}"><rect x="${L}" y="${T}" width="${pw}" height="${ph}"/></clipPath><g clip-path="url(#c-${s.id})">`;
+  s.traces.forEach((tr, i) => {
+    if (tr.hidden) return;
+    const st = STYLE[tr.style ?? i];
+    const P = tr.data.filter(([x]) => x >= s.x[0] - 1e-9 && x <= s.x[1] + 1e-9).map(([x, y]) => [+X(x).toFixed(1), +Y(y, tr.axis).toFixed(1)]);
+    const draw = tr.draw || s.draw || "line";
+    if (draw === "smooth") g += el("path", { d: smoothPath(P), fill: "none", style: `stroke:${st.c}`, "stroke-width": st.w, "stroke-dasharray": st.d });
+    else if (draw !== "points") g += el("polyline", { points: P.map((p) => p.join(",")).join(" "), fill: "none", style: `stroke:${st.c}`, "stroke-width": st.w, "stroke-dasharray": st.d, "stroke-linejoin": "round" });
+    if (draw === "points" || draw === "line+points") for (const [px, py] of P) g += el("circle", { cx: px, cy: py, r: draw === "points" ? 2.6 : 2.2, style: draw === "points" ? `fill:${st.c}` : `fill:var(--surface-screen);stroke:${st.c}`, "stroke-width": 1.4 });
+    if (s.head && tr.data.length) { const [hx, hy] = tr.data[tr.data.length - 1]; g += el("circle", { cx: X(hx), cy: Y(hy, tr.axis), r: 3.5, style: `fill:${st.c}` }); }
+    for (const pk of tr.peaks || []) {
+      g += el("text", { x: X(pk[0]), y: Y(pk[1]) - 6, "text-anchor": "middle", "font-size": 10, style: `fill:${st.c}` }, "▾");
+    }
+  });
+  g += "</g>";
+  // trigger marks
+  if (s.trig) {
+    const ty = Y(s.trig.y), tx = X(s.trig.x);
+    g += el("path", { d: `M${L + pw + 1},${ty} l7,-6 h14 v12 h-14 z`, style: "fill:var(--signal)" });
+    g += el("text", { x: L + pw + 15, y: ty + 3.5, "text-anchor": "middle", "font-size": 9.5, fill: "var(--surface-screen)", "font-weight": 600 }, "T");
+    g += el("path", { d: `M${tx - 5},${T} h10 l-5,7 z`, style: "fill:var(--signal)" });
+  }
+  // cursors
+  if (s.cursors) s.cursors.forEach((cx, i) => {
+    const x = X(cx);
+    g += el("line", { x1: x, x2: x, y1: T, y2: T + ph, stroke: txt, "stroke-opacity": 0.8, "stroke-dasharray": "3 3" });
+    g += el("rect", { x: x - 7, y: T, width: 14, height: 14, rx: 2, fill: txt });
+    g += el("text", { x, y: T + 10.5, "text-anchor": "middle", "font-size": 10, fill: "var(--surface-screen)", "font-weight": 600 }, i + 1);
+  });
+  // legend (top row) — HTML-like in svg
+  if (s.legend !== false) {
+    let x = small ? 8 : L;
+    s.traces.forEach((tr, i) => {
+      const st = STYLE[tr.style ?? i];
+      if (!tr.noline) { g += el("line", { x1: x, x2: x + 16, y1: 15, y2: 15, style: `stroke:${st.c}`, "stroke-width": Math.max(1.6, st.w), "stroke-dasharray": st.d, "stroke-opacity": tr.hidden ? 0.35 : 1 }); x += 22; }
+      const name = el("tspan", { "fill-opacity": tr.hidden ? 0.4 : 0.85, "text-decoration": tr.hidden ? "line-through" : "none" }, tr.label);
+      const val = tr.hidden || tr.value === undefined ? "" : el("tspan", { dx: 6, "font-weight": 500 }, tr.value);
+      const unit = tr.hidden || !tr.unit ? "" : el("tspan", { dx: 4, "fill-opacity": 0.5 }, tr.unit);
+      g += el("text", { x, y: 19, "font-size": small ? 10.5 : 11, fill: txt }, name + val + unit);
+      const len = (tr.label.length + (tr.hidden ? 0 : (tr.value || "").length + 1 + (tr.unit ? tr.unit.length + 1 : 0))) * (small ? 6.4 : 6.7);
+      x += len + 18;
+    });
+  }
+  // readout strip
+  if (s.cursors) {
+    const y = H - 9;
+    g += el("line", { x1: 0, x2: W, y1: H - readH, y2: H - readH, stroke: dim, "stroke-opacity": 0.7 });
+    g += el("text", { x: 12, y, "font-size": 11, fill: txt, style: "white-space:pre" }, s.readout);
+  }
+  screen.innerHTML = `<svg width="${W}" height="${H}">${g}</svg>`;
+  fig._geo = { X, Y, T, ph, H, readH };
+}
+
+function caption(s) {
+  const keys = (s.keys || []).map((k) => `<span class="k${k.startsWith("[") ? " on" : ""}">${k.replace(/^\[|\]$/g, "")}</span>`).join("");
+  const modes = s.modes === false ? "" : `<span class="choice">${["time", "xy", "fft"].map((m) => (m === (s.mode || "time") ? `<b>[ ${m} ]</b>` : `<span>${m}</span>`)).join("")}</span>`;
+  return `<figcaption><span class="name">${s.name}</span><span class="state${s.live ? " live" : ""}">${s.state}</span><span class="gap"></span>${modes}${keys}</figcaption>`;
+}
+
+// ---------- scopes ----------
+const th = zip(CL.t, CL.th), ref = zip(CL.t, CL.ref), u = zip(CL.t, CL.u), w = zip(CL.t, CL.w);
+const cut = (d, t1) => d.filter(([t]) => t <= t1);
+const SCOPES = {
+  boardScope: { id: "b", name: "scope1", state: "live", live: true, keys: ["+ tap", "freeze", "cursors", "trigger", "⋯"], x: [0, 8.4], yl: [-0.2, 1.4], yr: [-8, 14], ylUnit: "rad", yrUnit: "N·m",
+    traces: [{ label: "plant.θ", data: cut(th, 8.4), value: "0.512", unit: "rad" }, { label: "ref.y", data: cut(ref, 8.4), value: "0.500", unit: "rad" }, { label: "pid.u", data: cut(u, 8.4), axis: "r", value: "3.104", unit: "N·m" }] },
+  anatScope: { id: "a", name: "scope1", state: "frozen", keys: ["+ tap", "freeze", "[cursors]", "[trigger]", "⋯"], x: [0.5, 4.5], yl: [-0.2, 1.4], yr: [-8, 14], ylUnit: "rad", yrUnit: "N·m",
+    cursors: [1.0, 1.62], trig: { y: 0.8, x: 1.28 },
+    readout: "1  1.000 s    2  1.620 s    Δt 0.620 s    1/Δt 1.613 Hz     ━ Δθ +1.214 rad    ┅ Δu −10.85 N·m",
+    traces: [{ label: "plant.θ", data: th, value: "1.214", unit: "rad" }, { label: "ref.y", data: ref, value: "1.000", unit: "rad" }, { label: "pid.u", data: u, axis: "r", value: "−2.43", unit: "N·m" }] },
+  trigScope: (() => { const p = periodic(); return { id: "t", name: "scope2", state: "triggered", live: true, keys: ["[trigger]", "⋯"], x: [-0.4, 1.6], yl: [-1.8, 1.8], trig: { y: 0, x: 0 },
+    traces: [{ label: "gen.y", data: p.a, value: "0.214" }, { label: "lag.y", data: p.b, value: "−0.81" }] }; })(),
+  xyScope: { id: "x", name: "scope3", state: "live", live: true, mode: "xy", keys: ["⋯"], x: [-1.4, 1.4], yl: [-4.2, 4.2], xUnit: "rad", ylUnit: "rad/s", head: true,
+    traces: [{ label: "x plant.θ", data: [], noline: true, value: "0.018", unit: "rad" }, { label: "y plant.ω", data: phase(), value: "−0.04", unit: "rad/s" }] },
+  fftScope: (() => { const sp = spectrum(); return { id: "f", name: "scope4", state: "live", live: true, mode: "fft", keys: ["⋯"], x: [0.1, 50], xlog: true, yl: [-80, 5], ylUnit: "dB", xUnit: "Hz",
+    traces: [{ label: "vib.a", data: sp.a, value: "1.20", unit: "Hz", peaks: [[1.2, -1]] }, { label: "filt.y", data: sp.b, value: "1.20", unit: "Hz", peaks: [] }] }; })(),
+  normalScope: { id: "n", name: "scope1", state: "live", live: true, size: "normal", modes: false, keys: ["⋯"], x: [0, 8.4], yl: [-0.2, 1.4], span: "10 s",
+    traces: [{ label: "plant.θ", data: cut(th, 8.4), value: "0.512" }, { label: "ref.y", data: cut(ref, 8.4), value: "0.500" }] },
+  largeScope: { id: "l", name: "scope1", state: "live", live: true, keys: ["cursors", "⋯"], x: [0, 8.4], yl: [-0.2, 1.4], ylUnit: "rad",
+    traces: [{ label: "plant.θ", data: cut(th, 8.4), value: "0.512", unit: "rad" }, { label: "ref.y", data: cut(ref, 8.4), value: "0.500", unit: "rad" }] },
+  popScope: { id: "p", name: "scope1", state: "armed", live: true, keys: ["+ tap", "freeze", "cursors", "[trigger]", "⋯"], x: [0, 10], yl: [-0.2, 1.4], yr: [-8, 14], ylUnit: "rad", yrUnit: "N·m", trig: { y: 0.8, x: 2 },
+    traces: [{ label: "plant.θ", data: th, value: "0.512", unit: "rad" }, { label: "ref.y", data: ref, value: "0.500", unit: "rad", hidden: true }, { label: "pid.u", data: u, axis: "r", value: "3.104", unit: "N·m" }] },
+  tapScope: { id: "tp", name: "scope1", state: "live", live: true, keys: ["+ tap", "cursors", "⋯"], x: [0, 8.4], yl: [-0.2, 1.4], ylUnit: "rad",
+    traces: [{ label: "ref.y", data: cut(ref, 8.4), value: "0.500", unit: "rad" }, { label: "plant.θ", data: cut(th, 8.4), value: "0.512", unit: "rad" }] },
+  studioScope: (() => { const m = motor(); return { id: "s", name: "simulate", state: "done · 2.00 s", keys: ["[cursors]", "⋯"], x: [0, 2], yl: [-20, 260], yr: [-2, 12], ylUnit: "rad/s", yrUnit: "A",
+    cursors: [0.1, 0.62], readout: "1  0.100 s    2  0.620 s    Δt 0.520 s    ━ Δω +114.2 rad/s    ━ Δi +5.31 A",
+    traces: [{ label: "J1.w", data: m.w, value: "114.2", unit: "rad/s" }, { label: "R1.i", data: m.i, axis: "r", value: "5.31", unit: "A" }] }; })(),
+};
+
+// frame 9 data: eight channels, and a sparse pair for the draw styles
+(() => {
+  const many = Array.from({ length: 8 }, (_, k) => ({ label: `ch${k + 1}`, value: "", data: Array.from({ length: 401 }, (_, i) => { const t = i * 0.01; return [t, Math.exp(-0.25 * t) * Math.sin(2 * Math.PI * 0.45 * t + k * 0.55) * (1 - k * 0.07)]; }) }));
+  many.forEach((c, k) => (c.value = c.data[c.data.length - 1][1].toFixed(2)));
+  SCOPES.paletteScope = { id: "pl", name: "scope5", state: "live", live: true, keys: ["+ tap", "freeze", "cursors", "trigger", "⋯"], x: [0, 4], yl: [-1.1, 1.1], traces: many };
+  const sp = (f) => Array.from({ length: 17 }, (_, i) => { const t = i * 0.25; return [t, f(t)]; });
+  const a = sp((t) => Math.sin(1.3 * t) * Math.exp(-0.15 * t)), b = sp((t) => (t < 1 ? 0 : 0.8 * (1 - Math.exp(-(t - 1) * 1.4))));
+  const tr = () => [{ label: "plant.θ", data: a, value: "−0.51" }, { label: "ref.y", data: b, value: "0.79" }];
+  for (const [k, draw] of [["drawLine", "line"], ["drawBoth", "line+points"], ["drawPoints", "points"], ["drawSmooth", "smooth"]])
+    SCOPES[k] = { id: k, name: draw, state: "", modes: false, keys: ["⋯"], x: [0, 4], yl: [-1, 1.1], draw, traces: tr() };
+  const sw = document.getElementById("swatches");
+  if (sw) sw.innerHTML = [["signal", "var(--signal)", "#ff6a30 (dark) · #ff5a1f (light)"], ["cyan", "#05a5b3"], ["indigo", "#606cdd"], ["magenta", "#b23e88"], ["gold", "#b08e05"], ["violet", "#a376e9"], ["green", "#24ae56"], ["pink", "#d861aa"]]
+    .map(([n, c, h], i) => `<div style="font-size:var(--size-2xs)"><div style="height:30px;border-radius:var(--radius-md);background:var(--surface-screen);display:grid;align-items:center;padding:0 10px"><svg height="4" width="100%"><line x1="0" x2="100%" y1="2" y2="2" style="stroke:${c}" stroke-width="2.4" stroke-dasharray="${i < 4 ? "" : "6 3"}"/></svg></div><div style="margin-top:5px"><b>${i + 1}</b> ${n}</div><div class="mono" style="color:var(--text-muted)">${h || c}</div></div>`).join("");
+})();
+
+function graph(svg, key) {
+  const d = key === "u" ? cut(u, 8.4) : cut(th, 8.4), W = 300, H = 100;
+  const vs = d.map(([, v]) => v), lo = Math.min(...vs, 0), hi = Math.max(...vs, 0), sp = hi - lo || 1, tMax = d[d.length - 1][0];
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = `<line class="zero" x1="0" x2="${W}" y1="${H - (-lo / sp) * H}" y2="${H - (-lo / sp) * H}"/><polyline class="trace" vector-effect="non-scaling-stroke" points="${d.map(([t, v]) => `${(t / tMax) * W},${H - ((v - lo) / sp) * H}`).join(" ")}"/>`;
+}
+
+function tapWire() {
+  const svg = document.getElementById("tapWire");
+  if (!svg) return;
+  const host = svg.parentElement.getBoundingClientRect(), hot = document.querySelector("#taps .dot.hot").getBoundingClientRect();
+  const target = document.querySelector("#taps .ringed .screen").getBoundingClientRect();
+  const x1 = hot.left - host.left + 6, y1 = hot.top - host.top + 6, x2 = target.left - host.left + target.width * 0.45, y2 = target.top - host.top + target.height * 0.4;
+  svg.setAttribute("width", host.width); svg.setAttribute("height", host.height);
+  Object.assign(document.querySelector("#taps .hint").style, { left: `${x2 + 14}px`, top: `${y2 + 8}px` });
+  svg.innerHTML = `<path d="M${x1},${y1} C${x1 + 140},${y1 + 30} ${x2 + 60},${y2 - 170} ${x2},${y2}" fill="none" style="stroke:var(--line-ink)" stroke-width="1.6"/><circle cx="${x2}" cy="${y2}" r="5" style="fill:var(--signal)"/>`;
+}
+
+// Callout pins of the anatomy frame, placed from the drawn scope.
+function pins() {
+  const fig = document.querySelector('[data-scope="anatScope"]');
+  if (!fig) return;
+  const host = fig.parentElement.getBoundingClientRect(), sc = fig.querySelector(".screen").getBoundingClientRect(), cap = fig.querySelector("figcaption").getBoundingClientRect();
+  const { X, Y, T, ph, H, readH } = fig._geo, top = sc.top - host.top, left = sc.left - host.left, half = 9;
+  const at = { legend: top + 15, axis: top + T + ph / 2, trig: top + Y(0.8), readout: top + H - readH / 2, caption: cap.top - host.top + cap.height / 2 };
+  for (const [k, y] of Object.entries(at)) fig.parentElement.querySelector(`[data-pin="${k}"]`).style.top = `${y - half}px`;
+  fig.parentElement.querySelector('[data-pin="cursor"]').style.left = `${left + X(SCOPES.anatScope.cursors[0]) - half}px`;
+}
+
+function render() {
+  document.querySelectorAll("[data-scope]").forEach((f) => drawScope(f, SCOPES[f.dataset.scope]));
+  pins();
+  document.querySelectorAll("[data-graph]").forEach((s) => graph(s, s.dataset.graph));
+  tapWire();
+}
+document.fonts.ready.then(render);
+addEventListener("resize", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>
+</body>
+</html>
