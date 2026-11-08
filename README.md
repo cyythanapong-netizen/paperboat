@@ -15,7 +15,7 @@ what they send.<br><br>
 | Engine | C++ build and the engine tests | [![engine](https://github.com/paperboatlab/paperboat/actions/workflows/engine.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/engine.yml?query=branch%3Adev) |
 | Python | the bindings and the protocol schema | [![python](https://github.com/paperboatlab/paperboat/actions/workflows/python.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/python.yml?query=branch%3Adev) |
 | Web and console | typecheck, tests and build of `apps/web` and `apps/cli` | [![web](https://github.com/paperboatlab/paperboat/actions/workflows/web.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/web.yml?query=branch%3Adev) |
-| Release | `.deb`, `.tar.gz`, `.zip` and the npm packages, built on a `v<version>` tag | [![release](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml/badge.svg)](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml) [![latest release](https://img.shields.io/github/v/release/paperboatlab/paperboat?include_prereleases&label=latest)](https://github.com/paperboatlab/paperboat/releases) |
+| Release | `.deb`, `.rpm`, `.tar.gz`, `.zip` and the npm packages, built on a `v<version>` tag | [![release](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml/badge.svg)](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml) [![latest release](https://img.shields.io/github/v/release/paperboatlab/paperboat?include_prereleases&label=latest)](https://github.com/paperboatlab/paperboat/releases) |
 | Docs | the [API reference](https://paperboatlab.github.io/paperboat/), warnings as errors | [![docs](https://github.com/paperboatlab/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
 
 ## Documentation
@@ -119,6 +119,7 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ```sh
 npm install -g @paperboatlabs/cli        # Linux x64 today; Windows x64 is being brought up. The native binary is an optional dependency
 sudo apt install ./paperboat_<version>_amd64.deb   # Debian / Ubuntu, from the GitHub release
+sudo dnf install ./paperboat-<version>.x86_64.rpm  # Fedora / RHEL
 ```
 
 A package install is the CLI and the apps: `paperboat` opens the console (needs `node`),
