@@ -133,6 +133,7 @@ jobs:
           python scripts/pack_npm.py --version "$v" --out dist/npm --target win32-x64 --prefix "$RUNNER_TEMP/root"
       - name: "SDK: the .zip builds and checks a backend"
         run: |
+          v=${{ steps.version.outputs.version }}
           pip install -q websockets jsonschema
           mkdir -p "$RUNNER_TEMP/pb" && unzip -q dist/paperboat-*.zip -d "$RUNNER_TEMP/pb"
           exe=$(ls "$RUNNER_TEMP"/pb/*/bin/paperboat.exe)
