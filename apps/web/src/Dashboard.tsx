@@ -27,7 +27,7 @@ import {
 import type { Monitor, PlacedDeco } from "./dashboardLayout";
 import type { ClientMsg, DashboardLayout, ParamValue, ServerMsg } from "./protocol";
 import { VarControls } from "./VarControls";
-import { Console } from "./Console";
+import { Console } from "@paperboat/shared/components";
 import { WebStation } from "./WebStation";
 import { SceneView } from "./SceneView";
 import { VAR_DRAG, VarsContext } from "./Variables";

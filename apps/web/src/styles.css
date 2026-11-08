@@ -533,28 +533,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .instrument.idle .screen { background: transparent; border: 1px dashed var(--line-strong); color: var(--text-muted); }
 .instrument.idle .screen output { color: var(--text-muted); }
 
-/* ---- Console: a display of what the backend logged. -------------------------------- */
-.console-window {
-  position: fixed; z-index: 50; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: min(760px, calc(100vw - 32px)); height: min(480px, calc(100vh - 140px));
-  display: flex; flex-direction: column; overflow: hidden;
-  background: var(--surface-panel); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-2);
-}
-.console-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3) var(--space-2) var(--panel-pad); border-bottom: 1px solid var(--line); }
-.console-head h2 { font: 600 var(--size-sm) var(--font-sans); }
-.console-head .lbl { margin-left: auto; }
-.console-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: var(--panel-pad); }
-.logs { flex: 1; margin: 0; padding: var(--space-3) var(--space-4) var(--space-3) 44px; overflow: auto; font: var(--size-xs) / 1.75 var(--font-mono); }
-.logs li::marker { color: var(--text-on-screen-muted); }
-.log-warn { color: var(--signal); }
-.log-error { color: var(--danger); }
-.log-node { font: inherit; margin-right: 6px; padding: 0 5px; text-transform: none; color: var(--text-on-screen); background: transparent; border: 1px solid var(--text-on-screen-muted); border-radius: var(--radius-sm); }
-.log-node:hover { border-color: var(--text-on-screen); }
-.logs li { position: relative; }
-.logs .log-copy { margin-left: 8px; padding: 0 5px; font: var(--size-2xs) var(--font-sans); color: var(--text-on-screen-muted); background: transparent; border: 1px solid var(--text-on-screen-muted); border-radius: var(--radius-sm); visibility: hidden; }
-.logs li:hover .log-copy, .logs .log-copy:focus-visible { visibility: visible; }
-.logs .log-copy:hover { color: var(--text-on-screen); border-color: var(--text-on-screen); }
 
 /* ---- Adding things (#50): the Flow's tools, the collection window, quick add, drops ---- */
 .kbd { font: 500 var(--size-2xs) var(--font-mono); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: var(--radius-sm); padding: 0 5px; color: var(--text); background: var(--surface-raised); }

@@ -10,7 +10,7 @@ import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from 
 import { Notice, ProjectLabel, type NoticeSpec } from "./ProjectUI";
 import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
 import { emptyOf, freeName, inlineRef, merged, refersTo, renameInFormula, renameRef, toToml, usesOf, type Use } from "./bindings";
-import { ConsoleWindow } from "./Console";
+import { ConsoleWindow } from "@paperboat/shared/components";
 import { Dashboard } from "./Dashboard";
 import { instrumentMeta } from "./instruments";
 import { inlineInText, loadSaved, mapTexts, renameInText, save as saveLayout, textUsing } from "./dashboardLayout";
