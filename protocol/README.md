@@ -405,7 +405,7 @@ value ("–" before a run), `{block:.2f}` with that many decimals, `{{` and `}}`
 
 ## Step flow
 
-A graph whose blocks have `step` ports is a Step flow (see `examples/backends/animation-python`):
+A graph whose blocks have `step` ports is a Step flow (see `paperboat-examples/animation-python`):
 
 - **Hats** are blocks with step outputs and no step input. They start **paths**: Start
   once at the beginning, When each time its signal `cond` rises (a key press). Several
@@ -454,7 +454,7 @@ and `station.load` when the page posts `station.ready`. The page may post back o
 `protocol/smoke_test.py --port <port>` checks any backend against this spec without
 knowing its domain, every message against the schema included. `protocol/golden.py`
 runs each example's starter headless (`--run`) and compares the results with its
-`expected.json`. Every backend in `examples/backends/` passes both.
+`expected.json`. Every backend in `paperboat-examples/` passes both.
 
 ## Why JSON, and what comes next
 

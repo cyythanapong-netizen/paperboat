@@ -54,9 +54,9 @@ its blocks (signal blocks only) run only while a path is at it: once per clock s
 on their outputs, so the next story reads the results. With ``params.reset`` its blocks
 are made afresh each time a path arrives, so a story in a loop starts over. A test
 procedure reads as
-``Start → Pull test (6 s) → Check (once)`` (``examples/backends/chain-python``); an
+``Start → Pull test (6 s) → Check (once)`` (``paperboat-examples/chain-python``); an
 animation as ``Start → Walk a square → Spin (2 s) → Report (once)``
-(``examples/backends/animation-python``, where Walk a square is a visual group of step
+(``paperboat-examples/animation-python``, where Walk a square is a visual group of step
 blocks and Spin a story around a signal block that turns the actor while it runs).
 
 .. code-block:: json
