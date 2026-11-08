@@ -26,7 +26,7 @@ jobs:
           path: paperboat
       - uses: actions/checkout@v4
         with:
-          repository: cyythanapong-netizen/paperboat-shared
+          repository: paperboatlab/paperboat-shared
           path: paperboat-shared
           token: ${{ secrets.DOWNSTREAM_TOKEN || github.token }}
       - uses: actions/setup-node@v4

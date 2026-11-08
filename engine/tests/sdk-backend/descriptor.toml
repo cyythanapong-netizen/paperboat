@@ -1,0 +1,14 @@
+domain = "sdk-backend"
+import = ["base", "dashboard"]
+
+[station]
+view = "graph"
+
+[graph]
+nodes = [
+  { id = "two", type = "constant", params = { value = 2 }, pos = [0, 0] },
+  { id = "graph", type = "graph", pos = [300, 0] },
+]
+edges = [
+  { from = ["two", "y"], to = ["graph", "in"] },
+]

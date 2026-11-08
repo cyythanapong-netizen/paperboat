@@ -1409,7 +1409,7 @@
         },
         "port": {
           "type": "string",
-          "description": "The monitor's input this sample came in by, for one with several (a Scope's a, b…). Absent: in."
+          "description": "The monitor's input this sample came in by, for one with several (a scope's a, b…). Absent: in."
         }
       },
       "required": [
@@ -2149,63 +2149,10 @@
       ],
       "additionalProperties": false
     },
-    "ScopeSettings": {
+    "InstrumentSettings": {
       "type": "object",
-      "description": "How a Scope instrument draws (#37): presentation, kept in the Board layout (it changes during a run without a graph edit and saves with the project). Zoom, cursors and freeze are not saved. Every key is optional.",
-      "additionalProperties": false,
-      "properties": {
-        "mode": {
-          "enum": ["time", "xy", "fft"],
-          "description": "time: channels over time (default); xy: the first channel on x, the others on y; fft: dB magnitude of the visible window."
-        },
-        "window": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "description": "Seconds of time shown while following the run. Absent: the whole run."
-        },
-        "ylog": {
-          "type": "boolean",
-          "description": "A log y axis (time mode)."
-        },
-        "hidden": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Channels not drawn, by id (an input, or input.component for a vector)."
-        },
-        "draw": {
-          "enum": ["line", "line+points", "points", "smooth"],
-          "description": "line: straight lines between samples (default); line+points: also a ring on each sample; points: samples only; smooth: a monotone cubic that never overshoots."
-        },
-        "trigger": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["source", "level"],
-          "properties": {
-            "edge": {
-              "enum": ["rising", "falling"]
-            },
-            "source": {
-              "type": "string",
-              "description": "The channel it watches."
-            },
-            "level": {
-              "type": "number"
-            },
-            "position": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 100,
-              "description": "Where the trigger point sits, % of the window. Absent: 10."
-            },
-            "single": {
-              "type": "boolean",
-              "description": "Freeze on the first trigger (single); absent: keep re-triggering (auto)."
-            }
-          }
-        }
-      }
+      "description": "How one instrument draws, kept in the Board layout (it changes during a run without a graph edit and saves with the project). The shape is the instrument's own, defined by the toolkit that provides it; the engine and the app only carry it.",
+      "additionalProperties": true
     },
     "DashboardLayout": {
       "type": "object",
@@ -2254,8 +2201,8 @@
                 "type": "string",
                 "description": "The tab it is on (one of `tabs`); absent: the first."
               },
-              "scope": {
-                "$ref": "#/$defs/ScopeSettings"
+              "settings": {
+                "$ref": "#/$defs/InstrumentSettings"
               }
             }
           }

@@ -12,6 +12,7 @@ import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
 import { emptyOf, freeName, inlineRef, merged, refersTo, renameInFormula, renameRef, toToml, usesOf, type Use } from "./bindings";
 import { ConsoleWindow } from "./Console";
 import { Dashboard } from "./Dashboard";
+import { instrumentMeta } from "./instruments";
 import { inlineInText, loadSaved, mapTexts, renameInText, save as saveLayout, textUsing } from "./dashboardLayout";
 import { MODES, PAGES, Panel, Rail, Switch, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
 const SceneView = lazy(() => import("./SceneView").then((m) => ({ default: m.SceneView })));
@@ -485,12 +486,15 @@ export function App() {
         nodes
           .filter(isBlock)
           .filter((n) => n.data.def.kind === "monitor" || !!n.data.def.instrument)
-          .map((n) => [n.id, { kind: n.data.def.instrument ?? "graph", params: n.data.params, ...absolute(n, nodes), ...(n.data.def.instrument === "scope" ? scopeWiring(n) : {}) }]),
+          .map((n) => {
+            const kind = n.data.def.instrument ?? "graph";
+            return [n.id, { kind, params: n.data.params, ...instrumentMeta(kind), ...absolute(n, nodes), ...wiring(n) }];
+          }),
       ),
-    [nodes, edges], // eslint-disable-line react-hooks/exhaustive-deps -- scopeWiring reads nodes and edges
+    [nodes, edges], // eslint-disable-line react-hooks/exhaustive-deps -- wiring reads nodes and edges
   );
-  // A Scope (#37): its inputs and the output wired into each, for its legend.
-  function scopeWiring(n: FlowNode) {
+  // A monitor's inputs and the output wired into each, for an instrument's legend.
+  function wiring(n: FlowNode) {
     const sources: Record<string, { label: string; unit?: string }> = {};
     for (const e of edges) {
       if (e.target !== n.id || !e.targetHandle) continue;
@@ -500,7 +504,7 @@ export function App() {
     }
     return { inputs: isBlock(n) ? portsOf(n).inputs.map((p) => p.id) : [], sources };
   }
-  // What a Scope's + tap offers: every block output that carries numbers.
+  // What an instrument's + tap offers: every block output that carries numbers.
   const taps = useMemo(
     () =>
       nodes.filter(isBlock).flatMap((n) =>
@@ -510,22 +514,24 @@ export function App() {
       ),
     [nodes],
   );
-  // + tap: wire output `id` into the Scope's first free input, adding one if all are used. One undo step.
-  const tap = (scope: string, id: string) => {
+  // + tap: wire output `id` into the monitor's first free input; if all are used and its inputs
+  // follow an `inputs` count (ports_from = "inputs"), add one. One undo step.
+  const tap = (monitor: string, id: string) => {
     const [source, sourceHandle] = id.split("\u0000");
-    const node = nodes.find((n) => n.id === scope);
+    const node = nodes.find((n) => n.id === monitor);
     if (!node || !isBlock(node)) return;
     const inputs = portsOf(node).inputs.map((p) => p.id);
-    const used = new Set(edges.filter((e) => e.target === scope).map((e) => e.targetHandle));
-    if (edges.some((e) => e.target === scope && e.source === source && e.sourceHandle === sourceHandle)) return;
+    const used = new Set(edges.filter((e) => e.target === monitor).map((e) => e.targetHandle));
+    if (edges.some((e) => e.target === monitor && e.source === source && e.sourceHandle === sourceHandle)) return;
     let input = inputs.find((i) => !used.has(i));
     if (!input) {
-      if (inputs.length >= 26) return log("warn", `${scope} has 26 inputs, all wired: remove one to tap ${source}.${sourceHandle}`);
+      if (node.data.def.ports_from !== "inputs") return log("warn", `${monitor} has no free input to tap ${source}.${sourceHandle}`);
+      if (inputs.length >= 26) return log("warn", `${monitor} has 26 inputs, all wired: remove one to tap ${source}.${sourceHandle}`);
       input = String.fromCharCode(97 + inputs.length);
-      setNodes((ns) => ns.map((n) => (n.id === scope && isBlock(n) ? { ...n, data: { ...n.data, params: { ...n.data.params, inputs: inputs.length + 1 } } } : n)));
+      setNodes((ns) => ns.map((n) => (n.id === monitor && isBlock(n) ? { ...n, data: { ...n.data, params: { ...n.data.params, inputs: inputs.length + 1 } } } : n)));
     }
-    setEdges((es) => [...es, makeWire({ source, sourceHandle, target: scope, targetHandle: input }, "signal")]);
-    log("info", `tap ${source}.${sourceHandle} → ${scope}.${input}`);
+    setEdges((es) => [...es, makeWire({ source, sourceHandle, target: monitor, targetHandle: input }, "signal")]);
+    log("info", `tap ${source}.${sourceHandle} → ${monitor}.${input}`);
   };
   const errors = state.logs.filter((l) => l.level === "error").length;
   const open = (p: Page) => {

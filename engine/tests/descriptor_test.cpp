@@ -524,7 +524,7 @@ TEST_CASE("toolkits manifest, requirements detection, and installer lifecycle") 
   const auto parsed = tk::parse_toolkits_manifest(R"(
 [[toolkits]]
 name = "opencv"
-repo = "https://github.com/cyythanapong-netizen/paperboat-toolkit-opencv.git"
+repo = "https://github.com/paperboatlab/paperboat-toolkit-opencv.git"
 description = "Image blocks."
 optional = true
 engine = ">=0.1"

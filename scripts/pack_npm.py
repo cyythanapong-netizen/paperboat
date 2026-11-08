@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SCOPE = "@paperboat"  # one place to rename the scope
 LICENSE = "UNLICENSED"  # no LICENSE file in the repository yet; set the SPDX id when one is chosen
-REPO = "git+https://github.com/cyythanapong-netizen/paperboat.git"
+REPO = "git+https://github.com/paperboatlab/paperboat.git"
 
 # target -> (npm os, npm cpu, libc, binary name)
 TARGETS = {

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Check all three repos (paperboat, ../paperboat-shared, ../squero-studio-om) and print one table.
-#   scripts/verify.sh            everything: builds, engine tests, dc-drive-cpp check, docs
+#   scripts/verify.sh            everything: builds, engine tests, sdk-backend check, docs
 #   scripts/verify.sh --quick    typecheck + unit tests + generator checks only (seconds)
 # Exit 1 if any step fails; a failed step's log is in $LOG/<n>.log (default /tmp/paperboat-verify).
 cd "$(dirname "$0")/.." || exit 1
@@ -32,7 +32,7 @@ if [ $QUICK = 0 ]; then
   step "paperboat: web build"     "$ROOT"   npm run -s build
   step "engine: build"            "$ROOT"   cmake --build engine/build -j"$(nproc)"
   step "engine: unit tests"       "$ROOT"   engine/build/tests/paperboat_tests
-  step "engine: check dc-drive-cpp" "$ROOT" "$PB" check examples/dc-drive-cpp
+  step "engine: check sdk-backend" "$ROOT" "$PB" check engine/tests/sdk-backend
   step "docs: build (-W)"         "$ROOT"   ./scripts/build_docs.sh
 fi
 

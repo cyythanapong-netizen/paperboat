@@ -1,9 +1,6 @@
 import { useContext, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { EngineState } from "./engine";
-import type { Channel } from "./scope/trace";
-import { BoardScope } from "./scope/BoardScope";
-import type { TapPort } from "./scope/Scope";
 import {
   CELLS,
   DEFAULT_COLUMNS,
@@ -24,7 +21,7 @@ import {
   resizeDecoration,
   resizeInstrument,
   rowsOf,
-  setScope,
+  setSettings,
   tabIsEmpty,
 } from "./dashboardLayout";
 import type { Monitor, PlacedDeco } from "./dashboardLayout";
@@ -36,7 +33,7 @@ import { SceneView } from "./SceneView";
 import { VAR_DRAG, VarsContext } from "./Variables";
 import { RemoveIcon } from "./RemoveIcon";
 import { GlideBrackets } from "./Shell";
-import { instrumentFor, registerInstrument, type InstrumentProps } from "./instruments";
+import { instrumentFor, type InstrumentProps, type TapPort } from "./instruments";
 
 export type { Monitor } from "./dashboardLayout";
 
@@ -44,129 +41,12 @@ const GAP = 12; // px between cells
 const ROW = 116; // px, one cell's height
 const MIN_CELL = 96; // px: a screen too narrow for the layout's columns gets fewer
 
-/** A Graph: the glance. One trace, or one per component of a vector (a clock run), and the latest values. */
-function Plot({ name, channels, idle }: { name: string; channels: readonly Channel[]; idle: boolean }) {
-  const W = 300;
-  const H = 100;
-  let tMax = 1e-9, vMin = 0, vMax = 0;
-  for (const c of channels)
-    for (let i = 0; i < c.buf.n; i++) {
-      tMax = Math.max(tMax, c.buf.t[i]);
-      vMin = Math.min(vMin, c.buf.v[i]);
-      vMax = Math.max(vMax, c.buf.v[i]);
-    }
-  const span = vMax - vMin || 1;
-  const points = (c: Channel) => {
-    let out = "";
-    for (let i = 0; i < c.buf.n; i++) out += `${(c.buf.t[i] / tMax) * W},${H - ((c.buf.v[i] - vMin) / span) * H} `;
-    return out;
-  };
-  const lasts = channels.map((c) => c.buf.last);
-  const readout =
-    lasts[0] === undefined
-      ? idle ? "graph" : "–"
-      : channels.length === 1
-        ? lasts[0].toFixed(3)
-        : channels.map((c, i) => `${c.label} ${lasts[i]?.toFixed(2)}`).join("  ");
-  return (
-    <figure className={`instrument graph${idle ? " idle" : ""}`}>
-      <div className="screen">
-        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-          <line className="zero" x1={0} x2={W} y1={H - (-vMin / span) * H} y2={H - (-vMin / span) * H} />
-          {channels.map((c, i) => (
-            <polyline key={c.id} className={`trace trace-${i % 4}`} points={points(c)} fill="none" vectorEffect="non-scaling-stroke">
-              {channels.length > 1 && <title>{c.label}</title>}
-            </polyline>
-          ))}
-        </svg>
-      </div>
-      <figcaption>
-        <span>{name}</span>
-        <output>{readout}</output>
-      </figcaption>
-    </figure>
-  );
-}
-
-/**
- * A Switch: a control the user flips during a run. It shows only what the engine sends
- * (no local guess), its `initial` state before the first sample, and is inert while no
- * run is going or the Dashboard can't send. Toggle mode has a click pill; momentary mode
- * a hold button, so the two never share a press.
- */
-function SwitchInstrument({ name, latest, state, send, params }: InstrumentProps) {
-  const momentary = params?.mode === "momentary";
-  const initialOn = params?.initial === undefined ? true : !!params.initial;
-  const live = !!send && state.run?.status === "running";
-  const on = live && typeof latest === "number" ? latest > 0.5 : initialOn;
-  const held = useRef(false);
-  const input = (down: boolean) => send?.({ type: "input", key: name, down });
-
-  // The engine latches a press until its next pass, so a click is a press and a release.
-  const click = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!live) return;
-    input(true);
-    input(false);
-  };
-  const press = (e: React.PointerEvent) => {
-    e.stopPropagation();
-    if (!live) return;
-    e.currentTarget.setPointerCapture(e.pointerId); // the release arrives even off the button
-    held.current = true;
-    input(true);
-  };
-  const release = (e: React.PointerEvent) => {
-    e.stopPropagation();
-    if (!held.current) return;
-    held.current = false;
-    input(false);
-  };
-
-  return (
-    <figure className={`instrument switch-instrument${live ? "" : " idle"}`}>
-      <div className="screen switch-screen">
-        <div className="switch-controls">
-          {momentary ? (
-            <button
-              type="button"
-              className={`switch-momentary-btn${on ? " on" : ""}`}
-              disabled={!live}
-              onPointerDown={press}
-              onPointerUp={release}
-              onPointerCancel={release}
-              title="Hold to switch on"
-            >
-              HOLD
-            </button>
-          ) : (
-            <button
-              type="button"
-              className={`switch-pill${on ? " on" : ""}`}
-              disabled={!live}
-              onClick={click}
-              title={`Click to switch ${on ? "off" : "on"}`}
-            >
-              <span className="switch-text">{on ? "ON" : "OFF"}</span>
-              <span className="switch-knob" />
-            </button>
-          )}
-        </div>
-      </div>
-      <figcaption>
-        <span>{name}</span>
-        <output>{on ? "on (1)" : "off (0)"}</output>
-      </figcaption>
-    </figure>
-  );
-}
-
 /**
  * One instrument: how a monitor shows on the Dashboard is up to its block's `instrument`.
  * Before a run sends it anything it is a greyed placeholder of the same frame (#58), so it
  * can be placed and sized before the first run.
  */
-function Instrument({ name, kind, state, send, params }: { name: string; kind: string; state: EngineState; send?: (m: ClientMsg) => void; params?: Record<string, ParamValue> }) {
+function Instrument({ name, kind, state, send, params, ...host }: { name: string; kind: string; state: EngineState; send?: (m: ClientMsg) => void; params?: Record<string, ParamValue> } & Pick<InstrumentProps, "size" | "inputs" | "sources" | "settings" | "onSettings" | "taps" | "onTap">) {
   const latest = state.latest[name];
   const idle = latest === undefined;
   const vector = Array.isArray(latest)
@@ -177,27 +57,7 @@ function Instrument({ name, kind, state, send, params }: { name: string; kind: s
       }).join(", ")
     : undefined;
   const Renderer = instrumentFor(kind) ?? FallbackInstrument;
-  return <Renderer name={name} kind={kind} latest={latest} idle={idle} vector={vector} state={state} send={send} params={params} />;
-}
-
-function DisplayInstrument({ name, latest, vector, idle }: InstrumentProps) {
-  return (
-    <figure className={`instrument display${idle ? " idle" : ""}`}>
-      <div className="screen">
-        <output>
-          {typeof latest === "number"
-            ? +latest.toFixed(4)
-            : Array.isArray(latest)
-              ? `[${vector ?? latest.map((v) => +v.toFixed(4)).join(", ")}]`
-              : String(latest ?? "–")}
-        </output>
-      </div>
-      <figcaption>
-        <span>{name}</span>
-        <span>display</span>
-      </figcaption>
-    </figure>
-  );
+  return <Renderer name={name} kind={kind} latest={latest} idle={idle} vector={vector} state={state} send={send} params={params} {...host} />;
 }
 
 /** A kind nothing registered (e.g. from a toolkit whose UI isn't here): its kind and raw latest value. */
@@ -214,10 +74,6 @@ function FallbackInstrument({ name, kind, latest, idle }: InstrumentProps) {
     </figure>
   );
 }
-
-registerInstrument("graph", ({ name, state, idle }) => <Plot name={name} channels={state.traces.channels(name)} idle={idle} />);
-registerInstrument("display", DisplayInstrument);
-registerInstrument("switch", SwitchInstrument);
 
 const ARROWS: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
 
@@ -344,9 +200,9 @@ export function Dashboard({
   subscribe?: (listen: (m: ServerMsg) => void) => () => void;
   send?: (m: ClientMsg) => void;
   gridOn?: boolean;
-  /** What a Scope's + tap offers, and how it wires one in (#37). */
+  /** What an instrument's + tap offers, and how it wires one into a monitor. */
   taps?: readonly TapPort[];
-  onTap?: (scope: string, id: string) => void;
+  onTap?: (monitor: string, id: string) => void;
 }) {
   const vars = useContext(VarsContext);
   const layout = saved ?? state.dashboard;
@@ -786,21 +642,20 @@ export function Dashboard({
               onDragStart={(e) => startDrag(e, { kind: "instrument", id: p.block, col: p.col, row: p.row })}
               onDragEnd={stop}
             >
-              {all[p.block].kind === "scope" ? (
-                <BoardScope
-                  name={p.block}
-                  state={state}
-                  settings={p.scope}
-                  onSettings={(next) => commit(setScope(arranged, p.block, next))}
-                  small={p.size === "normal" || p.size === "compact"}
-                  sources={all[p.block].sources}
-                  inputs={all[p.block].inputs}
-                  taps={taps}
-                  onTap={onTap && ((id) => onTap(p.block, id))}
-                />
-              ) : (
-                <Instrument name={p.block} kind={all[p.block].kind} state={state} send={send} params={all[p.block].params} />
-              )}
+              <Instrument
+                name={p.block}
+                kind={all[p.block].kind}
+                state={state}
+                send={send}
+                params={all[p.block].params}
+                size={p.size}
+                inputs={all[p.block].inputs ?? []}
+                sources={all[p.block].sources ?? {}}
+                settings={p.settings}
+                onSettings={(next) => commit(setSettings(arranged, p.block, next))}
+                taps={taps ?? []}
+                onTap={onTap && ((id) => onTap(p.block, id))}
+              />
               {canEdit && (
                 <div className="switch cell-tools" role="group" aria-label={`Size of ${p.block}`}>
                   {SIZES.map((s) => (

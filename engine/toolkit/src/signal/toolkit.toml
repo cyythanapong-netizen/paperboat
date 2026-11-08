@@ -1,4 +1,3 @@
 # The signal package: C++ parents plus TOML definitions in blocks.toml.
 name = "signal"
-register = ["add_waves", "add_definitions"]
 definitions = "blocks.toml"

@@ -1,0 +1,9 @@
+{
+  "name": "@paperboat/toolkit-dashboard-scope-web",
+  "private": true,
+  "version": "0.0.1",
+  "description": "The scope block's Board instrument. Its own dependencies are listed here; React comes from the app.",
+  "dependencies": {
+    "uplot": "^1.6.32"
+  }
+}

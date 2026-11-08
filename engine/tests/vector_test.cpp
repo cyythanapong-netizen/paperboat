@@ -262,10 +262,10 @@ TEST_CASE("a Scope sends one sample per wired input, tagged with it; a vector st
     CHECK(by_port["c"]["v"].is_array());
     CHECK(by_port["c"]["components"][1]["id"] == "q");
   }
-  // A backend's default layout may carry its settings; a typo is refused.
-  CHECK_NOTHROW(tk::load_descriptor("import = [\"dashboard\"]\n[dashboard]\ninstruments = [{ block = \"sc\", scope = { mode = \"xy\", window = 2 } }]\n"));
-  CHECK_THROWS_WITH(tk::load_descriptor("import = [\"dashboard\"]\n[dashboard]\ninstruments = [{ block = \"sc\", scope = { modes = \"xy\" } }]\n"),
-                    ContainsSubstring("modes"));
+  // A backend's default layout may carry an instrument's settings (a table; the toolkit's UI reads them).
+  CHECK_NOTHROW(tk::load_descriptor("import = [\"dashboard\"]\n[dashboard]\ninstruments = [{ block = \"sc\", settings = { mode = \"xy\", window = 2 } }]\n"));
+  CHECK_THROWS_WITH(tk::load_descriptor("import = [\"dashboard\"]\n[dashboard]\ninstruments = [{ block = \"sc\", settings = 3 }]\n"),
+                    ContainsSubstring("settings must be a table"));
 
   // Setting inputs to 1 gives a single input "a" (pb#189)
   const auto* sc = catalog().find("scope");

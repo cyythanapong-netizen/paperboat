@@ -1,3 +1,2 @@
 # The string manipulation toolkit.
 name = "string"
-register = ["add_strings"]

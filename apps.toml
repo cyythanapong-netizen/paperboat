@@ -3,14 +3,14 @@
 # kind: program (start/stop it; `launch` is the command that runs it, `port` where it listens) or library.
 [[apps]]
 name = "paperboat-shared"
-repo = "https://github.com/cyythanapong-netizen/paperboat-shared.git"
+repo = "https://github.com/paperboatlab/paperboat-shared.git"
 description = "The UI kit (@paperboat/shared) the apps build on."
 kind = "library"
 build = ["npm ci"]
 
 [[apps]]
 name = "squero-studio-om"
-repo = "https://github.com/cyythanapong-netizen/squero-studio-om.git"
+repo = "https://github.com/paperboatlab/squero-studio-om.git"
 description = "Squero Studio: OpenModelica. The Modelica editor that exports Paperboat C++ backends."
 kind = "program"
 launch = "bin/squero-om"  # `paperboat start squero-studio-om` runs its native launcher

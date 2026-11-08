@@ -1,0 +1,12 @@
+[backend]
+format = 0
+name = "sdk-backend"
+version = "0.1.0"
+engine = ">=0.1"
+language = "cpp"
+run = "build/paperboat-sdk-backend"
+port = 8781
+descriptor = "descriptor.toml"
+
+[test]
+golden = "expected.json"
