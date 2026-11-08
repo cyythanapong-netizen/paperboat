@@ -30,3 +30,22 @@ export function registerInstrument(kind: string, renderer: InstrumentRenderer): 
 export function instrumentFor(kind: string): InstrumentRenderer | undefined {
   return renderers.get(kind);
 }
+
+/** What the web app hands a toolkit's `web/index.ts(x)`: the registries it may extend. */
+export interface ToolkitWebHost {
+  registerInstrument: typeof registerInstrument;
+}
+
+/**
+ * Toolkit UI (pb#172): every toolkit folder may hold `web/index.ts` or `web/index.tsx` exporting
+ * `register(host)`. They are bundled at build time, so a toolkit installed into engine/toolkit/<name>
+ * shows up on the next web build (or at once under the dev server); the app names no toolkit.
+ */
+const toolkitWeb = import.meta.glob<{ register?: (host: ToolkitWebHost) => void }>(
+  ["../../../engine/toolkit/*/web/index.{ts,tsx}", "../../../engine/toolkit/src/*/web/index.{ts,tsx}"],
+  { eager: true },
+);
+for (const [path, mod] of Object.entries(toolkitWeb)) {
+  if (typeof mod.register === "function") mod.register({ registerInstrument });
+  else console.warn(`${path}: a toolkit's web/index must export register(host)`);
+}

@@ -59,6 +59,22 @@ Optional toolkits with external dependencies live in ``engine/toolkit/<package>/
 the package's CMake file decides whether its dependency is available. The backend links and
 registers an optional package explicitly.
 
+A package that needs its own UI keeps it in a ``web/`` folder next to its C++
+(``engine/toolkit/<package>/web/index.tsx`` or ``engine/toolkit/src/<package>/web/index.tsx``). The
+web app bundles every such entry and calls its ``register(host)`` export; ``host.registerInstrument(kind,
+component)`` adds a Dashboard instrument for monitors whose block says ``instrument = kind``. The
+component gets ``name``, ``kind``, ``latest``, ``idle`` (and ``params``, ``send``, ``state``). Nothing in
+the web app names the package::
+
+   // engine/toolkit/opencv/web/index.tsx
+   export function register(host) {
+     host.registerInstrument("image", ImageInstrument);
+   }
+
+The entries are bundled at build time: after installing a toolkit with a ``web/`` folder, rebuild the
+web app (the dev server picks it up at once). A kind nothing registered shows a plain tile with its kind
+and latest value.
+
 .. _pkg-base:
 
 base
@@ -253,7 +269,7 @@ Optional external toolkit from ``paperboat-toolkit-opencv`` (installed into ``en
 ``median`` (``size``), ``threshold`` (``level``, ``otsu``, ``invert``), ``adaptive_threshold``
 (``size``, ``c``, ``invert``), ``hsv_range``, ``canny`` (``low``, ``high``), ``erode``, ``dilate``,
 ``open``, ``close`` (``size``, ``iterations``), ``invert``, ``distance``. Monitor ``view`` (an image
-instrument). Station object ``image`` (props ``file``, ``width``; linked block out ``image``).
+instrument, from the toolkit's ``web/index.tsx``). Station object ``image`` (props ``file``, ``width``; linked block out ``image``).
 Its ``toolkits.toml`` entry lists these block types in ``blocks = [...]``; the engine sends them in
 ``ToolkitStatus.blocks`` so the UI can name the toolkit when a flow uses a block that is not installed.
 A new optional toolkit does the same, with no change to the web app.
