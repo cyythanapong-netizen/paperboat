@@ -817,11 +817,9 @@ export function exec(raw: string): void {
     case 'exit':
       return requestExit();
     case 'run':
-      if (!pos[0]) return openPicker();
-      return runBackend(pos[0], args);
     case 'start': {
-      if (!pos[0]) return appCommand('start', args);  // no target: the web app
-      const program = programNamed(pos[0]);
+      if (!pos[0]) return spec.name === 'run' ? openPicker() : appCommand('start', args);  // start alone: the web app
+      const program = programNamed(pos[0]);  // run on a program starts it, as the picker offers
       if (!program) return runBackend(pos[0], args);
       if (program.installed === false) say([mu(`${program.name} is not installed yet · it is fetched and built first`)]);
       const port = Number(flag(args, '--port')) || program.port;
