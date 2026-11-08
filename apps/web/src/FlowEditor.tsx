@@ -29,8 +29,8 @@ import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { ownKeys } from "./commands";
 import { CompactBlock } from "./Compact";
 import { copySelection, pasteClip, type Clip } from "./clipboard";
-import { connectError, iconEnd, inForm, netWireType, signalEnd, signOf, wireMismatch, type PortSides, type WireEnd } from "./ports";
-import { iconValid, placeIconPorts } from "@paperboat/shared";
+import { connectError, iconEnd, inForm, netWireType, placePorts, SIDES, signalEnd, signOf, wireMismatch, type PortSides, type WireEnd } from "./ports";
+import { flipSideX, flipSideY, iconValid, placeIconPorts, rotateIcon, rotateSideCCW, rotateSideCW, useCanvasHotkeys, type RotationDeg } from "@paperboat/shared";
 import { usePortLayout } from "./portLayout";
 import { Bindable, draggedVariable, NumberOrFormula, VAR_DRAG, VarsContext } from "./Variables";
 import { isRef } from "./bindings";
@@ -73,6 +73,8 @@ export type BlockData = {
   params: Record<string, ParamValue>;
   missing?: boolean;
   ports?: PortSides;
+  rotation?: RotationDeg;
+  mirror?: boolean;
   commented?: boolean;
   commentMode?: "out" | "through";
   comment?: string;
@@ -139,7 +141,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   // Ports that follow a param come and go: have the canvas measure the handles again.
   const updateInternals = useUpdateNodeInternals();
   const portKey = [...def.inputs, ...def.outputs].map((p) => p.id).join(",");
-  useEffect(() => updateInternals(id), [portKey, id, updateInternals]);
+  useEffect(() => updateInternals(id), [portKey, id, updateInternals, data.rotation, data.mirror]);
   // A simple block draws as a small plate (#70) until double-clicked open; fold puts it back.
   const [expanded, setExpanded] = useState(false);
   const ports = usePortLayout({
@@ -150,11 +152,13 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
     disabled: missing,
     sign: (p, dir) => (dir === "in" ? signOf(def, params, def.inputs.indexOf(p)) : ""),
   });
+  const placedIcon = (data.rotation || data.mirror) && def.view?.icon ? rotateIcon(def.view.icon, { rotation: data.rotation, mirror: data.mirror }) : def.view?.icon;
+  const viewDef = placedIcon ? { ...def, view: { ...def.view, icon: placedIcon } } : def;
   if ((def.view?.compact || iconValid(def.view?.icon)) && !expanded && !missing && !hasStepPorts(def)) {
     return (
       <CompactBlock
         id={id}
-        def={def}
+        def={viewDef}
         params={params}
         selected={!!selected}
         commented={commented}
@@ -546,6 +550,8 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
     const [x, y] = n.pos ?? [0, 120 * i];
     const def = defs.get(n.type);
     const ports = n.ports ? { ports: n.ports } : {};
+    const rotation = n.rotation !== undefined ? { rotation: n.rotation } : {};
+    const mirror = n.mirror !== undefined ? { mirror: n.mirror } : {};
     if (def) {
       const node = makeNode(def, n.id, x, y, n.params);
       return {
@@ -553,6 +559,8 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
         data: {
           ...node.data,
           ...ports,
+          ...rotation,
+          ...mirror,
           ...(n.commented !== undefined ? { commented: n.commented } : {}),
           ...(n.comment_mode !== undefined ? { commentMode: n.comment_mode } : {}),
           ...(n.comment !== undefined ? { comment: n.comment } : {}),
@@ -565,6 +573,8 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
       data: {
         ...node.data,
         ...ports,
+        ...rotation,
+        ...mirror,
         missing: true,
         ...(n.commented !== undefined ? { commented: n.commented } : {}),
         ...(n.comment_mode !== undefined ? { commentMode: n.comment_mode } : {}),
@@ -631,10 +641,12 @@ export function resolveBlocks(nodes: FlowNode[], edges: Wire[], blocks: BlockDef
       const defaults = Object.fromEntries(def.params.map((p) => [p.id, p.default]));
       const kept = Object.fromEntries(Object.entries(n.data.params).filter(([k]) => k in defaults));
       const ports = n.data.ports ? { ports: n.data.ports } : {};
+      const rotation = n.data.rotation !== undefined ? { rotation: n.data.rotation } : {};
+      const mirror = n.data.mirror !== undefined ? { mirror: n.data.mirror } : {};
       const commented = n.data.commented !== undefined ? { commented: n.data.commented } : {};
       const commentMode = n.data.commentMode !== undefined ? { commentMode: n.data.commentMode } : {};
       const comment = n.data.comment !== undefined ? { comment: n.data.comment } : {};
-      return { ...n, deletable: !def.linked, data: { def, params: { ...defaults, ...kept }, ...ports, ...commented, ...commentMode, ...comment } };
+      return { ...n, deletable: !def.linked, data: { def, params: { ...defaults, ...kept }, ...ports, ...rotation, ...mirror, ...commented, ...commentMode, ...comment } };
     }
     const wires = edges.map((e) => ({ ...e, type: e.data?.type }));
     return { ...n, deletable: true, data: { ...n.data, def: missingDef(n.data.def.type, n.data.params, wires, n.id, n.data.def), missing: true } };
@@ -650,6 +662,8 @@ export function toGraph(nodes: FlowNode[], edges: Wire[]): Graph {
       type: n.data.def.type,
       params: n.data.params,
       ...(n.data.ports ? { ports: n.data.ports } : {}),
+      ...(n.data.rotation !== undefined ? { rotation: n.data.rotation } : {}),
+      ...(n.data.mirror !== undefined ? { mirror: n.data.mirror } : {}),
       ...(n.data.commented !== undefined ? { commented: n.data.commented } : {}),
       ...(n.data.commentMode !== undefined ? { comment_mode: n.data.commentMode } : {}),
       ...(n.data.comment !== undefined ? { comment: n.data.comment } : {}),
@@ -735,7 +749,23 @@ export type FlowControls = {
   /** Arrange this level and its contents; false when locked or already arranged. */
   arrange: () => boolean;
   comment: (mode?: "out" | "through") => void;
-  can: { copy: boolean; paste: boolean; remove: boolean; group: boolean; frame: boolean; story: boolean; ungroup: boolean; arrange: boolean; comment: boolean };
+  rotate: (cw?: boolean) => void;
+  flip: (axis?: "x" | "y") => void;
+  duplicate: () => void;
+  can: {
+    copy: boolean;
+    paste: boolean;
+    remove: boolean;
+    group: boolean;
+    frame: boolean;
+    story: boolean;
+    ungroup: boolean;
+    arrange: boolean;
+    comment: boolean;
+    rotate: boolean;
+    flip: boolean;
+    duplicate: boolean;
+  };
 };
 
 const NO_CONNECTORS: Connectors = {};
@@ -1049,20 +1079,6 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
     return () => id;
   };
 
-  // `/` with the pointer over the canvas opens quick add there (it is then not a key for
-  // the backend); so does a double-click on empty canvas.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (e.key !== "/" || !pointer.current || e.ctrlKey || e.metaKey || e.altKey) return;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
-      e.preventDefault();
-      setQuick({ ...pointer.current });
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, []);
-
   // ---- Several at once: dragging on empty canvas draws a box; a dialog acts on it (#54) ----
   const [busy, setBusy] = useState(false); // dragging blocks or the box: the dialog waits
   const pickedNodes = shown.nodes.filter((n) => n.selected && !n.hidden);
@@ -1113,6 +1129,105 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
   };
   const removePicked = () =>
     deleteElements({ nodes: pickedNodes.map((n) => ({ id: n.id })), edges: pickedWires.map((w) => ({ id: w.id })) });
+
+  const updateNodeInternals = useUpdateNodeInternals();
+
+  const rotateSelected = (cw: boolean) => {
+    if (pickedBlocks.length === 0) return;
+    const ids = new Set(pickedBlocks.map((b) => b.id));
+    setNodes((ns) =>
+      ns.map((n) => {
+        if (!ids.has(n.id) || !isBlock(n)) return n;
+        const currentRot = (n.data.rotation ?? 0) as RotationDeg;
+        const nextRot = (((currentRot + (cw ? 270 : 90)) % 360) as RotationDeg);
+        const def = inForm(n.data.def, n.data.params);
+        const placed = placePorts(def, n.data.ports);
+        const nextPorts: PortSides = {};
+        for (const side of SIDES) {
+          const nextSide = cw ? rotateSideCW(side) : rotateSideCCW(side);
+          const list = placed[side].map((e) => e.port.id);
+          if (list.length > 0) nextPorts[nextSide] = list;
+        }
+        return {
+          ...n,
+          data: {
+            ...n.data,
+            rotation: nextRot,
+            ports: nextPorts,
+          },
+        };
+      }),
+    );
+    pickedBlocks.forEach((b) => updateNodeInternals(b.id));
+  };
+
+  const flipSelected = (axis: "x" | "y") => {
+    if (pickedBlocks.length === 0) return;
+    const ids = new Set(pickedBlocks.map((b) => b.id));
+    setNodes((ns) =>
+      ns.map((n) => {
+        if (!ids.has(n.id) || !isBlock(n)) return n;
+        const currentRot = (n.data.rotation ?? 0) as RotationDeg;
+        const currentMirror = Boolean(n.data.mirror);
+        const def = inForm(n.data.def, n.data.params);
+        const placed = placePorts(def, n.data.ports);
+        const nextPorts: PortSides = {};
+        for (const side of SIDES) {
+          const nextSide = axis === "x" ? flipSideX(side) : flipSideY(side);
+          const list = placed[side].map((e) => e.port.id);
+          if (list.length > 0) nextPorts[nextSide] = list;
+        }
+        if (axis === "x") {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              mirror: !currentMirror,
+              ports: nextPorts,
+            },
+          };
+        } else {
+          return {
+            ...n,
+            data: {
+              ...n.data,
+              mirror: !currentMirror,
+              rotation: (((currentRot + 180) % 360) as RotationDeg),
+              ports: nextPorts,
+            },
+          };
+        }
+      }),
+    );
+    pickedBlocks.forEach((b) => updateNodeInternals(b.id));
+  };
+
+  const duplicateSelected = (): boolean => {
+    const { nodes: ns, edges: es } = latest.current;
+    const clip = copySelection(ns, es);
+    if (!clip) return false;
+    const next = pasteClip(clip, ns, es, 30);
+    setNodes(next.nodes);
+    setEdges(next.edges);
+    return true;
+  };
+
+  useCanvasHotkeys({
+    hasSelection: many,
+    onInsert: () => {
+      if (pointer.current) setQuick({ ...pointer.current });
+    },
+    onRotateCW: () => rotateSelected(true),
+    onRotateCCW: () => rotateSelected(false),
+    onFlipH: () => flipSelected("x"),
+    onFlipV: () => flipSelected("y"),
+    onDuplicate: () => void duplicateSelected(),
+    onDelete: removePicked,
+    onComment: () => toggleComment("out"),
+    onBypass: () => toggleComment("through"),
+    onEscape: () => deselect(),
+  });
+
   if (controls) {
     controls.current = {
       copy: () => void copySelected(false),
@@ -1123,6 +1238,9 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
       ungroup: () => pickedFrames.forEach((f) => actions.ungroup(f.id)),
       arrange,
       comment: (mode: "out" | "through" = "out") => toggleComment(mode),
+      rotate: (cw = true) => rotateSelected(cw),
+      flip: (axis = "x") => flipSelected(axis),
+      duplicate: () => void duplicateSelected(),
       can: {
         copy: copySelection(nodes, edges) !== null,
         get paste() {
@@ -1135,35 +1253,15 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
         ungroup: pickedFrames.length > 0,
         arrange: !locked && canArrangeFlow(nodes, level),
         comment: pickedBlocks.length > 0,
+        rotate: pickedBlocks.length > 0,
+        flip: pickedBlocks.length > 0,
+        duplicate: pickedNodes.length > 0,
       },
     };
   }
   useEffect(() => () => {
     if (controls) controls.current = null;
   }, [controls]);
-  useEffect(() => {
-    if (!many) return;
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (ownKeys(t) || (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT"))) return;
-      if ((e.ctrlKey || e.metaKey) && (e.key === "/" || e.code === "Slash")) {
-        e.preventDefault();
-        toggleComment("out");
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key.toLowerCase() === "y" || e.code === "KeyY")) {
-        e.preventDefault();
-        toggleComment("through");
-        return;
-      }
-      if (e.key === "Escape") {
-        e.preventDefault(); // not a key for the backend
-        deselect();
-      }
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  });
   const counted = (n: number, one: string) => (n ? [`${n} ${one}${n === 1 ? "" : "s"}`] : []);
   const summary = [
     ...counted(pickedNodes.filter(isBlock).length, "block"),
@@ -1440,6 +1538,38 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
             <button
               className="key small"
               disabled={pickedBlocks.length === 0}
+              title="Rotate 90° clockwise (R)"
+              onClick={() => rotateSelected(true)}
+            >
+              Rotate
+            </button>
+            <button
+              className="key small"
+              disabled={pickedBlocks.length === 0}
+              title="Flip horizontal (F)"
+              onClick={() => flipSelected("x")}
+            >
+              Flip
+            </button>
+            <button
+              className="key small"
+              disabled={pickedBlocks.length === 0}
+              title="Flip vertical (Alt+F)"
+              onClick={() => flipSelected("y")}
+            >
+              Flip ⇅
+            </button>
+            <button
+              className="key small"
+              disabled={pickedBlocks.length === 0}
+              title="Duplicate (Ctrl+D)"
+              onClick={() => duplicateSelected()}
+            >
+              Duplicate
+            </button>
+            <button
+              className="key small"
+              disabled={pickedBlocks.length === 0}
               title={allCommented ? "Uncomment selected blocks (Ctrl+/)" : "Comment out selected blocks (Ctrl+/)"}
               onClick={() => toggleComment("out")}
             >
@@ -1549,7 +1679,10 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
 const GESTURES: [string, string][] = [
   ["Add a block", "/ or double-click the canvas"],
   ["Select", "Click a block · Ctrl-drag a box · Ctrl-click adds"],
-  ["Act on a selection", "The dialog above it: delete, group, story, comment"],
+  ["Rotate", "R turns clockwise · Shift+R counter-clockwise"],
+  ["Flip", "F mirrors horizontal · Alt+F vertical"],
+  ["Duplicate", "Ctrl+D · Alt-drag a block"],
+  ["Act on a selection", "The dialog above it: rotate, flip, duplicate, delete, group, comment"],
   ["Comment out · bypass", "Ctrl+/ · Ctrl+Shift+Y"],
   ["Pan · zoom", "Drag the canvas · the wheel"],
   ["Remove a wire", "Drag its end off the port"],

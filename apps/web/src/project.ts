@@ -54,6 +54,8 @@ function flowProblem(flow: unknown): string | null {
     if (!isObj(n) || !isText(n.id) || !isText(n.type)) return `flow.nodes[${i}] needs an id and a type`;
     if (n.params !== undefined && !isObj(n.params)) return `flow.nodes[${i}].params must be an object`;
     if (n.pos !== undefined && !(Array.isArray(n.pos) && n.pos.length === 2 && n.pos.every(isNum))) return `flow.nodes[${i}].pos must be two numbers`;
+    if (n.rotation !== undefined && ![0, 90, 180, 270].includes(n.rotation as number)) return `flow.nodes[${i}].rotation must be 0, 90, 180, or 270`;
+    if (n.mirror !== undefined && typeof n.mirror !== "boolean") return `flow.nodes[${i}].mirror must be a boolean`;
     if (n.commented !== undefined && typeof n.commented !== "boolean") return `flow.nodes[${i}].commented must be a boolean`;
     if (n.comment_mode !== undefined && n.comment_mode !== "out" && n.comment_mode !== "through") return `flow.nodes[${i}].comment_mode must be "out" or "through"`;
     if (n.comment !== undefined && typeof n.comment !== "string") return `flow.nodes[${i}].comment must be a string`;
