@@ -32,7 +32,10 @@ function createObject(e: Entity, flat = false): THREE.Object3D {
     return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: texture }));
   }
   const [a, b, c] = e.size ?? [1, 1, 1];
-  const geometry = e.shape === "sphere" ? new THREE.SphereGeometry(a, 24, 16) : new THREE.BoxGeometry(a, b, c);
+  const geometry =
+    e.shape === "sphere" ? new THREE.SphereGeometry(a, 24, 16)
+    : e.shape === "cylinder" ? new THREE.CylinderGeometry(a, a, b, 24) // radius size[0], length size[1] along y
+    : new THREE.BoxGeometry(a, b, c);
   return new THREE.Mesh(geometry, flat ? new THREE.MeshBasicMaterial({ color }) : new THREE.MeshStandardMaterial({ color }));
 }
 
@@ -96,6 +99,7 @@ export function SceneView({ entities, view, grid, projection = "persp" }: { enti
       const grid = token("--scene-grid", "#a9a9a3");
       const floor = new THREE.GridHelper(10, 10, grid, grid);
       floor.visible = showGrid.current;
+      floor.position.y = view.floor ?? 0;
       floorGrid.current = floor;
       scene.add(floor);
       // The backend may say where the camera opens (and so where Home returns): view.camera.

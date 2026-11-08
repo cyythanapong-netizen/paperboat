@@ -832,6 +832,7 @@
           "enum": [
             "box",
             "sphere",
+            "cylinder",
             "line",
             "image"
           ]
@@ -885,6 +886,10 @@
             "grid": {
               "type": "boolean",
               "description": "Show the floor grid (default true). The user can switch it on or off on the Station page, and that choice wins."
+            },
+            "floor": {
+              "type": "number",
+              "description": "The height (y) of the floor grid (default 0): below a model that hangs from the origin."
             },
             "camera": {
               "type": "object",

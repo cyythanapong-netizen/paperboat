@@ -102,12 +102,13 @@ Default address: `ws://localhost:8765`.
 { "id": "mass", "shape": "box", "pos": [0, 0, 0], "size": [1, 1, 1], "color": "#2f5d62" }
 { "id": "spring", "shape": "line", "pos": [-2.9, 0, 0], "to": [-0.5, 0, 0] }
 { "id": "body", "shape": "box", "pos": [0, 0.25, 0], "size": [1, 0.5, 0.6], "rot": [0, 1.57, 0], "scale": [2, 2, 2] }
-// shape: box | sphere (size[0] = radius) | line (pos → to)
+// shape: box | sphere (size[0] = radius) | cylinder (size[0] = radius, size[1] = length along y) | line (pos → to)
 // rot: optional, radians, applied in x, y, z order; scale: optional factors on top of size
 
 // View: camera hint sent with a scene (default 3d)
 { "mode": "3d" }                                   // "grid": false hides the floor grid (default true; the user's own switch wins)
 { "mode": "3d", "camera": { "eye": [3, 2, 6], "target": [0, 0.5, 0], "fov": 40 } }
+{ "mode": "3d", "floor": -1.2 }                    // the floor grid's height (default 0), under a model hanging from the origin
                                                    // where the camera opens and Home returns (default eye [2, 4, 8] at [0, 0, 0], fov 50)
 { "mode": "2d", "center": [6, 5], "height": 11 }   // orthographic, looking down −z
 
