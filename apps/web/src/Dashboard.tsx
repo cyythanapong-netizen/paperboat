@@ -37,7 +37,6 @@ import { VAR_DRAG, VarsContext } from "./Variables";
 import { RemoveIcon } from "./RemoveIcon";
 import { GlideBrackets } from "./Shell";
 import { instrumentFor, registerInstrument, type InstrumentProps } from "./instruments";
-import "./ImageInstrument";
 
 export type { Monitor } from "./dashboardLayout";
 
