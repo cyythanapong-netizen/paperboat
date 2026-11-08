@@ -24,7 +24,7 @@ import {
   type Viewport,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { createContext, Fragment, useContext, useEffect, useId, useMemo, useRef, useState, type Dispatch, type DragEvent, type MutableRefObject, type SetStateAction } from "react";
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type Dispatch, type DragEvent, type MutableRefObject, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { ownKeys } from "./commands";
 import { CompactBlock } from "./Compact";
@@ -38,7 +38,7 @@ import { RemoveIcon } from "./RemoveIcon";
 import { connectionOf, nearestAccepting, SNAP, WireDragContext, type Anchor } from "./wireSnap";
 import { arrangeFlowNodes, canArrangeFlow } from "./flowLayout";
 import { middleOfWire, orthoPoints, roundedPolyline, routeWires, squareUp, type Obstacle, type RouteInput, type WireRoute, type WirePoint } from "./wireRouting.ts";
-import { useWireBends } from "@paperboat/shared/components";
+import { CanvasHelp, useWireBends } from "@paperboat/shared/components";
 import {
   absolute,
   Boundary,
@@ -1598,7 +1598,7 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
             </span>
           </p>
         )}
-        <CanvasHelp />
+        <CanvasHelp gestures={GESTURES} />
         {hint && (
           <div className="drop-hint" aria-live="polite">
             {hint.plan.kind === "place" && (
@@ -1641,60 +1641,19 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
 
 /** What the canvas does with a pointer and keys, one line each. */
 const GESTURES: [string, string][] = [
-  ["Add a block", "/ or double-click the canvas"],
-  ["Select", "Click a block · Ctrl-drag a box · Ctrl-click adds"],
-  ["Rotate", "R turns clockwise · Shift+R counter-clockwise"],
-  ["Flip", "F mirrors horizontal · Alt+F vertical"],
-  ["Duplicate", "Ctrl+D · Alt-drag a block"],
+  ["Add a block", "`/` or double-click the canvas"],
+  ["Select", "Click a block · `Ctrl`-drag a box · `Ctrl`-click adds"],
+  ["Rotate", "`R` turns clockwise · `Shift+R` counter-clockwise"],
+  ["Flip", "`F` mirrors horizontal · `Alt+F` vertical"],
+  ["Duplicate", "`Ctrl+D` · `Alt`-drag a block"],
   ["Act on a selection", "The dialog above it: rotate, flip, duplicate, delete, group, comment"],
-  ["Comment out · bypass", "Ctrl+/ · Ctrl+Shift+Y"],
+  ["Comment out · bypass", "`Ctrl+/` · `Ctrl+Shift+Y`"],
   ["Pan · zoom", "Drag the canvas · the wheel"],
   ["Remove a wire", "Drag its end off the port"],
   ["Move a port", "Drag its name to another side · double-click puts it back"],
-  ["Open a group", "Double-click it · Alt+↑ or Esc comes back · ▾ collapses"],
-  ["Undo · redo", "Ctrl+Z · Ctrl+Shift+Z"],
+  ["Open a group", "Double-click it · `Alt+↑` or `Esc` comes back · ▾ collapses"],
+  ["Undo · redo", "`Ctrl+Z` · `Ctrl+Shift+Z`"],
 ];
-
-/** The canvas's "?" key: the gestures as a short list, on demand. Esc or a click elsewhere closes it. */
-function CanvasHelp() {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      e.stopPropagation(); // not "go up a level" as well
-      setOpen(false);
-    };
-    const onDown = (e: PointerEvent) => !box.current?.contains(e.target as globalThis.Node) && setOpen(false);
-    window.addEventListener("keydown", onKey, true);
-    window.addEventListener("pointerdown", onDown, true);
-    return () => {
-      window.removeEventListener("keydown", onKey, true);
-      window.removeEventListener("pointerdown", onDown, true);
-    };
-  }, [open]);
-  return (
-    <div ref={box} className="nodrag">
-      {open && (
-        <section className="help-pop" role="dialog" aria-label="Canvas gestures">
-          <h3>On the canvas</h3>
-          <dl>
-            {GESTURES.map(([what, how]) => (
-              <Fragment key={what}>
-                <dt>{what}</dt>
-                <dd>{how}</dd>
-              </Fragment>
-            ))}
-          </dl>
-        </section>
-      )}
-      <button className={`key small help-key${open ? " on" : ""}`} aria-expanded={open} title="What the canvas does" onClick={() => setOpen(!open)}>
-        ?
-      </button>
-    </div>
-  );
-}
 
 const hasStepPorts = (def: BlockDef) => [...def.inputs, ...def.outputs].some((p) => p.type === "step");
 
