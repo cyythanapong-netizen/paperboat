@@ -2,6 +2,7 @@
 // test that checks a backend's result without a UI.
 
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
@@ -172,6 +173,14 @@ int main(const Backend& backend, int argc, char** argv, int default_port) {
     return 2;
   }
   Backend b = backend;
+  if (const char* run = std::getenv("PAPERBOAT_RUN"); run && *run) {  // backend.toml's [run], from paperboat
+    try {
+      b.run = with_overrides(b.run, json::parse(run));
+    } catch (const std::exception& err) {
+      std::cerr << "error: PAPERBOAT_RUN (backend.toml [run]): " << err.what() << '\n';
+      return 2;
+    }
+  }
   if (!options.project.empty()) {
     try {
       b.initial_project = load_json(options.project);

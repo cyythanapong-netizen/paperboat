@@ -13,6 +13,7 @@ import {
   RECENT_MAX,
   stringify,
   type Stored,
+  changed,
 } from "../src/project.ts";
 
 const flow: Graph = {
@@ -52,6 +53,16 @@ test("a project is built from its parts and leaves out what is empty", () => {
 test("what is written is read back unchanged", () => {
   const p = buildProject({ backend: "b", flow, variables: [{ name: "x", type: "boolean", value: true }], run: { speed: 2 } });
   assert.deepEqual(ok(stringify(p)), p);
+});
+
+test("the run's solver and its options round-trip; only changes from the backend's are kept (#196)", () => {
+  const run = { solver: "rk45" as const, solver_options: { rtol: 1e-8, max_step: 0.001 } };
+  const p = buildProject({ backend: "b", flow, variables: [], run });
+  assert.deepEqual(ok(stringify(p)).run, run);
+  assert.match(bad({ paperboat: PROJECT_VERSION, backend: "b", flow, run: { solver_options: { rtol: "tight" } } }), /run\.solver_options\.rtol/);
+  const defaults = { solver: "rk4" as const, solver_options: { rtol: 1e-6, atol: 1e-9, sub_steps: 1 } };
+  assert.deepEqual(changed({ solver: "rk4", solver_options: { rtol: 1e-6, sub_steps: 4 } }, defaults), { solver_options: { sub_steps: 4 } });
+  assert.deepEqual(changed({ solver: "euler", solver_options: { rtol: 1e-6 } }, defaults), { solver: "euler" });
 });
 
 test("flow node rotation and mirror are validated and preserved", () => {

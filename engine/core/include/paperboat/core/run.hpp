@@ -16,6 +16,7 @@
 #include <string>
 
 #include "paperboat/core/graph.hpp"
+#include "paperboat/toolkit/solve.hpp"
 
 namespace paperboat::core {
 
@@ -27,13 +28,16 @@ struct RunSettings {
   int emit_every = 4;      // send signals and scene patches every N steps
   bool real_time = true;   // pace emits at wall-clock speed (tests turn it off)
   double speed = 1.0;      // times real time when paced; 0: as fast as it can
-  std::string solver = "rk4";  // default solver: "rk4", "rk45", "rk2", "euler", "discrete"
+  // The run's solver and its options: what a block or object whose `solver` is "auto" uses
+  // ("rk4", "rk45", "rk2", "euler", "discrete").
+  std::string solver = "rk4";
+  toolkit::solve::Options solver_options = {};
 };
 
-// `base` with a graph.run's `settings` on top (duration, dt, speed; never mode). Throws
-// std::invalid_argument for a value out of range.
+// `base` with a graph.run's `settings` on top (duration, dt, speed, solver, solver_options:
+// the ones given, over base's; never mode). Throws std::invalid_argument for a value out of range.
 RunSettings with_overrides(RunSettings base, const json& settings);
-// As hello.run announces them: mode, duration, dt, speed.
+// As hello.run announces them: mode, duration, dt, speed, solver, solver_options.
 json settings_json(const RunSettings& settings);
 
 class Executor;  // executor.hpp: how a graph runs

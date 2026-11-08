@@ -29,33 +29,58 @@ class Discrete final : public Solver {
   std::string_view name() const override { return "discrete"; }
 };
 
-class Euler final : public Solver {
+// A fixed-step method, taken `sub_steps` times per clock step.
+class Fixed : public Solver {
  public:
-  void step(State& x, double t, double dt, const Deriv& f) override { x = axpy(x, dt, call(f, t, x)); }
+  explicit Fixed(int sub_steps) : n_(sub_steps) {}
+  void step(State& x, double t, double dt, const Deriv& f) final {
+    const double h = dt / n_;
+    for (int i = 0; i < n_; ++i) once(x, t + i * h, h, f);
+  }
+
+ protected:
+  virtual void once(State& x, double t, double dt, const Deriv& f) = 0;
+
+ private:
+  int n_;
+};
+
+class Euler final : public Fixed {
+ public:
+  using Fixed::Fixed;
   std::string_view name() const override { return "euler"; }
+
+ private:
+  void once(State& x, double t, double dt, const Deriv& f) override { x = axpy(x, dt, call(f, t, x)); }
 };
 
 // Heun's method: the trapezoid of the slopes at both ends.
-class Rk2 final : public Solver {
+class Rk2 final : public Fixed {
  public:
-  void step(State& x, double t, double dt, const Deriv& f) override {
+  using Fixed::Fixed;
+  std::string_view name() const override { return "rk2"; }
+
+ private:
+  void once(State& x, double t, double dt, const Deriv& f) override {
     const State k1 = call(f, t, x);
     const State k2 = call(f, t + dt, axpy(x, dt, k1));
     for (std::size_t i = 0; i < x.size(); ++i) x[i] += dt / 2 * (k1[i] + k2[i]);
   }
-  std::string_view name() const override { return "rk2"; }
 };
 
-class Rk4 final : public Solver {
+class Rk4 final : public Fixed {
  public:
-  void step(State& x, double t, double dt, const Deriv& f) override {
+  using Fixed::Fixed;
+  std::string_view name() const override { return "rk4"; }
+
+ private:
+  void once(State& x, double t, double dt, const Deriv& f) override {
     const State k1 = call(f, t, x);
     const State k2 = call(f, t + dt / 2, axpy(x, dt / 2, k1));
     const State k3 = call(f, t + dt / 2, axpy(x, dt / 2, k2));
     const State k4 = call(f, t + dt, axpy(x, dt, k3));
     for (std::size_t i = 0; i < x.size(); ++i) x[i] += dt / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]);
   }
-  std::string_view name() const override { return "rk4"; }
 };
 
 // Dormand–Prince 5(4), the method of MATLAB's ode45: a 5th-order step with a 4th-order
@@ -79,7 +104,8 @@ class Rk45 final : public Solver {
                             e6 = 22. / 525, e7 = -1. / 40;
 
     const double end = t + dt;
-    double h = h_ > 0 ? std::min(h_, dt) : dt;
+    const double cap = o_.max_step > 0 ? std::min(o_.max_step, dt) : dt;
+    double h = h_ > 0 ? std::min(h_, cap) : cap;
     const std::size_t n = x.size();
     State k1 = call(f, t, x), y(n), err(n);
     for (int steps = 0;; ++steps) {
@@ -122,10 +148,13 @@ class Rk45 final : public Solver {
         t += h;
         x = y;
         k1 = k7;
-        h_ = h = h * grow;
+        h_ = h = std::min(h * grow, cap);
       } else {
         h *= std::max(0.2, grow);
       }
+      if (o_.min_step > 0 && h < o_.min_step)
+        throw std::runtime_error("rk45: the step size fell below min_step " + std::to_string(o_.min_step) +
+                                 " at t = " + std::to_string(t) + " (a stiff system, or the tolerance too tight)");
       if (h < 1e-14 * std::max(1.0, std::abs(t))) throw std::runtime_error("rk45: the step size fell to nothing (a singularity?)");
     }
   }
@@ -143,23 +172,61 @@ const std::vector<std::string>& names() {
   return list;
 }
 
+namespace {
+thread_local Defaults run_defaults;
+}
+
+void set_defaults(Defaults d) {
+  if (d.name.empty() || d.name == "auto") d.name = "rk4";
+  if (std::ranges::find(names(), d.name) == names().end()) make(d.name);  // throws, naming the solvers
+  check(d.options);
+  run_defaults = std::move(d);
+}
+
+const Defaults& defaults() { return run_defaults; }
+
+std::string_view resolve(std::string_view name) {
+  return name.empty() || name == "auto" ? std::string_view(run_defaults.name) : name;
+}
+
+void check(const Options& o) {
+  auto need = [](bool ok, const char* what) {
+    if (!ok) throw std::invalid_argument(std::string("solver option ") + what);
+  };
+  need(std::isfinite(o.rtol) && o.rtol > 0, "rtol must be more than 0");
+  need(std::isfinite(o.atol) && o.atol >= 0, "atol must be 0 or more");
+  need(std::isfinite(o.min_step) && o.min_step >= 0, "min_step must be 0 or more");
+  need(std::isfinite(o.max_step) && o.max_step >= 0, "max_step must be 0 or more");
+  need(o.max_step == 0 || o.min_step <= o.max_step, "min_step must not be more than max_step");
+  need(o.max_steps >= 1, "max_steps must be 1 or more");
+  need(o.sub_steps >= 1 && o.sub_steps <= 10000, "sub_steps must be 1 to 10000");
+}
+
+std::unique_ptr<Solver> make(std::string_view name) { return make(name, run_defaults.options); }
+
 std::unique_ptr<Solver> make(std::string_view name, Options options) {
-  if (name == "rk4") return std::make_unique<Rk4>();
+  check(options);
+  name = resolve(name);
+  if (name == "rk4") return std::make_unique<Rk4>(options.sub_steps);
   if (name == "rk45") return std::make_unique<Rk45>(options);
-  if (name == "rk2") return std::make_unique<Rk2>();
-  if (name == "euler") return std::make_unique<Euler>();
+  if (name == "rk2") return std::make_unique<Rk2>(options.sub_steps);
+  if (name == "euler") return std::make_unique<Euler>(options.sub_steps);
   if (name == "discrete") return std::make_unique<Discrete>();
   std::string known;
   for (const auto& n : names()) known += (known.empty() ? "" : ", ") + n;
-  throw std::invalid_argument("no solver \"" + std::string(name) + "\" (" + known + ")");
+  throw std::invalid_argument("no solver \"" + std::string(name) + "\" (auto, " + known + ")");
 }
 
 void step(std::string_view solver, State& x, double t, double dt, const Deriv& f, Options options) {
   make(solver, options)->step(x, t, dt, f);
 }
 
+void step(std::string_view solver, State& x, double t, double dt, const Deriv& f) { make(solver)->step(x, t, dt, f); }
+
 ParamDef param(std::string fallback) {
-  return {.id = "solver", .type = "enum", .default_text = std::move(fallback), .options = names()};
+  std::vector<std::string> options = {"auto"};
+  options.insert(options.end(), names().begin(), names().end());
+  return {.id = "solver", .type = "enum", .default_text = std::move(fallback), .options = std::move(options)};
 }
 
 }  // namespace paperboat::toolkit::solve

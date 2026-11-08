@@ -1,5 +1,6 @@
 import type { RunSettings } from "./protocol";
 import { NumberField } from "./NumberField";
+import { changed } from "./project";
 
 const SPEEDS = [0.25, 0.5, 1, 2, 4, 0];
 
@@ -60,11 +61,4 @@ export function RunOptions({ defaults, value, onChange }: { defaults: RunSetting
       </select>
     </span>
   );
-}
-
-/** Only the settings that differ from the backend's defaults. */
-export function changed(value: RunSettings, defaults: RunSettings): RunSettings {
-  return Object.fromEntries(
-    Object.entries(value).filter(([k, v]) => v !== undefined && v !== defaults[k as keyof RunSettings]),
-  ) as RunSettings;
 }

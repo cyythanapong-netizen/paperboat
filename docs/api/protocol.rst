@@ -90,7 +90,9 @@ UI → Backend
 ------------
 
 =================  =====================================================================
-``graph.run``      ``graph`` (``nodes``, ``edges``, ``groups?``), ``station?``
+``graph.run``      ``graph`` (``nodes``, ``edges``, ``groups?``), ``station?``, ``settings?``
+                   (``duration``, ``dt``, ``speed``, ``solver``, ``solver_options``: over
+                   ``hello.run``'s; the solver is what ``auto`` solvers use)
 ``station.set``    ``station``: an edit on the Station page; answered with ``scene``
 ``run.cancel``     —
 ``input``          ``key`` (a ``KeyboardEvent.code``), ``down``

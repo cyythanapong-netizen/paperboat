@@ -6,7 +6,7 @@
 //
 //   struct Mass final : paperboat::Model {
 //     explicit Mass(const paperboat::Values& p)
-//         : Model({paperboat::get_or(p, "x0"), 0.0}, paperboat::get_text(p, "solver", "rk4")),
+//         : Model({paperboat::get_or(p, "x0"), 0.0}, paperboat::get_text(p, "solver", "auto")),
 //           k_(paperboat::get_or(p, "k")) {}
 //     paperboat::solve::State derivatives(double, const paperboat::solve::State& x,
 //                                         const paperboat::Values& in) const override {
@@ -26,8 +26,10 @@ namespace paperboat::toolkit {
 
 class Model : public StationObject {
  public:
-  // Its initial state, and the solver that advances it (solve::names()).
-  explicit Model(solve::State initial, std::string_view solver = "rk4", solve::Options options = {});
+  // Its initial state, and the solver that advances it (solve::names(); "auto": the run's,
+  // with the run's options unless given).
+  explicit Model(solve::State initial, std::string_view solver = "auto");
+  Model(solve::State initial, std::string_view solver, solve::Options options);
 
   // dx/dt at time t in state x, under the linked block's inputs (unwired ones absent).
   virtual solve::State derivatives(double t, const solve::State& x, const Values& in) const = 0;
@@ -39,7 +41,8 @@ class Model : public StationObject {
   const solve::State& x() const { return x_; }
 
   // Change the solver advancing this model.
-  void set_solver(std::string_view solver, solve::Options options = {});
+  void set_solver(std::string_view solver);
+  void set_solver(std::string_view solver, solve::Options options);
 
  protected:
   // For a model that changes its own state between steps (a bounce, a reset).

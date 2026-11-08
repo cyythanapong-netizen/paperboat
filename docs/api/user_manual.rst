@@ -251,6 +251,11 @@ The Run Dock floats gracefully at the bottom of the canvas, rendered in semi-tra
 - **Duration**: Edit the run duration in seconds (e.g., `10 s`). Set to `0` or leave empty
   for continuous runs if supported by the backend.
 - **Speed Multiplier**: Toggle execution pacing between `0.5×`, `1×`, `2×`, or uncapped `Max`.
+- **Solver**: the Run menu picks the run's solver (`RK4`, `RK45`, `RK2`, `Euler`,
+  `Discrete`); **Run > Solver settings…** sets its options: tolerances and the smallest and
+  largest sub-step for `RK45`, sub-steps per clock step for the fixed-step solvers. Every
+  block and station object whose own `solver` is `auto` (the default) uses it; the settings
+  save with the project.
 
 The Console
 ~~~~~~~~~~~
