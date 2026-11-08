@@ -1,71 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import {
-  backWireExitDistance,
-  backWireLaneOffset,
-  orderWireRoutes,
-  routeWires,
-  sampleCubicBezier,
-  wireCurvature,
-  type Obstacle,
-  type RouteInput,
-} from "../src/wireRouting.ts";
-
-test("fan-out lanes follow destination order with stable ties", () => {
-  const routes = orderWireRoutes([
-    { id: "z", y: 100, handle: "in" },
-    { id: "b", y: 20, handle: "in" },
-    { id: "a", y: 100, handle: "in" },
-    { id: "c", y: 100, handle: "a" },
-  ]);
-  assert.deepEqual([...routes], [["b", 0], ["c", 1], ["a", 2], ["z", 3]]);
-});
-
-test("fan-in and fan-out curves use their crowded end's order", () => {
-  assert.equal(wireCurvature(0, 1, 0, 1), 0.25);
-  assert.deepEqual([0, 1, 2].map((lane) => wireCurvature(0, 1, lane, 3)), [0.15, 0.25, 0.35]);
-  assert.deepEqual([0, 1, 2].map((lane) => wireCurvature(lane, 3, 2 - lane, 3)), [0.25, 0.25, 0.25]);
-  assert.ok(wireCurvature(0, 8, 0, 1) >= 0.12);
-});
+import { backWireExitDistance, backWireLaneOffset, routeWires, type Obstacle, type RouteInput } from "../src/wireRouting.ts";
 
 test("back-wire tracks are distinct and spaced", () => {
   assert.deepEqual([0, 1, 2].map(backWireLaneOffset), [0, 18, 36]);
   assert.deepEqual([0, 1, 2].map(backWireExitDistance), [24, 32, 40]);
 });
 
-test("fan-out forward signal wires diverge immediately and do not overlap", () => {
+test("fan-out forward signal wires leave square and split towards each target", () => {
   const wires: RouteInput[] = [
     { id: "w1", source: "A", sourceHandle: "out", target: "B", targetHandle: "in", sx: 100, sy: 100, tx: 300, ty: 50 },
     { id: "w2", source: "A", sourceHandle: "out", target: "C", targetHandle: "in", sx: 100, sy: 100, tx: 300, ty: 150 },
-    { id: "w3", source: "A", sourceHandle: "out", target: "D", targetHandle: "in", sx: 100, sy: 100, tx: 300, ty: 250 },
   ];
   const routes = routeWires(wires);
-  assert.equal(routes.size, 3);
-
-  // Parse control points from path "M sx,sy C cx1,cy1 cx2,cy2 tx,ty"
-  const parseBezier = (path: string) => {
-    const match = /^M\s*([\d.-]+),([\d.-]+)\s*C\s*([\d.-]+),([\d.-]+)\s*([\d.-]+),([\d.-]+)\s*([\d.-]+),([\d.-]+)$/.exec(path);
-    assert.ok(match, `Invalid bezier path: ${path}`);
-    const [, sx, sy, cx1, cy1, cx2, cy2, tx, ty] = match.map(Number);
-    return {
-      p0: [sx, sy] as [number, number],
-      p1: [cx1, cy1] as [number, number],
-      p2: [cx2, cy2] as [number, number],
-      p3: [tx, ty] as [number, number],
-    };
-  };
-
-  const samples1 = sampleCubicBezier(parseBezier(routes.get("w1")!.path).p0, parseBezier(routes.get("w1")!.path).p1, parseBezier(routes.get("w1")!.path).p2, parseBezier(routes.get("w1")!.path).p3, 20);
-  const samples2 = sampleCubicBezier(parseBezier(routes.get("w2")!.path).p0, parseBezier(routes.get("w2")!.path).p1, parseBezier(routes.get("w2")!.path).p2, parseBezier(routes.get("w2")!.path).p3, 20);
-  const samples3 = sampleCubicBezier(parseBezier(routes.get("w3")!.path).p0, parseBezier(routes.get("w3")!.path).p1, parseBezier(routes.get("w3")!.path).p2, parseBezier(routes.get("w3")!.path).p3, 20);
-
-  // Beyond ~16px from port (sample index >= 2 in 200px span, approx x >= 118)
-  for (let i = 2; i <= 18; i++) {
-    const dist12 = Math.hypot(samples1[i][0] - samples2[i][0], samples1[i][1] - samples2[i][1]);
-    const dist23 = Math.hypot(samples2[i][0] - samples3[i][0], samples2[i][1] - samples3[i][1]);
-    assert.ok(dist12 >= 4, `w1 and w2 too close at sample ${i}: ${dist12}px`);
-    assert.ok(dist23 >= 4, `w2 and w3 too close at sample ${i}: ${dist23}px`);
-  }
+  assert.deepEqual(routes.get("w1")!.points, [[100, 100], [200, 100], [200, 50], [300, 50]]);
+  assert.deepEqual(routes.get("w2")!.points, [[100, 100], [200, 100], [200, 150], [300, 150]]);
 });
 
 test("nested back-wire loops have distinct horizontal tracks and do not intersect", () => {
@@ -109,6 +58,6 @@ test("forward step wires fanning into the same target get distinct vertical chan
 
   assert.equal(r1.kind, "step");
   assert.equal(r2.kind, "step");
-  assert.notEqual(r1.labelX, r2.labelX, "Vertical channels must have distinct x coordinates");
-  assert.equal(Math.abs(r1.labelX - r2.labelX), 12, "Vertical channels should be spaced by 12px");
+  const stem = (r: typeof r1) => r.points[1][0];
+  assert.equal(Math.abs(stem(r1) - stem(r2)), 12, "Vertical channels should be spaced by 12px");
 });

@@ -138,6 +138,8 @@ Wiring Ports
   - **Vector wires**: carry multi-channel arrays (such as 3D coordinates or RGB vectors).
   - **Image wires**: carry raster frames and visual buffers.
 - An unwired signal input automatically defaults to `0.0`.
+- Wires run square (horizontal and vertical runs only). Select a wire and drag the handle on any
+  of its segments to move that segment; the bends are saved with the project.
 
 Configuring Block Parameters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -298,7 +300,8 @@ is saved after each one, so the ``.mo`` stays a normal Modelica file that OMEdit
   either end; a signal (causal) wire runs from an output to an input and is drawn with an arrow.
   A wire the rules refuse is not drawn: the reason is written at the foot of the canvas
   (``a PositivePin does not join a Flange_a``, ``an input does not join an input``). Three or more
-  wires on a port draw a junction dot. A wire's stored bends (``Line(points)``) are kept on the 20px grid.
+  wires on a port draw a junction dot. A wire's stored bends (``Line(points)``) are kept on the 20px grid. Wires run square, as on the
+  Flow canvas: select one and drag a segment's handle to move it; the new bends are written to the ``.mo``.
 - *Moving and deleting*: drag a part to move it; :kbd:`Delete` removes the selected parts or wire.
 - *Quick add*: press :kbd:`/`, type a part name and press :kbd:`Enter` to place it. With a wire
   selected the part is *spliced in*: the line above the list says exactly what will happen,
