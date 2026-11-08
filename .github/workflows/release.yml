@@ -79,7 +79,7 @@ jobs:
       - name: The npm packages install on a clean Node and run
         run: |
           prefix=$(mktemp -d)
-          npm install -g --prefix "$prefix" dist/npm/paperboat-cli-linux-x64-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz
+          npm install -g --prefix "$prefix" dist/npm/paperboatlabs-cli-linux-x64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz
           "$prefix/bin/paperboat" --version
           "$prefix/bin/paperboat" pkg list
           pip install -q --upgrade websockets jsonschema   # the runner's jsonschema 3.2 predates Draft 2020-12
@@ -143,10 +143,10 @@ jobs:
       - name: The npm packages install and run through the launcher
         run: |
           prefix=$(mktemp -d)
-          npm install -g --prefix "$prefix" dist/npm/paperboat-cli-win32-x64-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz
+          npm install -g --prefix "$prefix" dist/npm/paperboatlabs-cli-win32-x64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz
           node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" --version
           node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" pkg list
-          rm dist/npm/paperboat-cli-[0-9]*.tgz   # the launcher is published from the Linux job
+          rm dist/npm/paperboatlabs-cli-[0-9]*.tgz   # the launcher is published from the Linux job
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -183,6 +183,6 @@ jobs:
         run: |
           if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::notice::NPM_TOKEN is not set; skipping npm"; exit 0; fi
           case "$GITHUB_REF_NAME" in *-*) tag=--tag=${GITHUB_REF_NAME#*-}; tag=${tag%%.*};; esac   # alpha.1 -> --tag alpha, never "latest"
-          for f in dist/npm/paperboat-cli-*-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz; do
+          for f in dist/npm/paperboatlabs-cli-*-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz; do
             npm publish "$f" --access public --provenance $tag
           done
