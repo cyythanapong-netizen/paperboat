@@ -40,7 +40,7 @@ The direction and its history are in issue #48.
 
 Light (grey panels) and dark (near-black panels), built on the same semantic tokens. The
 theme follows the system unless the user picks one in View > Theme (auto, light,
-dark); the choice is kept in this browser. The 3D station reads its background and grid
+dark) or with the theme key at the bar's right end (one click cycles them); the choice is kept in this browser. The 3D station reads its background and grid
 from the tokens and is rebuilt when the theme changes. Displays are black in both themes.
 
 ## View modes
@@ -79,7 +79,9 @@ sideways), the bar wraps, and Commander stacks its pages in one scrolling column
 
 The bar holds only the wordmark, the **menus**, the project's name (centred on the bar like a window title, in muted monospace so it isn't taken for a key; after the menus below 1100px; a signal-coloured dot
 while there are changes not saved), the view switch, an error count when the Console has
-errors, and a connection chip (which opens File > Backend…). Everything else
+errors, a connection status pill (which opens File > Backend…) and the theme key. The pill
+(`StatusPill`, shared with Squero Studio) keeps the room of its widest label, so `connecting` →
+engine name never shifts the keys beside it. Everything else
 you can do is a **command** in one registry (`src/commands.ts`); the menu bar, the command
 search and the registry's own shortcuts all read it, so a label, a shortcut and whether
 something is available can't drift between them.
@@ -263,7 +265,7 @@ backends; Paperboat runs procedures (PID, step stories) and monitors them on the
 Simulate is a local check, never a second Flow page.
 
 The top bar shows `squero studio [ OM ]` (lowercase wordmark, light `studio`, rounded ink `Om` badge)
-along with the project name and an `omc <ver> · ready | checking | failed` status chip on the right.
+along with the project name and an `omc <ver> · ready | checking | failed` status pill (the same `StatusPill`) and the theme key on the right.
 Studio has no modal dialogs; refusals and notices appear in plain words.
 
 Surfaces:
