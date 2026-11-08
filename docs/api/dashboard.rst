@@ -33,7 +33,7 @@ level, position in the window, auto or single), log y, four draw styles, and CSV
 ``+ tap`` wires any output in (to the next free input, adding one), as one undo step.
 
 How a Scope draws is the Board layout's, not a block param, so it changes during a run and
-saves with the project: an instrument's ``scope`` table (``mode``, ``window`` in seconds,
+saves with the project: an instrument's ``settings`` table (for a scope: ``mode``, ``window`` in seconds,
 ``ylog``, ``hidden`` channel ids, ``draw``, ``trigger`` = ``{ edge, source, level, position,
 single }``). A backend may ship one:
 
@@ -41,7 +41,7 @@ single }``). A backend may ship one:
 
    [dashboard]
    instruments = [
-     { block = "scope1", size = "xlarge", scope = { window = 2, trigger = { source = "a", level = 0 } } },
+     { block = "scope1", size = "xlarge", settings = { window = 2, trigger = { source = "a", level = 0 } } },
    ]
 
 Layout

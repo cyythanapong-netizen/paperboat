@@ -1,0 +1,11 @@
+/* The graph instrument. The frame (.instrument, .screen, .idle) is the app's. */
+.instrument.graph .screen { padding: var(--space-3); display: flex; }
+.instrument.graph svg { display: block; width: 100%; height: 100%; }
+.instrument .trace { stroke: var(--signal); stroke-width: 1.6; }
+/* A vector's traces (#164): one per component, told apart by dash, not colour. */
+.instrument .trace-1 { stroke-dasharray: 6 3; }
+.instrument .trace-2 { stroke-dasharray: 2 3; }
+.instrument .trace-3 { stroke-dasharray: 8 3 2 3; }
+.instrument .zero { stroke: var(--text-on-screen-muted); stroke-dasharray: 2 3; }
+.instrument.idle .zero { stroke: var(--line-strong); }
+/* ---- Scope (#37): the screen shows, the grey caption controls ---- */

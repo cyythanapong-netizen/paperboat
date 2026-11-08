@@ -379,15 +379,15 @@ json Run::pass_over(const std::vector<std::string>& order) {
   json samples = json::array();
   // What an instrument shows, `in` of `shown`, as `signal` samples. `port` is the output it
   // came from, for a vector's component names.
-  // `input` names the monitor's input it came in by, for one with several (a Scope); "" is `in`.
+  // `input` names the monitor's input it came in by, for one with several (`sample_per_input`); "" is `in`.
   const auto sample = [&](const Node& node, const toolkit::Values& shown, const toolkit::PortDef* port, const std::string& input = {}) {
     const double t = std::round(ctx_.t * 1e4) / 1e4;
     const auto first = samples.size();
     if (const auto* text = toolkit::get_if<std::string>(shown, "in")) {
       samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", *text}});
     } else if (const auto* vector = toolkit::get_vector(shown, "in")) {
-      if (node.def.instrument == "display" || node.def.instrument == "scope" || settings_.mode == RunSettings::Mode::Clock) {
-        // A Display is a readout, and a Graph in a clock run draws one trace per component
+      if (node.def.whole_vector || settings_.mode == RunSettings::Mode::Clock) {
+        // A readout or scope shows the whole vector, and a graph in a clock run draws one trace per component
         // over time: the vector is one sample. A Graph in a run-once plots it by index (x is
         // the index), useful for point series.
         json item = {{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", *vector}};
@@ -451,7 +451,7 @@ json Run::pass_over(const std::vector<std::string>& order) {
       validate_vector_outputs(node, outputs_[id]);
     } else {  // a monitor: what it shows is its "value" output, or its input
       auto in = inputs_of(node);
-      if (node.def.instrument == "scope") {  // one sample per wired input, tagged with it
+      if (node.def.sample_per_input) {  // one sample per wired input, tagged with it
         for (const auto& p : node.def.inputs)
           if (const auto v = in.find(p.id); v != in.end()) sample(node, {{"in", v->second}}, source_port(id, p.id), p.id);
         continue;

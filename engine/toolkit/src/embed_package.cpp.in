@@ -1,5 +1,12 @@
 // Generated from a package's toolkit.toml definitions field.
+#include "paperboat/toolkit/descriptor.hpp"
+
 namespace paperboat::toolkit {
 extern const char* const @PAPERBOAT_EMBED_SYMBOL@;
 const char* const @PAPERBOAT_EMBED_SYMBOL@ = R"pbtoml(@PAPERBOAT_EMBED_CONTENT@)pbtoml";
+
+namespace @PAPERBOAT_EMBED_PACKAGE@ {
+// The package's TOML definitions: blocks that only extend a C++ parent in the same package.
+void add_definitions(Registry& registry) { define_blocks(registry, "@PAPERBOAT_EMBED_PACKAGE@", @PAPERBOAT_EMBED_SYMBOL@); }
+}  // namespace @PAPERBOAT_EMBED_PACKAGE@
 }  // namespace paperboat::toolkit
