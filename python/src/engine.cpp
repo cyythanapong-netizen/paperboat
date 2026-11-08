@@ -11,6 +11,7 @@
 // Threads: the engine runs on its own threads; every call into Python takes the GIL, and
 // Python errors become C++ errors (which fail the run, never the backend).
 
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -28,6 +29,7 @@
 #include <nanobind/stl/unique_ptr.h>
 #include <nanobind/stl/vector.h>
 #include <paperboat/core/backend.hpp>
+#include <paperboat/core/backend_manager.hpp>
 #include <paperboat/toolkit/bases.hpp>
 #include <paperboat/toolkit/model.hpp>
 #include <paperboat/toolkit/scene.hpp>
@@ -610,8 +612,17 @@ std::string read_file(const std::string& path) {
 // the built-in toolkit; then the descriptor loads against that registry.
 std::unique_ptr<Hosted> make(const std::string& engine, const std::string& descriptor, nb::list blocks, nb::list objects,
                              nb::object state, const std::string& mode, double dt, double duration, int emit_every,
-                             nb::object view, double speed, const std::string& solver, nb::object connectors) {
+                             nb::object view, double speed, std::string solver, nb::object connectors) {
   auto h = std::make_unique<Hosted>();
+  if (solver.empty()) {  // not set by the backend: the backend.toml beside the descriptor, else rk4
+    const auto dir = std::filesystem::path(descriptor).parent_path();
+    if (std::filesystem::is_regular_file(dir / "backend.toml")) {
+      std::string err;
+      solver = core::BackendManager::load_manifest(dir, &err).solver;
+      if (!err.empty()) throw std::runtime_error(err);
+    }
+    if (solver.empty()) solver = "rk4";
+  }
   h->registry = tk::builtins();
   const std::string domain = tk::descriptor_domain(read_file(descriptor));
   if (domain.empty() && (nb::len(blocks) > 0 || nb::len(objects) > 0))
@@ -737,7 +748,7 @@ NB_MODULE(_engine, m) {
 
   m.def("make", &make, nb::arg("engine"), nb::arg("descriptor"), nb::arg("blocks"), nb::arg("objects"),
         nb::arg("state").none(), nb::arg("mode"), nb::arg("dt"), nb::arg("duration"), nb::arg("emit_every"),
-        nb::arg("view").none(), nb::arg("speed") = 1.0, nb::arg("solver") = "rk4",
+        nb::arg("view").none(), nb::arg("speed") = 1.0, nb::arg("solver") = "",
         nb::arg("connectors").none() = nb::none(),
         "Register the domain's classes and load the descriptor.");
 
