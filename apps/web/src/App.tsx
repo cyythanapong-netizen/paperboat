@@ -14,7 +14,7 @@ import { ConsoleWindow } from "./Console";
 import { Dashboard } from "./Dashboard";
 import { instrumentMeta } from "./instruments";
 import { inlineInText, loadSaved, mapTexts, renameInText, save as saveLayout, textUsing } from "./dashboardLayout";
-import { MODES, PAGES, Panel, Rail, Switch, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
+import { MODES, PAGES, Panel, Rail, StatusPill, Switch, ThemeToggle, useTheme, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
 const SceneView = lazy(() => import("./SceneView").then((m) => ({ default: m.SceneView })));
 import { StationGraph, type StationControls } from "./StationGraph";
 import { StationPanel, withObject } from "./StationPanel";
@@ -103,23 +103,7 @@ const SOLVER_LABELS: Record<SolverOption, string> = {
 /** "1 object", "2 objects". */
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** The theme in use: the user's pick, or the system's. Sets html[data-theme]. */
-function useTheme(choice: Theme): "light" | "dark" {
-  const query = "(prefers-color-scheme: dark)";
-  const [system, setSystem] = useState(() => (window.matchMedia?.(query).matches ? "dark" : "light"));
-  useEffect(() => {
-    const m = window.matchMedia?.(query);
-    if (!m) return;
-    const on = () => setSystem(m.matches ? "dark" : "light");
-    m.addEventListener("change", on);
-    return () => m.removeEventListener("change", on);
-  }, []);
-  useEffect(() => {
-    if (choice === "auto") delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = choice;
-  }, [choice]);
-  return choice === "auto" ? (system as "light" | "dark") : choice;
-}
+const CONN_TONE = { open: "ok", connecting: "busy", closed: "bad" } as const;
 
 export function App() {
   const [mode, setMode] = remembered<Mode>("paperboat.mode", "navigator", MODES);
@@ -1092,10 +1076,14 @@ export function App() {
             {locked ? "🔒 Locked" : "🔓 Lock"}
           </button>
         )}
-        <button className={`chip conn-${state.connection}`} title="Which backend: File > Backend…" onClick={() => setBackendOpen(true)}>
-          <i aria-hidden="true" />
-          {state.connection === "open" ? state.engine : state.connection}
-        </button>
+        <StatusPill
+          label={state.connection === "open" ? state.engine : state.connection}
+          labels={[state.engine, "connecting", "closed"]}
+          tone={CONN_TONE[state.connection]}
+          title="Which backend: File > Backend…"
+          onClick={() => setBackendOpen(true)}
+        />
+        <ThemeToggle theme={themeChoice} onTheme={setThemeChoice} />
       </header>
       <Rail page={page} onPage={setPage} hidden={mode !== "navigator"} allowedPages={allowedPages} />
       <VarsContext.Provider value={varsApi}>
