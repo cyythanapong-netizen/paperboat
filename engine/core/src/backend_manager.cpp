@@ -39,6 +39,7 @@
 namespace paperboat::core {
 namespace {
 
+
 // Sockets, the same calls on POSIX and Winsock.
 #ifdef _WIN32
 using sock_t = SOCKET;
@@ -69,6 +70,22 @@ bool connect_pending() { return errno == EINPROGRESS; }
 
 using nlohmann::json;
 namespace fs = std::filesystem;
+
+// The installed SDK next to this binary: <prefix>/bin/paperboat, <prefix>/lib*/cmake/Paperboat (pb#177).
+fs::path sdk_dir() {
+  const fs::path exe = platform::exe_path();
+  if (exe.empty()) return {};
+  const fs::path prefix = exe.parent_path().parent_path();
+  std::error_code ec;
+  for (const char* lib : {"lib", "lib64"}) {
+    if (const fs::path dir = prefix / lib / "cmake" / "Paperboat"; fs::is_regular_file(dir / "PaperboatConfig.cmake", ec)) return dir;
+  }
+  // Debian puts libraries in lib/<multiarch>.
+  for (const auto& entry : fs::directory_iterator(prefix / "lib", ec)) {
+    if (const fs::path dir = entry.path() / "cmake" / "Paperboat"; fs::is_regular_file(dir / "PaperboatConfig.cmake", ec)) return dir;
+  }
+  return {};
+}
 
 int64_t current_timestamp() {
   return std::chrono::duration_cast<std::chrono::seconds>(
@@ -480,8 +497,12 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
     if (verbose) std::cout << "[build] configuring with cmake…" << std::endl;
     const fs::path root = toolkit::find_repo_root(backend_dir);
     std::vector<std::string> config_cmd = {"cmake", "-S", backend_dir.string(), "-B", build_dir.string()};
-    if (!root.empty() && fs::is_directory(root / "engine")) {
+    if (!root.empty() && fs::is_regular_file(root / "engine" / "CMakeLists.txt")) {
       config_cmd.push_back("-DPAPERBOAT_ENGINE_DIR=" + (root / "engine").string());
+    } else if (const fs::path sdk = sdk_dir(); !sdk.empty()) {
+      // An installed package: build against its SDK (pb#177), which is a Release build.
+      config_cmd.push_back("-DPaperboat_DIR=" + sdk.string());
+      config_cmd.push_back("-DCMAKE_BUILD_TYPE=Release");
     }
     auto config_res = ProcessRunner::run_sync(config_cmd);
     if (!config_res.ok()) {
@@ -491,7 +512,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
   }
 
   if (verbose) std::cout << "[build] compiling backend…" << std::endl;
-  auto build_res = ProcessRunner::run_sync({"cmake", "--build", build_dir.string()});
+  auto build_res = ProcessRunner::run_sync({"cmake", "--build", build_dir.string(), "--config", "Release"});
   if (!build_res.ok()) {
     if (error_msg) *error_msg = "cmake build failed: " + build_res.stderr_text;
     return false;
@@ -1109,6 +1130,10 @@ BackendManifest BackendManager::load_manifest(const fs::path& backend_dir, std::
     m.engine = doc["backend"]["engine"].value_or(">=0.1");
     m.language = doc["backend"]["language"].value_or(std::string{});
     m.run = doc["backend"]["run"].value_or(std::string{});
+#ifdef _WIN32
+    // A C++ backend's run names the program without .exe, the same on every platform.
+    if (m.language == "cpp" && !m.run.empty() && fs::path(m.run).extension().empty()) m.run += ".exe";
+#endif
     m.port = static_cast<int>(doc["backend"]["port"].value_or(8765));
     m.descriptor = doc["backend"]["descriptor"].value_or("descriptor.toml");
 

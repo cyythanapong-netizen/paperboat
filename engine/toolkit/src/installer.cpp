@@ -134,10 +134,13 @@ ToolkitResult rebuild_host(const HostBuild& host, const fs::path& root, const To
       return {true, "no host build configured"};
     }
   }
-  if (!fs::is_directory(src)) return {false, "source directory not found at " + src.string()};
+  if (!src.empty() && !fs::is_directory(src)) return {false, "source directory not found at " + src.string()};
   if (log) log("info", "reconfiguring build at " + bld.string() + "…");
   std::string last;
-  if (run_cmd({"cmake", "-S", src.string(), "-B", bld.string()}, root, log, &last) != 0) {
+  // Only a build folder (a running backend's): reconfigure it from its own cache.
+  const std::vector<std::string> configure = src.empty() ? std::vector<std::string>{"cmake", bld.string()}
+                                                         : std::vector<std::string>{"cmake", "-S", src.string(), "-B", bld.string()};
+  if (run_cmd(configure, root, log, &last) != 0) {
     return {false, "cmake configure failed" + (last.empty() ? "" : ": " + last)};
   }
   if (log) log("info", "building…");
@@ -278,9 +281,10 @@ fs::path find_repo_root(const fs::path& hint) {
     if (auto p = walk_up(hint); !p.empty()) return p;
   }
   if (auto p = walk_up(fs::current_path()); !p.empty()) return p;
-#ifdef PAPERBOAT_SOURCE_DIR
-  if (auto p = walk_up(fs::path(PAPERBOAT_SOURCE_DIR)); !p.empty()) return p;
-#endif
+  // A binary built in a checkout (engine/build/...) finds it from where it runs.
+  if (const fs::path exe = platform::exe_path(); !exe.empty()) {
+    if (auto p = walk_up(exe.parent_path()); !p.empty()) return p;
+  }
   return install_root();
 }
 

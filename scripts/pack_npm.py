@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Build the npm packages for a release: one per platform (the native binary) and the launcher.
 
+    cmake --install engine/build --prefix dist/root
     python3 scripts/pack_npm.py --version 0.1.0 --out dist/npm --target linux-x64 \\
-        --binary engine/build/tools/paperboat          # @paperboat/cli-linux-x64
+        --prefix dist/root                             # @paperboat/cli-linux-x64 (binary + SDK)
     python3 scripts/pack_npm.py --version 0.1.0 --out dist/npm --main     # @paperboat/cli
 
 Each runs `npm pack`, leaving a .tgz in --out. Publish the platform packages first, the launcher last
@@ -39,7 +40,7 @@ def main() -> None:
     ap.add_argument("--version", required=True)
     ap.add_argument("--out", required=True, type=Path)
     ap.add_argument("--target", choices=sorted(TARGETS))
-    ap.add_argument("--binary", type=Path, help="the paperboat binary for --target")
+    ap.add_argument("--prefix", type=Path, help="a `cmake --install` tree for --target: bin/, share/ and the SDK")
     ap.add_argument("--main", action="store_true", help="the launcher package")
     args = ap.parse_args()
     if bool(args.main) == bool(args.target):
@@ -52,24 +53,20 @@ def main() -> None:
             meta = json.loads((stage / "package.json").read_text())
             meta["optionalDependencies"] = {f"{SCOPE}/cli-{t}": args.version for t in sorted(TARGETS)}
         else:
-            if not args.binary or not args.binary.is_file():
-                sys.exit("--binary must be the paperboat executable for --target")
             os_name, cpu, libc, exe = TARGETS[args.target]
-            (stage / "bin").mkdir(parents=True)
-            shutil.copy2(args.binary, stage / "bin" / exe)
+            if not args.prefix or not (args.prefix / "bin" / exe).is_file():
+                sys.exit(f"--prefix must be an install tree with bin/{exe}")
+            # bin/paperboat finds the registries at ../share/paperboat and the SDK at ../lib*/cmake/Paperboat.
+            shutil.copytree(args.prefix, stage)
             (stage / "bin" / exe).chmod(0o755)
-            share = stage / "share" / "paperboat"  # where the binary looks for the registries: ../share/paperboat
-            share.mkdir(parents=True)
-            for name in ("toolkits.toml", "apps.toml"):
-                shutil.copy2(ROOT / name, share / name)
-            (stage / "README.md").write_text(f"Native paperboat binary for {args.target}. Install `{SCOPE}/cli`, not this.\n")
+            (stage / "README.md").write_text(f"Native paperboat binary and C++ SDK for {args.target}. Install `{SCOPE}/cli`, not this.\n")
             meta = {
                 "name": f"{SCOPE}/cli-{args.target}",
                 "description": f"Paperboat command line, native binary for {args.target}",
                 "repository": {"type": "git", "url": REPO},
                 "os": [os_name],
                 "cpu": [cpu],
-                "files": ["bin", "share", "README.md"],
+                "files": sorted(p.name for p in stage.iterdir()),
             }
             if libc:
                 meta["libc"] = [libc]
