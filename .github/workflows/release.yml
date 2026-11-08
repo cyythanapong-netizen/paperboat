@@ -134,7 +134,8 @@ jobs:
           git clone -q --depth 1 "https://x-access-token:${TOKEN}@github.com/paperboatlab/paperboat-shared.git" ../paperboat-shared
           (cd ../paperboat-shared && npm ci --no-audit --no-fund)
       - name: The web app and the console (share/paperboat/web, share/paperboat/cli)
-        run: npm ci --no-audit --no-fund && npm run build:release
+        # npm install, not ci: a lockfile written on Linux lacks TypeScript 7's win32 binary (npm#4828)
+        run: npm install --no-audit --no-fund && npm run build:release
       # The CLI, the core and the toolkit, and of the
       # tests only the process layer's run here (engine/tests/process_test.cpp).
       - name: Build
