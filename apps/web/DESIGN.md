@@ -101,9 +101,11 @@ something is available can't drift between them.
   content (the one place glass is for). In Lookout it sits over the Board.
 - **Projects** (#82, `project.ts`, `ProjectUI.tsx`): File > Open (Ctrl+O), Save (Ctrl+S), Save as,
   Restore last session and Recent projects; a file dropped on the window opens too. Anything
-  that needs a word first (another backend, unsaved changes, a file that can't be read, the
-  offer to restore) is a **notice** floating in the middle, with its safe choice last (Esc);
-  a successful open leaves a **toast** at the bottom left with one **Undo**. See
+  that needs a word first (another backend, unsaved changes, the offer to restore) is a
+  **notice** floating in the middle, with its safe choice last (Esc). Errors, warnings and
+  results ("Opened …", a file that can't be read) go to the **Console**, never a popup over
+  the footer; the Console key turns red with the error count. Edit > Undo open project
+  brings back what an open replaced. See
   `docs/api/project.rst` for the file.
 - **Keys:** a menu, the search and the dock's buttons take their keys (arrows, Enter) for
   themselves: elements marked `data-own-keys` are not forwarded to the backend. A

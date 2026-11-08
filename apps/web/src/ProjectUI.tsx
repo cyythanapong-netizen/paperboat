@@ -68,25 +68,6 @@ export function Notice({ spec, onClose }: { spec: NoticeSpec; onClose: () => voi
   );
 }
 
-/** A line at the bottom left that says what just happened and offers to take it back. */
-export function Toast({ text, undo, onUndo, onClose }: { text: string; undo: string; onUndo: () => void; onClose: () => void }) {
-  useEffect(() => {
-    const t = window.setTimeout(onClose, 20_000);
-    return () => window.clearTimeout(t);
-  }, [text, onClose]);
-  return (
-    <div className="toast" role="status" data-own-keys>
-      <span>{text}</span>
-      <button className="key small" onClick={() => (onClose(), onUndo())}>
-        {undo}
-      </button>
-      <button className="key small" aria-label="Dismiss" title="Dismiss" onClick={onClose}>
-        ×
-      </button>
-    </div>
-  );
-}
-
 /** The project's name in the bar, with a dot while there are changes not saved. */
 export function ProjectLabel({ name, dirty }: { name: string; dirty: boolean }) {
   return (

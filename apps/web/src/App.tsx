@@ -7,7 +7,7 @@ import { absolute, isFrame, levelOf } from "./groups";
 import type { DashboardLayout, ParamValue, Project, RunSettings, Station, ToolkitStatus, Variable, Variables } from "./protocol";
 import { addRecent, ago, buildProject, clearAutosave, loadAutosave, loadRecent, parseProject, projectFileName, projectName, saveAutosave, saveRecent, stringify, type Stored } from "./project";
 import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from "./projectFiles";
-import { Notice, ProjectLabel, Toast, type NoticeSpec } from "./ProjectUI";
+import { Notice, ProjectLabel, type NoticeSpec } from "./ProjectUI";
 import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
 import { emptyOf, freeName, inlineRef, merged, refersTo, renameInFormula, renameRef, toToml, usesOf, type Use } from "./bindings";
 import { ConsoleWindow } from "./Console";
@@ -598,7 +598,7 @@ export function App() {
   const [projectTitle, setProjectTitle] = useState("Untitled");
   const fileHandle = useRef<FileHandle | null>(null); // where Save writes, once the user chose a file (Chromium)
   const [notice, setNotice] = useState<NoticeSpec | null>(null);
-  const [toast, setToast] = useState<{ text: string; undo: () => void } | null>(null);
+  const [undoOpen, setUndoOpen] = useState<(() => void) | null>(null); // Edit ▸ Undo open project
   const [recent, setRecent] = useState<Stored[]>(loadRecent);
   const [lastSession, setLastSession] = useState<Stored | undefined>(undefined); // unsaved work found at load
   const [restoreChecked, setRestoreChecked] = useState(false);
@@ -696,7 +696,6 @@ export function App() {
   const fail = (title: string, e: unknown) => {
     const msg = e instanceof Error ? e.message : String(e);
     log("error", `${title}: ${msg}`);
-    setNotice({ title, text: [msg], actions: [{ label: "OK", primary: true }] });
   };
 
   /** Open a project, after a word if it comes from another backend or replaces unsaved changes; one Undo brings back what was open. */
@@ -711,12 +710,11 @@ export function App() {
       applyProject(p, name);
       fileHandle.current = null;
       remember(p, name);
-      setToast({
-        text: `Opened “${name}”`,
-        undo: () => {
-          applyProject(was, beforeTitle, beforeBase);
-          fileHandle.current = handle;
-        },
+      log("info", `Opened “${name}” (Edit ▸ Undo open project brings back what was open)`);
+      setUndoOpen(() => () => {
+        applyProject(was, beforeTitle, beforeBase);
+        fileHandle.current = handle;
+        setUndoOpen(null);
       });
     };
     if (warnings.length === 0) go();
@@ -725,8 +723,7 @@ export function App() {
   const openText = (text: string, file: string) => {
     const r = parseProject(text);
     if ("error" in r) {
-      log("error", `${file}: ${r.error}`);
-      setNotice({ title: "Can't open this file", text: [`${file}: ${r.error}`, "Nothing was changed."], actions: [{ label: "OK", primary: true }] });
+      log("error", `Can't open ${file}: ${r.error}. Nothing was changed.`);
     } else openProject(r.project, projectName(file));
   };
   const openFile = async () => {
@@ -870,14 +867,7 @@ export function App() {
     if (failed.length > 0) {
       installQueue.current = [];
       autoRestart.current = false;
-      setNotice({
-        title: "Toolkit installation failed",
-        text: [`Installing ${failed.join(", ")} failed. Check the Console for details.`],
-        actions: [
-          { label: "Open Console", primary: true, run: () => setConsoleShown(true) },
-          { label: "Dismiss" },
-        ],
-      });
+      log("error", `Installing ${failed.join(", ")} failed. See the lines above for details.`);
       return;
     }
 
@@ -892,14 +882,7 @@ export function App() {
         restartBackend();
       } else {
         const names = finished.join(", ");
-        setNotice({
-          title: `Toolkit ${names} ready`,
-          text: [`Restart the backend so it loads the updated toolkit (${names}).`],
-          actions: [
-            { label: "Restart backend", primary: true, run: restartBackend },
-            { label: "Later" },
-          ],
-        });
+        log("warn", `Toolkit ${names} ready: restart the backend so it loads the update.`);
       }
     }
   }, [state.toolkits, restartBackend, installToolkit]);
@@ -935,6 +918,7 @@ export function App() {
     { id: "file.restartBackend", label: "Restart backend", menu: "file", group: "backend", enabled: state.connection === "open", why: "Not connected to a backend", run: restartBackend },
 
     { id: "edit.undo", label: "Undo", menu: "edit", group: "history", shortcut: "Ctrl+Z", enabled: history.canUndo, why: "Nothing to undo on the Flow canvas", run: history.undo },
+    { id: "edit.undoOpen", label: "Undo open project", menu: "edit", group: "history", enabled: !!undoOpen, why: "No project was just opened", run: () => undoOpen?.() },
     { id: "edit.redo", label: "Redo", menu: "edit", group: "history", shortcut: "Ctrl+Shift+Z", enabled: history.canRedo, why: "Nothing to redo", run: history.redo },
     { id: "edit.cut", label: "Cut", menu: "edit", group: "clipboard", shortcut: "Ctrl+X", enabled: onCanvas((c) => c.copy), why: canvasWhy("Select blocks first"), run: () => flow.current?.cut() },
     { id: "edit.copy", label: "Copy", menu: "edit", group: "clipboard", shortcut: "Ctrl+C", enabled: onCanvas((c) => c.copy), why: canvasWhy("Select blocks first"), run: () => flow.current?.copy() },
@@ -1234,7 +1218,6 @@ export function App() {
         />
       )}
       {notice && <Notice key={notice.title + notice.text.join()} spec={notice} onClose={() => setNotice(null)} />}
-      {toast && <Toast text={toast.text} undo="Undo" onUndo={toast.undo} onClose={() => setToast(null)} />}
       {searchOpen && <CommandSearch commands={commands} onClose={() => setSearchOpen(false)} />}
       {backendOpen && (
         <BackendWindow
