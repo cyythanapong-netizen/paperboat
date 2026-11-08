@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { TraceStore } from "./scope/trace.ts";
+import { TraceStore } from "./traces.ts";
 import type { BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
 
 export type EngineState = {
@@ -29,7 +29,7 @@ export type EngineState = {
   varValues: Record<string, number | boolean | string>;
   varError: { text: string; at?: string } | null;
   run: { id: string; progress: number; status: "running" | RunStatus; startedAt?: number; simTime?: number } | null;
-  /** Every monitor's plotted history (scope/trace.ts), kept outside React state. */
+  /** Every monitor's plotted history (traces.ts), kept outside React state. */
   traces: TraceStore;
   /** Ticks when `traces` changed, at most once per animation frame: what plots re-render on. */
   traceVersion: number;

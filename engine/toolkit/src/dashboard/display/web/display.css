@@ -1,0 +1,4 @@
+/* The display instrument. The frame (.instrument, .screen, .idle) is the app's. */
+.instrument.display .screen { display: flex; align-items: flex-end; padding: var(--space-3); }
+.instrument.display .screen output { font: 500 var(--size-xl) / 1 var(--font-mono); overflow-wrap: anywhere; }
+.size-large .instrument.display .screen output, .size-xlarge .instrument.display .screen output { font-size: calc(var(--size-xl) * 2); }

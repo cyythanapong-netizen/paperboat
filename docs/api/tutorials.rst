@@ -482,19 +482,19 @@ What becomes what:
 
 ``CMakeLists.txt``, ``main.cpp`` and ``domain/`` are rewritten on every generate;
 ``descriptor.toml`` (a step on each input, a graph on each output), ``backend.toml`` and
-``README.md`` are written once and then yours. ``examples/dc-drive-cpp`` is one such backend,
-its descriptor edited into a PID speed loop.
+``README.md`` are written once and then yours. The studio ships one such backend,
+``examples/dc-drive-cpp``, its descriptor edited into a PID speed loop.
 
 The same backend, drawn instead of typed
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``examples/dc-drive-cpp`` was authored in Squero Studio OM, with no ``.mo`` written by hand
-except where noted. Start the server from ``examples/`` so the dock's default export folder
+``dc-drive-cpp`` was authored in Squero Studio OM, with no ``.mo`` written by hand
+except where noted. Start the server from the studio's ``examples/`` so the dock's default export folder
 (``dc-drive-cpp``) lands next to the model, then open http://localhost:8790:
 
 .. code-block:: bash
 
-   cd examples && ../../squero-studio-om/bin/squero-om dc-drive-cpp/modelica/DCDrive.mo
+   cd squero-studio-om/examples && ../bin/squero-om dc-drive-cpp/modelica/DCDrive.mo
 
 1. **Place parts.** Filter the library and double-click: ``SignalVoltage``, ``Resistor``,
    ``Inductor``, ``RotationalEMF``, ``Ground``, two ``Inertia`` (rotor, load),

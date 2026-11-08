@@ -41,18 +41,125 @@ Package Quick Reference
 Package structure
 -----------------
 
-Built-in packages live in ``engine/toolkit/src/<package>/``. Each folder has a TOML
-``toolkit.toml`` manifest naming its C++ namespace and registrar functions::
+A toolkit is one folder, each block is a folder in it, and everything of a block is in its
+folder. Built-in packages live in ``engine/toolkit/src/<package>/``::
 
-   name = "math"
-   register = ["add_arithmetic"]
+   engine/toolkit/src/math/
+     toolkit.toml            name = "math"
+     arithmetic_shared.hpp   a helper a few blocks share
+     gain/
+       gain.cpp              the block: defines paperboat::toolkit::math::add_gain(Registry&)
+       icon.hpp              its look on the plate: a view.icon
+       web/                  its UI, if it has one (see below)
+       design.html           its design mockups and notes
+     sum/
+       sum.cpp
+       icon.hpp
 
-CMake discovers the manifests and source files and generates the package-registration
-dispatcher. A package's block implementation, ``BlockDef`` (including ``description`` and
-``view``), and registration function stay together. A new registration function is listed
-in the manifest; an additional block in an existing function needs no central registry or
-description-map edit. ``signal`` also uses ``definitions = "blocks.toml"`` to embed its
-definitions on the C++ ``signal/generator`` parent.
+CMake finds each ``add_<folder name>`` from the folder names (``<block>/<block>.cpp``) and
+generates the package-registration dispatcher, so a new block edits no list, manifest, registry
+or description map. A block's implementation, ``BlockDef`` (including ``description``, ``view``
+and its ``view.icon`` glyph) and registration stay in its folder. A manifest may add
+``definitions = "blocks.toml"`` (``signal``) to embed blocks that are only TOML on a C++ parent in
+the same package; they are registered after the folders. An explicit ``register = ["add_x", …]``
+in the manifest replaces the folder rule. Delete the folder and the rest still builds and runs;
+put it back and it works with no edit elsewhere.
+
+A block that needs its own UI keeps it in its ``web/`` folder
+(``engine/toolkit/src/<package>/<block>/web/index.tsx``; an installed toolkit's
+``engine/toolkit/<package>/<block>/web/index.tsx``, or ``<package>/web/index.tsx`` for one UI for
+the whole package). The web app bundles every such entry and calls its ``register(host)`` export;
+``host.registerInstrument(kind,
+component, { size, order })`` adds a Dashboard instrument for monitors whose block says
+``instrument = kind``. ``size`` is the cell size it opens at (``compact``, ``normal``, ``large``,
+``xlarge``; default ``normal``) and ``order`` its place in the automatic order (readouts 0, pictures 1,
+plots 2, the default). The component gets ``name``, ``kind``, ``latest``, ``idle``, ``vector``, ``params``,
+``send`` and ``state`` (``state.traces`` is the history of every monitor's signals), and from the host
+its ``size``, its ``inputs`` and the ``sources`` wired into them, its ``settings`` (a table kept in the
+Board layout and saved with the project, set with ``onSettings``) and ``taps`` / ``onTap`` to wire an
+output in. A block says how the run samples it with ``BlockDef::whole_vector`` (a vector is one sample)
+and ``sample_per_input`` (one sample per wired input, tagged with it). Nothing in the engine or the web
+app names the package::
+
+   // engine/toolkit/opencv/view/web/index.tsx
+   import type { ToolkitWebHost } from "@paperboat/host";   // the app, as types only
+   import "./image.css";                                     // its own styles
+   export function register(host: ToolkitWebHost) {
+     host.registerInstrument("image", ImageInstrument, { size: "large", order: 1 });
+   }
+
+A ``web/`` folder also holds the block's components, CSS, tests (``*.test.ts``, run by the web
+app's ``npm test``) and a ``package.json`` naming its own npm dependencies (the folder is an npm
+workspace; the scope's names ``uplot``). The entries are bundled at build time: after installing a
+toolkit with a ``web/`` folder, run ``npm install`` and rebuild the web app (the dev server picks it
+up at once). A kind nothing registered shows a plain tile with its kind and latest value.
+
+Optional toolkits with external dependencies live in ``engine/toolkit/<package>/`` with the same
+layout plus a ``toolkit.toml`` and a package-local ``CMakeLists.txt``. The engine discovers the
+folder; the package's CMake file decides whether its dependency is available. The backend links and
+registers an optional package explicitly.
+
+Toolkit packages
+================
+
+Built-in templates, by package (``engine/toolkit``). Import a package in a descriptor
+(``import = ["signal", "math"]``) or use one template (``use = "math/gain"``). Paperboat is
+not Simulink: ``base`` holds only what any domain needs; everything else lives in the
+package of what it is about. List them with ``paperboat-catalog --templates``.
+
+Package Quick Reference
+-----------------------
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 32 50
+
+   * - Package
+     - Block Templates
+     - Functional Role
+   * - :ref:`pkg-base`
+     - ``constant``, ``text``, ``boolean``, ``key``, ``key_hold``, ``to_number``, ``to_text``, ``to_boolean``, ``type_of``, ``mux``, ``demux``, ``now``, ``interval``, ``timeout``, ``delay``, ``if``, ``and``, ``or``, ``xor``, ``not``, ``compare``, ``in_range``
+     - Fundamental values, type conversions, runtime clock delays, and dual signal/step logic gates.
+   * - :ref:`pkg-signal`
+     - ``clock``, ``sine``, ``step``, ``ramp``, ``square``, ``ease``, ``function``, ``noise``, ``generator``
+     - Continuous time waveforms :math:`f(t)`, periodic generators, and free mathematical expressions.
+   * - :ref:`pkg-math`
+     - ``sum``, ``product``, ``gain``, ``bias``, ``min``, ``max``, ``abs``, ``clamp``, ``wrap``, ``map``, ``expression``
+     - Arithmetic operators, dynamic multi-sign summing junctions, and range boundary transformations.
+   * - :ref:`pkg-string`
+     - ``string/format``, ``string/concat``, ``string/split``, ``string/replace``, ``string/length``
+     - Text formatting, templating, and string manipulation operations.
+   * - :ref:`pkg-control`
+     - ``pid``, ``rate_limiter``, ``deadband``, ``hysteresis``, ``lowpass``, ``integrator``
+     - Dynamic feedback controllers, signal filters, and rate-of-change limiters.
+   * - :ref:`pkg-dashboard`
+     - ``graph``, ``display``, ``scope``, ``image``
+     - Telemetry instruments piping signals to real-time oscilloscopes, digital readouts, and visual frames.
+   * - :ref:`pkg-step`
+     - ``start``, ``when``, ``wait``, ``if``, ``repeat``, ``while``, ``say``, ``join``, ``stop``
+     - Discrete event control flow nodes, condition branching, loops, and path synchronization.
+
+Package structure
+-----------------
+
+A toolkit is one folder, and everything of it is in that folder. Built-in packages live in
+``engine/toolkit/src/<package>/``::
+
+   engine/toolkit/src/math/
+     toolkit.toml        name = "math"
+     gain.cpp            one block, one file: defines paperboat::toolkit::math::add_gain(Registry&)
+     sum.cpp
+     arithmetic_shared.hpp   a helper a few blocks share
+     web/                its UI, if any (see below)
+
+CMake finds each ``add_<file name>`` by the file name and generates the package-registration
+dispatcher, so a new block edits no list, manifest, registry or description map. A block's
+implementation, ``BlockDef`` (including ``description``, ``view`` and its ``view.icon`` glyph)
+and registration stay in its one file. A manifest may add ``definitions = "blocks.toml"``
+(``signal``) to embed blocks that are only TOML on a C++ parent in the same package; they are
+registered after the files. An explicit ``register = ["add_x", …]`` in the manifest replaces the
+file-name rule. Delete the folder and the rest still builds and runs; put it back and it works
+with no edit elsewhere.
 
 Optional toolkits with external dependencies live in ``engine/toolkit/<package>/`` with a
 ``toolkit.toml`` and a package-local ``CMakeLists.txt``. The engine discovers the folder;
@@ -62,18 +169,29 @@ registers an optional package explicitly.
 A package that needs its own UI keeps it in a ``web/`` folder next to its C++
 (``engine/toolkit/<package>/web/index.tsx`` or ``engine/toolkit/src/<package>/web/index.tsx``). The
 web app bundles every such entry and calls its ``register(host)`` export; ``host.registerInstrument(kind,
-component)`` adds a Dashboard instrument for monitors whose block says ``instrument = kind``. The
-component gets ``name``, ``kind``, ``latest``, ``idle`` (and ``params``, ``send``, ``state``). Nothing in
-the web app names the package::
+component, { size, order })`` adds a Dashboard instrument for monitors whose block says
+``instrument = kind``. ``size`` is the cell size it opens at (``compact``, ``normal``, ``large``,
+``xlarge``; default ``normal``) and ``order`` its place in the automatic order (readouts 0, pictures 1,
+plots 2, the default). The component gets ``name``, ``kind``, ``latest``, ``idle``, ``vector``, ``params``,
+``send`` and ``state`` (``state.traces`` is the history of every monitor's signals), and from the host
+its ``size``, its ``inputs`` and the ``sources`` wired into them, its ``settings`` (a table kept in the
+Board layout and saved with the project, set with ``onSettings``) and ``taps`` / ``onTap`` to wire an
+output in. A block says how the run samples it with ``BlockDef::whole_vector`` (a vector is one sample)
+and ``sample_per_input`` (one sample per wired input, tagged with it). Nothing in the engine or the web
+app names the package::
 
    // engine/toolkit/opencv/web/index.tsx
-   export function register(host) {
-     host.registerInstrument("image", ImageInstrument);
+   import type { ToolkitWebHost } from "@paperboat/host";   // the app, as types only
+   import "./image.css";                                     // its own styles
+   export function register(host: ToolkitWebHost) {
+     host.registerInstrument("image", ImageInstrument, { size: "large", order: 1 });
    }
 
-The entries are bundled at build time: after installing a toolkit with a ``web/`` folder, rebuild the
-web app (the dev server picks it up at once). A kind nothing registered shows a plain tile with its kind
-and latest value.
+``web/`` also holds the package's components, CSS, tests (``*.test.ts``, run by the web app's
+``npm test``) and a ``package.json`` naming its own npm dependencies (the folder is an npm
+workspace; the dashboard's names ``uplot``). The entries are bundled at build time: after installing
+a toolkit with a ``web/`` folder, run ``npm install`` and rebuild the web app (the dev server picks it
+up at once). A kind nothing registered shows a plain tile with its kind and latest value.
 
 .. _pkg-base:
 
