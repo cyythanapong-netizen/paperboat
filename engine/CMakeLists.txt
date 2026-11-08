@@ -93,7 +93,7 @@ endif()
 # Backends (examples/backends/*-cpp) are projects of their own that use the engine; the
 # engine never builds or reads them.
 
-# Packages (cpack -G DEB / TGZ / ZIP): the paperboat binary and the registries it reads (see tools/).
+# Packages (cpack -G DEB / RPM / TGZ / ZIP): the paperboat binary and the registries it reads (see tools/).
 if(PROJECT_IS_TOP_LEVEL)
   set(CPACK_PACKAGE_NAME paperboat)
   set(CPACK_PACKAGE_VERSION ${PAPERBOAT_VERSION})
@@ -118,6 +118,19 @@ if(PROJECT_IS_TOP_LEVEL)
   set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "paperboat (= ${PAPERBOAT_DEB_VERSION}), cmake (>= 3.25), g++ (>= 4:12)")
   set(CPACK_DEBIAN_DEV_PACKAGE_SHLIBDEPS OFF)  # static libraries
   set(CPACK_DEBIAN_DEV_PACKAGE_SECTION libdevel)
+  # Two .rpms the same way, in Fedora's names: paperboat and paperboat-devel. RPM sorts "~" before
+  # the release too (0.1.0~alpha.2 < 0.1.0); runtime libraries are found by rpm's auto-requires.
+  set(CPACK_RPM_COMPONENT_INSTALL ON)
+  set(CPACK_RPM_PACKAGE_VERSION ${PAPERBOAT_DEB_VERSION})
+  set(CPACK_RPM_PACKAGE_LICENSE "Proprietary")  # no LICENSE file yet (scripts/pack_npm.py says UNLICENSED)
+  set(CPACK_RPM_PACKAGE_GROUP "Applications/Engineering")
+  set(CPACK_RPM_PACKAGE_URL "https://github.com/paperboatlab/paperboat")
+  set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+  set(CPACK_RPM_RUNTIME_PACKAGE_NAME paperboat)
+  set(CPACK_RPM_RUNTIME_PACKAGE_SUGGESTS "git, nodejs, npm")
+  set(CPACK_RPM_DEV_PACKAGE_NAME paperboat-devel)
+  set(CPACK_RPM_DEV_PACKAGE_REQUIRES "paperboat = ${PAPERBOAT_DEB_VERSION}, cmake >= 3.25, gcc-c++ >= 12")
+  set(CPACK_RPM_DEV_PACKAGE_AUTOREQ OFF)  # static libraries
   include(CPack)
 endif()
 

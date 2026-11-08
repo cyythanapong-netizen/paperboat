@@ -62,7 +62,7 @@ C++
    target_compile_definitions(counter PRIVATE PAPERBOAT_DESCRIPTOR="${CMAKE_CURRENT_SOURCE_DIR}/descriptor.toml")
 
 ``paperboat build`` picks the engine for you: in a checkout it passes ``-DPAPERBOAT_ENGINE_DIR``, from an
-installed package (``.deb`` with ``paperboat-dev``, the ``.tar.gz``, the ``.zip`` or ``@paperboatlabs/cli``) it
+installed package (``.deb`` with ``paperboat-dev``, ``.rpm`` with ``paperboat-devel``, the ``.tar.gz``, the ``.zip`` or ``@paperboatlabs/cli``) it
 passes ``-DPaperboat_DIR`` and builds Release. See :ref:`cpp-sdk`.
 
 Python
