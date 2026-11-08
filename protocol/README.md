@@ -63,8 +63,8 @@ Default address: `ws://localhost:8765`.
   "group": "base",                 // optional palette group: the domain, or a toolkit package
   // optional, how to draw it (a hint: absent, or a UI that ignores it, draws the normal card).
   // compact: a small plate with a glyph, bare port dots (names on hover) and a caption with the
-  // block's name and value. glyph: a curve (gain, plus, step, clamp, const) or a few characters
-  // drawn as text; value: an expression of the params. Every key is optional.
+  // block's name and value. glyph: a few characters drawn as text,
+  // shown when there is no view.icon (built-in curves such as gain are icons); value: an expression of the params. Every key is optional.
   "view": { "compact": true, "glyph": "gain", "value": "{k}" },
   // view.icon (optional, additive): a custom look, drawn instead of the glyph; see "Custom block look"
   "feedthrough": false,            // optional: its outputs don't depend on this step's inputs
