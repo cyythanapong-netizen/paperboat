@@ -23,11 +23,12 @@ Views
 ``[station] view`` says how the Station page shows the station.
 
 ``scene`` (default)
-   The built-in 2D or 3D scene of **entities**: ``box``, ``sphere`` (``size[0]`` = radius),
+   The built-in 2D or 3D scene of **entities**: ``box``, ``sphere`` (``size[0]`` = radius), ``cylinder`` (``size[0]`` = radius, ``size[1]`` = length along y),
    ``line`` (``pos`` → ``to``) and ``image`` (a picture ``size[0]`` × ``size[1]``), with
    ``pos``, ``size``, ``rot`` (radians, x, y, z order), ``scale``, ``color``. Station objects,
    the domain state and blocks draw them; ``scene.patch`` updates them during a run. The
-   backend's ``view`` hint picks the camera (``{"mode": "2d", "center": [x, y], "height": h}``).
+   backend's ``view`` hint picks the camera (``{"mode": "2d", "center": [x, y], "height": h}``; in 3D,
+   ``camera`` and ``floor``, the height of the floor grid).
 
 ``graph``
    Station objects as nodes and their links as wires: drag from an object's right handle

@@ -609,7 +609,7 @@ What runs
 
    .. cpp:member:: std::string shape = "box"
 
-      ``"box"``, ``"sphere"`` (``size[0]`` = radius), ``"line"`` (``pos`` → ``to``) or ``"image"``.
+      ``"box"``, ``"sphere"`` (``size[0]`` = radius), ``"cylinder"`` (``size[0]`` = radius, ``size[1]`` = length along y), ``"line"`` (``pos`` → ``to``) or ``"image"``.
 
    .. cpp:member:: std::array<double, 3> pos
 

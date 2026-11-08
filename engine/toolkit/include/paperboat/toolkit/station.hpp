@@ -20,7 +20,8 @@ namespace paperboat::toolkit {
 // One shape in the scene (the protocol's Entity).
 struct Entity {
   std::string id = {};
-  std::string shape = "box";                   // "box", "sphere" (size[0] = radius), "line" (pos → to)
+  std::string shape = "box";                   // "box", "sphere" (size[0] = radius), "cylinder" (size[0] = radius,
+                                          // size[1] = length along y), "line" (pos → to)
                                           // or "image" (a size[0] × size[1] picture facing +z)
   std::array<double, 3> pos{};
   std::array<double, 3> size{1, 1, 1};
