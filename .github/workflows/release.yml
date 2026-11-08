@@ -1,4 +1,4 @@
-# Release packages: .deb and .tar.gz (Linux), npm packages (@paperboat/cli + one per platform), a GitHub release.
+# Release packages: .deb and .tar.gz (Linux), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
 # A tag v<version> publishes; pull requests and manual runs only build and check the packages.
 # The version is engine/CMakeLists.txt's project(paperboat VERSION ...); the tag must match it.
 # Publishing to npm needs the NPM_TOKEN secret (an automation token for the @paperboat scope); without it
@@ -144,8 +144,8 @@ jobs:
         run: |
           prefix=$(mktemp -d)
           npm install -g --prefix "$prefix" dist/npm/paperboat-cli-win32-x64-*.tgz dist/npm/paperboat-cli-[0-9]*.tgz
-          node "$prefix/node_modules/@paperboat/cli/bin/paperboat.js" --version
-          node "$prefix/node_modules/@paperboat/cli/bin/paperboat.js" pkg list
+          node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" --version
+          node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" pkg list
           rm dist/npm/paperboat-cli-[0-9]*.tgz   # the launcher is published from the Linux job
       - uses: actions/upload-artifact@v4
         with:
