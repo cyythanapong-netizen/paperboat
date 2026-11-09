@@ -109,6 +109,9 @@ json ports_json(const std::vector<toolkit::PortDef>& ports) {
     for (const auto& c : p.components) components.push_back({c.id, c.unit});
     out.push_back({p.id, p.type, p.unit, p.dimension ? json(*p.dimension) : json(), components, p.broadcast});
   }
+  return out;
+}
+
 // A list of points as a readout (#24): how many, and the first few. A signal sample carries a
 // number, text or a vector, not a table.
 std::string points_text(const toolkit::Table& points) {
