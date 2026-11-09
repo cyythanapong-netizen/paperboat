@@ -20,7 +20,7 @@ import { PAGE_IDS, useUiLock } from "./uiLock";
 import { useVariables, varsApiFor } from "./variablesState";
 import { useCanvasSync } from "./canvasSync";
 import { useBoardWiring } from "./boardWiring";
-import { runBlocker, runClock } from "./runStatus";
+import { dockSettings, runBlocker, runClock, speedChange } from "./runStatus";
 import { useProjectSession } from "./projectSession";
 import { useToolkitInstall } from "./toolkitInstall";
 import { menuCommands, solverChoice } from "./menuCommands";
@@ -401,8 +401,13 @@ export function App() {
           status={state.run ? status : undefined}
           statusText={status === "running" ? <>running {elapsed}{delayNotice}</> : status}
           defaults={state.runDefaults}
-          settings={runSettings}
-          onSettings={setRunSettings}
+          settings={dockSettings(state.run, runSettings)}
+          onSettings={(next) => {
+            // A new speed during a run goes to the run (#219); every change is the next run's too.
+            const tell = speedChange(running, dockSettings(state.run, runSettings), next, state.runDefaults);
+            if (tell) send(tell);
+            setRunSettings(next);
+          }}
           onRun={run}
           onCancel={() => send({ type: "run.cancel" })}
         />

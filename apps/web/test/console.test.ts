@@ -84,3 +84,16 @@ test("reducer ignores unknown message types without crashing or dropping state",
   assert.equal(s2.logs.at(-1)?.text, 'ignored unknown message type "toolkits"');
   assert.equal(s2.logs.at(-1)?.level, "warn");
 });
+
+test("run.speed (#219): the running run takes the speed and where it was; another run's, or none running, changes nothing", () => {
+  const started = reduce(initial, { type: "run.started", run: "run-1" });
+  const going = reduce(reduce(started, { type: "run.progress", run: "run-1", fraction: 0.3 }), { type: "signal", node: "g", t: 3, v: 1 });
+  const fast = reduce(going, { type: "run.speed", run: "run-1", speed: 4 });
+  assert.equal(fast.run?.speed, 4);
+  assert.deepEqual({ ...fast.run?.pacedFrom, at: 0 }, { at: 0, simTime: 3, progress: 0.3 });
+  assert.equal(fast.logs.length, going.logs.length); // not an unknown message
+  assert.equal(reduce(going, { type: "run.speed", run: "run-0", speed: 4 }), going);
+  const done = reduce(fast, { type: "run.finished", run: "run-1", status: "done" });
+  assert.equal(reduce(done, { type: "run.speed", run: "run-1", speed: 1 }), done);
+  assert.equal(reduce(initial, { type: "run.speed", speed: 1 }), initial);
+});

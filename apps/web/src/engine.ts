@@ -2,6 +2,19 @@ import { useCallback, useEffect, useReducer, useRef } from "react";
 import { TraceStore } from "./traces.ts";
 import type { BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
 
+/** The run the backend is on, or last ran. */
+export type RunState = {
+  id: string;
+  progress: number;
+  status: "running" | RunStatus;
+  startedAt?: number;
+  simTime?: number;
+  /** The speed the run took during it (run.speed, #219); absent: the one it started with. */
+  speed?: number;
+  /** Where the run was (wall clock, ms, and its own clock) when it took that speed: pacing goes on from there. */
+  pacedFrom?: { at: number; simTime?: number; progress: number };
+};
+
 export type EngineState = {
   connection: "connecting" | "open" | "closed";
   engine: string;
@@ -28,7 +41,7 @@ export type EngineState = {
   /** What the variables come to (variables.values), and why not when they don't hold. */
   varValues: Record<string, number | boolean | string>;
   varError: { text: string; at?: string } | null;
-  run: { id: string; progress: number; status: "running" | RunStatus; startedAt?: number; simTime?: number } | null;
+  run: RunState | null;
   /** Every monitor's plotted history (traces.ts), kept outside React state. */
   traces: TraceStore;
   /** Ticks when `traces` changed, at most once per animation frame: what plots re-render on. */
@@ -155,6 +168,10 @@ export function reduce(s: EngineState, m: Action): EngineState {
       return s.run?.id === m.run ? { ...s, run: { ...s.run, progress: m.fraction } } : s;
     case "run.finished":
       return s.run?.id === m.run ? { ...s, run: { ...s.run, status: m.status }, active: [] } : s;
+    case "run.speed":
+      // The run took a new speed (#219): from here on it paces at it.
+      if (!s.run || s.run.status !== "running" || (m.run !== undefined && m.run !== s.run.id)) return s;
+      return { ...s, run: { ...s.run, speed: m.speed, pacedFrom: { at: Date.now(), simTime: s.run.simTime, progress: s.run.progress } } };
     case "node.state": {
       const active = s.active.filter((id) => id !== m.node);
       const failed = m.state === "failed" ? [...s.failed.filter((id) => id !== m.node), m.node] : s.failed;
