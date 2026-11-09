@@ -7,6 +7,7 @@
 
 #include "paperboat/core/backend.hpp"
 #include "paperboat/core/backend_manager.hpp"
+#include "paperboat/core/cache.hpp"
 
 #include <paperboat/toolkit/installer.hpp>
 #include <paperboat/toolkit/platform.hpp>
@@ -35,6 +36,7 @@ struct Session::State {
   std::optional<json> tuned;  // the list the UI sent during a run (#75), until the run takes it
   int runs = 0;
   std::atomic<int> live_run{0};  // the number of the run that is going, else 0
+  RunCache cache;  // what runs that evaluate once keep for the next run of this session
   std::mutex toolkit_mutex;
   std::string busy_toolkit;
   std::string busy_action;
@@ -170,7 +172,7 @@ void Session::on_message(const std::string& text) {
         }
         s.emit(m);
       };
-      core::run(id, graph, station, s.backend, emit, keys_now, stop, settings, variables, tune_now);
+      core::run(id, graph, station, s.backend, emit, keys_now, stop, settings, variables, tune_now, &s.cache);
     });
   } else if (type == "station.set") {
     // An edit on the Station page: check it, keep it, and show it.

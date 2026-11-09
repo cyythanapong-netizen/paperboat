@@ -63,16 +63,18 @@ class Once final : public Executor {
  public:
   std::string execute(Run& run) override {
     run.at_time(0);
-    // Block by block, each reported running then done: a long pipeline shows where it is.
+    // Block by block, each reported running then done (only done: reused from an earlier run):
+    // a long pipeline shows where it is, and a cancel stops it between two blocks.
     json samples = json::array();
     for (const auto& id : run.graph().order) {
-      run.node_state(id, "running");
-      for (auto& sample : run.pass_over({id})) samples.push_back(std::move(sample));
-      run.node_state(id, "done");
+      if (run.cancelled()) return "cancelled";
+      for (auto& sample : run.evaluate(id)) samples.push_back(std::move(sample));
     }
     for (const auto& s : samples) run.emit(s);
     run.emit(run.scene(true));
-    run.log("info", "evaluated " + std::to_string(run.graph().order.size()) + " blocks");
+    std::string what = "evaluated " + std::to_string(run.graph().order.size()) + " blocks";
+    if (run.reused() > 0) what += " (" + std::to_string(run.reused()) + " reused from an earlier run)";
+    run.log("info", what);
     return "done";
   }
 };

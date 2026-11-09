@@ -90,6 +90,7 @@ void add_split(Registry& registry) {
     double index = get_or(p, "index", -1.0);
     return std::make_unique<Split>(std::move(delim), index);
   };
+  split.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(split));
 }
 

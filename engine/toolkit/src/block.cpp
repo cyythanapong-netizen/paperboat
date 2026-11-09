@@ -402,6 +402,19 @@ class Lanes final : public Block {
     return out;
   }
 
+  // Its lanes are stateless (before they are made: one made to ask; one that can't be made
+  // says no, and its first step reports why).
+  bool stateless() const override {
+    if (lanes_.empty()) {
+      try {
+        return make_(params_)->stateless();
+      } catch (const std::exception&) {
+        return false;
+      }
+    }
+    return std::ranges::all_of(lanes_, [](const auto& lane) { return lane->stateless(); });
+  }
+
   // Each lane takes it, or (a stateless one) is made again with it.
   bool set_param(std::string_view id, double value) override {
     auto params = params_;

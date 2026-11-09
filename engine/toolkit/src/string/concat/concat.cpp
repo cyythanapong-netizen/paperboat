@@ -52,6 +52,7 @@ void add_concat(Registry& registry) {
   for (auto& inp : concat.def.inputs) inp.type = "any";
   concat.def.outputs[0].type = "text";
   concat.def.ports_from = "inputs";
+  concat.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(concat));
 }
 

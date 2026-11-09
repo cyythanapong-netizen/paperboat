@@ -68,6 +68,7 @@ void add_text_test(Registry& registry) {
     int mode = static_cast<int>(get_or(p, "mode", 0.0));
     return std::make_unique<TextTestBranch>(mode);
   };
+  tt.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(tt));
 }
 

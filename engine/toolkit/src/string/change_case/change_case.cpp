@@ -61,6 +61,7 @@ void add_change_case(Registry& registry) {
     int mode = static_cast<int>(get_or(p, "mode", 1.0));
     return std::make_unique<ChangeCase>(mode);
   };
+  cc.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(cc));
 }
 

@@ -43,6 +43,7 @@ void add_key_hold(Registry& registry) {
     auto it = config.find("key");
     return std::make_unique<KeyHold>(it == config.end() ? "Space" : it->second);
   };
+  hold.def.cacheable = false;  // reads the keys held in the UI: never reused from an earlier run
   registry.add(std::move(hold));
 }
 

@@ -24,7 +24,7 @@ Default address: `ws://localhost:8765`.
 | `run.started`  | `run: string`                               | when a run starts            |
 | `run.progress` | `run: string`, `fraction: number` (0–1)     | during a run                 |
 | `signal`       | `node: string`, `t: number`, `v: number \| string \| number[]`, `components?: VectorComponent[]`, `port?: string` | per sample, for monitor nodes. A monitor with `sample_per_input` (a scope) sends one per wired input, `port` naming it (absent: `in`), and one with `whole_vector` keeps a vector whole. `t` is the x value: time in a simulation, list index otherwise; a Display monitor, and a Graph in a clock run (one trace per component), get a whole vector as `number[]` with its source component labels; a Graph in a run-once gets it by index. A layout instrument's optional `settings` is that instrument's own table (schema `InstrumentSettings`; its shape is the toolkit's, the engine only carries it) |
-| `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them; any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
+| `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them, or only `done` for a block whose outputs it reused from an earlier run (see [Caching](#caching)); any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
 | `node.progress` | `node: string`, `fraction: number` (0–1) | How far a block's long step has got (`Context::progress`), at most ~20 a second per block; the UI shows it on the running block |
 | `log`          | `level: "info" \| "warn" \| "error"`, `text`, `node?: string` | any time. `node`: the block or station object that wrote it, or that failed |
 | `toolkits.status` | `toolkits: ToolkitStatus[]`              | when an optional toolkit's installation or busy state changes. `ToolkitStatus.blocks` lists the block types a toolkit provides (from `toolkits.toml`), so the UI names the toolkit to install for a missing block |
@@ -421,6 +421,23 @@ A graph whose blocks have `step` ports is a Step flow (see `paperboat-examples/a
 - Leaving by an unwired step output ends that path; reaching a Stop block ends the run. The run ends (`done`) when no path
   runs and no hat may start one; with a When it runs until `run.cancel` or a time limit.
 - `run.progress` can't know the length in advance; it may only send `1` at the end.
+
+## Caching
+
+A backend that evaluates once (`hello.run.mode == "once"`) may keep each block's outputs
+between the runs of one connection and reuse them: a block is called again only when
+something it depends on changed since the run that computed it: its type, params and text
+(variables included, once resolved), the values on its wires (so a station object changed
+reaches only the blocks it feeds, and a change upstream that gives the same values stops
+there), the variables it read, its `file` params' files. A reused block is reported
+`node.state: "done"` with no `running` before it (a `cached` state is for later: it needs
+`NodeState` and the shared TypeScript types to change together); its signals, scene entities
+and the logs it wrote are sent as when it ran, and the run's last log says how many blocks it
+reused. Only blocks that declare themselves pure (pure functions of
+those inputs: no clock, keys, domain state, randomness or side effects) are reused; a run on
+a clock, a Step flow or a block that reads keys or draws at random always computes. A run
+cancelled while a block computes doesn't keep that block's result. The C++ engine does all
+this (`engine/core/include/paperboat/core/cache.hpp`).
 
 ## Groups
 

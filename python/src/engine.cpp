@@ -204,9 +204,11 @@ struct BlockContext {
   const tk::ProgressFn* progress_fn = nullptr;
   const tk::Values* variables = nullptr;
   const tk::SetVariableFn* set_variable_fn = nullptr;
+  const tk::VariableReadFn* variable_read_fn = nullptr;  // the run records the read (what a run-once's cache checks)
 
   nb::object variable(const std::string& name) const {
     const tk::Value* v = variables ? [&] { const auto it = variables->find(name); return it == variables->end() ? nullptr : &it->second; }() : nullptr;
+    if (variable_read_fn) (*variable_read_fn)(name, v);
     return v ? to_py(*v) : nb::none();
   }
   bool set_variable(const std::string& name, nb::handle value) const {
@@ -227,7 +229,7 @@ nb::object context(const tk::Context& ctx) {
   nb::set keys;
   if (ctx.keys_down)
     for (const auto& k : *ctx.keys_down) keys.add(nb::str(k.c_str()));
-  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn, ctx.progress_fn, ctx.variables, ctx.set_variable_fn});
+  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn, ctx.progress_fn, ctx.variables, ctx.set_variable_fn, ctx.variable_read_fn});
 }
 
 // Runs `fn` with the GIL held; a Python error becomes a C++ error the run reports.
@@ -532,6 +534,7 @@ tk::BlockDef block_def(nb::handle cls) {
   def.inputs_from = text_attr(cls, "inputs_from", "");
   def.outputs_from = text_attr(cls, "outputs_from", "");
   if (nb::hasattr(cls, "elementwise")) def.elementwise = nb::cast<bool>(cls.attr("elementwise"));
+  if (nb::hasattr(cls, "cacheable") && !cls.attr("cacheable").is_none()) def.cacheable = nb::cast<bool>(cls.attr("cacheable"));
   return def;
 }
 
