@@ -575,13 +575,23 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
   PythonEnv env;
   const fs::path root = repo_root.empty() ? toolkit::find_repo_root(backend_dir) : repo_root;
 
-  // 1. Resolve python binary: backend venv -> root venv -> system python3
-  if (!backend_dir.empty() && fs::is_regular_file(backend_dir / ".venv" / "bin" / "python3")) {
-    env.python_bin = backend_dir / ".venv" / "bin" / "python3";
-  } else if (!root.empty() && fs::is_regular_file(root / ".venv" / "bin" / "python3")) {
-    env.python_bin = root / ".venv" / "bin" / "python3";
+  // 1. Resolve python binary: backend venv -> root venv -> system python3. A Windows venv keeps it in
+  // Scripts\python.exe, and Windows has no python3 outside a venv (python.org and the Store install python).
+#ifdef _WIN32
+  const fs::path venv_python = fs::path(".venv") / "Scripts" / "python.exe";
+  constexpr const char* system_python = "python";
+  constexpr char path_sep = ';';
+#else
+  const fs::path venv_python = fs::path(".venv") / "bin" / "python3";
+  constexpr const char* system_python = "python3";
+  constexpr char path_sep = ':';
+#endif
+  if (!backend_dir.empty() && fs::is_regular_file(backend_dir / venv_python)) {
+    env.python_bin = backend_dir / venv_python;
+  } else if (!root.empty() && fs::is_regular_file(root / venv_python)) {
+    env.python_bin = root / venv_python;
   } else {
-    env.python_bin = "python3";
+    env.python_bin = system_python;
   }
 
   // 2. Set PYTHONPATH to root/python
@@ -589,7 +599,7 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
     std::string pythonpath = (root / "python").string();
     const char* cur = std::getenv("PYTHONPATH");
     if (cur && *cur) {
-      pythonpath += ":" + std::string(cur);
+      pythonpath += path_sep + std::string(cur);
     }
     env.env.emplace_back("PYTHONPATH", pythonpath);
   }
@@ -598,19 +608,24 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
   env.env.emplace_back("NO_PROXY", "localhost,127.0.0.1");
   env.env.emplace_back("PYTHONUNBUFFERED", "1");  // log lines reach `paperboat run` as they are printed
 
-  // 3. Ensure C++ Python bindings (_engine*.so) are built
+  // 3. Ensure C++ Python bindings (_engine*.so, _engine*.pyd on Windows) are built
   if (!root.empty() && fs::is_directory(root / "python")) {
     bool need_bindings_build = false;
     bool has_so = false;
     std::error_code ec;
 
-    // Check python/paperboat/ for _engine*.so
+    // Check python/paperboat/ for the extension module
+#ifdef _WIN32
+    constexpr std::string_view module_ext = ".pyd";
+#else
+    constexpr std::string_view module_ext = ".so";
+#endif
     fs::path pkg_dir = root / "python" / "paperboat";
     std::filesystem::file_time_type so_time;
     if (fs::is_directory(pkg_dir)) {
       for (const auto& entry : fs::directory_iterator(pkg_dir, ec)) {
         auto fn = entry.path().filename().string();
-        if (fn.starts_with("_engine") && fn.ends_with(".so")) {
+        if (fn.starts_with("_engine") && fn.ends_with(module_ext)) {
           has_so = true;
           so_time = fs::last_write_time(entry.path(), ec);
           break;
