@@ -41,7 +41,8 @@ Vector = list[float]
 
 __all__ = [
     "Backend", "Block", "Context", "DomainState", "Entity", "Generator", "Handle", "Linked", "Model", "Monitor", "ODE", "Param",
-    "Port", "StationObject", "Step", "Timed", "Vector", "VectorComponent", "ode", "scene", "serve", "solve", "vector_port",
+    "Port", "StationObject", "Step", "Timed", "Vector", "VectorComponent", "numbers_port", "ode", "points_port", "scene", "serve", "solve",
+    "vector_port",
 ]
 
 
@@ -82,6 +83,22 @@ def vector_port(id: str, dimension: int | None = None, components=()) -> Port:
             raise ValueError(f"vector dimension {dimension} does not match {len(parts)} components")
         dimension = len(parts)
     return Port(id, "vector", dimension=dimension, components=parts)
+
+
+def numbers_port(id: str, unit: str = "") -> Port:
+    """A list of numbers (#24), any length, in one unit: a block gives it as a list of floats.
+    It joins vector ports and elementwise blocks' signal ports (which then map over it)."""
+    return Port(id, "numbers", unit=unit)
+
+
+def points_port(id: str, coordinates=()) -> Port:
+    """A list of points (#24): a block gives it as a list of rows, ``[[x, z], ...]``. The
+    coordinates (names, (name, unit) pairs, or VectorComponents) fix each point's, by position.
+
+    Example: ``points_port("profile", [("x", "m"), ("z", "m")])``.
+    """
+    parts = vector_port("_", components=coordinates).components if coordinates else ()
+    return Port(id, "points", dimension=len(parts) or None, components=parts)
 
 
 class Param(NamedTuple):

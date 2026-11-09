@@ -28,6 +28,9 @@ Package Quick Reference
    * - :ref:`pkg-string`
      - ``string/format``, ``string/concat``, ``string/split``, ``string/replace``, ``string/length``
      - Text formatting, templating, and string manipulation operations.
+   * - :ref:`pkg-list`
+     - ``range``, ``series``, ``list_length``, ``item``, ``aggregate``, ``points``, ``coordinates``
+     - Lists of numbers and of points on the wires: made, measured, indexed, joined, split and reduced.
    * - :ref:`pkg-control`
      - ``pid``, ``rate_limiter``, ``deadband``, ``hysteresis``, ``lowpass``, ``integrator``
      - Dynamic feedback controllers, signal filters, and rate-of-change limiters.
@@ -129,6 +132,9 @@ Package Quick Reference
    * - :ref:`pkg-string`
      - ``string/format``, ``string/concat``, ``string/split``, ``string/replace``, ``string/length``
      - Text formatting, templating, and string manipulation operations.
+   * - :ref:`pkg-list`
+     - ``range``, ``series``, ``list_length``, ``item``, ``aggregate``, ``points``, ``coordinates``
+     - Lists of numbers and of points on the wires: made, measured, indexed, joined, split and reduced.
    * - :ref:`pkg-control`
      - ``pid``, ``rate_limiter``, ``deadband``, ``hysteresis``, ``lowpass``, ``integrator``
      - Dynamic feedback controllers, signal filters, and rate-of-change limiters.
@@ -343,13 +349,60 @@ Text processing and manipulation blocks:
 - ``change_case``: ``text`` → ``y`` (text); converts case (``mode``: ``upper``, ``lower``, ``title``).
 - ``text_test``: ``text``, ``test`` → ``y`` (signal or step branches ``yes``/``no``; ``mode``: ``contains``, ``starts_with``, ``ends_with``).
 
+.. _pkg-list:
+
+list
+----
+
+Lists on the wires (#24). A port of type ``numbers`` carries a list of numbers (any length); one
+of type ``points`` a list of points (one row per point, ``[x, z]``). A list wire is drawn heavier
+than a signal's (a points wire also broken), and a list port's dot is a double ring.
+
+- ``numbers`` joins ``numbers`` and ``vector`` (a vector is a list of fixed length: one of another
+  length fails when it arrives) and an :ref:`elementwise <elementwise>` block's signal ports: that
+  is the map. Range → ``function`` (``f = "x^2"``) → ``gain`` squares and scales every item. A list
+  has one unit, every item's: a list in ``m`` into a port in ``rad`` is refused.
+- ``points`` joins only ``points`` (and ``any``). On a points port ``dimension`` and ``components``
+  describe each point, not the list: points of 2 coordinates into a port expecting 3 are refused,
+  and coordinate units are checked by position, as a vector's are. A list's own length is never
+  declared.
+- Neither joins a plain ``signal`` port, and a number is not a list.
+
+Blocks:
+
+- ``range`` (→ ``y``, numbers): ``count`` numbers evenly spaced from ``start`` to ``stop``, both
+  included (``0, 1, 11`` gives 0, 0.1 … 1).
+- ``series`` (→ ``y``, numbers): ``count`` numbers from ``start``, each ``step`` more.
+- ``list_length`` (``list`` → ``n``): how many items.
+- ``item`` (``list``, ``i`` → ``y``): the item at ``index`` (0 the first, -1 the last), or at input
+  ``i`` when it is wired; outside the list fails, naming the block.
+- ``aggregate`` (``list`` → ``y``; ``op``: ``sum``, ``mean``, ``min``, ``max``): one number from the
+  list. The sum of none is 0; the others of an empty list fail.
+- ``points`` (one numbers input per name → ``points``): joins lists of coordinates into a list of
+  points, as ``mux`` joins numbers. Param ``names`` (``"x z"``; default ``"x y"``) gives the inputs
+  and the points' coordinates, ``units`` their units by position. Lists of different lengths fail;
+  an unwired coordinate is 0.
+- ``coordinates`` (``points`` → one numbers output per name): the other way, as ``demux``.
+
+``list_length``, ``item`` and ``aggregate`` are magic blocks with two forms, picked by ``form``:
+``numbers`` (the default) and ``points``, whose ``list`` is a list of points. In the points form
+``item`` gives a point (a vector) and ``aggregate`` one value per coordinate: ``mean`` is the
+centroid, ``min`` and ``max`` the corners of the bounding box.
+
+On the Dashboard a ``display`` shows a list's first values and how many there are (a list of
+points as text: ``5 points: (-1, 1), (-0.5, 0.25), …``); a ``graph`` in a run-once plots a list of
+numbers over its index and a list of points as a curve, the second coordinate over the first.
+Fan-out of a whole run over a list's items (a sweep) and a ``Collect`` of their results are not
+part of this package yet.
+
 .. _pkg-dashboard:
 
 dashboard
 ---------
 
 Monitors: ``graph`` (plots ``in`` over time; a vector in a clock run as one trace per
-component, in a run-once by index), ``display`` (its latest number, text or vector) and
+component, in a run-once by index; a list of points in a run-once as y over x), ``display`` (its
+latest number, text, vector or list: a long list as its first values and its length) and
 ``scope`` (inputs ``a``, ``b``… by its ``inputs`` param, 2–26, each a channel, a vector one per
 component; see :doc:`dashboard`).
 Control: ``switch`` (output ``y``, 0 or 1), a Board switch the user flips during a run. Param

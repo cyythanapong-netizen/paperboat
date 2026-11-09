@@ -779,3 +779,70 @@ def test_a_cacheable_python_block_is_reused_by_the_next_run_once(tmp_path: Path)
     finally:
         proc.terminate()
         proc.wait(timeout=10)
+
+LIST_BACKEND = '''
+import paperboat
+from paperboat import numbers_port, points_port
+
+class Profile(paperboat.Block):
+    type, label = "profile", "Profile"
+    outputs = [points_port("points", [("x", "m"), ("z", "m")])]
+    def step(self, ctx, inputs):
+        return {"points": [[0.0, 1.0], [1.0, 3.0], [2.0, 2.0]]}
+
+class Heights(paperboat.Block):
+    type, label = "heights", "Heights"
+    inputs = [numbers_port("z", "m")]
+    outputs = ["top"]
+    def step(self, ctx, inputs):
+        return {"top": max(inputs["z"])}
+
+paperboat.serve(paperboat.Backend(engine="test-lists", descriptor="descriptor.toml",
+                                  blocks=[Profile, Heights], mode="once"))
+'''
+
+LIST_DESCRIPTOR = '''
+domain = "lists"
+import = ["list", "math", "dashboard"]
+[graph]
+nodes = [
+  { id = "p", type = "profile" },
+  { id = "c", type = "coordinates", params = { names = "x z", units = "m m" } },
+  { id = "h", type = "heights" },
+  { id = "n", type = "list_length", params = { form = "points" } },
+  { id = "k", type = "gain", params = { k = 2 } },
+  { id = "s", type = "aggregate", params = { op = "sum" } },
+  { id = "top", type = "display" }, { id = "count", type = "display" }, { id = "sum", type = "display" },
+  { id = "shown", type = "display" },
+]
+edges = [
+  { from = ["p", "points"], to = ["c", "points"] },
+  { from = ["c", "z"], to = ["h", "z"] },
+  { from = ["p", "points"], to = ["n", "list"] },
+  { from = ["c", "x"], to = ["k", "u"] },
+  { from = ["k", "y"], to = ["s", "list"] },
+  { from = ["h", "top"], to = ["top", "in"] },
+  { from = ["n", "n"], to = ["count", "in"] },
+  { from = ["s", "y"], to = ["sum", "in"] },
+  { from = ["p", "points"], to = ["shown", "in"] },
+]
+'''
+
+
+def test_lists_flow_between_python_blocks_and_the_list_package(tmp_path: Path) -> None:
+    msgs = run_backend(tmp_path, backend=LIST_BACKEND, descriptor=LIST_DESCRIPTOR)
+    assert msgs[-1]["status"] == "done", msgs
+    last = {m["node"]: m["v"] for m in msgs if m["type"] == "signal"}
+    assert last["top"] == 3.0          # a points list split into coordinates, one read by a Python block
+    assert last["count"] == 3.0        # List Length in its points form
+    assert last["sum"] == 6.0          # Gain mapped over a list, then summed: 2 * (0 + 1 + 2)
+    assert last["shown"] == "3 points: (0, 1), (1, 3), (2, 2)"
+
+
+def test_list_ports_from_python_carry_their_shape(tmp_path: Path) -> None:
+    import paperboat
+    port = paperboat.points_port("p", [("x", "m"), "z"])
+    assert port.type == "points" and port.dimension == 2
+    assert port.components[0] == paperboat.VectorComponent("x", "m")
+    assert paperboat.numbers_port("y", "m") == paperboat.Port("y", "numbers", unit="m")
+    assert paperboat.points_port("q").dimension is None

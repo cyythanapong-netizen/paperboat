@@ -4,17 +4,20 @@ import type { Channel, InstrumentProps } from "@paperboat/host";
 function Plot({ name, channels, idle }: { name: string; channels: readonly Channel[]; idle: boolean }) {
   const W = 300;
   const H = 100;
-  let tMax = 1e-9, vMin = 0, vMax = 0;
+  // x runs from 0 (time, or a list's index) or from the least x of a list of points (#24).
+  let tMin = 0, tMax = 1e-9, vMin = 0, vMax = 0;
   for (const c of channels)
     for (let i = 0; i < c.buf.n; i++) {
+      tMin = Math.min(tMin, c.buf.t[i]);
       tMax = Math.max(tMax, c.buf.t[i]);
       vMin = Math.min(vMin, c.buf.v[i]);
       vMax = Math.max(vMax, c.buf.v[i]);
     }
   const span = vMax - vMin || 1;
+  const width = tMax - tMin || 1;
   const points = (c: Channel) => {
     let out = "";
-    for (let i = 0; i < c.buf.n; i++) out += `${(c.buf.t[i] / tMax) * W},${H - ((c.buf.v[i] - vMin) / span) * H} `;
+    for (let i = 0; i < c.buf.n; i++) out += `${((c.buf.t[i] - tMin) / width) * W},${H - ((c.buf.v[i] - vMin) / span) * H} `;
     return out;
   };
   const lasts = channels.map((c) => c.buf.last);
