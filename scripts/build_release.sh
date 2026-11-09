@@ -16,6 +16,10 @@ if [ "${WEB:-ON}" = ON ]; then (cd "$src" && npm ci --no-audit --no-fund && npm 
 
 mkdir -p "$out"
 python_modules=""
+if [ -z "${PYTHONS:-}" ]; then
+  echo "warning: PYTHONS is unset: these packages will not ship the Python bindings" >&2
+  echo "         set PYTHONS=\"python3.11 python3.12\" for a release" >&2
+fi
 if [ -n "${PYTHONS:-}" ]; then
   # shellcheck disable=SC2086  # a list of interpreters
   "$src/scripts/build_python.sh" "$build/python" $PYTHONS

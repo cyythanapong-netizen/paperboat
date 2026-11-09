@@ -10,6 +10,7 @@ build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
 wheel.packages = ["paperboat"]
+wheel.exclude = ["paperboat/_engine.*"]
 # One abi3 wheel for every CPython from 3.12 on (nanobind's stable ABI); a 3.11 build makes a cp311 wheel.
 wheel.py-api = "cp312"
 

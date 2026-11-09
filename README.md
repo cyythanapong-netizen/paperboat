@@ -172,10 +172,11 @@ A package install is the CLI and the apps: `paperboat` opens the console (needs 
 `paperboat start` serves the web app on http://localhost:3047 (no npm, no checkout), and `pkg`,
 `update`, `check`, `pack`. Building C++ backends
 and installing toolkits (they compile into the engine) need paperboat built from source.
-Python backends run as they are: every package ships the `paperboat` module (in
-`lib/paperboat/python`, which the CLI puts on `PYTHONPATH`) for CPython 3.11 and later; the
-CLI runs `python3`, or the backend's `.venv`, or `$PAPERBOAT_PYTHON`. The release also has
-wheels (`pip install paperboat-<version>-cp312-abi3-<platform>.whl`, for Python 3.12+).
+Python backends run through the CLI as they are: every package ships the `paperboat` module
+(in `lib/paperboat/python`, which `paperboat run`/`check` put on `PYTHONPATH`) for CPython 3.11
+and later; the CLI runs `python3`, or the backend's `.venv`, or `$PAPERBOAT_PYTHON`. A process
+started another way needs the wheel: `pip install paperboat-<version>-cp312-abi3-<platform>.whl`
+(Python 3.12+).
 
 ### The console
 

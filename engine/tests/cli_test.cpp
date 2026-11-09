@@ -460,13 +460,18 @@ TEST_CASE("a Python backend gets `import paperboat` on PYTHONPATH and $PAPERBOAT
   fs::create_directories(root / "python" / "paperboat");
   std::ofstream(root / "python" / "paperboat" / "__init__.py") << "\n";
   CHECK(core::BackendManager::python_package_dir(root) == root / "python");
+  const fs::path named_python = root / "python3.13";
+  std::ofstream(named_python) << "\n";
   setenv("PYTHONPATH", "/elsewhere", 1);
-  setenv("PAPERBOAT_PYTHON", "/opt/python3.13/bin/python3", 1);
+  setenv("PAPERBOAT_PYTHON", named_python.c_str(), 1);
   const auto env = core::BackendManager::prepare_python_env(root);
+  CHECK(pythonpath(env) == (root / "python").string() + ":/elsewhere");
+  CHECK(env.python_bin == named_python.string());
+  // A name that is not a file falls back to python3 instead of failing in the backend.
+  setenv("PAPERBOAT_PYTHON", "/opt/python3.13/bin/python3", 1);
+  CHECK(core::BackendManager::prepare_python_env(root).python_bin == "python3");
   unsetenv("PYTHONPATH");
   unsetenv("PAPERBOAT_PYTHON");
-  CHECK(pythonpath(env) == (root / "python").string() + ":/elsewhere");
-  CHECK(env.python_bin == "/opt/python3.13/bin/python3");
   CHECK(core::BackendManager::prepare_python_env(root).python_bin == "python3");
   fs::remove_all(root);
 }

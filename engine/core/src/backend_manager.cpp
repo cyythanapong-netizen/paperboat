@@ -628,7 +628,12 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
   if (fs::path py = venv_python(backend_dir); !py.empty()) {
     env.python_bin = py;
   } else if (const char* named = std::getenv("PAPERBOAT_PYTHON"); named && *named) {
-    env.python_bin = named;
+    if (fs::path path(named); path.has_parent_path() && !fs::is_regular_file(path)) {
+      std::cerr << "warning: PAPERBOAT_PYTHON=" << named << " is not a file; using python3\n";
+      env.python_bin = default_python();
+    } else {
+      env.python_bin = named;
+    }
   } else if (fs::path root_py = venv_python(root); !root_py.empty()) {
     env.python_bin = root_py;
   } else {
