@@ -1,7 +1,7 @@
 import { useContext, useState } from "react";
 import { NumberField } from "./NumberField";
 import type { Variable } from "./protocol";
-import { VarsContext } from "./Variables";
+import { VarsContext } from "./VarsContext";
 
 /** One variable as a control (#75): a slider (with its number) for a number with a range, a toggle for a boolean, a choice for an enum. A formula's is read-only. */
 function VarControl({ v }: { v: Variable }) {

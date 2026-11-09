@@ -1,30 +1,10 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useDismiss } from "@paperboat/shared/components";
 import { parseNumber } from "./NumberField";
-import type { ParamDef, ParamValue, Variable, Variables } from "./protocol";
+import type { ParamDef, ParamValue, Variable } from "./protocol";
+import { VarsContext } from "./VarsContext";
 import { badName, emptyOf, fits, freeName, isRef, type Ref, type Use } from "./bindings";
 
-/**
- * Variables (#36): named, typed values used by reference in block params and station
- * properties. The list lives in the App (the backend's defaults, then the user's own); the
- * engine resolves it and says what each comes to (`values`), or why it doesn't hold.
- */
-export type VarsApi = {
-  list: Variables;
-  values: Record<string, number | boolean | string>;
-  error: { text: string; at?: string } | null;
-  /** Names of the backend's defaults (Reset instead of Delete). */
-  defaults: Variables;
-  locked: boolean;
-  setList: (next: Variables) => void;
-  rename: (from: string, to: string) => void;
-  remove: (name: string) => void;
-  uses: (name: string) => Use[];
-  /** Open the sheet at `name`. */
-  reveal: (name: string) => void;
-  /** A new variable from a field's value; returns its name. */
-  promote: (def: ParamDef, value: ParamValue) => string;
-};
-export const VarsContext = createContext<VarsApi | null>(null);
 
 /** A variable being dragged from the sheet onto a field (dataTransfer can't be read on dragover). */
 const dragged = { current: null as Variable | null };
@@ -73,12 +53,7 @@ function Bound({ def, value, set, disabled }: { def: ParamDef; value: Ref; set: 
   const vars = useContext(VarsContext)!;
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
-    window.addEventListener("mousedown", away);
-    return () => window.removeEventListener("mousedown", away);
-  }, [open]);
+  useDismiss(box, () => setOpen(false), { enabled: open });
   const isVar = "var" in value;
   const v = isVar ? vars.list.find((x) => x.name === value.var) : undefined;
   const missing = isVar && !v;
@@ -151,6 +126,7 @@ export function NumberOrFormula({ def, value, set, disabled }: { def: ParamDef; 
   const vars = useContext(VarsContext);
   const [text, setText] = useState<string | null>(null);
   const [pick, setPick] = useState(0);
+  const box = useRef<HTMLSpanElement>(null);
   const formula = text !== null && text.startsWith("=") && !!vars;
   const q = formula ? text!.slice(1).trim() : "";
   const fragment = /^\w*$/.test(q);
@@ -163,6 +139,7 @@ export function NumberOrFormula({ def, value, set, disabled }: { def: ParamDef; 
   const fresh = vars && formula ? freeName(fragment && q ? q : def.id, vars.list) : "";
   const items = formula ? [...choices.map((v) => ({ bind: v.name })), { fresh }] : [];
   const done = () => setText(null);
+  useDismiss(box, done, { enabled: formula });
   const choose = (i: number) => {
     const it = items[i];
     if (!it) return;
@@ -182,13 +159,10 @@ export function NumberOrFormula({ def, value, set, disabled }: { def: ParamDef; 
       else if (q && vars!.list.some((v) => v.name === q && fits(v, def))) set({ var: q });
       else return choose(pick);
       done();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      done();
     }
   };
   return (
-    <span className="formula-box">
+    <span className="formula-box" ref={box}>
       <input
         className={`nodrag num${formula ? " formula" : ""}`}
         type="text"

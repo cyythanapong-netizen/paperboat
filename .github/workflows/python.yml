@@ -46,3 +46,30 @@ jobs:
         run: cmake -S python -B python/build -DCMAKE_BUILD_TYPE=Release -DPython_EXECUTABLE="$(which python)" && cmake --build python/build -j 4
       - name: Test the bindings
         run: python -m pytest -q python/tests
+
+  scaffold:
+    name: Python scaffold (`paperboat new --python`)
+    runs-on: ubuntu-24.04
+    env:
+      CXX: g++-14
+      CC: gcc-14
+      CMAKE_GENERATOR: Ninja
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tools and test tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
+          pip install websockets jsonschema numpy
+      - name: Build the CLI and the bindings
+        run: |
+          cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Debug -DPAPERBOAT_BUILD_TESTS=OFF
+          cmake --build engine/build --target paperboat
+          cmake -S python -B python/build -DCMAKE_BUILD_TYPE=Release -DPython_EXECUTABLE="$(which python)"
+          cmake --build python/build -j 4
+      - name: Generate and check a Python backend
+        run: |
+          ./bin/paperboat new demo --python --dir "$RUNNER_TEMP/demo"
+          ./bin/paperboat check "$RUNNER_TEMP/demo"

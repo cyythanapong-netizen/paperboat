@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <regex>
 #include <set>
 #include <sstream>
+#include <tuple>
 
 #include <nlohmann/json.hpp>
 #include <toml++/toml.hpp>
@@ -204,19 +206,38 @@ void write_marker(const fs::path& toolkit_dir, std::string_view version, std::st
   }
 }
 
-struct VersionTriple {
-  int major = 0;
-  int minor = 0;
-  int patch = 0;
-  std::string raw;
-
-  auto operator<=>(const VersionTriple& o) const {
-    if (major != o.major) return major <=> o.major;
-    if (minor != o.minor) return minor <=> o.minor;
-    return patch <=> o.patch;
+// SemVer §11: dot-separated identifiers, numeric ones compared as numbers and before alphanumeric ones.
+std::strong_ordering compare_prerelease(std::string_view a, std::string_view b) {
+  const auto numeric = [](std::string_view s) { return !s.empty() && std::ranges::all_of(s, [](char c) { return c >= '0' && c <= '9'; }); };
+  while (!a.empty() && !b.empty()) {
+    const auto da = a.find('.'), db = b.find('.');
+    const std::string_view x = a.substr(0, da), y = b.substr(0, db);
+    a = da == std::string_view::npos ? std::string_view{} : a.substr(da + 1);
+    b = db == std::string_view::npos ? std::string_view{} : b.substr(db + 1);
+    const bool nx = numeric(x), ny = numeric(y);
+    std::strong_ordering c = std::strong_ordering::equal;
+    if (nx && ny) c = x.size() != y.size() ? x.size() <=> y.size() : x.compare(y) <=> 0;
+    else if (nx != ny) c = nx ? std::strong_ordering::less : std::strong_ordering::greater;
+    else c = x.compare(y) <=> 0;
+    if (c != 0) return c;
   }
-  bool operator==(const VersionTriple& o) const = default;
-};
+  return a.empty() == b.empty() ? std::strong_ordering::equal : a.empty() ? std::strong_ordering::less : std::strong_ordering::greater;
+}
+
+// 1 to `max` dot-separated numbers ("0", "0.1", "0.1.2"); empty when it is not that.
+std::vector<int> leading_numbers(std::string_view s, std::size_t max) {
+  std::vector<int> out;
+  while (true) {
+    const auto dot = s.find('.');
+    const std::string_view part = s.substr(0, dot);
+    int n = 0;
+    const auto [end, ec] = std::from_chars(part.data(), part.data() + part.size(), n);
+    if (part.empty() || ec != std::errc{} || end != part.data() + part.size() || out.size() == max) return {};
+    out.push_back(n);
+    if (dot == std::string_view::npos) return out;
+    s.remove_prefix(dot + 1);
+  }
+}
 
 }  // namespace
 
@@ -225,32 +246,62 @@ int run_command(const std::vector<std::string>& args, const fs::path& cwd, const
   return run_cmd(args, cwd, log, last_line, all_output);
 }
 
-std::vector<std::string> parse_release_tags(std::string_view ls_remote_output) {
-  std::istringstream stream{std::string(ls_remote_output)};
-  std::string line;
-  const std::regex tag_regex(R"(refs/tags/v?(\d+)\.(\d+)\.(\d+)(?:\^\{\})?$)");
-  std::vector<VersionTriple> parsed;
+std::strong_ordering ReleaseVersion::operator<=>(const ReleaseVersion& o) const {
+  if (auto c = std::tie(major, minor, patch) <=> std::tie(o.major, o.minor, o.patch); c != 0) return c;
+  if (prerelease.empty() || o.prerelease.empty())  // a release is newer than its prereleases
+    return prerelease.empty() == o.prerelease.empty() ? std::strong_ordering::equal
+           : prerelease.empty()                       ? std::strong_ordering::greater
+                                                      : std::strong_ordering::less;
+  return compare_prerelease(prerelease, o.prerelease);
+}
 
-  while (std::getline(stream, line)) {
-    std::smatch match;
-    if (std::regex_search(line, match, tag_regex)) {
-      int maj = std::stoi(match[1].str());
-      int min = std::stoi(match[2].str());
-      int pat = std::stoi(match[3].str());
-      std::string ver = match[1].str() + "." + match[2].str() + "." + match[3].str();
-      VersionTriple vt{maj, min, pat, ver};
-      if (std::ranges::find(parsed, vt) == parsed.end()) {
-        parsed.push_back(std::move(vt));
-      }
-    }
+std::string ReleaseVersion::str() const {
+  std::string s = std::to_string(major) + "." + std::to_string(minor) + "." + std::to_string(patch);
+  return prerelease.empty() ? s : s + "-" + prerelease;
+}
+
+std::optional<ReleaseVersion> parse_version(std::string_view text) {
+  if (text.starts_with('v')) text.remove_prefix(1);
+  const auto dash = text.find('-');
+  const auto core = leading_numbers(text.substr(0, dash), 3);
+  if (core.size() != 3) return std::nullopt;
+  ReleaseVersion v{core[0], core[1], core[2], {}};
+  if (dash != std::string_view::npos) {
+    const std::string_view pre = text.substr(dash + 1);
+    static const std::regex ident(R"([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)");
+    if (!std::regex_match(pre.begin(), pre.end(), ident)) return std::nullopt;
+    v.prerelease = std::string(pre);
   }
+  return v;
+}
 
-  // Sort newest first
-  std::ranges::sort(parsed, std::greater<VersionTriple>{});
+bool valid_version_range(std::string_view range) { return !leading_numbers(range, 3).empty(); }
 
+bool version_in_range(std::string_view version, std::string_view range) {
+  const auto v = parse_version(version);
+  const auto r = leading_numbers(range, 3);
+  if (!v || r.empty()) return false;
+  const int parts[] = {v->major, v->minor, v->patch};
+  return std::equal(r.begin(), r.end(), parts);
+}
+
+std::vector<std::string> parse_release_tags(std::string_view ls_remote_output, bool include_prereleases) {
+  std::istringstream stream{std::string(ls_remote_output)};
+  std::vector<ReleaseVersion> parsed;
+  for (std::string line; std::getline(stream, line);) {
+    while (!line.empty() && std::isspace(static_cast<unsigned char>(line.back()))) line.pop_back();
+    const auto at = line.find("refs/tags/");
+    if (at == std::string::npos) continue;
+    std::string_view tag = std::string_view(line).substr(at + 10);
+    if (tag.ends_with("^{}")) tag.remove_suffix(3);
+    const auto v = parse_version(tag);
+    if (!v || (!include_prereleases && !v->prerelease.empty())) continue;
+    if (std::ranges::find(parsed, *v) == parsed.end()) parsed.push_back(*v);
+  }
+  std::ranges::sort(parsed, std::greater<>{});  // newest first
   std::vector<std::string> out;
   out.reserve(parsed.size());
-  for (const auto& p : parsed) out.push_back(p.raw);
+  for (const auto& p : parsed) out.push_back(p.str());
   return out;
 }
 

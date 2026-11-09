@@ -20,6 +20,7 @@
 
 #include <paperboat/toolkit/variables.hpp>
 
+#include "paperboat/core/cache.hpp"
 #include "paperboat/core/run.hpp"
 
 namespace paperboat::core {
@@ -42,8 +43,10 @@ class Calling {
 
 class Run {
  public:
+  // `cache`: where a run that evaluates once finds the outputs of earlier runs and keeps its
+  // own (see evaluate); null: every block is called.
   Run(std::string id, const Backend& backend, RunSettings settings, Emit emit, KeysNow keys, std::stop_token stop,
-      VariablesNow tune = nullptr);
+      VariablesNow tune = nullptr, SpeedNow speed = nullptr, RunCache* cache = nullptr);
 
   // Makes the station and graph (references to `variables` resolved first, #36), runs them
   // with the backend's executor (or the default) and reports the end. Returns "done",
@@ -62,6 +65,13 @@ class Run {
   // (signal messages, sent by frame()).
   json pass();
   json pass_over(const std::vector<std::string>& order);
+  // One block of a run that evaluates once: its outputs from the run's cache when nothing it
+  // depends on changed since a run computed them (node.state "done" alone, the logs it wrote
+  // shown again), else called like pass_over({id}) (node.state "running", then "done") and, if
+  // it may be reused, kept in the cache for the next run. Returns its samples.
+  json evaluate(const std::string& id);
+  // How many blocks evaluate() took from the cache so far.
+  int reused() const { return reused_; }
   // What step blocks report (a progress, a lap), for the next pass; or what one step block
   // reports now, for the blocks after it on the path.
   void store_step_outputs();
@@ -69,7 +79,8 @@ class Run {
   // After a pass: station objects move under their linked blocks' inputs, then the domain
   // state. Returns a message if the domain ends the run.
   std::optional<std::string> advance();
-  // Sends samples, the scene's changes and the run's progress; waits to keep real time.
+  // Sends samples, the scene's changes and the run's progress; waits to keep real time, at the
+  // speed the UI asked for last (#219).
   void frame(const json& samples, std::optional<double> progress);
   // The whole scene, with what blocks show (after a run-once).
   json scene(bool with_blocks) const;
@@ -103,6 +114,24 @@ class Run {
   // the UI already holds are left out of it, so a mesh is sent again only when it changes.
   void note_arrays(const json& entities);
   void drop_sent_arrays(json& entities);
+  // A new speed from the UI, if one came (#219): pacing goes on from where it is at that speed,
+  // and the UI hears it took it (run.speed).
+  void take_speed();
+  // Waits until the wall clock reaches the run clock at the run's speed, taking a new speed
+  // while it waits; warns when computation has fallen behind.
+  void pace();
+
+  // What a block whose outputs may be reused is, for the cache: type, ports, params, text,
+  // lanes, the run's dt and solver, its files. None for a block that is always called.
+  std::optional<std::string> cache_signature(const Node& node) const;
+
+  // What the block evaluate() is calling depends on and does besides its outputs.
+  struct Recording {
+    std::string node;
+    std::map<std::string, std::optional<toolkit::Value>, std::less<>> variables;  // read
+    std::vector<std::pair<std::string, std::string>> logs;                        // written
+    bool set_variable = false;  // a side effect: not reused
+  };
 
   std::string id_;
   const Backend& backend_;
@@ -110,16 +139,25 @@ class Run {
   Emit emit_;
   KeysNow keys_now_;
   VariablesNow tune_now_;
+  SpeedNow speed_now_;
   std::stop_token stop_;
   toolkit::KeySet keys_;
   std::string failed_;  // the block that threw, if one did
   toolkit::LogFn log_;
   toolkit::ProgressFn progress_;
   toolkit::SetVariableFn set_variable_;
+  toolkit::VariableReadFn variable_read_;
+  RunCache* cache_ = nullptr;
+  std::optional<Recording> recording_;
+  int reused_ = 0;
+  bool evaluated_ = false;  // evaluate() ran: a run that ends done drops other nodes' entries
   json pending_;  // the variables list with this pass's set_variable writes; null when none
   std::map<std::string, std::chrono::steady_clock::time_point, std::less<>> progress_sent_;  // node → last node.progress
-  std::chrono::steady_clock::time_point run_start_time_{};
-  bool run_started_time_set_ = false;
+  // Pacing's anchor (#219): run time pace_t_ was due at wall time pace_wall_, at settings_.speed
+  // since. A speed change moves it to now, so the run neither jumps ahead nor stalls.
+  std::chrono::steady_clock::time_point pace_wall_{};
+  double pace_t_ = 0;
+  bool paced_ = false;
   std::chrono::steady_clock::time_point last_lag_warn_{};
   toolkit::Context ctx_;
   json graph_given_;               // as the UI sent it, references and all (to resolve again when a variable is tuned)

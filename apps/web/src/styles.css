@@ -57,7 +57,7 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
   height: 100%;
   display: grid;
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
-  grid-template-rows: var(--bar-height) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr); /* the bar: one line (--bar-height), or two when it wraps */
   gap: var(--gutter);
   padding: var(--gutter);
   transition: grid-template-columns var(--slide), column-gap var(--slide);
@@ -67,7 +67,7 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .mode-commander .rail, .mode-lookout .rail { opacity: 0; pointer-events: none; padding-inline: 0; border-width: 0; }
 .bar, .rail, .panel { background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 
-.bar { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); min-width: 0; }
+.bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); min-height: var(--bar-height); padding: var(--space-2) var(--space-4); min-width: 0; }
 .bar > * { flex: none; }
 .bar > .spacer { flex: 1 1 auto; }
 .wordmark { display: inline-flex; align-items: center; gap: var(--space-2); font: 600 var(--size-md) var(--font-sans); letter-spacing: -0.01em; }
@@ -256,6 +256,14 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 }
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+/* A narrower bar: tighter keys, and the logo without its name while the bar is still one line, so that
+   line holds the project's name in full at 1024 px. When the keys don't fit even with the name cut
+   short, the bar wraps onto a second line (see .bar and .bar > .proj). */
+@media (max-width: 1100px) {
+  .bar { gap: var(--space-3) var(--space-2); }
+  .bar .menu-title { padding: 0 var(--space-2); }
+}
+@media (max-width: 1100px) and (min-width: 861px) { .bar .wordmark { font-size: 0; gap: 0; } }
 @media (max-width: 860px) {
   .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; --gutter: 8px; }
   .bar { flex-wrap: wrap; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
@@ -284,9 +292,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* ---- Station ---------------------------------------------------------------------- */
 .station { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .scene { position: relative; width: 100%; height: 100%; overflow: hidden; }
-.key.view-cube-home { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); transition: color var(--motion), border-color var(--motion), opacity var(--motion); }
-.view-cube-home svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
-.view-cube-home.at-home { color: var(--text-muted); border-color: var(--line); }
 .station.view-graph .station-panel, .station.view-web .station-panel { left: auto; right: var(--space-3); }
 .web-station { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface-raised); }
 .station-graph { position: absolute; inset: 0; }
@@ -371,6 +376,32 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .port-strip.bottom { border-top: 1px solid var(--line); }
 .port.side-top, .port.side-bottom { padding: 5px 4px; text-align: center; }
 .port:has(.wire-target) { color: var(--text); font-weight: 600; }
+/* Which way a port goes (#204), whatever side a turn or a mirror put it on: a 4×6px ink chevron
+   just outside the dot, pointing into the block at an input and out of it at an output, as an
+   arrowhead on the wire would. The dot itself keeps saying the type (round, square step, dashed
+   image, double-ringed list), so the two read independently; connector ports (`.ip`) are acausal
+   and have their own shapes. The hover title and accessible name say it in words too
+   (usePortDirections). --port-out is the angle that points away from the block on that side. */
+.flow .react-flow__handle-right { --port-out: 0deg; }
+.flow .react-flow__handle-bottom { --port-out: 90deg; }
+.flow .react-flow__handle-left { --port-out: 180deg; }
+.flow .react-flow__handle-top { --port-out: 270deg; }
+.flow .react-flow__handle:is(.source, .target):not(.ip)::before {
+  content: ""; position: absolute; top: 50%; left: 50%; width: 4px; height: 6px;
+  background: var(--line-ink); clip-path: polygon(0 0, 100% 50%, 0 100%); pointer-events: none;
+  /* Its centre this far from the dot's: the 8px dot's radius, a 1.5px gap and half the chevron. */
+  --port-reach: 7.5px;
+  transform: translate(-50%, -50%) rotate(var(--port-out, 0deg)) translateX(var(--port-reach));
+}
+.flow .react-flow__handle.target:not(.ip)::before { transform: translate(-50%, -50%) rotate(calc(var(--port-out, 0deg) + 180deg)) translateX(calc(-1 * var(--port-reach))); }
+/* A plate turned so a port sits on its bottom edge: the caption moves down clear of the chevron. */
+.flow .compact-block:has(> .plate > .react-flow__handle-bottom:not(.ip)) { gap: 12px; }
+/* A compact plate's port name, on hover, says its direction first. */
+.flow .port-tip::before { color: var(--text-muted); }
+.flow .port-tip.in::before { content: "in "; }
+.flow .port-tip.out::before { content: "out "; }
+/* An acausal connector is both ways: its two coincident handles must not claim one direction. */
+.flow .react-flow__handle.k-acausal .port-tip::before { content: none; }
 
 .param { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding: 3px 10px; color: var(--text-muted); }
 .param input, .param select { width: 66px; text-align: right; background: transparent; border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; padding: 1px 2px; color: var(--text); }
@@ -436,7 +467,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .crumb-here { border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; background: transparent; padding: 1px 2px; font: 600 var(--size-xs) var(--font-sans); color: var(--text); }
 .crumb-kind { margin-left: var(--space-2); font-size: var(--size-2xs); color: var(--text-muted); }
 /* In and Out: where the level's wires cross its edge. */
-.boundary { position: relative; box-sizing: border-box; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; gap: var(--space-2); padding: 4px 10px; font: var(--size-2xs) var(--font-mono); color: var(--text); background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: 999px; white-space: nowrap; }
+.boundary { position: relative; box-sizing: border-box; width: 100%; height: 100%; overflow: visible; display: flex; align-items: center; gap: var(--space-2); padding: 4px 10px; font: var(--size-2xs) var(--font-mono); color: var(--text); background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: 999px; white-space: nowrap; }
 .boundary-tag { font: 600 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .boundary-name { overflow: hidden; text-overflow: ellipsis; }
 .react-flow__node-boundary { cursor: default; }
@@ -551,6 +582,14 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .key.add { font-weight: 600; border-color: var(--line-ink); }
 
 .wire-hit { fill: none; stroke: transparent; stroke-width: 18px; pointer-events: stroke; }
+/* Lists on the wires (#24): a wire that carries a list of numbers or of points is drawn heavier, a
+   bundle of values (points' broken into points), and a list port's dot is a double ring. Dashed
+   stays image's, a square step's. The wire's class is its source port's type. */
+.react-flow__edge-path.wire-numbers, .react-flow__edge-path.wire-points { stroke-width: 2.6px; }
+.react-flow__edge-path.wire-points { stroke-dasharray: 9 2; }
+.react-flow__edge:has(.wire-numbers, .wire-points) .wire-casing { stroke-width: 7px; }
+.port-numbers .react-flow__handle, .port-points .react-flow__handle,
+.react-flow__handle.t-numbers, .react-flow__handle.t-points { border: 3px double var(--line-ink); }
 .react-flow__edge-path.drop-target { stroke-width: 3.5px !important; }
 .drop-hint { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 .drop-outline { position: absolute; width: 156px; height: 64px; border: 1.5px dashed var(--line-ink); border-radius: var(--radius-md); }
@@ -597,6 +636,15 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .card-params { display: flex; flex-wrap: wrap; gap: 2px 10px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
 .card-params b { font-weight: 400; color: var(--text); }
 .card-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; }
+/* Blocks that don't work in the open sheet's flow type (#9): apart, muted, saying where they do. */
+.browser-elsewhere { margin-top: var(--space-4); }
+.browser-elsewhere summary { cursor: pointer; margin: var(--space-2) 0; }
+.card.off { cursor: not-allowed; opacity: 0.55; border-style: dashed; }
+.card.off:hover { border-color: var(--line-strong); }
+.card.off .card-foot .lbl { white-space: normal; }
+/* The Flow page's sheet type (#9): Signal flow, Step flow… */
+.sheet-flow { display: inline-flex; align-items: center; gap: var(--space-1); }
+.sheet-flow .lbl { white-space: nowrap; }
 
 /* Quick add: a search floating at the cursor. */
 .quick-add { position: fixed; z-index: 60; width: 280px; background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); overflow: hidden; }
@@ -607,6 +655,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .quick-add li.on { border-color: var(--line-ink); }
 .quick-add li.on b { font-weight: 600; }
 .quick-add li.none { cursor: default; }
+.quick-add li.away { opacity: 0.55; }
+.quick-add li.away b { font-weight: 400; }
 .quick-foot { display: flex; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--line); }
 .dragging-card .browser { opacity: 0.3; pointer-events: none; }
 
@@ -734,15 +784,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 
 /* ---- Menus, the command search and the run dock (#78) ----------------------------- */
 /* The open menu title is boxed in ink like the current page on the rail; a chosen item sits in brackets. */
-
-/* The command search floats at the top centre, over the bar, like a title-bar field. */
-.cmd-search { position: fixed; z-index: 60; top: var(--gutter); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); padding: var(--space-2); }
-.cmd-input { width: 100%; height: 34px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-md); background: var(--surface-well); box-shadow: var(--well-shadow); color: var(--text); font: 400 var(--size-sm) var(--font-sans); }
-.cmd-list { list-style: none; margin: var(--space-2) 0 0; padding: 0; max-height: min(360px, 60vh); overflow: auto; }
-.cmd-item { display: flex; justify-content: space-between; gap: var(--space-6); padding: 5px var(--space-3); border: 1.5px solid transparent; border-radius: var(--radius-sm); font-size: var(--size-sm); cursor: pointer; }
-.cmd-item.on { border-color: var(--line-ink); font-weight: 600; }
-.cmd-item[aria-disabled="true"] { color: var(--text-muted); opacity: 0.6; cursor: default; }
-.cmd-empty { padding: var(--space-3); color: var(--text-muted); }
+/* The command search's layout lives with the component in @paperboat/shared (plates.css). */
 
 /* The run dock: glass, because it floats over live content (the pages). */
 .pages { position: relative; }
@@ -773,16 +815,17 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .backend-note { margin: 0; padding: 0 var(--panel-pad) var(--panel-pad); }
 
 /* ---- Projects (#82): the name and the unsaved dot, notices, the undo toast ---------- */
-/* The project's name is the window's title, not a menu: centred on the bar, in muted monospace,
-   with no key-like weight; the unsaved dot rides after it. */
-.bar { position: relative; }
+/* The project's name is the window's title, not a menu: in muted monospace, with no key-like weight;
+   the unsaved dot rides after it. It sits in the bar's flow after the menus, and ProjectLabel moves it
+   toward the bar's centre only as far as the room before the next key: centred on a wide bar, it slides
+   toward the menus as the bar narrows, then the name truncates (down to about ten characters), and then
+   the bar wraps. It never slides under a key. It takes the room it needs before the spacer gets any. */
 .bar > .proj {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  display: inline-flex; align-items: center; gap: var(--space-2); max-width: min(320px, 26vw);
-  font: 400 var(--size-xs) var(--font-mono); color: var(--text-muted); pointer-events: auto; cursor: default;
+  flex: 1000 1 10ch; min-width: 0; max-width: max-content;
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  font: 400 var(--size-xs) var(--font-mono); color: var(--text-muted); cursor: default;
 }
-@media (max-width: 1100px) { .bar > .proj { position: static; transform: none; } } /* no room to centre: after the menus */
-.proj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-name { min-width: 0; max-width: min(300px, 24vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); }
 .notice { height: auto; width: min(480px, calc(100vw - 32px)); }
 .notice-body { padding: var(--panel-pad) var(--panel-pad) var(--space-2); }

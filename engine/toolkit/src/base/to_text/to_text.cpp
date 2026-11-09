@@ -36,6 +36,7 @@ void add_to_text(Registry& registry) {
   to_txt.def.description = "Converts numbers, booleans, or lists to formatted text.";
   to_txt.def.view = {.compact = true, .glyph = "→T"};
   to_txt.make = [](const Values&, const Config&) { return std::make_unique<ToText>(); };
+  to_txt.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(to_txt));
 }
 

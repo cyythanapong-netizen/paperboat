@@ -1,6 +1,14 @@
 # Apps that live in their own repositories. `paperboat pkg install <name>` clones one (a release tag,
 # or main) into the per-user store and builds it there. `deps` are installed first and sit next to the app (npm's file:../<dep>).
 # kind: program (start/stop it; `launch` is the command that runs it, `port` where it listens) or library.
+#
+# A dep is "name" or "name@range"; the range is the leading numbers of a version ("0.1": any 0.1.x).
+# paperboat and paperboat-shared share a MAJOR.MINOR line, so the apps here pin paperboat-shared to this
+# repository's line. A dep resolves to its newest tag in range, prereleases included when the app's own
+# version is a prerelease or dev (a dev app with no tag in range takes the dep's main). An installed dep
+# outside the range fails the install (`--force` reinstalls it in range), and a dep version outside the
+# range of an installed app that needs it is refused. The install marker records the dep versions;
+# `paperboat pkg list` shows them.
 [[apps]]
 name = "paperboat-shared"
 repo = "https://github.com/paperboatlab/paperboat-shared.git"
@@ -15,6 +23,6 @@ description = "Squero Studio: OpenModelica. The Modelica editor that exports Pap
 kind = "program"
 launch = "bin/squero-om"  # `paperboat start squero-studio-om` runs its native launcher
 port = 59201  # squero-om's first free port (59201..59299)
-deps = ["paperboat-shared"]
+deps = ["paperboat-shared@0.1"]
 build = ["npm ci", "npm run build"]
 output = "dist"

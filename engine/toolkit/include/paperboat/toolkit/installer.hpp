@@ -4,8 +4,10 @@
 // demand into engine/toolkit/<name>. Backends may declare required toolkits in
 // toolkit_requirements.toml (or import/use them in descriptor.toml).
 
+#include <compare>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -70,8 +72,30 @@ using ToolkitLog = std::function<void(std::string_view level, std::string_view t
 int run_command(const std::vector<std::string>& args, const std::filesystem::path& cwd = {},
                 const ToolkitLog& log = {}, std::string* last_line = nullptr, std::string* all_output = nullptr);
 
-// Parse git tags output (e.g. from git ls-remote --tags --refs) into semantic version numbers, newest first.
-std::vector<std::string> parse_release_tags(std::string_view ls_remote_output);
+// A release version: MAJOR.MINOR.PATCH with an optional -prerelease ("0.1.0-alpha.2"), ordered by
+// SemVer precedence: 0.1.0-alpha.2 < 0.1.0-alpha.10 < 0.1.0-beta < 0.1.0 < 0.1.1.
+struct ReleaseVersion {
+  int major = 0;
+  int minor = 0;
+  int patch = 0;
+  std::string prerelease;  // empty for a release
+
+  std::strong_ordering operator<=>(const ReleaseVersion& o) const;
+  bool operator==(const ReleaseVersion& o) const = default;
+  std::string str() const;
+};
+
+// "0.1.0", "v0.1.0-alpha.2"; nullopt for anything else (a branch name, build metadata).
+std::optional<ReleaseVersion> parse_version(std::string_view text);
+
+// A range is the leading numbers of a version: "0" (0.x.y), "0.1" (0.1.x) or "0.1.2". A version is in it
+// when those numbers match; its prereleases count too ("0.1.0-alpha.2" is in "0.1").
+bool valid_version_range(std::string_view range);
+bool version_in_range(std::string_view version, std::string_view range);
+
+// Parse git tags output (e.g. from git ls-remote --tags --refs) into semantic versions, newest first.
+// Releases only, unless `include_prereleases`.
+std::vector<std::string> parse_release_tags(std::string_view ls_remote_output, bool include_prereleases = false);
 
 // Fetch release tags from remote repository.
 std::vector<std::string> list_releases(const ToolkitEntry& entry, const ToolkitLog& log = {});

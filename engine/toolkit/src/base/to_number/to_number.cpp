@@ -62,6 +62,7 @@ void add_to_number(Registry& registry) {
   to_num.make = [](const Values& params, const Config&) {
     return std::make_unique<ToNumber>(get_or(params, "fallback", 0.0));
   };
+  to_num.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(to_num));
 }
 

@@ -80,6 +80,13 @@ test("flow node rotation and mirror are validated and preserved", () => {
   assert.match(bad({ ...base, flow: { nodes: [{ id: "a", type: "t", mirror: "yes" }], edges: [] } }), /mirror must be a boolean/);
 });
 
+test("the sheet's flow type (#9) is kept, and checked", () => {
+  const read = ok(stringify(buildProject({ backend: "b", flow: { ...flow, flow: "step" } })));
+  assert.equal(read.flow.flow, "step");
+  assert.equal(ok(stringify(buildProject({ backend: "b", flow }))).flow.flow, undefined); // not chosen
+  assert.match(bad({ paperboat: 0, backend: "b", flow: { ...flow, flow: "liquid" } }), /flow\.flow must be one of signal, step, state, model/);
+});
+
 test("the text is indented and ends with a newline, so a diff reads", () => {
   const text = stringify(buildProject({ backend: "b", flow }));
   assert.ok(text.includes('\n  "backend": "b"'));

@@ -307,9 +307,11 @@ struct BlockContext {
   const tk::ProgressFn* progress_fn = nullptr;
   const tk::Values* variables = nullptr;
   const tk::SetVariableFn* set_variable_fn = nullptr;
+  const tk::VariableReadFn* variable_read_fn = nullptr;  // the run records the read (what a run-once's cache checks)
 
   nb::object variable(const std::string& name) const {
     const tk::Value* v = variables ? [&] { const auto it = variables->find(name); return it == variables->end() ? nullptr : &it->second; }() : nullptr;
+    if (variable_read_fn) (*variable_read_fn)(name, v);
     return v ? to_py(*v) : nb::none();
   }
   bool set_variable(const std::string& name, nb::handle value) const {
@@ -330,7 +332,7 @@ nb::object context(const tk::Context& ctx) {
   nb::set keys;
   if (ctx.keys_down)
     for (const auto& k : *ctx.keys_down) keys.add(nb::str(k.c_str()));
-  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn, ctx.progress_fn, ctx.variables, ctx.set_variable_fn});
+  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn, ctx.progress_fn, ctx.variables, ctx.set_variable_fn, ctx.variable_read_fn});
 }
 
 // Runs `fn` with the GIL held; a Python error becomes a C++ error the run reports.
@@ -532,13 +534,14 @@ std::vector<tk::PortDef> ports_from_py(nb::handle list, const std::string& at) {
         for (nb::handle component : p.attr("components"))
           port.components.push_back(vector_component_from_py(component, at));
       if (!port.components.empty()) {
-        if (!tk::is_vector_type(port.type)) throw std::runtime_error(at + ": components are only valid on a vector port");
+        if (!tk::is_vector_type(port.type) && port.type != "points")
+          throw std::runtime_error(at + ": components are only valid on a vector or points port");
         if (port.dimension && *port.dimension != port.components.size())
           throw std::runtime_error(at + ": vector dimension does not match its components");
         port.dimension = port.components.size();
       }
-      if (port.dimension && !tk::is_vector_type(port.type))
-        throw std::runtime_error(at + ": dimension is only valid on a vector port");
+      if (port.dimension && !tk::is_vector_type(port.type) && port.type != "points")
+        throw std::runtime_error(at + ": dimension is only valid on a vector or points port");
       out.push_back(std::move(port));
     } else if (nb::isinstance<nb::tuple>(p) || nb::isinstance<nb::list>(p)) {
       const auto seq = nb::cast<nb::sequence>(p);
@@ -617,6 +620,28 @@ tk::View view_from_py(nb::handle cls, const std::string& at) {
   return view;
 }
 
+// A block class's `flows`: the flow types it works in (#9), a list or tuple of names
+// ("signal", "step", "state", "model"); empty or absent: every one.
+std::vector<std::string> flows_from_py(nb::handle cls, const std::string& at) {
+  if (!nb::hasattr(cls, "flows")) return {};
+  nb::object v = cls.attr("flows");
+  if (v.is_none()) return {};
+  if (nb::isinstance<nb::str>(v) || (!nb::isinstance<nb::list>(v) && !nb::isinstance<nb::tuple>(v)))
+    throw std::runtime_error(at + ": flows must be a list of flow types, such as [\"signal\", \"step\"]");
+  std::vector<std::string> flows;
+  for (nb::handle f : v) {
+    if (!nb::isinstance<nb::str>(f)) throw std::runtime_error(at + ": flows must be a list of flow types, such as [\"signal\", \"step\"]");
+    flows.push_back(nb::cast<std::string>(f));
+  }
+  if (flows.empty()) return {};
+  try {
+    tk::check_flows(flows, at);
+  } catch (const std::invalid_argument& err) {
+    throw std::runtime_error(err.what());
+  }
+  return flows;
+}
+
 tk::BlockDef block_def(nb::handle cls) {
   const std::string at = class_name(cls);
   tk::BlockDef def;
@@ -635,6 +660,8 @@ tk::BlockDef block_def(nb::handle cls) {
   def.inputs_from = text_attr(cls, "inputs_from", "");
   def.outputs_from = text_attr(cls, "outputs_from", "");
   if (nb::hasattr(cls, "elementwise")) def.elementwise = nb::cast<bool>(cls.attr("elementwise"));
+  if (nb::hasattr(cls, "cacheable") && !cls.attr("cacheable").is_none()) def.cacheable = nb::cast<bool>(cls.attr("cacheable"));
+  def.flows = flows_from_py(cls, at);
   return def;
 }
 
@@ -943,14 +970,16 @@ NB_MODULE(_engine, m) {
       return state_to_py(state);
     }
   };
-  nb::class_<PySolver>(solve, "Solver", "A solver by name (paperboat.solve.names()); rk45 keeps its step size between calls.")
+  nb::class_<PySolver>(solve, "Solver", "A solver by name (paperboat.solve.names()); rk45 keeps its step size between calls, cvode and ida their history.")
       .def("__init__", [](PySolver* self, const std::string& name, double rtol, double atol, int max_steps) {
           new (self) PySolver{tk::solve::make(name, {.rtol = rtol, .atol = atol, .max_steps = max_steps})};
         }, nb::arg("name") = "rk4", nb::arg("rtol") = 1e-6, nb::arg("atol") = 1e-9, nb::arg("max_steps") = 100000)
       .def("step", &PySolver::step, nb::arg("f"), nb::arg("x"), nb::arg("t"), nb::arg("dt"),
            "x advanced from t to t + dt under f(t, x) (dx/dt, or the next x for discrete): a new list.")
+      .def("restart", [](PySolver& s) { s.solver->restart(); },
+           "Forget what it carries between steps: call it after the equations change.")
       .def_prop_ro("name", [](const PySolver& s) { return std::string(s.solver->name()); });
-  solve.def("names", [] { return tk::solve::names(); }, "The solvers, the default first: rk4, rk45, rk2, euler, discrete.");
+  solve.def("names", [] { return tk::solve::names(); }, "The solvers, the default first: rk4, rk45, rk2, euler, discrete, then cvode and ida (implicit, for stiff systems) when the engine has SUNDIALS.");
   solve.def("step", [](const std::string& name, nb::callable f, nb::handle x, double t, double dt) {
       PySolver s{tk::solve::make(name)};
       return s.step(std::move(f), x, t, dt);

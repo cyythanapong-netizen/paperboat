@@ -37,12 +37,14 @@ class RandomBoolean final : public Block {
 
 void add_random_boolean(Registry& registry) {
   // math/random_boolean
-  registry.add(make_template(
+  auto t = make_template(
       "math", "random_boolean", "Random Boolean", {"p"}, {"y"},
       {{.id = "p", .default_value = 0.5, .type = "number"},
        {.id = "seed", .default_value = 0.0, .type = "number"}},
       [](const Values& p, const Config&) { return std::make_unique<RandomBoolean>(p); },
-      "Generates random booleans with probability p.", {.compact = true, .glyph = "~B", .value = "{p}"}));
+      "Generates random booleans with probability p.", {.compact = true, .glyph = "~B", .value = "{p}"});
+  t.def.cacheable = false;  // a fresh draw each run: never reused from an earlier run
+  registry.add(std::move(t));
 }
 
 }  // namespace paperboat::toolkit::math

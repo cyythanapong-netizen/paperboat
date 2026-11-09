@@ -8,6 +8,7 @@
 #include "paperboat/core/backend.hpp"
 #include "paperboat/core/binary.hpp"
 #include "paperboat/core/backend_manager.hpp"
+#include "paperboat/core/cache.hpp"
 
 #include <paperboat/toolkit/installer.hpp>
 #include <paperboat/toolkit/platform.hpp>
@@ -39,8 +40,10 @@ struct Session::State {
   json station;
   json variables;  // the list (#36): the backend's defaults until the UI sets its own
   std::optional<json> tuned;  // the list the UI sent during a run (#75), until the run takes it
+  std::optional<double> speed;  // the speed the UI asked for during a run (run.speed, #219), until the run takes it
   int runs = 0;
   std::atomic<int> live_run{0};  // the number of the run that is going, else 0
+  RunCache cache;  // what runs that evaluate once keep for the next run of this session
   std::mutex toolkit_mutex;
   std::string busy_toolkit;
   std::string busy_action;
@@ -112,7 +115,8 @@ Session::Session(const Backend& backend, Send send, SendBinary send_binary)
                 {"protocol", "paperboat/0"},
                 {"engine", backend.engine},
                 {"station", station_view},
-                {"run", settings_json(backend.run)}};
+                {"run", settings_json(backend.run)},
+                {"flows", catalog.flows}};  // the flow types a sheet may be (#9)
   if (s.send_binary) hello["binary"] = kFrameVersion;  // the client asked: its arrays come as binary frames
   const json toolkits = s.current_toolkits(/*busy_name=*/{}, /*busy_state=*/{}, /*fetch_versions=*/true);
   if (!toolkits.empty()) hello["toolkits"] = toolkits;
@@ -158,12 +162,17 @@ void Session::on_message(const std::string& text) {
       variables = s.variables;
       s.pressed.clear();  // presses from before this run don't count
       s.tuned.reset();    // nor changes to the variables from before it
+      s.speed.reset();    // nor a speed asked of an earlier run
     }
     const int number = ++s.runs;
     const std::string id = "run-" + std::to_string(number);
     auto tune_now = [&s]() -> std::optional<json> {
       std::lock_guard lock(s.mutex);
       return std::exchange(s.tuned, std::nullopt);
+    };
+    auto speed_now = [&s]() -> std::optional<double> {
+      std::lock_guard lock(s.mutex);
+      return std::exchange(s.speed, std::nullopt);
     };
     s.live_run = number;
     auto keys_now = [&s] {
@@ -173,9 +182,14 @@ void Session::on_message(const std::string& text) {
       s.pressed.clear();
       return down;
     };
-    // Assigning a new jthread stops and joins the previous run first.
+    // Stop and join the previous run before starting this one. A new jthread starts as soon as it
+    // is constructed, while the old one may still be emitting or pruning the cache.
+    if (s.run.joinable()) {
+      s.run.request_stop();
+      s.run.join();
+    }
     s.run = std::jthread([&s, id, number, graph = msg.value("graph", json::object()), station, variables, keys_now, tune_now,
-                          settings = msg.value("settings", json())](std::stop_token stop) {
+                          speed_now, settings = msg.value("settings", json())](std::stop_token stop) {
       auto emit = [&s, number](const json& m) {
         if (m.value("type", "") == "variables.patch") {  // a block set variables (#166): later runs start from them
           std::lock_guard lock(s.mutex);
@@ -191,7 +205,7 @@ void Session::on_message(const std::string& text) {
         }
         s.emit(m);
       };
-      core::run(id, graph, station, s.backend, emit, keys_now, stop, settings, variables, tune_now);
+      core::run(id, graph, station, s.backend, emit, keys_now, stop, settings, variables, tune_now, speed_now, &s.cache);
     });
   } else if (type == "station.set") {
     // An edit on the Station page: check it, keep it, and show it. Locked during a run: the run
@@ -242,6 +256,20 @@ void Session::on_message(const std::string& text) {
     }
   } else if (type == "run.cancel") {
     s.run.request_stop();
+  } else if (type == "run.speed") {
+    // The speed changed during a run (#219): the run takes it at its next frame and answers with
+    // a run.speed of its own. Between runs there is nothing to change (the next graph.run brings
+    // its speed): ignored, as a change that crossed the run's end on the wire.
+    double speed = 0;
+    try {
+      speed = checked_speed(msg.contains("speed") ? msg.at("speed") : json());
+    } catch (const std::invalid_argument& err) {
+      s.log("error", std::string("run.speed: ") + err.what());
+      return;
+    }
+    if (s.live_run == 0) return;
+    std::lock_guard lock(s.mutex);
+    s.speed = speed;
   } else if (type == "input") {  // read by Key and Switch blocks
     const std::string key = msg.value("key", "");
     std::lock_guard lock(s.mutex);

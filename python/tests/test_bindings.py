@@ -315,7 +315,10 @@ edges = [{ from = ["m", "x"], to = ["x", "in"] }]
 
 def test_a_python_model_is_stepped_by_the_engines_solver(tmp_path: Path) -> None:
     import math
-    for solver, tolerance in (("rk4", 1e-7), ("rk45", 1e-5), ("euler", 0.1)):
+    sys.path.insert(0, str(ROOT / "python"))
+    import paperboat
+    implicit = [(name, 1e-5) for name in ("cvode", "ida") if name in paperboat.solve.names()]
+    for solver, tolerance in [("rk4", 1e-7), ("rk45", 1e-5), ("euler", 0.1), *implicit]:
         msgs = run_backend(tmp_path, MODEL_BACKEND, MODEL_DESCRIPTOR.replace("SOLVER", solver))
         assert msgs[-1]["status"] == "done", msgs
         x = [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "x"][-1]
@@ -497,6 +500,9 @@ def test_solve_helper_functions():
     assert s_euler.solver == "euler"
     s_disc = paperboat.solve.discrete(lambda t, x: [x[0] * 0.5], [1.0])
     assert s_disc.solver == "discrete"
+    if "cvode" in paperboat.solve.names():
+        assert paperboat.solve.cvode(lambda t, x: [-x[0]], [1.0]).solver == "cvode"
+        assert paperboat.solve.ida(lambda t, x: [-x[0]], [1.0]).solver == "ida"
     s_disc.step(0.1)
     assert abs(s_disc.x[0] - 0.5) < 1e-12
 
@@ -594,7 +600,135 @@ def test_view_icon_and_connectors_passthrough(tmp_path: Path) -> None:
     assert blocks["shunt"]["view"]["icon"]["ports"][0]["class"] == "RealInput"
     assert blocks["rig-load"]["view"]["icon"]["g"][0]["t"] == "ellipse"
 
+PACED_BACKEND = '''
+import paperboat
 
+class Double(paperboat.Block):
+    type, label = "double", "Double"
+    inputs, outputs = ["u"], ["y"]
+    def step(self, ctx, inputs):
+        return {"y": 2 * inputs.get("u", 0.0)}
+
+paperboat.serve(paperboat.Backend(engine="paced", descriptor="descriptor.toml", blocks=[Double], dt=0.01, duration=10.0))
+'''
+
+PACED_DESCRIPTOR = '''
+domain = "paced"
+import = ["base", "dashboard"]
+[graph]
+nodes = [{ id = "one", type = "constant", params = { value = 1 } }, { id = "d", type = "double" }, { id = "show", type = "display" }]
+edges = [{ from = ["one", "y"], to = ["d", "u"] }, { from = ["d", "y"], to = ["show", "in"] }]
+'''
+
+
+def test_a_python_backend_takes_a_speed_change_during_a_run(tmp_path: Path) -> None:
+    # #219: run.speed is the engine's (session and run loop), so a Python backend has it too: a
+    # 10 s run at 1×, switched to max after half a second, ends early and says it took the speed.
+    import asyncio
+    import socket
+    import time
+
+    import pytest
+
+    websockets = pytest.importorskip("websockets.asyncio.client")  # as the protocol's smoke test
+
+    def free_port() -> int:
+        for port in range(5650, 5700):
+            with socket.socket() as s:
+                if s.connect_ex(("127.0.0.1", port)) != 0:
+                    return port
+        raise RuntimeError("no free port in 5650-5699")
+
+    (tmp_path / "server.py").write_text(textwrap.dedent(PACED_BACKEND))
+    (tmp_path / "descriptor.toml").write_text(textwrap.dedent(PACED_DESCRIPTOR))
+    port = free_port()
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
+    proc = subprocess.Popen([sys.executable, "server.py", "--port", str(port)], cwd=tmp_path, env=env,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+
+    async def talk() -> tuple[list[dict], float]:
+        for _ in range(100):
+            try:
+                ws = await websockets.connect(f"ws://127.0.0.1:{port}", proxy=None)
+                break
+            except OSError:
+                await asyncio.sleep(0.1)
+        else:
+            raise RuntimeError("backend never listened: " + (proc.stderr.read() if proc.poll() is not None else ""))
+        async with ws:
+            graph = None
+            while graph is None:
+                msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
+                graph = msg["graph"] if msg["type"] == "graph.load" else None
+            start = time.monotonic()
+            await ws.send(json.dumps({"type": "graph.run", "graph": graph}))
+            await asyncio.sleep(0.5)
+            await ws.send(json.dumps({"type": "run.speed", "speed": 0}))
+            msgs = []
+            while not msgs or msgs[-1]["type"] != "run.finished":
+                msgs.append(json.loads(await asyncio.wait_for(ws.recv(), timeout=20)))
+            return msgs, time.monotonic() - start
+
+    try:
+        msgs, took = asyncio.run(talk())
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+    assert msgs[-1] == {"type": "run.finished", "run": "run-1", "status": "done"}
+    assert [m for m in msgs if m["type"] == "run.speed"] == [{"type": "run.speed", "run": "run-1", "speed": 0}]
+    assert took < 5  # not the 10 s it would take at 1×
+
+FLOWS_BACKEND = '''
+import json, pathlib
+import paperboat
+from paperboat import Port
+
+class Anywhere(paperboat.Block):
+    type, inputs, outputs = "anywhere", ["u"], ["y"]
+
+class Clocked(paperboat.Block):
+    type, inputs, outputs = "clocked", ["u"], ["y"]
+    flows = ["signal"]
+
+class Resistor(paperboat.Block):
+    type, inputs, outputs = "resistor", ["p"], ["n"]
+    flows = ("model",)
+
+class Beep(paperboat.Step):
+    type = "beep"
+
+b = paperboat.Backend(engine="flows", descriptor="descriptor.toml", blocks=[Anywhere, Clocked, Resistor, Beep])
+h = paperboat._engine.make(b.engine, str(pathlib.Path(__file__).parent / b.descriptor), b.blocks, b.objects, b.state, b.mode,
+                           b.dt, b.duration, b.emit_every, b.view, b.speed, b.solver, b.connectors)
+print(h.catalog_json())
+'''
+
+
+def test_a_python_block_says_which_flow_types_it_works_in(tmp_path: Path) -> None:
+    # #9: `flows` on a block class; a Step works in a Step flow unless it says; none: every flow type.
+    (tmp_path / "descriptor.toml").write_text('domain = "flows"\nimport = ["control"]\n')
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
+
+    def catalog(backend: str) -> subprocess.CompletedProcess:
+        (tmp_path / "inspect_flows.py").write_text(textwrap.dedent(backend))
+        return subprocess.run([sys.executable, "inspect_flows.py"], cwd=tmp_path, env=env, capture_output=True, text=True,
+                              timeout=60)
+
+    proc = catalog(FLOWS_BACKEND)
+    assert proc.returncode == 0, proc.stderr
+    blocks = {b["type"]: b for b in json.loads(proc.stdout.strip())["blocks"]}
+    assert "flows" not in blocks["anywhere"]
+    assert blocks["clocked"]["flows"] == ["signal"]
+    assert blocks["resistor"]["flows"] == ["model"]
+    assert blocks["beep"]["flows"] == ["step"]
+    assert blocks["pid"]["flows"] == ["signal"]  # the control package's default
+
+    proc = catalog(FLOWS_BACKEND.replace('flows = ("model",)', 'flows = ("liquid",)'))
+    assert proc.returncode != 0
+    assert 'Resistor: no flow type "liquid" (signal, step, state, model)' in proc.stderr
+    proc = catalog(FLOWS_BACKEND.replace('flows = ("model",)', 'flows = "model"'))
+    assert proc.returncode != 0
+    assert "Resistor: flows must be a list of flow types" in proc.stderr
 
 
 MESH_BACKEND = '''

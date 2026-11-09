@@ -60,7 +60,7 @@ struct BackendManifest {
   std::string descriptor = "descriptor.toml";
   std::vector<std::string> toolkits;
   std::string golden;    // from [test].golden
-  std::string solver;    // default solver: "rk4", "rk45", "rk2", "euler", "discrete"
+  std::string solver;    // default solver: "rk4", "rk45", "rk2", "euler", "discrete", "cvode", "ida"
   // [run] solver and [run.solver_options] as graph.run settings JSON ("" if neither); the
   // backend gets it as PAPERBOAT_RUN and announces it in hello.run.
   std::string run_settings;
@@ -152,8 +152,12 @@ class BackendManager {
     std::filesystem::path python_bin;
     std::vector<std::pair<std::string, std::string>> env;
   };
+  // The interpreter is the backend's .venv, $PAPERBOAT_PYTHON, the checkout's .venv, else python3.
   static PythonEnv prepare_python_env(const std::filesystem::path& repo_root = {},
                                      const std::filesystem::path& backend_dir = {});
+  // The folder that holds the `paperboat` Python package, put on PYTHONPATH (pb#223): a checkout's
+  // python/, else an installed package's <prefix>/lib/paperboat/python; empty if neither.
+  static std::filesystem::path python_package_dir(const std::filesystem::path& root);
 
   // Backend kind and directory resolution
   static BackendKind detect_backend_kind(const std::filesystem::path& path);

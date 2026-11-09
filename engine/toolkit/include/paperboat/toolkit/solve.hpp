@@ -5,6 +5,11 @@
 //   x' = f(t, x)       a continuous system: "euler", "rk2" (Heun), "rk4" (classic), or "rk45"
 //                      (Dormand–Prince, adaptive: it sub-steps inside the clock step to meet
 //                      its tolerances, so signals still arrive on the clock)
+//                      or, for stiff systems, "cvode" (SUNDIALS CVODE: BDF with Newton on a dense
+//                      Jacobian) or "ida" (SUNDIALS IDA on the residual x' - f(t, x) = 0). The
+//                      implicit two pick their own step and order inside the clock step, stop at its
+//                      end, and carry their history to the next one (names() has them when the
+//                      engine is built with SUNDIALS, PAPERBOAT_WITH_SUNDIALS)
 //   x[k+1] = f(t, x)   a difference equation: "discrete"
 //
 // The state is any size, known at run time. A station object that is a system of ODEs
@@ -33,10 +38,10 @@ using State = std::vector<double>;
 using Deriv = std::function<State(double t, const State& x)>;
 
 struct Options {
-  // Error control (rk45)
+  // Error control (rk45, cvode, ida)
   double rtol = 1e-6;       // relative tolerance, per component
   double atol = 1e-9;       // absolute tolerance, per component
-  double min_step = 0.0;    // smallest sub-step before it gives up (0: 1e-14 * t)
+  double min_step = 0.0;    // smallest sub-step before it gives up (0: automatic)
   double max_step = 0.0;    // largest sub-step (0: the clock step)
   int max_steps = 100000;   // sub-steps in one clock step before it gives up
   // Fixed sub-stepping (rk4, rk2, euler): steps of dt / sub_steps per clock step
@@ -58,8 +63,14 @@ class Solver {
  public:
   virtual ~Solver() = default;
   // Advance `x` from `t` to `t + dt`. Throws std::runtime_error when f returns a state of
-  // another size, or rk45 can't meet its tolerances in max_steps sub-steps.
+  // another size, or rk45, cvode or ida can't meet its tolerances in max_steps sub-steps.
   virtual void step(State& x, double t, double dt, const Deriv& f) = 0;
+
+  // Forget what it carries between clock steps (rk45's step size, cvode's and ida's history):
+  // call it after the equations change (a parameter tuned, a switch). cvode and ida also start
+  // afresh on their own when a step doesn't begin where the last one ended, from the state it
+  // left (a bounce, a reset, a new run).
+  virtual void restart() {}
 
   // Fixed-size overload: state as std::array<double, N>.
   template <std::size_t N>
@@ -78,7 +89,8 @@ class Solver {
   virtual std::string_view name() const = 0;
 };
 
-// The solvers by name, the default first: rk4, rk45, rk2, euler, discrete.
+// The solvers by name, the default first: rk4, rk45, rk2, euler, discrete, then cvode and ida
+// when the engine has them (built with SUNDIALS).
 const std::vector<std::string>& names();
 
 // A solver by name ("auto": the run's), with the run's options unless given. Throws
@@ -92,7 +104,8 @@ std::string_view resolve(std::string_view name);
 // Throws std::invalid_argument for an option out of range, naming it.
 void check(const Options& options);
 
-// One step with a fresh solver of that name (rk45 then starts its sub-steps at dt).
+// One step with a fresh solver of that name (rk45 then starts its sub-steps at dt; cvode and
+// ida start afresh, so a solver kept between steps is much faster for them).
 void step(std::string_view solver, State& x, double t, double dt, const Deriv& f, Options options);
 void step(std::string_view solver, State& x, double t, double dt, const Deriv& f);
 

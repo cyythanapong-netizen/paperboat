@@ -1,5 +1,5 @@
 import type { GroupNode } from "./groups";
-import type { BlockNode, FlowNode, Wire } from "./FlowEditor";
+import type { BlockNode, FlowNode, Wire } from "./flowModel";
 import { layoutGraph, type LayoutEdge, type LayoutNode, type LayoutPoint } from "./graphLayout.ts";
 
 const BLOCK_W = 190;

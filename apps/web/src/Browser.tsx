@@ -1,5 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import type { BlockDef, ObjectDef, ParamDef, PortDef } from "./protocol";
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useDismiss } from "@paperboat/shared/components";
+import type { BlockDef, FlowType, ObjectDef, ParamDef, PortDef } from "./protocol";
+import { byFlow, flowLabel, flowsLabel, notHere } from "./flowTypes.ts";
 import { GlideBrackets } from "./Shell";
 import { readStored, writeStored } from "./storage.ts";
 
@@ -81,13 +83,16 @@ function Ports({ inputs, outputs }: { inputs: PortDef[]; outputs: PortDef[] }) {
   );
 }
 
-function Card({ item, count, onAdd, place }: { item: Item; count: number; onAdd: () => void; place: string }) {
+/** A card in the browser; `off`: why it can't go on this sheet (#9), shown muted, not draggable. */
+function Card({ item, count, onAdd, place, off }: { item: Item; count: number; onAdd: () => void; place: string; off?: string }) {
   const c = card(item);
   return (
     <div
-      className={`card${c.step ? " step" : ""}`}
-      draggable
+      className={`card${c.step ? " step" : ""}${off ? " off" : ""}`}
+      draggable={!off}
+      aria-disabled={off ? true : undefined}
       onDragStart={(e) => {
+        if (off) return e.preventDefault();
         dragging.current = item;
         e.dataTransfer.setData(DRAG_TYPE, c.type);
         e.dataTransfer.effectAllowed = "copy";
@@ -99,7 +104,7 @@ function Card({ item, count, onAdd, place }: { item: Item; count: number; onAdd:
         dragging.current = null;
         document.body.classList.remove("dragging-card");
       }}
-      title={`Drag onto the ${place}, or Add`}
+      title={off ?? `Drag onto the ${place}, or Add`}
     >
       <div className="card-head">
         <b>{c.label}</b>
@@ -118,8 +123,8 @@ function Card({ item, count, onAdd, place }: { item: Item; count: number; onAdd:
         </div>
       )}
       <div className="card-foot">
-        <span className="lbl">{count ? `${count} on the ${place}` : ""}</span>
-        <button className="key small" onClick={onAdd}>
+        <span className="lbl">{off ?? (count ? `${count} on the ${place}` : "")}</span>
+        <button className="key small" onClick={onAdd} disabled={!!off}>
           Add
         </button>
       </div>
@@ -141,13 +146,16 @@ function usePlace(key: string, fallback: { x: number; y: number }) {
 
 /**
  * The collection, as a floating window over the page: search, a kind filter, packages on
- * the left, cards on the right. Move it by its head; it stays where it was put.
+ * the left, cards on the right. Move it by its head; it stays where it was put. With `flow`
+ * (the open sheet's type, #9), blocks that don't work in it are kept apart at the end, muted,
+ * each saying where it works.
  */
 export function BrowserWindow({
   title,
-  items,
+  items: all,
   counts,
   place,
+  flow,
   onAdd,
   onClose,
 }: {
@@ -156,9 +164,12 @@ export function BrowserWindow({
   counts: Record<string, number>;
   /** Where cards go: "canvas" or "station". */
   place: string;
+  /** The open sheet's flow type: only blocks that work in it can be added. */
+  flow?: FlowType;
   onAdd: (item: Item) => void;
   onClose: () => void;
 }) {
+  const { fits: items, elsewhere } = useMemo(() => (flow ? byFlow(all, flow) : { fits: all, elsewhere: [] as Item[] }), [all, flow]);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
   const [group, setGroup] = useState("");
@@ -170,6 +181,8 @@ export function BrowserWindow({
   const found = search(items, query).filter((i) => kind === "all" || card(i).filter === kind);
   const shown = found.filter((i) => !group || card(i).group === group);
   const byGroup = groups.map((g) => [g, shown.filter((i) => card(i).group === g)] as const).filter(([, list]) => list.length);
+  // What this sheet can't take, under the same search and filters.
+  const away = search(elsewhere, query).filter((i) => (kind === "all" || card(i).filter === kind) && (!group || card(i).group === group));
 
   // Move by the head; keep it on screen.
   const drag = (e: ReactPointerEvent) => {
@@ -187,11 +200,7 @@ export function BrowserWindow({
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useDismiss(box, onClose);
 
   return (
     <div className="browser" ref={box} style={{ left: at.x, top: at.y }} role="dialog" aria-label={title}>
@@ -237,7 +246,19 @@ export function BrowserWindow({
               </div>
             </section>
           ))}
-          {shown.length === 0 && <p className="empty">Nothing matches “{query}”.</p>}
+          {shown.length === 0 && <p className="empty">{query ? `Nothing matches “${query}”` : "Nothing here"}{flow ? ` in this ${flowLabel(flow)}` : ""}.</p>}
+          {flow && away.length > 0 && (
+            <details className="browser-elsewhere">
+              <summary className="lbl">
+                Not in this {flowLabel(flow)} · {away.length}
+              </summary>
+              <div className="cards">
+                {away.map((it) => (
+                  <Card key={it.def.type} item={it} count={counts[it.def.type] ?? 0} place={place} onAdd={() => {}} off={it.kind === "block" ? notHere(it.def, flow) : undefined} />
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       </div>
     </div>
@@ -248,11 +269,26 @@ export function BrowserWindow({
  * Quick add at the cursor: a search with the best matches; arrows choose, Enter adds at
  * that spot, Escape (or a click elsewhere) closes.
  */
-export function QuickAdd({ items, at, onPick, onClose }: { items: Item[]; at: { x: number; y: number }; onPick: (item: Item) => void; onClose: () => void }) {
+export function QuickAdd({
+  items: all,
+  flow,
+  at,
+  onPick,
+  onClose,
+}: {
+  items: Item[];
+  /** The open sheet's flow type (#9): blocks that don't work in it are only named, muted, below. */
+  flow?: FlowType;
+  at: { x: number; y: number };
+  onPick: (item: Item) => void;
+  onClose: () => void;
+}) {
   const [query, setQuery] = useState("");
   const [i, setI] = useState(0);
   const box = useRef<HTMLDivElement>(null);
+  const { fits: items, elsewhere } = useMemo(() => (flow ? byFlow(all, flow) : { fits: all, elsewhere: [] as Item[] }), [all, flow]);
   const list = search(items, query).slice(0, 7);
+  const away = query.trim() && flow ? search(elsewhere, query).slice(0, 3) : [];
   const pick = list[Math.min(i, list.length - 1)];
   // Stay on screen.
   const [pos, setPos] = useState(at);
@@ -262,11 +298,7 @@ export function QuickAdd({ items, at, onPick, onClose }: { items: Item[]; at: { 
     const r = el.getBoundingClientRect();
     setPos({ x: Math.min(at.x, window.innerWidth - r.width - 8), y: Math.min(at.y, window.innerHeight - r.height - 8) });
   }, [at]);
-  useEffect(() => {
-    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && onClose();
-    window.addEventListener("mousedown", away);
-    return () => window.removeEventListener("mousedown", away);
-  }, [onClose]);
+  useDismiss(box, onClose);
   const onKey = (e: KeyboardEvent) => {
     e.stopPropagation(); // typing here is not input for the backend
     if (e.key === "ArrowDown") (e.preventDefault(), setI((v) => Math.min(v + 1, list.length - 1)));
@@ -307,7 +339,14 @@ export function QuickAdd({ items, at, onPick, onClose }: { items: Item[]; at: { 
             </li>
           );
         })}
-        {list.length === 0 && <li className="none lbl">Nothing matches</li>}
+        {list.length === 0 && <li className="none lbl">Nothing matches{flow ? ` in this ${flowLabel(flow)}` : ""}</li>}
+        {flow &&
+          away.map((it) => (
+            <li key={`away-${it.def.type}`} className="none away" aria-disabled title={it.kind === "block" ? notHere(it.def, flow) : undefined}>
+              <b>{card(it).label}</b>
+              <span className="lbl">{it.kind === "block" ? `${flowsLabel(it.def.flows ?? [])} only` : ""}</span>
+            </li>
+          ))}
       </ol>
       <div className="quick-foot lbl">
         <span>↑↓ choose · ⏎ add here</span>

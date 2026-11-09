@@ -7,7 +7,8 @@
 // - Clock: step everything on a clock (a Signal flow, or a Step flow if the graph has step
 //   blocks), streaming signals and scene patches.
 // - Once: evaluate a Signal flow a single time (a build, a query, a geometry), then show
-//   the result. Wires may carry lists, tables and text.
+//   the result. Wires may carry lists, tables and text. Given a cache, a run reuses the
+//   outputs of blocks that nothing changed for since the last run (cache.hpp).
 
 #include <functional>
 #include <memory>
@@ -27,9 +28,9 @@ struct RunSettings {
   double duration = 10.0;  // run length (a Step flow: its limit), s
   int emit_every = 4;      // send signals and scene patches every N steps
   bool real_time = true;   // pace emits at wall-clock speed (tests turn it off)
-  double speed = 1.0;      // times real time when paced; 0: as fast as it can
+  double speed = 1.0;      // times real time when paced; 0: as fast as it can (a run.speed may change it, #219)
   // The run's solver and its options: what a block or object whose `solver` is "auto" uses
-  // ("rk4", "rk45", "rk2", "euler", "discrete").
+  // ("rk4", "rk45", "rk2", "euler", "discrete", "cvode", "ida": solve::names()).
   std::string solver = "rk4";
   toolkit::solve::Options solver_options = {};
 };
@@ -41,6 +42,7 @@ RunSettings with_overrides(RunSettings base, const json& settings);
 json settings_json(const RunSettings& settings);
 
 class Executor;  // executor.hpp: how a graph runs
+class RunCache;  // cache.hpp: outputs a run-once keeps for the next
 
 // What a backend is made of. A simple backend fills one and calls serve() (backend.hpp).
 struct Backend {
@@ -61,19 +63,30 @@ using Emit = std::function<void(const json& message)>;
 using KeysNow = std::function<toolkit::KeySet()>;  // keys held down in the UI right now
 // The variables list the UI last sent, if it sent one since the last call (#75); read between steps.
 using VariablesNow = std::function<std::optional<json>()>;
+// The speed the UI last asked for (run.speed, #219), if it asked since the last call; read between frames.
+using SpeedNow = std::function<std::optional<double>()>;
+
+// A run.speed's speed, checked: a finite number, 0 or more (0: as fast as it can). Throws
+// std::invalid_argument for anything else.
+double checked_speed(const json& speed);
 
 // The scene: station objects, the domain state's entities and what blocks show.
 json scene_message(const Station& station, const toolkit::DomainState* state, const json& view,
                    const std::vector<const toolkit::Block*>& blocks = {});
 
-// Emits run.started, then scene, signal, scene.patch, node.state, run.progress and log
-// events, then run.finished. Returns the final status: "done", "failed" or "cancelled".
+// Emits run.started, then scene, signal, scene.patch, node.state, run.progress, run.speed and
+// log events, then run.finished. Returns the final status: "done", "failed" or "cancelled".
 // `settings`: graph.run's overrides of the backend's run settings, if any. `variables`:
 // the variables (#36) the graph's and station's references resolve against. `tune`: where
 // the run looks for a changed variables list while it runs; a variable the run started with
 // that is marked `tunable` takes its new value from it (#75), the others stay as they were.
+// `speed`: where the run looks for a new speed while it runs (#219); it paces on at that speed
+// from where it is, and says so with a run.speed. `cache`: a run that evaluates once reuses
+// the outputs of blocks nothing changed for since an earlier run with the same cache
+// (cache.hpp), and keeps its own; null: none.
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,
                 const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings = nullptr,
-                const json& variables = nullptr, const VariablesNow& tune = nullptr);
+                const json& variables = nullptr, const VariablesNow& tune = nullptr, const SpeedNow& speed = nullptr,
+                RunCache* cache = nullptr);
 
 }  // namespace paperboat::core

@@ -45,6 +45,7 @@ void add_type_of(Registry& registry) {
   type_of.def.description = "Returns the type name: number, text, vector, table, handle, or empty.";
   type_of.def.view = {.compact = true, .glyph = "type"};
   type_of.make = [](const Values&, const Config&) { return std::make_unique<TypeOf>(); };
+  type_of.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(type_of));
 }
 

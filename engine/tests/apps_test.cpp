@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <map>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -19,15 +20,18 @@ build = ["npm ci"]
 [[apps]]
 name = "ui"
 repo = "https://example.com/ui.git"
-deps = ["lib"]
+deps = ["lib", "kit@0.1"]
 build = ["npm ci", "npm run build"]
 output = "dist"
 )");
   REQUIRE(apps.size() == 2);
-  CHECK(apps[1].deps == std::vector<std::string>{"lib"});
+  CHECK(apps[1].deps == std::vector<tk::AppDep>{{"lib", ""}, {"kit", "0.1"}});
+  CHECK(apps[1].deps[1].spec() == "kit@0.1");
   CHECK(apps[1].build.size() == 2);
   CHECK(apps[1].output == "dist");
   CHECK_THROWS(tk::parse_apps_manifest("[[apps]]\nname = \"x\"\n"));
+  for (const char* bad : {"lib@", "lib@x", "lib@0.1.2.3", "lib@^0.1", "@0.1"})  // a range is MAJOR[.MINOR[.PATCH]]
+    CHECK_THROWS(tk::parse_apps_manifest(std::string("[[apps]]\nname = \"x\"\nrepo = \"r\"\ndeps = [\"") + bad + "\"]\n"));
 }
 
 TEST_CASE("an app is a program or a library, and a program says how it launches and where it listens") {
@@ -146,5 +150,104 @@ TEST_CASE("update: a checkout is fast-forwarded, and refused when dirty or diver
   CHECK_FALSE(r.ok);
   CHECK(r.message.starts_with("diverged"));
 
+  fs::remove_all(tmp, ec);
+}
+
+TEST_CASE("pkg pairing: a dep resolves in its range, and an installed one outside it fails or is reinstalled") {
+  const fs::path tmp = fs::temp_directory_path() / "paperboat_apps_pairing_test";
+  std::error_code ec;
+  fs::remove_all(tmp, ec);
+  const auto sh = [](const std::string& c) { return std::system(c.c_str()) == 0; };
+  const auto git = [](const fs::path& d) { return "git -C '" + d.string() + "' -c user.email=t@e.com -c user.name=t "; };
+  const auto tag = [&](const fs::path& d, const std::string& version) {  // a commit with version.txt, tagged v<version>
+    std::ofstream(d / "version.txt") << version;
+    return sh(git(d) + "add -A && " + git(d) + "commit -qm " + version + " && " + git(d) + "tag v" + version);
+  };
+  const fs::path lib = tmp / "remote" / "lib", ui = tmp / "remote" / "ui";
+  for (const auto& d : {lib, ui}) {
+    fs::create_directories(d);
+    REQUIRE(sh(git(d) + "init -q -b main"));
+  }
+  for (const char* v : {"0.1.0-alpha.1", "0.1.0-alpha.2", "0.2.0"}) REQUIRE(tag(lib, v));  // 0.1 has prereleases only
+  for (const char* v : {"0.1.0-alpha.1", "0.1.0"}) REQUIRE(tag(ui, v));
+  fs::create_directories(tmp / "root" / "engine" / "toolkit");
+  std::ofstream(tmp / "root" / "apps.toml")
+      << "[[apps]]\nname = \"lib\"\nrepo = \"" << lib.string() << "\"\nbuild = [\"true\"]\n"
+      << "[[apps]]\nname = \"ui\"\nrepo = \"" << ui.string() << "\"\ndeps = [\"lib@0.1\"]\nbuild = [\"true\"]\n";
+  setenv("PAPERBOAT_HOME", (tmp / "home").c_str(), 1);
+  const fs::path root = tmp / "root", home = tmp / "home" / "apps";
+  const auto version_of = [&](const std::string& app) {
+    for (const auto& a : tk::list_apps(root))
+      if (a.name == app) return a.installed ? a.version : std::string("-");
+    return std::string("?");
+  };
+
+  CHECK(tk::list_app_versions("lib", root) == std::vector<std::string>{"0.2.0"});  // releases only by default
+  CHECK(tk::list_app_versions("lib", root, true) ==
+        std::vector<std::string>{"0.2.0", "0.1.0-alpha.2", "0.1.0-alpha.1"});
+
+  SECTION("a release app takes no prerelease of its dep") {
+    const auto r = tk::install_app("ui", "0.1.0", root);
+    CHECK_FALSE(r.ok);
+    CHECK(r.message.find("no release in that range") != std::string::npos);
+    CHECK(version_of("lib") == "-");
+    CHECK(version_of("ui") == "-");
+  }
+
+  SECTION("a prerelease app pulls the newest dep prerelease in range, and records it") {
+    REQUIRE(tk::install_app("ui", "0.1.0-alpha.1", root).ok);
+    CHECK(version_of("lib") == "0.1.0-alpha.2");  // not 0.2.0, and no manual pre-install
+    CHECK(version_of("ui") == "0.1.0-alpha.1");
+    const auto list = tk::list_apps(root);
+    CHECK(list[1].built_with == std::map<std::string, std::string>{{"lib", "0.1.0-alpha.2"}});
+
+    // the dep stays in the range of the installed app that needs it
+    const auto r = tk::install_app("lib", "0.2.0", root);
+    CHECK_FALSE(r.ok);
+    CHECK(r.message.find("outside 0.1") != std::string::npos);
+    CHECK(version_of("lib") == "0.1.0-alpha.2");
+    CHECK_FALSE(tk::app_outdated("lib", root));  // 0.2.0 is newer, but not for ui
+    REQUIRE(tag(lib, "0.1.0-alpha.3"));
+    CHECK(tk::app_outdated("lib", root));
+    REQUIRE(tk::install_app("lib", {}, root).ok);  // what `pkg update lib` does
+    CHECK(version_of("lib") == "0.1.0-alpha.3");
+
+    CHECK(tk::app_outdated("ui", root));  // 0.1.0 is a newer release of ui itself
+    CHECK(tk::install_app("lib", "0.2.0", root, {}, true).ok);  // forced out of range
+    CHECK(version_of("lib") == "0.2.0");
+  }
+
+  SECTION("an installed dep at another MAJOR.MINOR fails the install, or is reinstalled with force") {
+    REQUIRE(tk::install_app("lib", "0.2.0", root).ok);
+    auto r = tk::install_app("ui", "0.1.0-alpha.1", root);
+    CHECK_FALSE(r.ok);
+    CHECK(r.message.find("needs \"lib@0.1\", and 0.2.0 is installed") != std::string::npos);
+    CHECK(r.message.find("--force") != std::string::npos);
+    CHECK(version_of("lib") == "0.2.0");
+    CHECK(version_of("ui") == "-");
+
+    r = tk::install_app("ui", "0.1.0-alpha.1", root, {}, true);
+    CHECK(r.ok);
+    CHECK(r.message.find("with lib 0.1.0-alpha.2") != std::string::npos);
+    CHECK(version_of("lib") == "0.1.0-alpha.2");
+    CHECK(version_of("ui") == "0.1.0-alpha.1");
+    std::ifstream marker(home / "lib" / "version.txt");
+    std::string text;
+    marker >> text;
+    CHECK(text == "0.1.0-alpha.2");
+  }
+
+  SECTION("a dev app takes the newest dep in range, prereleases included") {
+    REQUIRE(tk::install_app("ui", "dev", root).ok);
+    CHECK(version_of("ui") == "dev");
+    CHECK(version_of("lib") == "0.1.0-alpha.2");
+  }
+
+  SECTION("a version with no tag is refused before any dep is installed") {
+    CHECK_FALSE(tk::install_app("ui", "0.1.0-alpha.9", root).ok);
+    CHECK(version_of("lib") == "-");
+  }
+
+  unsetenv("PAPERBOAT_HOME");
   fs::remove_all(tmp, ec);
 }

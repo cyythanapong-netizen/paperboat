@@ -12,10 +12,10 @@ Default address: `ws://localhost:8765`.
 
 | `type`         | Fields                                      | Sent                         |
 | -------------- | ------------------------------------------- | ---------------------------- |
-| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults), `toolkits?: ToolkitStatus[]`, `binary?: 1` | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP. `binary`: this connection gets typed arrays as binary frames (it asked with `?binary=1`, see [Binary frames](#binary-frames)) |
+| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults), `toolkits?: ToolkitStatus[]`, `flows?: FlowType[]` (the flow types a sheet may be, #9), `binary?: 1` | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP. `binary`: this connection gets typed arrays as binary frames (it asked with `?binary=1`, see [Binary frames](#binary-frames)) |
 | `catalog`      | `blocks: BlockDef[]`, `connectors?: Connectors` (see below), `objects?`, `dashboard?` | on connect                   |
 | `scene`        | `entities: Entity[]`, `view?: View`         | on connect, and on reset     |
-| `graph.load`   | `graph: { nodes, edges }`                   | on connect (starter graph)   |
+| `graph.load`   | `graph: { flow?, nodes, edges }`            | on connect (starter graph)   |
 | `station.load` | `station: Station`                          | on connect, after `graph.load`, if the catalog has `objects` |
 | `variables.load` | `variables: Variable[]`                   | on connect, before `graph.load`, if the backend has default variables (its descriptor's `[[variables]]`) |
 | `variables.values` | `values: { name: value }`, `error?: string`, `at?: string` | on connect and after each `variables.set`: what every variable comes to (a formula's result), or why they don't hold (`at`: the variable or block at fault) |
@@ -23,8 +23,9 @@ Default address: `ws://localhost:8765`.
 | `scene.patch`  | `entities: ({id} & Partial<Entity>)[]`      | during a run                 |
 | `run.started`  | `run: string`                               | when a run starts            |
 | `run.progress` | `run: string`, `fraction: number` (0–1)     | during a run                 |
+| `run.speed`    | `run: string`, `speed: number`              | during a run, when it took a `run.speed` from the UI (#219): it goes on at this speed from now. The UI shows it as the run's speed |
 | `signal`       | `node: string`, `t: number`, `v: number \| string \| number[]`, `components?: VectorComponent[]`, `port?: string` | per sample, for monitor nodes. A monitor with `sample_per_input` (a scope) sends one per wired input, `port` naming it (absent: `in`), and one with `whole_vector` keeps a vector whole. `t` is the x value: time in a simulation, list index otherwise; a Display monitor, and a Graph in a clock run (one trace per component), get a whole vector as `number[]` with its source component labels; a Graph in a run-once gets it by index. A layout instrument's optional `settings` is that instrument's own table (schema `InstrumentSettings`; its shape is the toolkit's, the engine only carries it) |
-| `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them; any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
+| `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them, or only `done` for a block whose outputs it reused from an earlier run (see [Caching](#caching)); any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
 | `node.progress` | `node: string`, `fraction: number` (0–1) | How far a block's long step has got (`Context::progress`), at most ~20 a second per block; the UI shows it on the running block |
 | `log`          | `level: "info" \| "warn" \| "error"`, `text`, `node?: string` | any time. `node`: the block or station object that wrote it, or that failed |
 | `toolkits.status` | `toolkits: ToolkitStatus[]`              | when an optional toolkit's installation or busy state changes. `ToolkitStatus.blocks` lists the block types a toolkit provides (from `toolkits.toml`), so the UI names the toolkit to install for a missing block |
@@ -38,6 +39,7 @@ Default address: `ws://localhost:8765`.
 | `station.set` | `station: Station`: an edit on the Station page; the backend checks it and answers with a `scene` (or a `log` error) |
 | `variables.set` | `variables: Variable[]`: the user's variables changed; the backend checks them, keeps them for the next run and answers with a `scene` (the station they shape), or a `log` error. During a run it answers with `variables.values` only, and the run takes the `tunable` ones (below) |
 | `run.cancel` | —                          |
+| `run.speed`  | `speed: number` (as `RunSettings.speed`: times real time, 0 as fast as it can): the speed changed during a run (#219). The run goes on from where it is at the new speed, neither jumping ahead nor stalling, and answers with a `run.speed`. One out of range is refused with a `log` error; between runs (the run ended on the way) it is ignored, as the next `graph.run` brings its own speed |
 | `input`      | `key: string` (a `KeyboardEvent.code`, e.g. `"Space"`), `down: boolean` |
 | `backend.restart` | — (restarts the backend process with its startup arguments) |
 | `toolkit.install` | `name: string`, `version?: string` (installs the named toolkit from `toolkits.toml` and rebuilds the engine; version is tag like `0.1.0` or `dev`) |
@@ -69,6 +71,9 @@ Default address: `ws://localhost:8765`.
   // view.icon (optional, additive): a custom look, drawn instead of the glyph; see "Custom block look"
   "feedthrough": false,            // optional: its outputs don't depend on this step's inputs
                                    // (an integrator, a delay), so a feedback loop may pass through it
+  "flows": ["signal"],             // optional (#9): the flow types it works in (signal, step, state,
+                                   // model); absent: every one. The palette offers it only on a sheet
+                                   // of one of these, and the engine refuses it on another
   // optional, a magic block: one form per way to use it, each with its own ports. Its enum
   // param "form" picks one (the first by default); inputs/outputs are the first form's.
   // A node takes the ports of its form, and the engine makes the block that form needs.
@@ -122,6 +127,9 @@ Default address: `ws://localhost:8765`.
 // changes; any but mode). A value out of range fails the run with a log, not the backend.
 // duration: 0 means run indefinitely until cancelled, a Stop block, or every path ending.
 { "mode": "clock", "duration": 10, "dt": 0.01, "speed": 1 }   // mode: clock | once; speed: times real time, 0 as fast as it can
+{ "solver": "rk45", "solvers": ["rk4", "rk45", "rk2", "euler", "discrete"] }
+// solver: hello.run's default and graph.run.settings' override; solvers: what this engine has,
+// the default first (hello.run only), so the UI offers no solver it can't run
 
 // Graph: sent by the UI with graph.run, and by the backend with graph.load
 {
@@ -131,6 +139,9 @@ Default address: `ws://localhost:8765`.
 ```
 
 `pos` is the node's place on the flow canvas; it is optional and backends ignore it.
+An optional `"flow": "step"` is the sheet's flow type (#9): each block must work in it (a
+story's blocks in a Signal flow), or the run fails naming the block. Absent: not chosen, and
+nothing is checked (graphs from before sheets had a type).
 Missing `params` take their defaults. A param's value is a number, or for a `key` param a
 `KeyboardEvent.code` string (`"ArrowDown"`), which the UI sets by the user pressing it.
 A param (or a station object's prop) may instead **refer to a variable**:
@@ -427,6 +438,23 @@ A graph whose blocks have `step` ports is a Step flow (see `paperboat-examples/a
 - Leaving by an unwired step output ends that path; reaching a Stop block ends the run. The run ends (`done`) when no path
   runs and no hat may start one; with a When it runs until `run.cancel` or a time limit.
 - `run.progress` can't know the length in advance; it may only send `1` at the end.
+
+## Caching
+
+A backend that evaluates once (`hello.run.mode == "once"`) may keep each block's outputs
+between the runs of one connection and reuse them: a block is called again only when
+something it depends on changed since the run that computed it: its type, params and text
+(variables included, once resolved), the values on its wires (so a station object changed
+reaches only the blocks it feeds, and a change upstream that gives the same values stops
+there), the variables it read, its `file` params' files. A reused block is reported
+`node.state: "done"` with no `running` before it (a `cached` state is for later: it needs
+`NodeState` and the shared TypeScript types to change together); its signals, scene entities
+and the logs it wrote are sent as when it ran, and the run's last log says how many blocks it
+reused. Only blocks that declare themselves pure (pure functions of
+those inputs: no clock, keys, domain state, randomness or side effects) are reused; a run on
+a clock, a Step flow or a block that reads keys or draws at random always computes. A run
+cancelled while a block computes doesn't keep that block's result. The C++ engine does all
+this (`engine/core/include/paperboat/core/cache.hpp`).
 
 ## Groups
 

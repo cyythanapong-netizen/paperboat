@@ -1,0 +1,12 @@
+[backend]
+format = 0
+name = "sdk-backend-python"
+version = "0.1.0"
+engine = ">=0.1"
+language = "python"
+run = "server.py"
+port = 8782
+descriptor = "descriptor.toml"
+
+[test]
+golden = "expected.json"

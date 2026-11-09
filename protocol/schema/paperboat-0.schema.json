@@ -678,6 +678,15 @@
       },
       "description": "Connector classes the blocks' icon ports refer to (§4), by Modelica class short name."
     },
+    "FlowType": {
+      "enum": [
+        "signal",
+        "step",
+        "state",
+        "model"
+      ],
+      "description": "What a sheet is (#9): a Signal flow (values flow one way), a Step flow (control passes along step wires), a State flow (transitions between states) or a Model flow (acausal physical connections)."
+    },
     "BlockDef": {
       "type": "object",
       "properties": {
@@ -779,6 +788,15 @@
         "description": {
           "type": "string",
           "description": "One line in plain words: what it does. Shown on its card in the block browser. Optional."
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FlowType"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "The flow types it works in (#9): the palette offers it only on a sheet of one of these, and the engine refuses it on another. Absent: every flow type."
         }
       },
       "required": [
@@ -998,6 +1016,10 @@
     "Graph": {
       "type": "object",
       "properties": {
+        "flow": {
+          "$ref": "#/$defs/FlowType",
+          "description": "The sheet's flow type (#9): each block must work in it (inside a story, a Signal flow). Absent: not chosen; nothing is checked, and the UI takes a Step flow if a block has step ports, else a Signal flow."
+        },
         "nodes": {
           "type": "array",
           "items": {
@@ -1168,6 +1190,13 @@
           "type": "integer",
           "minimum": 1,
           "description": "The binary frame layout this backend sends to this connection (1), present only when the client asked with ?binary=1 in its WebSocket URL: typed arrays come as binary frames and BinaryRef references. Absent: every array is JSON numbers."
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FlowType"
+          },
+          "description": "The flow types this backend offers (#9): what a sheet may be. Absent (an older backend): a Signal flow, and a Step flow if a block has step ports."
         }
       },
       "required": [
@@ -1609,6 +1638,29 @@
       ],
       "additionalProperties": false
     },
+    "run.speed": {
+      "description": "Both ways (#219). UI → backend: the speed changed during a run; the run goes on from where it is at this speed (between runs it is ignored; one out of range is refused with a log error). Backend → UI: the run took it, from now on at this speed.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "run.speed"
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Times real time (1: as the clock goes; 0: as fast as it can), as RunSettings.speed."
+        },
+        "run": {
+          "type": "string",
+          "description": "The run that took it (backend → UI only)."
+        }
+      },
+      "required": [
+        "type",
+        "speed"
+      ],
+      "additionalProperties": false
+    },
     "input": {
       "type": "object",
       "properties": {
@@ -1736,6 +1788,7 @@
             "run.started",
             "run.progress",
             "run.finished",
+            "run.speed",
             "signal",
             "node.state",
             "node.progress",
@@ -1905,6 +1958,18 @@
           "if": {
             "properties": {
               "type": {
+                "const": "run.speed"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/run.speed"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "signal"
               }
             }
@@ -1977,6 +2042,7 @@
             "station.set",
             "variables.set",
             "run.cancel",
+            "run.speed",
             "input",
             "backend.restart",
             "toolkit.install",
@@ -2033,6 +2099,18 @@
           },
           "then": {
             "$ref": "#/$defs/run.cancel"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run.speed"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/run.speed"
           }
         },
         {
@@ -2653,19 +2731,28 @@
             "rk45",
             "rk2",
             "euler",
-            "discrete"
+            "discrete",
+            "cvode",
+            "ida"
           ],
-          "description": "The run's solver: what a block or station object whose own solver is auto integrates with."
+          "description": "The run's solver: what a block or station object whose own solver is auto integrates with. cvode and ida (implicit, for stiff systems) need an engine built with SUNDIALS."
+        },
+        "solvers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The solvers this engine has (solve::names()), the default first. In hello.run only: the UI offers these and hides the rest."
         },
         "solver_options": {
           "type": "object",
           "description": "The run's solver options (#196); each left out keeps the backend's.",
           "properties": {
-            "rtol": { "type": "number", "exclusiveMinimum": 0, "description": "Relative tolerance (rk45)." },
-            "atol": { "type": "number", "minimum": 0, "description": "Absolute tolerance (rk45)." },
-            "min_step": { "type": "number", "minimum": 0, "description": "Smallest sub-step, s, before rk45 gives up (0: automatic)." },
-            "max_step": { "type": "number", "minimum": 0, "description": "Largest rk45 sub-step, s (0: the clock step)." },
-            "max_steps": { "type": "integer", "minimum": 1, "description": "rk45 sub-steps in one clock step before it gives up." },
+            "rtol": { "type": "number", "exclusiveMinimum": 0, "description": "Relative tolerance (rk45, cvode, ida)." },
+            "atol": { "type": "number", "minimum": 0, "description": "Absolute tolerance (rk45, cvode, ida)." },
+            "min_step": { "type": "number", "minimum": 0, "description": "Smallest sub-step, s, before rk45, cvode or ida gives up (0: automatic)." },
+            "max_step": { "type": "number", "minimum": 0, "description": "Largest rk45, cvode or ida sub-step, s (0: the clock step)." },
+            "max_steps": { "type": "integer", "minimum": 1, "description": "rk45, cvode or ida sub-steps in one clock step before it gives up." },
             "sub_steps": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "Fixed sub-steps per clock step (rk4, rk2, euler)." }
           },
           "additionalProperties": false

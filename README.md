@@ -10,11 +10,14 @@ watch the results live. Backends are written in C++ or Python; the web UI builds
 what they send.<br><br>
 📖 <strong>Documentation website: <a href="https://paperboatlab.github.io/paperboat/">https://paperboatlab.github.io/paperboat/</a></strong></p>
 
+<p align="center"><img src=".github/readme/demo.gif" width="100%" alt="Paperboat demo: on the Flow page a PID loop (square-wave setpoint, sum, PID, two lags) feeds two scopes and a display; kp is changed from 4 to 6, Run is pressed, and the Board plots the setpoint, the response and the control effort live as the 10 s run advances"></p>
+
 | Check | What it runs | `dev` |
 | --- | --- | --- |
 | Engine | C++ build and the engine tests | [![engine](https://github.com/paperboatlab/paperboat/actions/workflows/engine.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/engine.yml?query=branch%3Adev) |
 | Python | the bindings and the protocol schema | [![python](https://github.com/paperboatlab/paperboat/actions/workflows/python.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/python.yml?query=branch%3Adev) |
 | Web and console | typecheck, tests and build of `apps/web` and `apps/cli` | [![web](https://github.com/paperboatlab/paperboat/actions/workflows/web.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/web.yml?query=branch%3Adev) |
+| End to end | the web app in headless Chromium against a real engine backend | [![e2e](https://github.com/paperboatlab/paperboat/actions/workflows/e2e.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/e2e.yml?query=branch%3Adev) |
 | Release | `.deb`, `.rpm`, `.tar.gz`, `.zip` and the npm packages, built on a `v<version>` tag | [![release](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml/badge.svg)](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml) [![latest release](https://img.shields.io/github/v/release/paperboatlab/paperboat?include_prereleases&label=latest)](https://github.com/paperboatlab/paperboat/releases) |
 | Docs | the [API reference](https://paperboatlab.github.io/paperboat/), warnings as errors | [![docs](https://github.com/paperboatlab/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
 
@@ -48,9 +51,10 @@ engine/                   C++20 engine: toolkit (reusable blocks and station obj
 python/                   Python bindings for the engine (pip install ./python): write a
                           backend's domain code in Python, the C++ engine runs it
 protocol/                 WebSocket protocol spec, JSON Schema, smoke_test.py and golden.py
-examples/backends/        example backends, each a project of its own that uses Paperboat
-                          (copy one anywhere and it still runs). Published separately, as
-                          the paperboat-examples repository; clone it next to this one
+../paperboat-examples/    example backends, each a project of its own that uses Paperboat
+                          (copy one anywhere and it still runs). Not in this repository: they
+                          live in paperboat-examples, which is not publicly available; with access,
+                          clone it next to this one (or set PAPERBOAT_EXAMPLES_DIR)
   mass-spring-python/     simulation: a sine pushes a mass on a spring (Python)
   cart-pole-cpp/          simulation, closed loop: PID balances a pole. C++: the blocks
                           come from the toolkit, the Cart-pole station object is its own
@@ -82,6 +86,10 @@ unchanged, and all pass the same domain-neutral smoke test and their golden runs
 
 ## Run the proof of concept
 
+The `backend:*` scripts run the example backends, so they need a `paperboat-examples`
+checkout (see Layout). Without one, `engine/tests/sdk-backend` is a backend in this
+repository: `./bin/paperboat build engine/tests/sdk-backend && ./bin/paperboat check engine/tests/sdk-backend`.
+
 ```sh
 pip install websockets
 npm install
@@ -104,7 +112,7 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ./bin/paperboat list                # everything running, with a KIND: backend or app
 ./bin/paperboat start               # starts the web app on port 3047 (stop / restart: the same, no target)
 ./bin/paperboat examples start      # launches all example backends (ports 8765-8773)
-./bin/paperboat run cart-pole       # no paperboat-examples checkout? fetched to ~/.paperboat/examples, built, run
+./bin/paperboat run cart-pole       # no paperboat-examples checkout? fetched to ~/.paperboat/examples (PAPERBOAT_EXAMPLES_REPO: another URL), built, run
 ./bin/paperboat examples fetch     # clone or pull ~/.paperboat/examples
 ./bin/paperboat examples status     # checks status of example backends
 ./bin/paperboat toolkit list        # lists available and installed toolkits
@@ -113,6 +121,48 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ./bin/paperboat start squero-studio-om   # a program from apps.toml; fetched and built on first use
 ./bin/paperboat stop squero-studio-om    # `start` and `stop` take a backend or a program; with no target, the web app
 ```
+
+### Start a backend of your own
+
+`paperboat new` writes a minimal backend that passes `paperboat check` as it is: one block
+(`Scale`) in `domain/`, a starter graph in `descriptor.toml` and the `expected.json` it
+matches. The templates are built into the binary, so it works from an installed package too.
+
+```sh
+paperboat new my-backend            # C++ (the default), in ./my-backend; --dir <path> for another folder
+paperboat new my-backend --python   # Python: needs the paperboat module (npm run build:python, or pip install ./python)
+cd my-backend
+paperboat build                     # compile it (a Python backend has nothing to compile)
+paperboat check                     # manifest, catalog, protocol smoke test, golden run
+paperboat run                       # ws://localhost:8790
+paperboat start                     # the web app: open http://localhost:3047/?backend=ws://localhost:8790
+```
+
+It never overwrites: a folder that exists must be empty. Then add blocks in `domain/`, use
+them in the descriptor's `[graph]` and update `expected.json` (docs/api: Quickstart, Testing).
+
+### Apps from other repositories (`pkg`)
+
+`apps.toml` lists the apps that live in their own repositories. `paperboat pkg install <name>[@<version>]`
+clones a release tag (default: the newest release, else main, recorded as `dev`) into
+`~/.local/share/paperboat/apps` (or `$PAPERBOAT_HOME/apps`) and builds it; `pkg update`, `pkg uninstall`,
+`pkg versions` (prereleases too) and `pkg path` do the rest.
+
+paperboat and paperboat-shared share a MAJOR.MINOR line, and `pkg` enforces it. A dep in `apps.toml`
+takes a range, `deps = ["paperboat-shared@0.1"]`, and installing the app:
+
+- resolves the dep to its newest tag in that range, prereleases included when the app's own version is a
+  prerelease or `dev` (`pkg install squero-studio-om@0.1.0-alpha.1` pulls paperboat-shared `0.1.0-alpha.x`;
+  a `dev` app with no tag in range takes the dep's main);
+- keeps a dep that is already installed in range, and fails with a clear message when it is outside;
+  `--force` reinstalls it in range;
+- refuses the other way round too: `pkg install paperboat-shared@0.2.0` fails while an installed app needs
+  `0.1` (or pass `--force`), and `pkg update paperboat-shared` stays inside `0.1`;
+- records the dep versions in the install marker; `pkg list` shows them under the app, and flags a dep
+  installed since that is outside the range.
+
+Versions order by SemVer (`0.1.0-alpha.2 < 0.1.0-alpha.10 < 0.1.0`); `pkg update` and a plain
+`pkg install` take releases only, a prerelease only when asked for with `@<version>`.
 
 ### Install
 
@@ -127,6 +177,11 @@ A package install is the CLI and the apps: `paperboat` opens the console (needs 
 `paperboat start` serves the web app on http://localhost:3047 (no npm, no checkout), and `pkg`,
 `update`, `check`, `pack`. Building C++ backends
 and installing toolkits (they compile into the engine) need paperboat built from source.
+Python backends run through the CLI as they are: every package ships the `paperboat` module
+(in `lib/paperboat/python`, which `paperboat run`/`check` put on `PYTHONPATH`) for CPython 3.11
+and later; the CLI runs `python3`, or the backend's `.venv`, or `$PAPERBOAT_PYTHON`. A process
+started another way needs the wheel: `pip install paperboat-<version>-cp312-abi3-<platform>.whl`
+(Python 3.12+).
 
 ### The console
 
