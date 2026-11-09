@@ -1,6 +1,6 @@
 [project]
 name = "paperboat"
-version = "0.0.1"
+dynamic = ["version"]
 description = "Python bindings for Paperboat's C++ engine: write a backend's domain code in Python"
 requires-python = ">=3.11"
 
@@ -10,3 +10,12 @@ build-backend = "scikit_build_core.build"
 
 [tool.scikit-build]
 wheel.packages = ["paperboat"]
+# One abi3 wheel for every CPython from 3.12 on (nanobind's stable ABI); a 3.11 build makes a cp311 wheel.
+wheel.py-api = "cp312"
+
+# The engine's version (engine/CMakeLists.txt): 0.1.0 with PAPERBOAT_PRERELEASE "alpha.3" is 0.1.0a3.
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "../engine/CMakeLists.txt"
+regex = '(?s)project\(paperboat VERSION (?P<value>[0-9]+\.[0-9]+\.[0-9]+).*?set\(PAPERBOAT_PRERELEASE "(?P<pre>[^"]*)"'
+result = "{value}{pre}"

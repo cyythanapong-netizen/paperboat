@@ -1,4 +1,7 @@
 # Release packages: .deb, .rpm and .tar.gz (Linux), .tar.gz (macOS arm64), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
+# Every package ships the Python bindings (pb#223) in lib/paperboat/python, so a Python backend runs
+# with no pip step: paperboat._engine for CPython 3.11 and, through the stable ABI, for 3.12 and later
+# (scripts/build_python.sh). The same builds' wheels (paperboat-*.whl) go to the release too.
 # A tag v<version> publishes; pull requests and manual runs only build and check the packages.
 # The version is engine/CMakeLists.txt's project(paperboat VERSION ...); the tag must match it.
 # Publishing to npm needs the NPM_TOKEN secret (an automation token for the @paperboat scope); without it
@@ -16,6 +19,9 @@ on:
       - "engine/CMakeLists.txt"
       - "engine/cmake/**"
       - "engine/tests/sdk-backend/**"
+      - "engine/tests/sdk-backend-python/**"
+      - "python/**"
+      - "scripts/build_python.sh"
       - "protocol/*.py"
       - "engine/core/**"
       - "engine/toolkit/**"
@@ -63,6 +69,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # The Python bindings are built with both (scripts/build_python.sh); 3.12, set up last, is python3.
+      - uses: actions/setup-python@v5
+        id: py311
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-python@v5
+        id: py312
+        with:
+          python-version: "3.12"
       - name: Version
         id: version
         run: |
@@ -79,7 +94,9 @@ jobs:
           name: web-console
           path: apps
       - run: sudo apt-get update && sudo apt-get install -y g++-12 ninja-build dpkg-dev rpm file
-      - name: Build, test, package (.deb, .rpm, .tar.gz)
+      - name: Build, test, package (.deb, .rpm, .tar.gz, Python wheels)
+        env:
+          PYTHONS: ${{ steps.py311.outputs.python-path }} ${{ steps.py312.outputs.python-path }}
         run: CC=gcc-12 CXX=g++-12 WEB=OFF scripts/build_release.sh dist
       - name: npm packages
         run: |
@@ -96,27 +113,37 @@ jobs:
             (paperboat start --port 3047 >/tmp/web.log 2>&1 &) && sleep 2 &&
             curl -sf http://localhost:3047/ | grep -q "<div id=\"root\"" && echo "web app served"'
       # The SDK (pb#177): with only the packages installed, a C++ backend builds and passes paperboat check.
-      - name: "SDK: paperboat + paperboat-dev on Debian 12 build and check a backend, and one paperboat new writes"
+      - name: "SDK: paperboat + paperboat-dev on Debian 12 build and check a backend, one paperboat new writes, and check a Python backend"
         run: |
-          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" debian:bookworm sh -ec '
+          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" \
+              -v "$PWD/engine/tests/sdk-backend-python:/src-py:ro" debian:bookworm sh -ec '
             apt-get update -qq && apt-get install -y -qq /dist/paperboat_*.deb /dist/paperboat-dev_*.deb python3-pip >/dev/null
             pip install -q --break-system-packages websockets jsonschema
             cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend
-            cd /tmp && paperboat new demo && paperboat build demo && paperboat check demo'  # its embedded C++ template
-      - name: "The .rpms on Fedora: install, run, and build and check a backend"
+            cd /tmp && paperboat new demo && paperboat build demo && paperboat check demo &&
+            python3 --version && cp -r /src-py /tmp/py-backend && paperboat check /tmp/py-backend'
         run: |
-          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" fedora:latest sh -ec '
+          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" \
+              -v "$PWD/engine/tests/sdk-backend-python:/src-py:ro" fedora:latest sh -ec '
             dnf install -y -q /dist/paperboat-[0-9]*.rpm /dist/paperboat-devel-*.rpm python3-pip >/dev/null
             paperboat --version && paperboat pkg list && paperboat commands | grep -q pkg
             pip install -q websockets jsonschema
-            cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend'
-      - name: "SDK: the .tar.gz on Fedora builds and checks a backend"
+            cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend
+            python3 --version && cp -r /src-py /tmp/py-backend && cd /tmp && paperboat check /tmp/py-backend'
+      - name: "SDK: the .tar.gz on Fedora builds and checks a backend, and checks a Python backend"
         run: |
-          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" fedora:latest sh -ec '
+          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" \
+              -v "$PWD/engine/tests/sdk-backend-python:/src-py:ro" fedora:latest sh -ec '
             dnf install -y -q cmake gcc-c++ make python3-pip tar gzip >/dev/null
             pip install -q websockets jsonschema
             mkdir /opt/pb && tar xzf /dist/paperboat-*.tar.gz -C /opt/pb --strip-components=1
-            cp -r /src /tmp/sdk-backend && /opt/pb/bin/paperboat build /tmp/sdk-backend && /opt/pb/bin/paperboat check /tmp/sdk-backend'
+            cp -r /src /tmp/sdk-backend && /opt/pb/bin/paperboat build /tmp/sdk-backend && /opt/pb/bin/paperboat check /tmp/sdk-backend
+            cp -r /src-py /tmp/py-backend && cd /tmp && /opt/pb/bin/paperboat check /tmp/py-backend'
+      - name: "The wheel installs with pip and runs a Python backend"
+        run: |
+          python -m venv "$RUNNER_TEMP/whl" && "$RUNNER_TEMP/whl/bin/pip" install -q dist/paperboat-*-cp312-abi3-*.whl
+          cp -r engine/tests/sdk-backend-python "$RUNNER_TEMP/whl-backend" && cd "$RUNNER_TEMP/whl-backend"
+          "$RUNNER_TEMP/whl/bin/python" server.py --run | tail -1 | grep -q '"status":"done"' && echo "wheel runs"
       - name: The npm packages install on a clean Node and run
         run: |
           prefix=$(mktemp -d)
@@ -127,6 +154,8 @@ jobs:
           cp -r engine/tests/sdk-backend "$RUNNER_TEMP/sdk-backend" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
           CXX=g++-12 "$prefix/bin/paperboat" build "$RUNNER_TEMP/sdk-backend"   # against the SDK in the platform package
           "$prefix/bin/paperboat" check "$RUNNER_TEMP/sdk-backend"
+          cp -r "$GITHUB_WORKSPACE/engine/tests/sdk-backend-python" "$RUNNER_TEMP/py-backend"
+          "$prefix/bin/paperboat" check "$RUNNER_TEMP/py-backend"   # python3 3.12: the abi3 module
       - uses: actions/upload-artifact@v4
         with:
           name: linux
@@ -141,7 +170,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: actions/setup-python@v5  # a pip that may install (the system one is externally managed)
+      # A pip that may install (the system one is externally managed), and the two Pythons the bindings
+      # are built with (scripts/build_python.sh); 3.12, set up last, is python3.
+      - uses: actions/setup-python@v5
+        id: py311
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-python@v5
+        id: py312
         with:
           python-version: "3.12"
       - name: Version
@@ -157,11 +193,18 @@ jobs:
           name: web-console
           path: apps
       - run: brew list ninja >/dev/null 2>&1 || brew install ninja
+      - name: Python bindings (wheels, and the modules the packages ship)
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "13.0"
+        run: |
+          scripts/build_python.sh engine/build/python "${{ steps.py311.outputs.python-path }}" "${{ steps.py312.outputs.python-path }}"
+          mkdir -p dist && cp engine/build/python/wheels/*.whl dist/
       # libc++ is part of macOS, so no static runtime here; the binary runs on macOS 13 and later.
       - name: Build and test
         run: |
           cmake -S engine -B engine/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DPAPERBOAT_BUILD_TESTS=ON
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DPAPERBOAT_BUILD_TESTS=ON \
+            -DPAPERBOAT_PYTHON_MODULES_DIR="$PWD/engine/build/python/modules"
           cmake --build engine/build
           engine/build/tests/paperboat_tests
       - name: Package (.tar.gz, npm)
@@ -181,7 +224,22 @@ jobs:
           cp -r engine/tests/sdk-backend "$RUNNER_TEMP/sdk-backend" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
           "$prefix/bin/paperboat" build "$RUNNER_TEMP/sdk-backend"   # against the SDK in the platform package
           "$prefix/bin/paperboat" check "$RUNNER_TEMP/sdk-backend"
+          cp -r "$GITHUB_WORKSPACE/engine/tests/sdk-backend-python" "$RUNNER_TEMP/py-backend"
+          "$prefix/bin/paperboat" check "$RUNNER_TEMP/py-backend"   # python3 3.12: the abi3 module
           rm "$GITHUB_WORKSPACE"/dist/npm/paperboatlabs-cli-[0-9]*.tgz   # the launcher is published from the Linux job
+      - name: "The .tar.gz checks a Python backend with Python 3.11 (PAPERBOAT_PYTHON: the cp311 module)"
+        run: |
+          mkdir -p "$RUNNER_TEMP/pb" && tar xzf dist/paperboat-*.tar.gz -C "$RUNNER_TEMP/pb" --strip-components=1
+          py311="${{ steps.py311.outputs.python-path }}"
+          "$py311" -m pip install -q websockets jsonschema
+          cp -r engine/tests/sdk-backend-python "$RUNNER_TEMP/py-backend-311" && cd "$RUNNER_TEMP"
+          PAPERBOAT_PYTHON="$py311" "$RUNNER_TEMP/pb/bin/paperboat" check "$RUNNER_TEMP/py-backend-311"
+      - name: The web app is served from the .tar.gz, and stops
+        run: |
+          "$RUNNER_TEMP/pb/bin/paperboat" start --daemon --port 3047
+          curl -sf --retry 15 --retry-connrefused --retry-delay 1 http://localhost:3047/ | grep -q '<div id="root"' && echo "web app served"
+          "$RUNNER_TEMP/pb/bin/paperboat" list
+          "$RUNNER_TEMP/pb/bin/paperboat" stop
       - uses: actions/upload-artifact@v4
         with:
           name: macos
@@ -201,6 +259,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      # The Python bindings are built with both (scripts/build_python.sh); 3.12, set up last, is on PATH.
+      - uses: actions/setup-python@v5
+        id: py311
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-python@v5
+        id: py312
+        with:
+          python-version: "3.12"
       - name: Version
         id: version
         run: |
@@ -213,12 +280,20 @@ jobs:
         with:
           name: web-console
           path: apps
+      # The static C runtime, as paperboat.exe: Python ships vcruntime140.dll but not msvcp140.dll.
+      - name: Python bindings (wheels, and the modules the packages ship)
+        env:
+          CMAKE_ARGS: -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+        run: |
+          scripts/build_python.sh engine/build/python "${{ steps.py311.outputs.python-path }}" "${{ steps.py312.outputs.python-path }}"
+          mkdir -p dist && cp engine/build/python/wheels/*.whl dist/
       # The CLI, the core and the toolkit, and of the
       # tests only the process layer's run here (engine/tests/process_test.cpp).
       - name: Build
         run: |
           cmake -S engine -B engine/build -G "Visual Studio 17 2022" -A x64 \
-            -DPAPERBOAT_STATIC_RUNTIME=ON -DPAPERBOAT_BUILD_TESTS=ON
+            -DPAPERBOAT_STATIC_RUNTIME=ON -DPAPERBOAT_BUILD_TESTS=ON \
+            -DPAPERBOAT_PYTHON_MODULES_DIR="$(cygpath -m "$PWD/engine/build/python/modules")"
           cmake --build engine/build --config Release --parallel
       - name: The process layer works (CreateProcess, pipes, job objects, kill)
         run: ctest --test-dir engine/build -C Release --output-on-failure
@@ -244,6 +319,11 @@ jobs:
           cp -r engine/tests/sdk-backend "$RUNNER_TEMP/sdk-backend" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
           "$exe" build "$RUNNER_TEMP/sdk-backend"
           "$exe" check "$RUNNER_TEMP/sdk-backend"
+          cp -r "$GITHUB_WORKSPACE/engine/tests/sdk-backend-python" "$RUNNER_TEMP/py-backend"
+          "$exe" check "$RUNNER_TEMP/py-backend"   # Python 3.12: the abi3 module (_engine.pyd)
+          py311="${{ steps.py311.outputs.python-path }}"
+          "$py311" -m pip install -q websockets jsonschema
+          PAPERBOAT_PYTHON="$py311" "$exe" check "$RUNNER_TEMP/py-backend"   # the cp311 module
           cd "$GITHUB_WORKSPACE" && python scripts/pack_npm.py --version "$v" --out dist/npm --main
       - name: The npm packages install and run through the launcher
         run: |
@@ -251,6 +331,9 @@ jobs:
           npm install -g --prefix "$prefix" dist/npm/paperboatlabs-cli-win32-x64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz
           node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" --version
           node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" pkg list
+          cd "$RUNNER_TEMP"   # outside the checkout, whose python/ the CLI would take (and build) instead
+          node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" check "$RUNNER_TEMP/py-backend"
+          cd "$GITHUB_WORKSPACE"
           rm dist/npm/paperboatlabs-cli-[0-9]*.tgz   # the launcher is published from the Linux job
       - uses: actions/upload-artifact@v4
         with:
@@ -281,7 +364,7 @@ jobs:
           shopt -s nullglob
           case "$GITHUB_REF_NAME" in *-*) pre=--prerelease;; esac   # v0.1.0-alpha.1
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes $pre \
-            dist/*.deb dist/*.rpm dist/*.tar.gz dist/*.zip dist/npm/*.tgz
+            dist/*.deb dist/*.rpm dist/*.tar.gz dist/*.zip dist/*.whl dist/npm/*.tgz
       - name: npm (platform packages first, the launcher last)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

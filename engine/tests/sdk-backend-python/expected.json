@@ -1,0 +1,6 @@
+{
+  "status": "done",
+  "run": "server.py",
+  "signals": { "show": [7, 1e-9] },
+  "logs": ["offset to 7"]
+}

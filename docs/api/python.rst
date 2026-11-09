@@ -10,8 +10,15 @@ are what the engine calls**. The classes a backend passes become the domain's pa
 (named after the descriptor's ``domain``), so the palette has them without the descriptor
 listing them.
 
-Install: ``pip install ./python`` (or ``npm run build:python`` and ``PYTHONPATH=python`` while
-developing). Never implement a framework feature here: add it to the engine and bind it.
+Install: nothing to do with a paperboat package (.deb, .rpm, .tar.gz, .zip, npm): it ships the
+module in ``lib/paperboat/python`` and ``paperboat run`` / ``check`` put it on ``PYTHONPATH`` for
+the backend process. To ``import paperboat`` in a process the CLI did not start (an IDE, a
+service), install the wheel instead. It is
+built for CPython 3.11 and, through the stable ABI (abi3), for every CPython from 3.12 on; the
+interpreter is the backend's ``.venv``, else ``$PAPERBOAT_PYTHON``, else ``python3``. Elsewhere:
+``pip install`` a release wheel, or ``pip install ./python`` (or ``npm run build:python`` and
+``PYTHONPATH=python`` while developing). Never implement a framework feature here: add it to the
+engine and bind it.
 
 API Quick Reference
 -------------------

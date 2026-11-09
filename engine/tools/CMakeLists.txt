@@ -52,4 +52,17 @@ if(PROJECT_IS_TOP_LEVEL)
   if(EXISTS ${cli_bundle})
     install(FILES ${cli_bundle} DESTINATION share/paperboat/cli COMPONENT runtime)
   endif()
+  # Python backends (pb#223): the `paperboat` package in lib/paperboat/python, which the CLI puts on
+  # PYTHONPATH, so `import paperboat` works with no pip step. Its extension is built from python/
+  # (scripts/build_python.sh): one module per CPython ABI (abi3 for 3.12 and later, and 3.11);
+  # each interpreter loads the one for it.
+  set(PAPERBOAT_PYTHON_MODULES_DIR "" CACHE PATH "A folder of built paperboat._engine modules (_engine.*) to ship")
+  if(PAPERBOAT_PYTHON_MODULES_DIR)
+    file(GLOB py_modules "${PAPERBOAT_PYTHON_MODULES_DIR}/_engine.*")
+    if(NOT py_modules)
+      message(FATAL_ERROR "PAPERBOAT_PYTHON_MODULES_DIR: no _engine.* module in ${PAPERBOAT_PYTHON_MODULES_DIR}")
+    endif()
+    file(GLOB py_sources "${CMAKE_CURRENT_SOURCE_DIR}/../../python/paperboat/*.py")
+    install(FILES ${py_sources} ${py_modules} DESTINATION lib/paperboat/python/paperboat COMPONENT runtime)
+  endif()
 endif()
