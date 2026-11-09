@@ -1,9 +1,7 @@
 import {
-  addEdge,
   Background,
   BaseEdge,
   EdgeLabelRenderer,
-  MarkerType,
   MiniMap,
   NodeToolbar,
   Panel,
@@ -14,10 +12,8 @@ import {
   useReactFlow,
   useStoreApi,
   type Connection,
-  type Edge,
   type EdgeProps,
   type IsValidConnection,
-  type Node,
   type NodeProps,
   type OnEdgesChange,
   type OnNodesChange,
@@ -29,7 +25,7 @@ import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { ownKeys } from "./commands";
 import { CompactBlock } from "./Compact";
 import { copySelection, pasteClip, type Clip } from "./clipboard";
-import { connectError, iconEnd, inForm, netWireType, placePorts, SIDES, signalEnd, signOf, wireMismatch, type PortSides, type WireEnd } from "./ports";
+import { connectError, netWireType, placePorts, SIDES, signOf, wireMismatch, type PortSides } from "./ports";
 import { flipPlacement, flipSideX, flipSideY, iconValid, placeIconPorts, rotateIcon, rotatePlacement, rotateSideCCW, rotateSideCW, useCanvasHotkeys, type RotationDeg } from "@paperboat/shared";
 import { usePortLayout } from "./portLayout";
 import { Bindable, draggedVariable, NumberOrFormula, VAR_DRAG, VarsContext } from "./Variables";
@@ -40,7 +36,6 @@ import { arrangeFlowNodes, canArrangeFlow } from "./flowLayout";
 import { middleOfWire, orthoPoints, roundedPolyline, routeWires, squareUp, type Obstacle, type RouteInput, type WireRoute, type WirePoint } from "./wireRouting.ts";
 import { CanvasHelp, useWireBends } from "@paperboat/shared/components";
 import {
-  absolute,
   Boundary,
   descendants,
   display,
@@ -53,41 +48,15 @@ import {
   ordered,
   splitHandle,
   STORY_DEF,
-  toGroups,
   withoutFrame,
   type Expose,
   type GroupData,
   type GroupNode,
 } from "./groups";
-import type { BlockDef, Connectors, Graph, ObjectDef, ParamDef, ParamValue, PortDef, Station } from "./protocol";
+import type { BlockDef, Connectors, ParamDef, ParamValue, PortDef } from "./protocol";
 import { PageIcon } from "./Shell";
-
-/**
- * `missing`: the backend's catalog has no block of this type (an old graph, another
- * backend's, a block renamed in code). The node keeps its type, params and wires, drawn
- * red from what it had, until the type comes back or the user replaces it.
- * `ports`: where the user moved its ports to (drag a port's name); absent: inputs left, outputs right.
- */
-export type BlockData = {
-  def: BlockDef;
-  params: Record<string, ParamValue>;
-  missing?: boolean;
-  ports?: PortSides;
-  rotation?: RotationDeg;
-  mirror?: boolean;
-  commented?: boolean;
-  commentMode?: "out" | "through";
-  comment?: string;
-};
-export type BlockNode = Node<BlockData, "block">;
-/** What the Flow canvas holds: blocks, and the groups (frames) around some of them. */
-export type FlowNode = BlockNode | GroupNode;
-export const isBlock = (n: FlowNode): n is BlockNode => n.type === "block";
-/**
- * `type`: the type of the ports it joins: `step` (control passes along it), `signal`, `image`…
- * `points`: the bends the user dragged it to, source end first; absent, it is routed.
- */
-export type Wire = Edge<{ type: string; points?: WirePoint[] }, "wire">;
+import { connect, freeId, hasStepPorts, inForm, isBlock, makeNode, portDef, portsOf, portType, wireEnd, type BlockNode, type FlowNode, type Wire } from "./flowModel";
+import { inLevel, withBlock } from "./flowGraph";
 
 /** What the last run said about blocks (`node.state`): where a Step flow is, which failed. */
 export const RunStates = createContext<{
@@ -101,30 +70,9 @@ export const RunStates = createContext<{
   progress: {},
 });
 
-export { inForm };
-
-
-/** A block's ports as they are now (a magic block's: its form's). */
-export const portsOf = (n: BlockNode) => inForm(n.data.def, n.data.params);
-
-const portDef = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs") =>
-  def?.[side].find((p) => p.id === port);
-/**
- * The end of a wire at port `port` of `def`: an icon connector (its class from the catalog, either
- * direction for an acausal one), else a legacy signal port on the `side` the wire runs from.
- */
-const wireEnd = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs", connectors: Connectors): WireEnd | null => {
-  const ip = iconValid(def?.view?.icon) ? def?.view?.icon?.ports?.find((p) => p.id === port) : undefined;
-  if (ip) return iconEnd(ip, connectors);
-  return portDef(def, port, side) ? signalEnd(side === "inputs" ? "in" : "out") : null;
-};
-
 /** What the canvas knows of icon ports: the catalog's connectors, wires per port, ports whose wires dangle (`if` false). */
 const ConnectorsContext = createContext<Connectors>({});
 const IconWires = createContext<{ count: ReadonlyMap<string, Record<string, number>>; missing: ReadonlySet<string> }>({ count: new Map(), missing: new Set() });
-
-const portType = (def: BlockDef | undefined, port: string | null | undefined, side: "inputs" | "outputs") =>
-  portDef(def, port, side)?.type;
 
 /** Generic node: everything it shows comes from the backend's BlockDef. */
 function Block({ id, data, selected }: NodeProps<BlockNode>) {
@@ -445,266 +393,6 @@ function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire
 
 const nodeTypes = { block: Block, frame: GroupBox, boundary: Boundary };
 const edgeTypes = { wire: WireEdge };
-
-export function makeNode(def: BlockDef, id: string, x: number, y: number, params: Record<string, ParamValue> = {}): BlockNode {
-  const defaults = Object.fromEntries(def.params.map((p) => [p.id, p.default]));
-  // A linked block goes when its station object goes, not from the Flow page.
-  return { id, type: "block", position: { x, y }, deletable: !def.linked, data: { def, params: { ...defaults, ...params } } };
-}
-
-/**
- * Keep the linked blocks in step with the station: one per station object that spawns
- * one (same id), none for objects that are gone. Returns `nodes` itself when nothing changes.
- */
-export function syncLinked(nodes: FlowNode[], station: Station | null, objects: ObjectDef[], blocks: BlockDef[]): FlowNode[] {
-  const spawns = new Map(objects.flatMap((o) => (o.block ? [[o.type, o.block] as const] : [])));
-  const defs = new Map(blocks.map((b) => [b.type, b]));
-  const wanted = new Map(
-    (station?.objects ?? []).flatMap((o) => {
-      const def = defs.get(spawns.get(o.type) ?? "");
-      return def ? [[o.id, def] as const] : [];
-    }),
-  );
-  const kept = nodes.filter((n) => !isBlock(n) || !n.data.def.linked || wanted.has(n.id));
-  const have = new Set(kept.map((n) => n.id));
-  // New ones go below everything on the canvas, so they never cover a block.
-  const top = kept.filter((n) => !n.parentId);
-  const left = top.length ? Math.min(...top.map((n) => n.position.x)) : 0;
-  const below = top.length ? Math.max(...top.map((n) => n.position.y + (n.measured?.height ?? 130))) + 60 : 0;
-  const added = [...wanted]
-    .filter(([id]) => !have.has(id))
-    .map(([id, def], i) => makeNode(def, id, left + 220 * (i % 4), below + 150 * Math.floor(i / 4)));
-  return kept.length === nodes.length && added.length === 0 ? nodes : [...kept, ...added];
-}
-
-export function makeWire(c: Connection, type: string): Wire {
-  const step = type === "step";
-  return {
-    id: `${c.source}.${c.sourceHandle}-${c.target}.${c.targetHandle}`,
-    type: "wire",
-    ...c,
-    data: { type },
-    markerEnd: step ? { type: MarkerType.ArrowClosed } : undefined,
-  };
-}
-
-/**
- * Add a wire, replacing the one it can't share a port with: a signal input reads one
- * wire, and a step output leads to one next block (a step input can be reached from many).
- */
-function connect(wires: Wire[], c: Connection, type: string): Wire[] {
-  const step = type === "step";
-  const clash = (w: Wire) =>
-    step
-      ? w.source === c.source && w.sourceHandle === c.sourceHandle
-      : w.target === c.target && w.targetHandle === c.targetHandle;
-  return addEdge(makeWire(c, type), wires.filter((w) => !clash(w)));
-}
-
-export function freeId(type: string, nodes: FlowNode[]): string {
-  const taken = new Set(nodes.map((n) => n.id));
-  let i = 1;
-  while (taken.has(`${type}-${i}`)) i++;
-  return `${type}-${i}`;
-}
-
-/**
- * A stand-in definition for a block whose type the catalog lacks, from what is known of
- * it: the ports its wires use (and any it had), and its params as they were.
- */
-function missingDef(
-  type: string,
-  params: Record<string, ParamValue>,
-  wires: { source: string; sourceHandle?: string | null; target: string; targetHandle?: string | null; type?: string }[],
-  id: string,
-  had?: BlockDef,
-): BlockDef {
-  const ports = (side: "inputs" | "outputs") => {
-    const known = new Map((had?.[side] ?? []).map((p) => [p.id, p.type]));
-    for (const w of wires) {
-      const port = side === "inputs" ? (w.target === id ? w.targetHandle : null) : w.source === id ? w.sourceHandle : null;
-      if (port && !known.has(port)) known.set(port, w.type ?? "signal");
-    }
-    return [...known].map(([pid, ptype]) => ({ id: pid, type: ptype }));
-  };
-  return {
-    type,
-    label: type,
-    kind: "function",
-    inputs: ports("inputs"),
-    outputs: ports("outputs"),
-    params: Object.entries(params).map(([pid, v]) =>
-      typeof v === "number"
-        ? { id: pid, type: "number" as const, default: v }
-        : typeof v === "boolean"
-          ? { id: pid, type: "boolean" as const, default: v }
-          : { id: pid, type: "text" as const, default: typeof v === "string" ? v : "var" in v ? `=${v.var}` : `=${v.expr}` },
-    ),
-  };
-}
-
-/** Wire graph → editor state. A node whose type isn't in the catalog stays, as a missing block. */
-export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]; edges: Wire[] } {
-  const defs = new Map(blocks.map((b) => [b.type, b]));
-  const wires = graph.edges.map(({ from: [s, sp], to: [t, tp] }) => ({ source: s, sourceHandle: sp, target: t, targetHandle: tp }));
-  const nodes = graph.nodes.map((n, i) => {
-    const [x, y] = n.pos ?? [0, 120 * i];
-    const def = defs.get(n.type);
-    const ports = n.ports ? { ports: n.ports } : {};
-    const rotation = n.rotation !== undefined ? { rotation: n.rotation } : {};
-    const mirror = n.mirror !== undefined ? { mirror: n.mirror } : {};
-    if (def) {
-      const node = makeNode(def, n.id, x, y, n.params);
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          ...ports,
-          ...rotation,
-          ...mirror,
-          ...(n.commented !== undefined ? { commented: n.commented } : {}),
-          ...(n.comment_mode !== undefined ? { commentMode: n.comment_mode } : {}),
-          ...(n.comment !== undefined ? { comment: n.comment } : {}),
-        },
-      };
-    }
-    const node = makeNode(missingDef(n.type, n.params ?? {}, wires, n.id), n.id, x, y, n.params);
-    return {
-      ...node,
-      data: {
-        ...node.data,
-        ...ports,
-        ...rotation,
-        ...mirror,
-        missing: true,
-        ...(n.commented !== undefined ? { commented: n.commented } : {}),
-        ...(n.comment_mode !== undefined ? { commentMode: n.comment_mode } : {}),
-        ...(n.comment !== undefined ? { comment: n.comment } : {}),
-      },
-    };
-  });
-  const byId = new Map<string, BlockDef>(nodes.map((n) => [n.id, inForm(n.data.def, n.data.params)]));
-  // Groups round their blocks and the groups in them, innermost first: each is made while
-  // everything it holds still has its place on the whole canvas.
-  const groups = graph.groups ?? [];
-  const parentOf = new Map(groups.flatMap((g) => (g.parent ? [[g.id, g.parent] as const] : [])));
-  const depth = (id: string) => {
-    let d = 0;
-    for (let p = parentOf.get(id); p && d < 64; p = parentOf.get(p)) d++;
-    return d;
-  };
-  let all: FlowNode[] = nodes;
-  for (const g of [...groups].sort((a, b) => depth(b.id) - depth(a.id))) {
-    const inside = all.filter((n) => !n.parentId && (isBlock(n) ? g.nodes.includes(n.id) : parentOf.get(n.id) === g.id));
-    if (inside.length === 0) continue;
-    const { frame, children } = frameAround(g.id, g.kind, inside, {
-      label: g.label,
-      collapsed: g.collapsed,
-      seconds: g.params?.seconds,
-      reset: g.params?.reset,
-      release: g.release,
-      pos: g.pos,
-      sides: g.ports,
-      expose: g.expose?.map((x) => ({ side: x.side, to: [x.to[0], x.to[1]] as [string, string] })),
-    });
-    if (g.kind === "story") byId.set(g.id, STORY_DEF);
-    const moved = new Map(children.map((c) => [c.id, c]));
-    all = [...all.map((n) => moved.get(n.id) ?? n), frame];
-  }
-  // A frame's children are kept inside it, and so is a group in a frame.
-  all = all.map((n) => {
-    const p = n.parentId ? all.find((q) => q.id === n.parentId) : undefined;
-    return p && isFrame(p) && p.data.kind === "visual" ? { ...n, extent: "parent" as const } : n;
-  });
-  const edges = wires.map((w, i) => {
-    const wire = makeWire(w, portType(byId.get(w.source), w.sourceHandle, "outputs") ?? "signal");
-    const points = graph.edges[i].points;
-    return points ? { ...wire, data: { type: wire.data!.type, points } } : wire;
-  });
-  return { nodes: ordered(all), edges };
-}
-
-/**
- * The same canvas against a new catalog (the backend came back, perhaps changed): each
- * block takes its type's current definition, keeping the params it still has; a type that
- * is gone leaves a missing block; a missing one whose type is back is whole again.
- * Returns `nodes` itself when nothing changes.
- */
-export function resolveBlocks(nodes: FlowNode[], edges: Wire[], blocks: BlockDef[]): FlowNode[] {
-  const defs = new Map(blocks.map((b) => [b.type, b]));
-  let changed = false;
-  const out = nodes.map((n): FlowNode => {
-    if (!isBlock(n)) return n;
-    const def = defs.get(n.data.def.type);
-    if (def === n.data.def || (!def && n.data.missing)) return n;
-    changed = true;
-    if (def) {
-      const defaults = Object.fromEntries(def.params.map((p) => [p.id, p.default]));
-      const kept = Object.fromEntries(Object.entries(n.data.params).filter(([k]) => k in defaults));
-      const ports = n.data.ports ? { ports: n.data.ports } : {};
-      const rotation = n.data.rotation !== undefined ? { rotation: n.data.rotation } : {};
-      const mirror = n.data.mirror !== undefined ? { mirror: n.data.mirror } : {};
-      const commented = n.data.commented !== undefined ? { commented: n.data.commented } : {};
-      const commentMode = n.data.commentMode !== undefined ? { commentMode: n.data.commentMode } : {};
-      const comment = n.data.comment !== undefined ? { comment: n.data.comment } : {};
-      return { ...n, deletable: !def.linked, data: { def, params: { ...defaults, ...kept }, ...ports, ...rotation, ...mirror, ...commented, ...commentMode, ...comment } };
-    }
-    const wires = edges.map((e) => ({ ...e, type: e.data?.type }));
-    return { ...n, deletable: true, data: { ...n.data, def: missingDef(n.data.def.type, n.data.params, wires, n.id, n.data.def), missing: true } };
-  });
-  return changed ? out : nodes;
-}
-
-export function toGraph(nodes: FlowNode[], edges: Wire[]): Graph {
-  const groups = toGroups(nodes);
-  return {
-    nodes: nodes.filter(isBlock).map((n) => ({
-      id: n.id,
-      type: n.data.def.type,
-      params: n.data.params,
-      ...(n.data.ports ? { ports: n.data.ports } : {}),
-      ...(n.data.rotation !== undefined ? { rotation: n.data.rotation } : {}),
-      ...(n.data.mirror !== undefined ? { mirror: n.data.mirror } : {}),
-      ...(n.data.commented !== undefined ? { commented: n.data.commented } : {}),
-      ...(n.data.commentMode !== undefined ? { comment_mode: n.data.commentMode } : {}),
-      ...(n.data.comment !== undefined ? { comment: n.data.comment } : {}),
-    })),
-    edges: edges.map((e) => ({ from: [e.source, e.sourceHandle ?? ""], to: [e.target, e.targetHandle ?? ""] })),
-    ...(groups.length > 0 ? { groups } : {}),
-  };
-}
-
-/** `toGraph` and every block's place on the whole canvas, for a project file (a run doesn't need places). */
-export function toFlow(nodes: FlowNode[], edges: Wire[]): Graph {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const g = toGraph(nodes, edges);
-  return {
-    ...g,
-    nodes: g.nodes.map((n) => {
-      const at = absolute(byId.get(n.id)!, byId);
-      return { ...n, pos: [Math.round(at.x), Math.round(at.y)] };
-    }),
-    edges: g.edges.map((e, i) => (edges[i].data?.points ? { ...e, points: edges[i].data!.points } : e)),
-  };
-}
-
-/**
- * A new block at `at` (flow coordinates on the whole canvas, its top-left), selected and the
- * only one selected; inside subsystem `level` when one is open.
- */
-export function withBlock(nodes: FlowNode[], def: BlockDef, at: { x: number; y: number }, level: string | null = null): [FlowNode[], string] {
-  const id = freeId(def.type, nodes);
-  const node = { ...inLevel(makeNode(def, id, Math.round(at.x), Math.round(at.y)), level, nodes), selected: true };
-  return [[...nodes.map((n) => (n.selected ? { ...n, selected: false } : n)), node], id];
-}
-
-/** A new node placed in subsystem `level` (its position made relative to it), or as it is. */
-function inLevel<N extends FlowNode>(node: N, level: string | null, nodes: FlowNode[]): N {
-  const host = level ? nodes.find((n) => n.id === level) : undefined;
-  if (!host) return node;
-  const o = absolute(host, nodes);
-  return { ...node, parentId: level, position: { x: node.position.x - o.x, y: node.position.y - o.y } };
-}
 
 const typeOf = (p: PortDef) => p.type ?? "signal";
 const BLOCK_SIZE = { w: 156, h: 70 };
@@ -1655,7 +1343,6 @@ const GESTURES: [string, string][] = [
   ["Undo · redo", "`Ctrl+Z` · `Ctrl+Shift+Z`"],
 ];
 
-const hasStepPorts = (def: BlockDef) => [...def.inputs, ...def.outputs].some((p) => p.type === "step");
 
 /**
  * A block's ports as checkboxes: a ticked one is a port of the open group (shown on its block
