@@ -155,6 +155,10 @@ TEST_CASE("run.speed: the session refuses what isn't a speed, ignores one betwee
     std::lock_guard lock(mutex);
     return sent.back();
   };
+  auto at = [&](std::size_t index) {
+    std::lock_guard lock(mutex);
+    return sent.at(index);
+  };
   core::Session session(backend, [&](const std::string& text) {
     std::lock_guard lock(mutex);
     sent.push_back(json::parse(text));
@@ -178,8 +182,9 @@ TEST_CASE("run.speed: the session refuses what isn't a speed, ignores one betwee
   const auto start = Clock::now();
   session.on_message(R"({"type": "graph.run", "graph": )" + rig::catalog().graph + "}");
   std::this_thread::sleep_for(std::chrono::milliseconds(150));
+  const auto refused = count();
   session.on_message(R"({"type": "run.speed", "speed": -3})");  // refused: the run goes on at 1×
-  CHECK(last()["level"] == "error");
+  CHECK(at(refused)["level"] == "error");
   std::this_thread::sleep_for(std::chrono::milliseconds(100));
   session.on_message(R"({"type": "run.speed", "speed": 0})");  // max: the 10 s run ends early
   for (int i = 0; i < 500 && last()["type"] != "run.finished"; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));

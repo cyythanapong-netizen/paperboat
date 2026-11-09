@@ -700,8 +700,10 @@ void Run::frame(const json& samples, std::optional<double> progress) {
   for (const auto& e : scene_of_blocks(blocks())) patch.push_back(e);
   if (!patch.empty()) emit_({{"type", "scene.patch"}, {"entities", patch}});
   if (progress) emit_({{"type", "run.progress"}, {"run", id_}, {"fraction", *progress}});
-  take_speed();
-  if (settings_.real_time) pace();
+  if (settings_.real_time) {
+    take_speed();
+    pace();
+  }
 }
 
 void Run::take_speed() {
@@ -732,8 +734,10 @@ void Run::pace() {
   for (bool first = true;; first = false) {
     if (settings_.speed <= 0) return;  // as fast as it can
     const auto now = clock::now();
-    const auto due = pace_wall_ + std::chrono::duration_cast<clock::duration>(
-                                      std::chrono::duration<double>((ctx_.t - pace_t_) / settings_.speed));
+    // Clamp the wait to an hour before the cast: a tiny speed would otherwise overflow the
+    // clock's int64 nanoseconds. The 20 ms slices re-evaluate it, so the run still stalls there.
+    const double wait_s = std::min((ctx_.t - pace_t_) / settings_.speed, 3600.0);
+    const auto due = pace_wall_ + std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(wait_s));
     if (due <= now) {
       const auto lag = std::chrono::duration<double>(now - due).count();
       if (first && lag > 0.2 && (now - last_lag_warn_ > std::chrono::seconds(2))) {
