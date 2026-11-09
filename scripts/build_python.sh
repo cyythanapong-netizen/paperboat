@@ -19,6 +19,10 @@ rm -rf "$out/wheels" "$out/modules"
 mkdir -p "$out/wheels" "$out/modules"
 out="$(cd "$out" && pwd)"
 
+# Every core (the Visual Studio generator builds one file at a time otherwise).
+CMAKE_BUILD_PARALLEL_LEVEL="${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)}"
+export CMAKE_BUILD_PARALLEL_LEVEL
+
 for py in "$@"; do
   echo "== paperboat wheel with $("$py" -c 'import sys; print(sys.version.split()[0], sys.executable)')"
   "$py" -m pip wheel --no-deps --wheel-dir "$out/wheels" "$src/python"

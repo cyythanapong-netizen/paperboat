@@ -331,7 +331,9 @@ jobs:
           npm install -g --prefix "$prefix" dist/npm/paperboatlabs-cli-win32-x64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz
           node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" --version
           node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" pkg list
+          cd "$RUNNER_TEMP"   # outside the checkout, whose python/ the CLI would take (and build) instead
           node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" check "$RUNNER_TEMP/py-backend"
+          cd "$GITHUB_WORKSPACE"
           rm dist/npm/paperboatlabs-cli-[0-9]*.tgz   # the launcher is published from the Linux job
       - uses: actions/upload-artifact@v4
         with:
