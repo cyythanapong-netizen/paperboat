@@ -30,6 +30,13 @@ struct Entity {
   std::array<double, 3> scale{1, 1, 1};
   std::array<double, 3> to{};             // a line's end
   std::string src = {};                   // an image's picture: a URL or a data: URL
+  // A mesh (shape "mesh"), in the entity's own frame (pos, rot, scale place it): x, y, z per
+  // vertex, three vertex indices per triangle, and optionally a scalar field per vertex the
+  // UI colours from `range` (low to high; both 0: the field's own min and max).
+  std::vector<double> vertices = {};
+  std::vector<double> indices = {};
+  std::vector<double> values = {};
+  std::array<double, 2> range{};
 };
 
 // One station object in a run.

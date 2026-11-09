@@ -33,6 +33,10 @@ fs::path walk_up(fs::path p) {
   p = fs::weakly_canonical(p, ec);
   while (!p.empty()) {
     if (has_repo_markers(p)) return p;
+    // A paperboat-examples checkout sits next to paperboat, not inside it: a backend's
+    // descriptor or executable lives under <workspace>/paperboat-examples/NN-…, so the
+    // repository root is a sibling, not an ancestor. Check it at every step.
+    if (has_repo_markers(p / "paperboat")) return p / "paperboat";
     const fs::path parent = p.parent_path();
     if (parent == p) break;
     p = parent;
