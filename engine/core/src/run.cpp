@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <exception>
 #include <filesystem>
 #include <optional>
@@ -108,6 +109,22 @@ json ports_json(const std::vector<toolkit::PortDef>& ports) {
     for (const auto& c : p.components) components.push_back({c.id, c.unit});
     out.push_back({p.id, p.type, p.unit, p.dimension ? json(*p.dimension) : json(), components, p.broadcast});
   }
+// A list of points as a readout (#24): how many, and the first few. A signal sample carries a
+// number, text or a vector, not a table.
+std::string points_text(const toolkit::Table& points) {
+  const auto number = [](double v) {
+    char buf[32];
+    std::snprintf(buf, sizeof buf, "%.4g", v);
+    return std::string(buf);
+  };
+  std::string out = std::to_string(points.size()) + (points.size() == 1 ? " point" : " points");
+  constexpr std::size_t kShown = 4;
+  for (std::size_t i = 0; i < points.size() && i < kShown; ++i) {
+    out += i == 0 ? ": (" : ", (";
+    for (std::size_t c = 0; c < points[i].size(); ++c) out += (c ? ", " : "") + number(points[i][c]);
+    out += ")";
+  }
+  if (points.size() > kShown) out += ", …";
   return out;
 }
 
@@ -470,6 +487,19 @@ json Run::pass_over(const std::vector<std::string>& order) {
       } else {
         for (std::size_t i = 0; i < vector->size(); ++i)
           samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", i}, {"v", (*vector)[i]}});
+      }
+    } else if (const auto* points = toolkit::get_if<toolkit::Table>(shown, "in")) {
+      if (!node.def.whole_vector && settings_.mode == RunSettings::Mode::Once) {
+        // A Graph in a run-once plots a list of points as a curve: the second coordinate over
+        // the first (a point of one coordinate over its index).
+        for (std::size_t i = 0; i < points->size(); ++i) {
+          const auto& p = (*points)[i];
+          const bool xy = p.size() >= 2;
+          samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", xy ? p[0] : static_cast<double>(i)},
+                             {"v", xy ? p[1] : p.empty() ? 0.0 : p[0]}});
+        }
+      } else {
+        samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", points_text(*points)}});
       }
     } else {
       samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", toolkit::get_or(shown, "in")}});

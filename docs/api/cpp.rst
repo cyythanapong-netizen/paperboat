@@ -138,8 +138,10 @@ initializers may leave any out.
     .. cpp:member:: std::string type = "signal"
 
        ``"signal"`` (a value), ``"step"`` (control, in a Step flow) or a shape: ``"image"``,
-       ``"points"``, ``"vector"``… A wire joins ports of one type. ``"numbers"`` remains a
-       compatible name for numeric vectors.
+       ``"points"``, ``"vector"``… A wire joins ports of one type. Lists (#24): ``"numbers"`` is a
+       list of numbers (any length; it joins ``"vector"`` ports, a vector being a list of fixed
+       length) and ``"points"`` a list of points (a ``Table``, one row per point). Make them with
+       :cpp:func:`numbers_port` and :cpp:func:`points_port`; see :ref:`pkg-list`.
 
     .. cpp:member:: std::string unit
 
@@ -147,7 +149,8 @@ initializers may leave any out.
 
     .. cpp:member:: std::optional<std::size_t> dimension
 
-       A vector's fixed length. Absent: dynamic length; component metadata also fixes it.
+       A vector's fixed length. Absent: dynamic length; component metadata also fixes it. On a
+       ``"points"`` port, the coordinates of each point (the list's own length is never declared).
 
     .. cpp:member:: std::vector<VectorComponent> components
 
@@ -177,6 +180,14 @@ initializers may leave any out.
    Make a ``"vector"`` port. For example,
    ``vector_port("state", {{"x", "m"}, {"angle", "rad"}})`` puts a mixed-unit state on one
    wire while retaining the names and units of its components.
+
+.. cpp:function:: PortDef numbers_port(std::string id, std::string unit = {})
+.. cpp:function:: PortDef points_port(std::string id, std::vector<VectorComponent> coordinates = {})
+
+   Make a list port (#24): ``"numbers"``, a list of numbers in one ``unit``, or ``"points"``, a
+   list of points; ``points_port("profile", {{"x", "m"}, {"z", "m"}})`` fixes each point's
+   coordinates and their units. A block gives a list of numbers as a ``Vector`` and a list of
+   points as a ``Table``.
 
 .. cpp:struct:: ParamDef
 

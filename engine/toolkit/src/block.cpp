@@ -119,7 +119,7 @@ std::string text_param(const BlockDef& def, const Config& text, const std::strin
 }
 
 // `names` become ports of one side (`side`), units by position from the `units` param; the
-// first vector port of the other side (`other`) gets one component per name.
+// first vector or points port of the other side (`other`) gets one component per name.
 void name_ports(const BlockDef& def, const Config& text, const std::string& param, std::vector<PortDef>& side,
                 std::vector<PortDef>& other) {
   std::vector<std::string> reserved;
@@ -141,7 +141,9 @@ void name_ports(const BlockDef& def, const Config& text, const std::string& para
     components.push_back({.id = names[i], .unit = p.unit});
     side.push_back(std::move(p));
   }
-  if (auto v = std::ranges::find_if(other, [](const PortDef& p) { return is_vector_type(p.type); }); v != other.end()) {
+  // (or points port: one coordinate per name, as a Points block's [x, z])
+  if (auto v = std::ranges::find_if(other, [](const PortDef& p) { return is_vector_type(p.type) || p.type == "points"; });
+      v != other.end()) {
     v->dimension = names.size();
     v->components = std::move(components);
   }
@@ -286,6 +288,38 @@ std::string a_port(const std::string& type) {
 }
 }  // namespace
 
+namespace {
+// Why `from`'s shape doesn't fit `to`'s, for two vector ports or two points ports: the declared
+// length (a vector's values, a point's coordinates) and the units by position.
+std::optional<std::string> shape_mismatch(const PortDef& from, const PortDef& to, bool points) {
+  const auto from_size = vector_dimension(from);
+  const auto to_size = vector_dimension(to);
+  if (from_size && to_size && *from_size != *to_size)
+    return points ? "carries points of " + std::to_string(*from_size) + " coordinates into a port expecting " +
+                        std::to_string(*to_size)
+                  : "carries a vector of " + std::to_string(*from_size) + " values into a port expecting " +
+                        std::to_string(*to_size);
+  const std::size_t components = std::max(from.components.size(), to.components.size());
+  const auto unit_at = [](const PortDef& p, std::size_t i) -> std::string_view {
+    if (i < p.components.size() && !p.components[i].unit.empty()) return p.components[i].unit;
+    return p.unit;
+  };
+  for (std::size_t i = 0; i < components; ++i) {
+    const auto from_unit = unit_at(from, i);
+    const auto to_unit = unit_at(to, i);
+    if (!from_unit.empty() && !to_unit.empty() && from_unit != to_unit)
+      return std::string(points ? "carries point coordinate " : "carries vector component ") + std::to_string(i) + " in " +
+             std::string(from_unit) + " into a port in " + std::string(to_unit);
+  }
+  // A list's one unit is that of every item: checked as a number's is. (A vector's, without
+  // components, is not, as before.)
+  if (components == 0 && (is_list_type(from.type) || is_list_type(to.type)) && !from.unit.empty() && !to.unit.empty() &&
+      from.unit != to.unit)
+    return "carries " + from.unit + " into a port in " + to.unit;
+  return std::nullopt;
+}
+}  // namespace
+
 std::optional<std::string> wire_mismatch(const PortDef& from, const PortDef& to) {
   const bool step_from = from.type == "step", step_to = to.type == "step";
   if (step_from != step_to) return "joins " + a_port(from.type) + " to " + a_port(to.type);
@@ -294,31 +328,15 @@ std::optional<std::string> wire_mismatch(const PortDef& from, const PortDef& to)
   const bool same_type = from.type == to.type || (vectorish(from) && vectorish(to));
   if (!step_from && !same_type && from.type != "any" && to.type != "any")
     return "joins " + a_port(from.type) + " to " + a_port(to.type);
-  if (vectorish(from) && vectorish(to)) {
-    const auto from_size = vector_dimension(from);
-    const auto to_size = vector_dimension(to);
-    if (from_size && to_size && *from_size != *to_size)
-      return "carries a vector of " + std::to_string(*from_size) + " values into a port expecting " +
-             std::to_string(*to_size);
-    const std::size_t components = std::max(from.components.size(), to.components.size());
-    const auto unit_at = [](const PortDef& p, std::size_t i) -> std::string_view {
-      if (i < p.components.size() && !p.components[i].unit.empty()) return p.components[i].unit;
-      return p.unit;
-    };
-    for (std::size_t i = 0; i < components; ++i) {
-      const auto from_unit = unit_at(from, i);
-      const auto to_unit = unit_at(to, i);
-      if (!from_unit.empty() && !to_unit.empty() && from_unit != to_unit)
-        return "carries vector component " + std::to_string(i) + " in " + std::string(from_unit) +
-               " into a port in " + std::string(to_unit);
-    }
-  } else if (!from.unit.empty() && !to.unit.empty() && from.unit != to.unit) {
-    return "carries " + from.unit + " into a port in " + to.unit;
-  }
+  if (vectorish(from) && vectorish(to)) return shape_mismatch(from, to, false);
+  if (from.type == "points" && to.type == "points") return shape_mismatch(from, to, true);
+  if (!from.unit.empty() && !to.unit.empty() && from.unit != to.unit) return "carries " + from.unit + " into a port in " + to.unit;
   return std::nullopt;
 }
 
 bool is_vector_type(std::string_view type) { return type == "vector" || type == "numbers"; }
+
+bool is_list_type(std::string_view type) { return type == "numbers" || type == "points"; }
 
 std::optional<std::size_t> vector_dimension(const PortDef& port) {
   if (port.dimension) return port.dimension;
@@ -339,7 +357,26 @@ PortDef vector_port(std::string id, std::vector<VectorComponent> components) {
   return {.id = std::move(id), .type = "vector", .dimension = dimension, .components = std::move(components)};
 }
 
+PortDef numbers_port(std::string id, std::string unit) { return {.id = std::move(id), .type = "numbers", .unit = std::move(unit)}; }
+
+PortDef points_port(std::string id, std::vector<VectorComponent> coordinates) {
+  std::optional<std::size_t> dimension;
+  if (!coordinates.empty()) dimension = coordinates.size();
+  return {.id = std::move(id), .type = "points", .dimension = dimension, .components = std::move(coordinates)};
+}
+
 std::optional<std::string> vector_value_mismatch(const PortDef& port, const Value& value) {
+  if (port.type == "points") {
+    if (const auto* list = std::get_if<Vector>(&value); list && list->empty()) return std::nullopt;  // no points
+    const auto* table = std::get_if<Table>(&value);
+    if (!table) return "expects a list of points";
+    if (const auto dimension = vector_dimension(port))
+      for (std::size_t i = 0; i < table->size(); ++i)
+        if ((*table)[i].size() != *dimension)
+          return "has point " + std::to_string(i) + " of " + std::to_string((*table)[i].size()) + " coordinates, expected " +
+                 std::to_string(*dimension);
+    return std::nullopt;
+  }
   if (!is_vector_type(port.type)) return std::nullopt;
   const auto* vector = std::get_if<Vector>(&value);
   if (!vector) return "expects a vector value";
@@ -354,7 +391,8 @@ namespace {
 class Lanes final : public Block {
  public:
   using Make = std::function<std::unique_ptr<Block>(const Values& params)>;
-  Lanes(Make make, Values params, std::size_t lanes) : make_(std::move(make)), params_(std::move(params)), n_(lanes) {
+  Lanes(Make make, Values params, std::size_t lanes, std::vector<std::string> number_outputs)
+      : make_(std::move(make)), params_(std::move(params)), n_(lanes), number_outputs_(std::move(number_outputs)) {
     if (n_ > 0) made(n_);
   }
 
@@ -364,7 +402,7 @@ class Lanes final : public Block {
     for (const auto& [port, value] : in) {
       const auto* v = std::get_if<Vector>(&value);
       if (!v) continue;
-      if (n == 0) {
+      if (first.empty()) {
         n = v->size();
         first = port;
       } else if (v->size() != n) {
@@ -372,9 +410,18 @@ class Lanes final : public Block {
                                     " has " + std::to_string(n) + ": the vectors into an element-wise block are one length");
       }
     }
-    if (n == 0) n = lanes_.empty() ? std::max<std::size_t>(n_, 1) : lanes_.size();  // only numbers: each lane takes them
+    if (first.empty()) n = lanes_.empty() ? std::max<std::size_t>(n_, 1) : lanes_.size();  // only numbers: each lane takes them
     if (n_ > 0 && n != n_)
       throw std::invalid_argument("input " + first + " has " + std::to_string(n) + " values, expected " + std::to_string(n_));
+    if (n == 0) return empty(ctx, in);
+    if (!lanes_.empty() && n != lanes_.size()) {
+      // A list (#24) that changed length: lanes without state are made again for it.
+      if (!std::ranges::all_of(lanes_, [](const auto& lane) { return lane->stateless(); }))
+        throw std::invalid_argument("input " + first + " has " + std::to_string(n) + " values, but had " +
+                                    std::to_string(lanes_.size()) + ": this block keeps a state per element, so the list "
+                                    "into it can't change length during a run");
+      lanes_.clear();
+    }
     made(n);
     std::vector<Values> out;
     out.reserve(n);
@@ -434,6 +481,23 @@ class Lanes final : public Block {
     for (std::size_t i = 0; i < n; ++i) lanes_.push_back(make_(params_));
   }
 
+  // An empty list in: every number output is an empty list. The def says which outputs those
+  // are; without it, a lane made for the purpose says (fed zeros for the lists), so the
+  // block's own lanes keep their state.
+  Values empty(const Context& ctx, const Values& in) const {
+    if (!number_outputs_.empty()) {
+      Values out;
+      for (const auto& port : number_outputs_) out.emplace(port, Vector{});
+      return out;
+    }
+    Values probe;
+    for (const auto& [port, value] : in) probe.emplace(port, std::holds_alternative<Vector>(value) ? Value{0.0} : value);
+    Values out = make_(params_)->step(ctx, probe);
+    for (auto& [port, value] : out)
+      if (std::holds_alternative<double>(value)) value = Vector{};
+    return out;
+  }
+
   // The lanes' outputs as one: numbers into a vector; anything else is lane 0's.
   static Values gathered(const std::vector<Values>& lanes) {
     Values out;
@@ -454,14 +518,15 @@ class Lanes final : public Block {
   Make make_;
   Values params_;
   std::size_t n_;  // 0: from the first step's vectors
+  std::vector<std::string> number_outputs_;  // the def's number outputs, whose empty list is `[]`
   std::vector<std::unique_ptr<Block>> lanes_;
 };
 
 }  // namespace
 
 std::unique_ptr<Block> make_lanes(std::function<std::unique_ptr<Block>(const Values& params)> make, Values params,
-                                  std::size_t lanes) {
-  return std::make_unique<Lanes>(std::move(make), std::move(params), lanes);
+                                  std::size_t lanes, std::vector<std::string> number_outputs) {
+  return std::make_unique<Lanes>(std::move(make), std::move(params), lanes, std::move(number_outputs));
 }
 
 BlockDef lifted(const BlockDef& def, std::size_t lanes, const std::vector<VectorComponent>& components) {

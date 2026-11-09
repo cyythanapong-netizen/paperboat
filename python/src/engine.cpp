@@ -431,13 +431,14 @@ std::vector<tk::PortDef> ports_from_py(nb::handle list, const std::string& at) {
         for (nb::handle component : p.attr("components"))
           port.components.push_back(vector_component_from_py(component, at));
       if (!port.components.empty()) {
-        if (!tk::is_vector_type(port.type)) throw std::runtime_error(at + ": components are only valid on a vector port");
+        if (!tk::is_vector_type(port.type) && port.type != "points")
+          throw std::runtime_error(at + ": components are only valid on a vector or points port");
         if (port.dimension && *port.dimension != port.components.size())
           throw std::runtime_error(at + ": vector dimension does not match its components");
         port.dimension = port.components.size();
       }
-      if (port.dimension && !tk::is_vector_type(port.type))
-        throw std::runtime_error(at + ": dimension is only valid on a vector port");
+      if (port.dimension && !tk::is_vector_type(port.type) && port.type != "points")
+        throw std::runtime_error(at + ": dimension is only valid on a vector or points port");
       out.push_back(std::move(port));
     } else if (nb::isinstance<nb::tuple>(p) || nb::isinstance<nb::list>(p)) {
       const auto seq = nb::cast<nb::sequence>(p);
