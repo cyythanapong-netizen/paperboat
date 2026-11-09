@@ -685,7 +685,7 @@ while the autopilot is flying; the GNC law steers to the new pad. Touchdown must
 1.5 m/s vertical and 0.5 m/s horizontal with fuel left.
 
 Tutorial 06: ABB-Style Palletizer
--------------------------------
+---------------------------------
 
 .. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/06-robot-pick-place-station.svg
    :width: 520px
@@ -712,7 +712,7 @@ lift/drag vectors. Move ``alpha`` from 0° to 25° in the Variables sheet to see
 lift curve and the stall break past 14°.
 
 Tutorial 08: Air-Hockey Puck Tracker
------------------------------------
+------------------------------------
 
 .. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/08-air-hockey-station.svg
    :width: 520px
