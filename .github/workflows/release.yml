@@ -122,6 +122,7 @@ jobs:
             cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend
             cd /tmp && paperboat new demo && paperboat build demo && paperboat check demo &&
             python3 --version && cp -r /src-py /tmp/py-backend && paperboat check /tmp/py-backend'
+      - name: "SDK: the .rpms on Fedora: install, run, build and check a backend, and check a Python backend"
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" \
               -v "$PWD/engine/tests/sdk-backend-python:/src-py:ro" fedora:latest sh -ec '
