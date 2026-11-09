@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -74,7 +75,7 @@ TEST_CASE("ProcessRunner stream and detached runs pass cwd, env and output throu
   std::map<std::string, std::vector<std::string>> lines;
   core::ProcessRunner::run_stream(
       sh("printf 'a\\r\\nb\\n'; printf 'e1\\n' >&2; printf \"$PB_PROBE $(pwd)\"",
-         "echo a& echo b& echo e1 1>&2& <nul set /p =%PB_PROBE% %CD%"),
+         "echo a& echo b& 1>&2 echo e1& <nul set /p =%PB_PROBE% %CD%"),
       dir, env, [&](std::string_view stream, std::string_view line) { lines[std::string(stream)].emplace_back(line); });
   REQUIRE(lines["stdout"].size() == 3);
   CHECK(lines["stdout"][0] == "a");
@@ -89,7 +90,7 @@ TEST_CASE("ProcessRunner stream and detached runs pass cwd, env and output throu
   const fs::path log = dir / "detached.log";
   fs::remove(log);
   const int pid = core::ProcessRunner::run_detached(
-      sh("echo \"$PB_PROBE $(pwd)\"; echo err >&2", "echo(%PB_PROBE% %CD%& echo err 1>&2"), dir, env, log);
+      sh("echo \"$PB_PROBE $(pwd)\"; echo err >&2", "echo(%PB_PROBE% %CD%& 1>&2 echo err"), dir, env, log);
   REQUIRE(pid > 0);
   CHECK(test_platform::wait_exit(pid));
   std::ifstream in(log);
@@ -174,6 +175,35 @@ TEST_CASE("BackendManager port inspection and registry") {
   CHECK_FALSE(fs::exists(rec_path));
 }
 
+TEST_CASE("prepare_python_env finds a venv's python and extends PYTHONPATH the platform's way") {
+  const fs::path root = fs::temp_directory_path() / "pb_python_env";
+  std::error_code ec;
+  fs::remove_all(root, ec);
+#ifdef _WIN32
+  const fs::path venv_python = fs::path(".venv") / "Scripts" / "python.exe";
+  const std::string sep = ";";
+#else
+  const fs::path venv_python = fs::path(".venv") / "bin" / "python3";
+  const std::string sep = ":";
+#endif
+  const fs::path backend = root / "backend";
+  fs::create_directories((backend / venv_python).parent_path());
+  std::ofstream(backend / venv_python) << "";
+  const char* was = std::getenv("PYTHONPATH");
+  const std::string saved = was ? was : "";
+  test_platform::set_env("PYTHONPATH", "elsewhere");
+
+  const auto env = core::BackendManager::prepare_python_env(root, backend);
+  CHECK(env.python_bin == backend / venv_python);
+  const auto path = std::ranges::find(env.env, std::string("PYTHONPATH"), &std::pair<std::string, std::string>::first);
+  REQUIRE(path != env.env.end());
+  CHECK(path->second == (root / "python").string() + sep + "elsewhere");
+
+  if (was) test_platform::set_env("PYTHONPATH", saved);
+  else test_platform::unset_env("PYTHONPATH");
+  fs::remove_all(root, ec);
+}
+
 TEST_CASE("BackendManager check_backend validates missing vs valid descriptors") {
   auto non_existent = core::BackendManager::check_backend("/non/existent/path");
   CHECK_FALSE(non_existent.ok);
@@ -236,7 +266,11 @@ TEST_CASE("BackendManifest load_manifest validates schema and required fields") 
   CHECK(m_valid.name == "my-service");
   CHECK(m_valid.version == "1.2.3");
   CHECK(m_valid.language == "cpp");
+#ifdef _WIN32
+  CHECK(m_valid.run == "build/my-bin.exe");  // a C++ backend's program, named without .exe in backend.toml
+#else
   CHECK(m_valid.run == "build/my-bin");
+#endif
   CHECK(m_valid.port == 9000);
   CHECK(m_valid.descriptor == "descriptor.toml");
   CHECK(m_valid.toolkits == std::vector<std::string>{"opencv"});
