@@ -53,6 +53,7 @@ export const FLAG_HELP: Record<string, string> = {
   '--host': 'listen host',
   '--daemon': 'run in the background',
   '--version': 'toolkit version',
+  '--force': 'reinstall, even out of range',
   '-f': 'follow',
   '-n': 'number of lines',
   '-i': 'interactive',

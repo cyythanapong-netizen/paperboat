@@ -136,6 +136,29 @@ paperboat start                     # the web app: open http://localhost:3047/?b
 It never overwrites: a folder that exists must be empty. Then add blocks in `domain/`, use
 them in the descriptor's `[graph]` and update `expected.json` (docs/api: Quickstart, Testing).
 
+### Apps from other repositories (`pkg`)
+
+`apps.toml` lists the apps that live in their own repositories. `paperboat pkg install <name>[@<version>]`
+clones a release tag (default: the newest release, else main, recorded as `dev`) into
+`~/.local/share/paperboat/apps` (or `$PAPERBOAT_HOME/apps`) and builds it; `pkg update`, `pkg uninstall`,
+`pkg versions` (prereleases too) and `pkg path` do the rest.
+
+paperboat and paperboat-shared share a MAJOR.MINOR line, and `pkg` enforces it. A dep in `apps.toml`
+takes a range, `deps = ["paperboat-shared@0.1"]`, and installing the app:
+
+- resolves the dep to its newest tag in that range, prereleases included when the app's own version is a
+  prerelease or `dev` (`pkg install squero-studio-om@0.1.0-alpha.1` pulls paperboat-shared `0.1.0-alpha.x`;
+  a `dev` app with no tag in range takes the dep's main);
+- keeps a dep that is already installed in range, and fails with a clear message when it is outside;
+  `--force` reinstalls it in range;
+- refuses the other way round too: `pkg install paperboat-shared@0.2.0` fails while an installed app needs
+  `0.1` (or pass `--force`), and `pkg update paperboat-shared` stays inside `0.1`;
+- records the dep versions in the install marker; `pkg list` shows them under the app, and flags a dep
+  installed since that is outside the range.
+
+Versions order by SemVer (`0.1.0-alpha.2 < 0.1.0-alpha.10 < 0.1.0`); `pkg update` and a plain
+`pkg install` take releases only, a prerelease only when asked for with `@<version>`.
+
 ### Install
 
 ```sh
