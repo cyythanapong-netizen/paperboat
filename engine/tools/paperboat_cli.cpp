@@ -899,7 +899,7 @@ int cmd_pkg(const std::vector<std::string_view>& args) {
       for (const auto& d : a.deps) {  // what it was built against, and whether the dep installed now still pairs
         const auto it = std::ranges::find(list, d.name, &tk::AppEntry::name);
         const std::string now = it != list.end() && it->installed ? it->version : "";
-        const std::string built = a.built_with.contains(d.name) ? a.built_with.at(d.name) : now;
+        const std::string built = a.built_with.contains(d.name) ? a.built_with.at(d.name) : "";
         std::string line = "with " + d.name + " " + (built.empty() ? "?" : built);
         if (!d.range.empty()) line += " (needs " + d.range + ")";
         if (now.empty()) line += "; it is not installed now";
@@ -1331,7 +1331,7 @@ const std::vector<CommandSpec>& command_table() {
       {"unpack", cmd_unpack, "Unpack and verify a .ppk", {}, {}, {"--dir", "--json-stream"}, "ppk"},
       {"update", cmd_update, "Pull this repository and its app checkouts, rebuild", {}, {}, {"--check", "--no-build"}},
       {"pkg", cmd_pkg, "Apps from other repositories (package manager)", {},
-       {"list", "install", "update", "uninstall", "versions", "path"}, {"--json", "--all", "--version"}},
+       {"list", "install", "update", "uninstall", "versions", "path"}, {"--json", "--all", "--version", "--force"}},
       {"top", cmd_top, "Process dashboard (console)"},
       {"commands", cmd_commands, "The command table", {}, {}, {"--json"}},
   };
