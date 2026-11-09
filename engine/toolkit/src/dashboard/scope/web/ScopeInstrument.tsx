@@ -4,8 +4,7 @@
  * settings in the Board layout, and hands a tap to the host to wire.
  */
 import type { Channel, InstrumentProps } from "@paperboat/host";
-import { Scope } from "./Scope";
-import type { ScopeSettings } from "./Scope";
+import { Scope, type ScopeSettings } from "@paperboat/shared/scope";
 
 export function ScopeInstrument({ name, state, settings, onSettings, size, sources, inputs, taps, onTap }: InstrumentProps) {
   const small = size === "normal" || size === "compact";
