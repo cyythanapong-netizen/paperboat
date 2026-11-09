@@ -442,6 +442,35 @@ TEST_CASE("resolve_backend_dir makes a relative backend path absolute") {
   fs::remove_all(rel);
 }
 
+TEST_CASE("a Python backend gets `import paperboat` on PYTHONPATH and $PAPERBOAT_PYTHON's interpreter (pb#223)") {
+  const fs::path root = fs::temp_directory_path() / "pb_python_env_root";
+  fs::remove_all(root);
+  fs::create_directories(root);
+  auto pythonpath = [](const core::BackendManager::PythonEnv& env) {
+    for (const auto& [k, v] : env.env)
+      if (k == "PYTHONPATH") return v;
+    return std::string{};
+  };
+
+  // No paperboat package here, and none next to this test binary: nothing to add.
+  CHECK(core::BackendManager::python_package_dir(root).empty());
+  CHECK(pythonpath(core::BackendManager::prepare_python_env(root)).empty());
+
+  // A built copy (no CMakeLists.txt beside it, so nothing is built): first on PYTHONPATH.
+  fs::create_directories(root / "python" / "paperboat");
+  std::ofstream(root / "python" / "paperboat" / "__init__.py") << "\n";
+  CHECK(core::BackendManager::python_package_dir(root) == root / "python");
+  setenv("PYTHONPATH", "/elsewhere", 1);
+  setenv("PAPERBOAT_PYTHON", "/opt/python3.13/bin/python3", 1);
+  const auto env = core::BackendManager::prepare_python_env(root);
+  unsetenv("PYTHONPATH");
+  unsetenv("PAPERBOAT_PYTHON");
+  CHECK(pythonpath(env) == (root / "python").string() + ":/elsewhere");
+  CHECK(env.python_bin == "/opt/python3.13/bin/python3");
+  CHECK(core::BackendManager::prepare_python_env(root).python_bin == "python3");
+  fs::remove_all(root);
+}
+
 TEST_CASE("list_toolkits includes built-in toolkit and inspect_toolkit categorizes blocks and instruments") {
   const auto list = tk::list_toolkits();
   REQUIRE_FALSE(list.empty());

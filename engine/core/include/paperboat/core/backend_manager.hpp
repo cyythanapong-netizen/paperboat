@@ -152,8 +152,12 @@ class BackendManager {
     std::filesystem::path python_bin;
     std::vector<std::pair<std::string, std::string>> env;
   };
+  // The interpreter is the backend's .venv, $PAPERBOAT_PYTHON, the checkout's .venv, else python3.
   static PythonEnv prepare_python_env(const std::filesystem::path& repo_root = {},
                                      const std::filesystem::path& backend_dir = {});
+  // The folder that holds the `paperboat` Python package, put on PYTHONPATH (pb#223): a checkout's
+  // python/, else an installed package's <prefix>/lib/paperboat/python; empty if neither.
+  static std::filesystem::path python_package_dir(const std::filesystem::path& root);
 
   // Backend kind and directory resolution
   static BackendKind detect_backend_kind(const std::filesystem::path& path);

@@ -35,7 +35,16 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, NamedTuple
 
-from ._engine import Context, Entity, Handle, make, options, remember_args, scene, solve
+if sys.version_info < (3, 11):
+    raise ImportError(f"paperboat needs Python 3.11 or later, not {sys.version.split()[0]} ({sys.executable}); "
+                      "set PAPERBOAT_PYTHON to a newer python3 for the paperboat command")
+try:
+    from ._engine import Context, Entity, Handle, make, options, remember_args, scene, solve
+except ImportError as err:
+    # The packages ship the module for CPython 3.11 and, through the stable ABI, for 3.12 and later (pb#223).
+    raise ImportError(f"paperboat's engine module (paperboat._engine) does not load in Python {sys.version.split()[0]} "
+                      f"({sys.executable}): {err}. The packages have it for CPython 3.11 and later "
+                      "(PAPERBOAT_PYTHON picks the interpreter); a checkout builds it with npm run build:python") from err
 
 Vector = list[float]
 
