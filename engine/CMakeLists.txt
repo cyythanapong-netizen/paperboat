@@ -94,6 +94,8 @@ if(PAPERBOAT_INSTALL)
   write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfigVersion.cmake COMPATIBILITY SameMinorVersion)
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfigVersion.cmake
           DESTINATION ${PAPERBOAT_CMAKE_DIR} COMPONENT dev)
+  # Apache-2.0: the notice travels with every runtime package (deb, rpm, tar.gz, zip).
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT runtime)
 endif()
 
 # Optional toolkit packages are self-contained folders with a toolkit.toml and a
@@ -141,7 +143,7 @@ if(PROJECT_IS_TOP_LEVEL)
   # the release too (0.1.0~alpha.2 < 0.1.0); runtime libraries are found by rpm's auto-requires.
   set(CPACK_RPM_COMPONENT_INSTALL ON)
   set(CPACK_RPM_PACKAGE_VERSION ${PAPERBOAT_DEB_VERSION})
-  set(CPACK_RPM_PACKAGE_LICENSE "Proprietary")  # no LICENSE file yet (scripts/pack_npm.py says UNLICENSED)
+  set(CPACK_RPM_PACKAGE_LICENSE "Apache-2.0")  # the LICENSE file at the repository root (as scripts/pack_npm.py)
   set(CPACK_RPM_PACKAGE_GROUP "Applications/Engineering")
   set(CPACK_RPM_PACKAGE_URL "https://github.com/paperboatlab/paperboat")
   set(CPACK_RPM_FILE_NAME RPM-DEFAULT)

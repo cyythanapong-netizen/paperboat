@@ -46,3 +46,6 @@ Thumbs.db
 .~*
 *.insyncdl
 *.log
+
+# Local tool state
+.remember

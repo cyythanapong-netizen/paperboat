@@ -51,9 +51,10 @@ engine/                   C++20 engine: toolkit (reusable blocks and station obj
 python/                   Python bindings for the engine (pip install ./python): write a
                           backend's domain code in Python, the C++ engine runs it
 protocol/                 WebSocket protocol spec, JSON Schema, smoke_test.py and golden.py
-examples/backends/        example backends, each a project of its own that uses Paperboat
-                          (copy one anywhere and it still runs). Published separately, as
-                          the paperboat-examples repository; clone it next to this one
+../paperboat-examples/    example backends, each a project of its own that uses Paperboat
+                          (copy one anywhere and it still runs). Not in this repository: they
+                          live in paperboat-examples, which is not publicly available; with access,
+                          clone it next to this one (or set PAPERBOAT_EXAMPLES_DIR)
   mass-spring-python/     simulation: a sine pushes a mass on a spring (Python)
   cart-pole-cpp/          simulation, closed loop: PID balances a pole. C++: the blocks
                           come from the toolkit, the Cart-pole station object is its own
@@ -85,6 +86,10 @@ unchanged, and all pass the same domain-neutral smoke test and their golden runs
 
 ## Run the proof of concept
 
+The `backend:*` scripts run the example backends, so they need a `paperboat-examples`
+checkout (see Layout). Without one, `engine/tests/sdk-backend` is a backend in this
+repository: `./bin/paperboat build engine/tests/sdk-backend && ./bin/paperboat check engine/tests/sdk-backend`.
+
 ```sh
 pip install websockets
 npm install
@@ -107,7 +112,7 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ./bin/paperboat list                # everything running, with a KIND: backend or app
 ./bin/paperboat start               # starts the web app on port 3047 (stop / restart: the same, no target)
 ./bin/paperboat examples start      # launches all example backends (ports 8765-8773)
-./bin/paperboat run cart-pole       # no paperboat-examples checkout? fetched to ~/.paperboat/examples, built, run
+./bin/paperboat run cart-pole       # no paperboat-examples checkout? fetched to ~/.paperboat/examples (PAPERBOAT_EXAMPLES_REPO: another URL), built, run
 ./bin/paperboat examples fetch     # clone or pull ~/.paperboat/examples
 ./bin/paperboat examples status     # checks status of example backends
 ./bin/paperboat toolkit list        # lists available and installed toolkits

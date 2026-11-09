@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCOPE = "@paperboatlabs"  # one place to rename the scope
-LICENSE = "UNLICENSED"  # no LICENSE file in the repository yet; set the SPDX id when one is chosen
+LICENSE = "Apache-2.0"  # SPDX id of the LICENSE file at the repository root
 REPO = "git+https://github.com/paperboatlab/paperboat.git"
 
 # target -> (npm os, npm cpu, libc, binary name)
@@ -51,6 +51,7 @@ def main() -> None:
         stage = Path(tmp) / "pkg"
         if args.main:
             shutil.copytree(ROOT / "npm" / "cli", stage)
+            shutil.copy2(ROOT / "LICENSE", stage / "LICENSE")
             meta = json.loads((stage / "package.json").read_text())
             meta["optionalDependencies"] = {f"{SCOPE}/cli-{t}": args.version for t in sorted(TARGETS)}
         else:
@@ -61,6 +62,7 @@ def main() -> None:
             shutil.copytree(args.prefix, stage)
             (stage / "bin" / exe).chmod(0o755)
             (stage / "README.md").write_text(f"Native paperboat binary and C++ SDK for {args.target}. Install `{SCOPE}/cli`, not this.\n")
+            shutil.copy2(ROOT / "LICENSE", stage / "LICENSE")
             meta = {
                 "name": f"{SCOPE}/cli-{args.target}",
                 "description": f"Paperboat command line, native binary for {args.target}",

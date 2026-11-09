@@ -1,6 +1,7 @@
 {
   "name": "paperboat",
   "private": true,
+  "license": "Apache-2.0",
   "workspaces": [
     "apps/*",
     "engine/toolkit/src/*/*/web",
