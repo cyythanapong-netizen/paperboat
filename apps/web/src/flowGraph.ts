@@ -2,7 +2,7 @@
 // other, groups included, and new blocks placed on the level that is open.
 
 import { absolute, frameAround, isFrame, ordered, STORY_DEF, toGroups } from "./groups";
-import type { BlockDef, Graph } from "./protocol";
+import type { BlockDef, FlowType, Graph } from "./protocol";
 import { freeId, inForm, isBlock, makeNode, makeWire, missingDef, portType, type FlowNode, type Wire } from "./flowModel.ts";
 
 /** Wire graph → editor state. A node whose type isn't in the catalog stays, as a missing block. */
@@ -86,9 +86,11 @@ export function fromGraph(graph: Graph, blocks: BlockDef[]): { nodes: FlowNode[]
   return { nodes: ordered(all), edges };
 }
 
-export function toGraph(nodes: FlowNode[], edges: Wire[]): Graph {
+/** The canvas as the wire graph; `flow`: the sheet's flow type, if one was chosen (#9). */
+export function toGraph(nodes: FlowNode[], edges: Wire[], flow?: FlowType | null): Graph {
   const groups = toGroups(nodes);
   return {
+    ...(flow ? { flow } : {}),
     nodes: nodes.filter(isBlock).map((n) => ({
       id: n.id,
       type: n.data.def.type,
@@ -106,9 +108,9 @@ export function toGraph(nodes: FlowNode[], edges: Wire[]): Graph {
 }
 
 /** `toGraph` and every block's place on the whole canvas, for a project file (a run doesn't need places). */
-export function toFlow(nodes: FlowNode[], edges: Wire[]): Graph {
+export function toFlow(nodes: FlowNode[], edges: Wire[], flow?: FlowType | null): Graph {
   const byId = new Map(nodes.map((n) => [n.id, n]));
-  const g = toGraph(nodes, edges);
+  const g = toGraph(nodes, edges, flow);
   return {
     ...g,
     nodes: g.nodes.map((n) => {

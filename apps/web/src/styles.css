@@ -636,6 +636,15 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .card-params { display: flex; flex-wrap: wrap; gap: 2px 10px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
 .card-params b { font-weight: 400; color: var(--text); }
 .card-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; }
+/* Blocks that don't work in the open sheet's flow type (#9): apart, muted, saying where they do. */
+.browser-elsewhere { margin-top: var(--space-4); }
+.browser-elsewhere summary { cursor: pointer; margin: var(--space-2) 0; }
+.card.off { cursor: not-allowed; opacity: 0.55; border-style: dashed; }
+.card.off:hover { border-color: var(--line-strong); }
+.card.off .card-foot .lbl { white-space: normal; }
+/* The Flow page's sheet type (#9): Signal flow, Step flow… */
+.sheet-flow { display: inline-flex; align-items: center; gap: var(--space-1); }
+.sheet-flow .lbl { white-space: nowrap; }
 
 /* Quick add: a search floating at the cursor. */
 .quick-add { position: fixed; z-index: 60; width: 280px; background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); overflow: hidden; }
@@ -646,6 +655,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .quick-add li.on { border-color: var(--line-ink); }
 .quick-add li.on b { font-weight: 600; }
 .quick-add li.none { cursor: default; }
+.quick-add li.away { opacity: 0.55; }
+.quick-add li.away b { font-weight: 400; }
 .quick-foot { display: flex; justify-content: space-between; padding: 6px 10px; border-top: 1px solid var(--line); }
 .dragging-card .browser { opacity: 0.3; pointer-events: none; }
 

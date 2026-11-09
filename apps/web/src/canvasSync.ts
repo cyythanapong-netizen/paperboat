@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { EngineState } from "./engine";
-import type { ClientMsg, Station } from "./protocol";
+import type { ClientMsg, FlowType, Station } from "./protocol";
 import { resolveBlocks, syncLinked, withoutLooseWires, type FlowNode, type Wire } from "./flowModel";
 import { fromGraph, toGraph } from "./flowGraph";
 
@@ -16,6 +16,8 @@ export function useCanvasSync(
   setNodes: Dispatch<SetStateAction<FlowNode[]>>,
   setEdges: Dispatch<SetStateAction<Wire[]>>,
   fitView: () => void,
+  /** The sheet's flow type as the loaded graph gives it (#9); null: not chosen. */
+  setFlowChoice: (flow: FlowType | null) => void,
 ) {
   const [station, setStation] = useState<Station | null>(null);
   // What the canvas and station were loaded as, and from which backend: a backend that
@@ -69,9 +71,10 @@ export function useCanvasSync(
     const g = state.loaded ? fromGraph(state.loaded, state.blocks) : { nodes: [], edges: [] };
     setNodes(g.nodes);
     setEdges(g.edges);
+    setFlowChoice(state.loaded?.flow ?? null);
     canvas.current = { ...canvas.current, engine: state.engine, graph: JSON.stringify(toGraph(g.nodes, g.edges)) };
     requestAnimationFrame(() => fitView());
-  }, [state.loaded, state.blocks, state.engine, setNodes, setEdges, fitView]);
+  }, [state.loaded, state.blocks, state.engine, setNodes, setEdges, fitView, setFlowChoice]);
 
   return { station, editStation };
 }

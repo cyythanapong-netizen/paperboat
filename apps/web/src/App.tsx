@@ -7,7 +7,9 @@ import { RunStates } from "./flowContexts";
 import { isBlock, type FlowNode, type Wire } from "./flowModel";
 import { fromGraph, toGraph, withBlock } from "./flowGraph";
 import { isFrame, levelOf } from "./groups";
-import type { DashboardLayout, Project, RunSettings } from "./protocol";
+import type { DashboardLayout, FlowType, Project, RunSettings } from "./protocol";
+import { inferFlow, offeredFlows, sheetFlow } from "./flowTypes";
+import { SheetFlow } from "./SheetFlow";
 import { Notice } from "./ProjectUI";
 import { VariablesSheet } from "./Variables";
 import { VarsContext } from "./VarsContext";
@@ -85,8 +87,10 @@ export function App() {
   const [consoleShown, setConsoleShown] = useState(false);
   useEffect(() => setRunSettings({}), [state.engine]); // another backend: its own defaults
 
+  // The Flow sheet's flow type, if one was chosen (#9); null: taken from its blocks.
+  const [flowChoice, setFlowChoice] = useState<FlowType | null>(null);
   // The canvas and the station follow the backend, keeping what the user changed since it loaded them.
-  const { station, editStation } = useCanvasSync(state, send, nodes, edges, setNodes, setEdges, fitView);
+  const { station, editStation } = useCanvasSync(state, send, nodes, edges, setNodes, setEdges, fitView, setFlowChoice);
 
   // Ctrl+Z / Ctrl+Shift+Z on the Flow canvas; a new graph from the backend starts afresh.
   const history = useUndo(nodes, edges, setNodes, setEdges, state.loaded);
@@ -119,6 +123,9 @@ export function App() {
 
   // The subsystem or story open on the Flow canvas (#68); null: the top level.
   const [flowLevel, setFlowLevel] = useState<string | null>(null);
+  // The open sheet's flow type (#9): what the palette offers on it.
+  const offered = useMemo(() => offeredFlows(state.flows, state.blocks), [state.flows, state.blocks]);
+  const sheet = sheetFlow(flowChoice ?? inferFlow(nodes), flowLevel, nodes);
 
   // A Console line names a block: open the level it is on, select it and bring it into view.
   const showBlock = (id: string) => {
@@ -244,7 +251,7 @@ export function App() {
     if (mode === "commander") boardDrawer.setOpen(true); // a run is watched on the Board
     send({
       type: "graph.run",
-      graph: toGraph(nodes, edges),
+      graph: toGraph(nodes, edges, flowChoice),
       ...(station ? { station } : {}),
       ...(Object.keys(runSettings).length ? { settings: runSettings } : {}),
       variables,
@@ -261,6 +268,7 @@ export function App() {
     const g = fromGraph(p.flow, state.blocks);
     setNodes(g.nodes);
     setEdges(g.edges);
+    setFlowChoice(p.flow.flow ?? null);
     setFlowLevel(null);
     editStation(p.station ?? state.station ?? { objects: [] });
     varsHistory.current = { past: [], future: [] };
@@ -285,7 +293,7 @@ export function App() {
     state,
     subscribe,
     log,
-    { nodes, edges, station, variables, dashSaved, runSettings, projectLock },
+    { nodes, edges, station, variables, dashSaved, runSettings, projectLock, flowChoice },
     loadProject,
   );
 
@@ -351,7 +359,17 @@ export function App() {
             addObject={addObject}
           />
         </Panel>
-        <Panel {...panel("flow")} actions={<>{arrangeKey("flow")}{addKey("flow")}</>} info={count(nodes.filter(isBlock).length, "block")}>
+        <Panel
+          {...panel("flow")}
+          actions={
+            <>
+              <SheetFlow offered={offered} flow={sheet.flow} story={sheet.story} chosen={flowChoice !== null} disabled={running} onChoose={setFlowChoice} />
+              {arrangeKey("flow")}
+              {addKey("flow")}
+            </>
+          }
+          info={count(nodes.filter(isBlock).length, "block")}
+        >
           <RunStates.Provider value={runStates}>
             <FlowEditor
               blocks={state.blocks}
@@ -367,6 +385,7 @@ export function App() {
               level={flowLevel}
               setLevel={setFlowLevel}
               locked={running}
+              sheetFlow={sheet.flow}
             />
           </RunStates.Provider>
         </Panel>
@@ -448,7 +467,15 @@ export function App() {
       )}
       {consoleShown && <ConsoleWindow logs={state.logs} errors={errors} onBlock={showBlock} onClose={() => setConsoleShown(false)} />}
       {browser === "flow" && (
-        <BrowserWindow title="Add a block" items={blockItems} counts={counts(nodes.filter(isBlock).map((n) => ({ type: n.data.def.type })))} place="canvas" onAdd={addBlock} onClose={() => setBrowser(null)} />
+        <BrowserWindow
+          title="Add a block"
+          items={blockItems}
+          counts={counts(nodes.filter(isBlock).map((n) => ({ type: n.data.def.type })))}
+          place="canvas"
+          flow={sheet.flow}
+          onAdd={addBlock}
+          onClose={() => setBrowser(null)}
+        />
       )}
       {browser === "station" && (
         <BrowserWindow

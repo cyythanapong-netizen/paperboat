@@ -2,7 +2,7 @@
 // file, reading and checking one, naming it, and the small lists the browser keeps (recent
 // projects and the autosave). The shape is `Project` in protocol.ts, generated from the schema.
 
-import type { DashboardLayout, Graph, Project, RunSettings, Station, Variables } from "./protocol";
+import type { DashboardLayout, FlowType, Graph, Project, RunSettings, Station, Variables } from "./protocol";
 import { readStored as read, writeStored as write } from "./storage.ts";
 
 /** The format version this app writes and reads. A newer file is refused. */
@@ -45,11 +45,15 @@ const pair = (v: unknown): v is [string, string] => Array.isArray(v) && v.length
 const VARIABLE_TYPES = ["number", "boolean", "enum", "text", "file"];
 const GROUP_KINDS = ["visual", "subsystem", "story"];
 
+/** What a sheet may be (#9; flowTypes.ts). */
+const FLOW_TYPES: FlowType[] = ["signal", "step", "state", "model"];
+
 /** The first thing wrong with the flow, in words, or null. */
 function flowProblem(flow: unknown): string | null {
   if (!isObj(flow)) return "flow must be an object";
   if (!Array.isArray(flow.nodes)) return "flow.nodes must be a list";
   if (!Array.isArray(flow.edges)) return "flow.edges must be a list";
+  if (flow.flow !== undefined && !FLOW_TYPES.includes(flow.flow as FlowType)) return `flow.flow must be one of ${FLOW_TYPES.join(", ")}`;
   for (const [i, n] of flow.nodes.entries()) {
     if (!isObj(n) || !isText(n.id) || !isText(n.type)) return `flow.nodes[${i}] needs an id and a type`;
     if (n.params !== undefined && !isObj(n.params)) return `flow.nodes[${i}].params must be an object`;
