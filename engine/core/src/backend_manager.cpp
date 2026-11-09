@@ -26,6 +26,10 @@
 #include <sys/types.h>
 #include <unistd.h>
 #endif
+#ifdef __APPLE__
+#include <arpa/inet.h>  // ntohs
+#include <libproc.h>    // proc_listpids, proc_pidfdinfo
+#endif
 
 #include <nlohmann/json.hpp>
 #include <toml++/toml.hpp>
@@ -203,6 +207,34 @@ int BackendManager::find_pid_by_port(int port) {
   for (DWORD i = 0; i < table->dwNumEntries; ++i)
     if (ntohs(static_cast<u_short>(table->table[i].dwLocalPort)) == port) return static_cast<int>(table->table[i].dwOwningPid);
   return 0;
+#elif defined(__APPLE__)
+  // no /proc on macOS: walk each process's file descriptors with libproc and find the TCP
+  // socket listening on `port`. Only processes of this user are readable, which is all the
+  // backends paperboat starts.
+  const int bytes = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
+  if (bytes <= 0) return 0;
+  std::vector<pid_t> pids(static_cast<std::size_t>(bytes) / sizeof(pid_t) + 64);
+  const int got = proc_listpids(PROC_ALL_PIDS, 0, pids.data(), static_cast<int>(pids.size() * sizeof(pid_t)));
+  if (got <= 0) return 0;
+  pids.resize(static_cast<std::size_t>(got) / sizeof(pid_t));
+  for (const pid_t pid : pids) {
+    if (pid <= 0) continue;
+    const int fd_bytes = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nullptr, 0);
+    if (fd_bytes <= 0) continue;
+    std::vector<proc_fdinfo> fds(static_cast<std::size_t>(fd_bytes) / sizeof(proc_fdinfo));
+    const int fd_got = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fds.data(), static_cast<int>(fds.size() * sizeof(proc_fdinfo)));
+    if (fd_got <= 0) continue;
+    fds.resize(static_cast<std::size_t>(fd_got) / sizeof(proc_fdinfo));
+    for (const auto& fd : fds) {
+      if (fd.proc_fdtype != PROX_FDTYPE_SOCKET) continue;
+      socket_fdinfo si{};
+      if (proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, &si, sizeof(si)) != static_cast<int>(sizeof(si))) continue;
+      if (si.psi.soi_kind != SOCKINFO_TCP) continue;
+      const auto& tcp = si.psi.soi_proto.pri_tcp;
+      if (tcp.tcpsi_state == TSI_S_LISTEN && ntohs(static_cast<uint16_t>(tcp.tcpsi_ini.insi_lport)) == port) return pid;
+    }
+  }
+  return 0;
 #else
 
   // Search socket inode in /proc/net/tcp and /proc/net/tcp6
@@ -298,10 +330,12 @@ bool BackendManager::free_port(int port, int timeout_ms) {
     ProcessRunner::kill_pid(pid, SIGTERM, timeout_ms / 2);
   }
 
+#ifndef __APPLE__  // macOS fuser takes no port/tcp; find_pid_by_port already covers it there
   // Fallback to fuser -k
   if (is_port_listening(port)) {
     ProcessRunner::run_sync({"fuser", "-k", std::to_string(port) + "/tcp"});
   }
+#endif
 
   auto start = std::chrono::steady_clock::now();
   while (is_port_listening(port)) {

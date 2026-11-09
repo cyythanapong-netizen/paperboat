@@ -3,6 +3,8 @@
 
 #ifdef _WIN32
 #include <process.h>  // _spawnvp
+#else
+#include <unistd.h>  // execvp
 #endif
 #include <algorithm>
 #include <cstdlib>
