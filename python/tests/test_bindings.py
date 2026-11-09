@@ -677,3 +677,55 @@ def test_a_python_backend_takes_a_speed_change_during_a_run(tmp_path: Path) -> N
     assert msgs[-1] == {"type": "run.finished", "run": "run-1", "status": "done"}
     assert [m for m in msgs if m["type"] == "run.speed"] == [{"type": "run.speed", "run": "run-1", "speed": 0}]
     assert took < 5  # not the 10 s it would take at 1×
+
+FLOWS_BACKEND = '''
+import json, pathlib
+import paperboat
+from paperboat import Port
+
+class Anywhere(paperboat.Block):
+    type, inputs, outputs = "anywhere", ["u"], ["y"]
+
+class Clocked(paperboat.Block):
+    type, inputs, outputs = "clocked", ["u"], ["y"]
+    flows = ["signal"]
+
+class Resistor(paperboat.Block):
+    type, inputs, outputs = "resistor", ["p"], ["n"]
+    flows = ("model",)
+
+class Beep(paperboat.Step):
+    type = "beep"
+
+b = paperboat.Backend(engine="flows", descriptor="descriptor.toml", blocks=[Anywhere, Clocked, Resistor, Beep])
+h = paperboat._engine.make(b.engine, str(pathlib.Path(__file__).parent / b.descriptor), b.blocks, b.objects, b.state, b.mode,
+                           b.dt, b.duration, b.emit_every, b.view, b.speed, b.solver, b.connectors)
+print(h.catalog_json())
+'''
+
+
+def test_a_python_block_says_which_flow_types_it_works_in(tmp_path: Path) -> None:
+    # #9: `flows` on a block class; a Step works in a Step flow unless it says; none: every flow type.
+    (tmp_path / "descriptor.toml").write_text('domain = "flows"\nimport = ["control"]\n')
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
+
+    def catalog(backend: str) -> subprocess.CompletedProcess:
+        (tmp_path / "inspect_flows.py").write_text(textwrap.dedent(backend))
+        return subprocess.run([sys.executable, "inspect_flows.py"], cwd=tmp_path, env=env, capture_output=True, text=True,
+                              timeout=60)
+
+    proc = catalog(FLOWS_BACKEND)
+    assert proc.returncode == 0, proc.stderr
+    blocks = {b["type"]: b for b in json.loads(proc.stdout.strip())["blocks"]}
+    assert "flows" not in blocks["anywhere"]
+    assert blocks["clocked"]["flows"] == ["signal"]
+    assert blocks["resistor"]["flows"] == ["model"]
+    assert blocks["beep"]["flows"] == ["step"]
+    assert blocks["pid"]["flows"] == ["signal"]  # the control package's default
+
+    proc = catalog(FLOWS_BACKEND.replace('flows = ("model",)', 'flows = ("liquid",)'))
+    assert proc.returncode != 0
+    assert 'Resistor: no flow type "liquid" (signal, step, state, model)' in proc.stderr
+    proc = catalog(FLOWS_BACKEND.replace('flows = ("model",)', 'flows = "model"'))
+    assert proc.returncode != 0
+    assert "Resistor: flows must be a list of flow types" in proc.stderr
