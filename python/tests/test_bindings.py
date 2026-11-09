@@ -721,7 +721,7 @@ def test_a_python_block_says_which_flow_types_it_works_in(tmp_path: Path) -> Non
     assert blocks["clocked"]["flows"] == ["signal"]
     assert blocks["resistor"]["flows"] == ["model"]
     assert blocks["beep"]["flows"] == ["step"]
-    assert blocks["pid"]["flows"] == ["signal"]  # the control package's default
+    assert blocks["pid"]["flows"] == ["signal", "step"]  # the control package's default
 
     proc = catalog(FLOWS_BACKEND.replace('flows = ("model",)', 'flows = ("liquid",)'))
     assert proc.returncode != 0
