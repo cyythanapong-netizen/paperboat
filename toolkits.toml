@@ -1,5 +1,13 @@
 # Optional toolkits that live in their own repositories and install into engine/toolkit/<name>.
 [[toolkits]]
+name = "optimization"
+repo = "https://github.com/paperboatlab/paperboat-toolkit-optimization.git"
+description = "Quadratic and linear programming blocks on OSQP."
+optional = true
+engine = ">=0.1"
+blocks = ["qp", "lp"]
+
+[[toolkits]]
 name = "opencv"
 repo = "https://github.com/paperboatlab/paperboat-toolkit-opencv.git"
 description = "Image processing blocks, view monitor, and image station object (OpenCV)."
