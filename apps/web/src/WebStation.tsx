@@ -64,6 +64,8 @@ export function WebStation({ backend, page, state, subscribe, send, onStation }:
       className="web-station"
       title="Station (the backend's page)"
       sandbox="allow-scripts"
+      allow="fullscreen"
+      allowFullScreen
       src={pageUrl(backend, page)}
     />
   );

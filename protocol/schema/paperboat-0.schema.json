@@ -2514,6 +2514,7 @@
           "enum": [
             "box",
             "sphere",
+            "cylinder",
             "line",
             "image"
           ]

@@ -6,4 +6,4 @@ description = "Image processing blocks, view monitor, and image station object (
 optional = true
 engine = ">=0.1"
 blocks = ["gray", "blur", "median", "threshold", "adaptive_threshold", "hsv_range", "canny",
-          "erode", "dilate", "open", "close", "invert", "distance", "view", "image"]
+          "erode", "dilate", "open", "close", "invert", "distance", "centroid", "view", "image"]
