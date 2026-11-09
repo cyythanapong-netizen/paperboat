@@ -26,6 +26,7 @@
 
 #include "paperboat/core/backend.hpp"
 #include "paperboat/core/executor.hpp"
+#include "paperboat/toolkit/array.hpp"
 #include "paperboat/toolkit/bases.hpp"
 #include "paperboat/toolkit/block.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
@@ -68,7 +69,9 @@ using toolkit::timed_def;
 using toolkit::Expression;
 using toolkit::ExpressionError;
 
-// Values on wires and in params.
+// Values on wires and in params; typed arrays for bulk data (a mesh, a field: array.hpp).
+using toolkit::Array;
+using toolkit::DType;
 using toolkit::Config;
 using toolkit::Handle;
 using toolkit::KeySet;

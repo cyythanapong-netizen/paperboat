@@ -13,6 +13,7 @@
 #include <string_view>
 #include <vector>
 
+#include "paperboat/toolkit/array.hpp"
 #include "paperboat/toolkit/block.hpp"
 
 namespace paperboat::toolkit {
@@ -22,7 +23,8 @@ struct Entity {
   std::string id = {};
   std::string shape = "box";                   // "box", "sphere" (size[0] = radius), "cylinder" (size[0] = radius,
                                           // size[1] = length along y), "line" (pos → to)
-                                          // or "image" (a size[0] × size[1] picture facing +z)
+                                          // "image" (a size[0] × size[1] picture facing +z) or "mesh"
+                                          // (triangles: vertices and indices, below)
   std::array<double, 3> pos{};
   std::array<double, 3> size{1, 1, 1};
   std::array<double, 3> rot{};            // radians, x then y then z
@@ -30,6 +32,14 @@ struct Entity {
   std::array<double, 3> scale{1, 1, 1};
   std::array<double, 3> to{};             // a line's end
   std::string src = {};                   // an image's picture: a URL or a data: URL
+  // A mesh (shape "mesh"), in the entity's own frame (pos, rot, scale place it): x, y, z per
+  // vertex ([n, 3], f32 best), three vertex indices per triangle ([m, 3], u32), and optionally
+  // a scalar field per vertex ([n]) the UI colours from `range` (low to high; both 0: the
+  // field's own min and max). Typed arrays: binary frames for a client that takes them.
+  Array vertices = {};
+  Array indices = {};
+  Array values = {};
+  std::array<double, 2> range{};
 };
 
 // One station object in a run.

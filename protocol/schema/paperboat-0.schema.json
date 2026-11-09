@@ -853,7 +853,8 @@
             "sphere",
             "cylinder",
             "line",
-            "image"
+            "image",
+            "mesh"
           ]
         },
         "pos": {
@@ -879,6 +880,27 @@
         "src": {
           "type": "string",
           "description": "An image's picture: a URL or a data: URL."
+        },
+        "vertices": {
+          "$ref": "#/$defs/NumberArray",
+          "description": "A mesh's vertices: x, y, z each, in the entity's own frame (pos, rot and scale place it). Shape [n, 3], f32."
+        },
+        "indices": {
+          "$ref": "#/$defs/NumberArray",
+          "description": "A mesh's triangles: three vertex indices each, counter-clockwise seen from the front. Shape [m, 3], u32 (or i32, u8)."
+        },
+        "values": {
+          "$ref": "#/$defs/NumberArray",
+          "description": "A field over a mesh, one number per vertex (a pressure, a stress), that the UI colours over range. Shape [n]."
+        },
+        "range": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "The values that take the low and high ends of the colour scale; absent: the field's own min and max."
         }
       },
       "required": [
@@ -887,7 +909,7 @@
         "pos"
       ],
       "additionalProperties": false,
-      "description": "One shape on the Station's scene. shape: box, sphere (size[0] = radius), line (pos to `to`), image (a size[0] x size[1] picture facing +z, from src)."
+      "description": "One shape on the Station's scene. shape: box, sphere (size[0] = radius), line (pos to `to`), image (a size[0] x size[1] picture facing +z, from src), mesh (triangles from vertices and indices, coloured by an optional field: values)."
     },
     "View": {
       "description": "Camera hint sent with a scene. 2d: orthographic, looking down -z at center, height units tall.",
@@ -1141,6 +1163,11 @@
             "$ref": "#/$defs/ToolkitStatus"
           },
           "description": "Available optional toolkits and their installed status on this machine."
+        },
+        "binary": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "The binary frame layout this backend sends to this connection (1), present only when the client asked with ?binary=1 in its WebSocket URL: typed arrays come as binary frames and BinaryRef references. Absent: every array is JSON numbers."
         }
       },
       "required": [
@@ -2515,7 +2542,8 @@
             "box",
             "sphere",
             "line",
-            "image"
+            "image",
+            "mesh"
           ]
         },
         "pos": {
@@ -2541,6 +2569,27 @@
         "src": {
           "type": "string",
           "description": "An image's picture: a URL or a data: URL."
+        },
+        "vertices": {
+          "$ref": "#/$defs/NumberArray",
+          "description": "A mesh's vertices: x, y, z each, in the entity's own frame (pos, rot and scale place it). Shape [n, 3], f32."
+        },
+        "indices": {
+          "$ref": "#/$defs/NumberArray",
+          "description": "A mesh's triangles: three vertex indices each, counter-clockwise seen from the front. Shape [m, 3], u32 (or i32, u8)."
+        },
+        "values": {
+          "$ref": "#/$defs/NumberArray",
+          "description": "A field over a mesh, one number per vertex (a pressure, a stress), that the UI colours over range. Shape [n]."
+        },
+        "range": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "The values that take the low and high ends of the colour scale; absent: the field's own min and max."
         }
       }
     },
@@ -2860,6 +2909,80 @@
           }
         }
       }
+    },
+    "DType": {
+      "description": "Binary frames (#18): an array's element type, little-endian. f32, f64: IEEE floats; i32, u32: 32-bit integers; u8: bytes.",
+      "enum": [
+        "f32",
+        "f64",
+        "i32",
+        "u32",
+        "u8"
+      ]
+    },
+    "BinaryRef": {
+      "description": "Binary frames (#18): where a message has a typed array, a client that asked for binary frames gets this in its place. The frame whose descriptor has this id came over the same WebSocket right before the message.",
+      "type": "object",
+      "properties": {
+        "binary": {
+          "type": "string",
+          "description": "The binary frame's id (its descriptor's id), unique on this connection."
+        }
+      },
+      "required": [
+        "binary"
+      ],
+      "additionalProperties": false
+    },
+    "NumberArray": {
+      "description": "Binary frames (#18): a typed array. JSON numbers, flat and row-major, for a client without binary frames; a BinaryRef for one with them.",
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        {
+          "$ref": "#/$defs/BinaryRef"
+        }
+      ]
+    },
+    "BinaryFrameDescriptor": {
+      "description": "Binary frames (#18): the JSON descriptor inside a binary frame (protocol/README.md, Binary frames): which array it is and how to read its payload.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "What the BinaryRef in the next text message names."
+        },
+        "dtype": {
+          "$ref": "#/$defs/DType"
+        },
+        "shape": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "The array's dimensions, row-major; the payload holds their product of elements."
+        },
+        "path": {
+          "type": "string",
+          "description": "Where the reference sits in that message, as a JSON pointer (/entities/0/vertices); for logs and tools."
+        },
+        "compression": {
+          "enum": [
+            "none"
+          ],
+          "description": "How the payload is packed; absent means none, the only one in layout 1. A decoder refuses one it doesn't know."
+        }
+      },
+      "required": [
+        "id",
+        "dtype",
+        "shape"
+      ]
     }
   },
   "$ref": "#/$defs/toUI"

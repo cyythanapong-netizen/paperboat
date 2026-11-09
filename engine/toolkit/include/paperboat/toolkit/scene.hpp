@@ -39,6 +39,12 @@ Entity circle(std::string id, double x, double y, double radius, std::string col
 
 // A bar of square section from `a` to `b` (a link, a pole, a strut).
 Entity rod(std::string id, Vec a, Vec b, double thickness, std::string color = "#888888");
+// A triangle mesh at `pos`: `vertices` x, y, z per vertex ([n, 3]) and `indices` three per
+// triangle ([m, 3]), in the mesh's own frame. `values` (optional, [n]) is a field over it that
+// the UI colours, low to high over `range` (both 0: the field's min and max). Keep the arrays
+// and hand out the same ones each frame: a run sends a mesh's arrays again only when they change.
+Entity mesh(std::string id, Array vertices, Array indices, std::string color = "#888888", Vec pos = {},
+            Array values = {}, std::array<double, 2> range = {});
 // A coil spring from `a` to `b`: a zigzag of lines `width` across, ids `id/0`, `id/1`…
 // The same number of lines whatever its length, so a patch updates them all.
 std::vector<Entity> spring(const std::string& id, Vec a, Vec b, int coils = 8, double width = 0.2,

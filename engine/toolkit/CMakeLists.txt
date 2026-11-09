@@ -7,6 +7,7 @@
 # registered last.
 # (A manifest with an explicit `register = [...]` list keeps that list instead.)
 set(PAPERBOAT_TOOLKIT_CORE_SOURCES
+  src/array.cpp
   src/block.cpp
   src/bases.cpp
   src/expression.cpp

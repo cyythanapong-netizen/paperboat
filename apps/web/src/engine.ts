@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { TraceStore } from "./traces.ts";
+import { FrameReader, withBinary } from "./binary.ts";
 import type { BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
 
 export type EngineState = {
@@ -213,14 +214,20 @@ export function useEngine(url: string) {
       dispatch({ type: "signals", list });
     };
     const connect = () => {
-      const ws = new WebSocket(url);
+      // Typed arrays (a mesh) come as binary frames before the message that uses them (#18).
+      const ws = new WebSocket(withBinary(url));
+      ws.binaryType = "arraybuffer";
+      const frames = new FrameReader();
       socket.current = ws;
       dispatch({ type: "connection", value: "connecting" });
       ws.onopen = () => !stopped && dispatch({ type: "connection", value: "open" });
       ws.onmessage = (e) => {
         if (stopped) return;
         try {
-          const msg = JSON.parse(e.data) as ServerMsg;
+          if (e.data instanceof ArrayBuffer) return frames.frame(e.data);
+          const { msg: parsed, problems } = frames.message(e.data as string);
+          for (const text of problems) dispatch({ type: "log", level: "warn", text });
+          const msg = parsed as ServerMsg;
           if (msg.type === "signal") {
             // Plots read the store; React hears of a frame's samples once (#37).
             traces.add(msg);

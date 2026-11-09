@@ -1,5 +1,7 @@
 #include "paperboat/core/station.hpp"
 
+#include "paperboat/core/binary.hpp"
+
 #include <algorithm>
 #include <filesystem>
 #include <set>
@@ -66,6 +68,11 @@ json entity_json(const toolkit::Entity& e) {
   if (e.shape == "image") out["src"] = e.src;
   if (e.rot != std::array<double, 3>{}) out["rot"] = e.rot;
   if (e.scale != std::array<double, 3>{1, 1, 1}) out["scale"] = e.scale;
+  // A mesh's typed arrays: binary frames or JSON numbers when sent (binary.hpp).
+  if (!e.vertices.empty()) out["vertices"] = array_json(e.vertices);
+  if (!e.indices.empty()) out["indices"] = array_json(e.indices);
+  if (!e.values.empty()) out["values"] = array_json(e.values);
+  if (e.range != std::array<double, 2>{}) out["range"] = e.range;
   return out;
 }
 

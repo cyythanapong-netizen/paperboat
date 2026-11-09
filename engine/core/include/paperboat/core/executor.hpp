@@ -80,7 +80,7 @@ class Run {
 
   // True once the user cancelled; logs it. The executor then returns "cancelled".
   bool cancelled();
-  void emit(const json& message) { emit_(message); }
+  void emit(const json& message);  // a `scene` also resets what the UI holds of meshes (below)
   void log(std::string_view level, std::string_view text);
   void node_state(std::string_view node, std::string_view state);
 
@@ -99,6 +99,10 @@ class Run {
   // The end of a pass: applies what blocks set, and tells the UI (variables.patch).
   void commit_variables();
   bool change_param(Node& node, const toolkit::ParamDef& def, double value);
+  // Mesh arrays (vertices, indices, values) the UI holds: a scene's are noted; a patch's that
+  // the UI already holds are left out of it, so a mesh is sent again only when it changes.
+  void note_arrays(const json& entities);
+  void drop_sent_arrays(json& entities);
 
   std::string id_;
   const Backend& backend_;
@@ -129,6 +133,7 @@ class Run {
   Graph g_;
   std::map<std::string, toolkit::Values> outputs_;
   std::map<std::string, std::vector<json>> story_samples_;  // monitor → its latest story pass's samples, until the next frame
+  std::map<std::string, json> sent_arrays_;  // "entity\nfield" → the array the UI got last
 };
 
 class Executor {

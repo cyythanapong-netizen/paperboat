@@ -1,6 +1,7 @@
 #include "paperboat/core/run.hpp"
 
 #include "paperboat/core/executor.hpp"
+#include "paperboat/core/binary.hpp"
 
 #include <paperboat/toolkit/solve.hpp>
 #include <paperboat/toolkit/variables.hpp>
@@ -171,7 +172,7 @@ std::string Run::go(const json& graph_given, const json& station_given, const js
     emit_(log_msg("error", std::string("invalid graph: ") + err.what()));
     return finish("failed");
   }
-  emit_(scene_message(station_, state_.get(), backend_.view));
+  emit(scene_message(station_, state_.get(), backend_.view));
   try {
     auto executor = backend_.executor ? backend_.executor(g_, settings_) : nullptr;
     if (!executor) executor = default_executor(g_, settings_);
@@ -511,6 +512,7 @@ void Run::frame(const json& samples, std::optional<double> progress) {
   if (state_)
     for (const auto& e : entities_json(state_->patch())) patch.push_back(e);
   for (const auto& e : scene_of_blocks(blocks())) patch.push_back(e);
+  drop_sent_arrays(patch);
   if (!patch.empty()) emit_({{"type", "scene.patch"}, {"entities", patch}});
   if (progress) emit_({{"type", "run.progress"}, {"run", id_}, {"fraction", *progress}});
   if (settings_.real_time && settings_.speed > 0) {
@@ -530,6 +532,40 @@ void Run::frame(const json& samples, std::optional<double> progress) {
         std::snprintf(buf, sizeof buf, "computation delay: behind real-time by %.2f s", lag);
         log("warn", buf);
       }
+    }
+  }
+}
+
+void Run::emit(const json& message) {
+  if (message.value("type", "") == "scene") {
+    sent_arrays_.clear();  // the UI drops what it held and takes this scene's
+    note_arrays(message.at("entities"));
+  }
+  emit_(message);
+}
+
+namespace {
+constexpr const char* kMeshArrays[] = {"vertices", "indices", "values"};
+}
+
+void Run::note_arrays(const json& entities) {
+  for (const auto& e : entities) {
+    if (!e.is_object()) continue;
+    for (const char* field : kMeshArrays)
+      if (const auto it = e.find(field); it != e.end() && is_array_json(*it))
+        sent_arrays_[e.value("id", std::string{}) + "\n" + field] = *it;
+  }
+}
+
+void Run::drop_sent_arrays(json& entities) {
+  for (auto& e : entities) {
+    if (!e.is_object()) continue;
+    for (const char* field : kMeshArrays) {
+      const auto it = e.find(field);
+      if (it == e.end() || !is_array_json(*it)) continue;
+      auto& last = sent_arrays_[e.value("id", std::string{}) + "\n" + field];
+      if (last == *it) e.erase(field);
+      else last = *it;
     }
   }
 }

@@ -84,7 +84,7 @@ API Quick Reference
      - :cpp:struct:`Entity`
      - Geometry entity rendered in 3D/2D on the Station page.
    * -
-     - :cpp:func:`scene::box`, :cpp:func:`scene::sphere`, :cpp:func:`scene::line`, :cpp:func:`scene::image`, :cpp:func:`scene::rect`, :cpp:func:`scene::circle`, :cpp:func:`scene::rod`, :cpp:func:`scene::spring`
+     - :cpp:func:`scene::box`, :cpp:func:`scene::sphere`, :cpp:func:`scene::line`, :cpp:func:`scene::image`, :cpp:func:`scene::rect`, :cpp:func:`scene::circle`, :cpp:func:`scene::rod`, :cpp:func:`scene::spring`, :cpp:func:`scene::mesh`
      - 3D and 2D visual geometry entity construction helpers.
    * - **Solvers & Physics**
      - :cpp:class:`Model`
@@ -609,7 +609,7 @@ What runs
 
    .. cpp:member:: std::string shape = "box"
 
-      ``"box"``, ``"sphere"`` (``size[0]`` = radius), ``"cylinder"`` (``size[0]`` = radius, ``size[1]`` = length along y), ``"line"`` (``pos`` → ``to``) or ``"image"``.
+      ``"box"``, ``"sphere"`` (``size[0]`` = radius), ``"cylinder"`` (``size[0]`` = radius, ``size[1]`` = length along y), ``"line"`` (``pos`` → ``to``), ``"image"`` or ``"mesh"`` (``vertices`` and ``indices``).
 
    .. cpp:member:: std::array<double, 3> pos
 
@@ -622,6 +622,12 @@ What runs
    .. cpp:member:: std::string color = "#888888"
 
    .. cpp:member:: std::array<double, 3> scale
+
+   .. cpp:member:: Array vertices
+
+      A mesh's vertices, x, y, z each (``[n, 3]``), in its own frame. ``indices`` (``[m, 3]``)
+      are its triangles, ``values`` (``[n]``, optional) a field over it the UI colours over
+      ``range`` (both 0: the field's min and max). See :cpp:func:`scene::mesh`.
 
    .. cpp:member:: std::array<double, 3> to
 
@@ -860,6 +866,29 @@ y up; the 2D helpers lie in the x–y plane at depth ``z``, which the 2D view sh
 
    A zigzag of lines (ids ``id/0``, ``id/1``…), the same number at any length, so a patch
    moves them all.
+
+.. cpp:function:: Entity scene::mesh(std::string id, Array vertices, Array indices, std::string color = "#888888", Vec pos = {}, Array values = {}, std::array<double, 2> range = {})
+
+   A triangle mesh at ``pos``. Keep its arrays and hand out the same ones each frame: a run
+   sends a mesh's arrays again only when they change, so a field (``values``) updates on its
+   own. Throws ``std::invalid_argument`` unless there are 3 numbers per vertex, 3 indices per
+   triangle and one value per vertex.
+
+.. cpp:class:: Array
+
+   A typed array (``toolkit/array.hpp``): bulk numbers that don't belong in JSON. Little-endian
+   and row-major, shared and immutable. A client that asked for binary frames gets it as one
+   (protocol, "Binary frames"); any other as JSON numbers.
+
+   .. cpp:function:: template<class T> explicit Array(const std::vector<T> &values, std::vector<std::size_t> shape = {})
+
+      ``T``: ``float``, ``double``, ``std::int32_t``, ``std::uint32_t`` or ``std::uint8_t``
+      (dtype ``f32``, ``f64``, ``i32``, ``u32``, ``u8``). An empty shape is one dimension.
+
+   .. cpp:function:: DType dtype() const
+   .. cpp:function:: const std::vector<std::size_t> &shape() const
+   .. cpp:function:: std::size_t size() const
+   .. cpp:function:: double at(std::size_t i) const
 
 Registering
 -----------
