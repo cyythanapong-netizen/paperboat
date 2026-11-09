@@ -606,7 +606,7 @@ json Run::evaluate(const std::string& id) {
     return pass_over({id});
   }
   node_state(id, "running");
-  if (signature) recording_ = Recording{.node = id};
+  if (signature) recording_ = Recording{.node = id, .variables = {}, .logs = {}, .set_variable = false};
   json samples;
   try {
     samples = pass_over({id});

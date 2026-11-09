@@ -154,7 +154,12 @@ void Session::on_message(const std::string& text) {
       s.pressed.clear();
       return down;
     };
-    // Assigning a new jthread stops and joins the previous run first.
+    // Stop and join the previous run before starting this one. A new jthread starts as soon as it
+    // is constructed, while the old one may still be emitting or pruning the cache.
+    if (s.run.joinable()) {
+      s.run.request_stop();
+      s.run.join();
+    }
     s.run = std::jthread([&s, id, number, graph = msg.value("graph", json::object()), station, variables, keys_now, tune_now,
                           settings = msg.value("settings", json())](std::stop_token stop) {
       auto emit = [&s, number](const json& m) {
