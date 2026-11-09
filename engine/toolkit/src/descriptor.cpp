@@ -485,7 +485,7 @@ void load_starters(const json& doc, Catalog& catalog) {
     }
   }
   if (!groups.empty()) graph["groups"] = groups;
-  if (auto mismatch = flow_mismatch(nlohmann::json::parse(graph.dump()), catalog)) throw DescriptorError("graph: " + mismatch->message);
+  if (auto mismatch = flow_mismatch(graph, catalog)) throw DescriptorError("graph: " + mismatch->message);
   catalog.graph = graph.dump();
 
   if (!doc.contains("station")) return;
@@ -750,8 +750,12 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
   if (doc.contains("flows")) {
     catalog.flows = flows_from(doc.at("flows"), "descriptor");
   } else {
+    // A story in the starter graph runs as a step, so the starter may be a Step flow too.
+    const bool starter_story = std::ranges::any_of(doc.value("graph", json::object()).value("groups", json::array()),
+                                                   [](const json& g) { return g.value("kind", std::string{}) == "story"; });
     for (const auto& flow : flow_types())
-      if (flow == "signal" || std::ranges::any_of(catalog.entries, [&](const CatalogEntry& e) {
+      if (flow == "signal" || (flow == "step" && starter_story) ||
+          std::ranges::any_of(catalog.entries, [&](const CatalogEntry& e) {
             return std::ranges::find(e.def.flows, flow) != e.def.flows.end();
           }))
         catalog.flows.push_back(flow);

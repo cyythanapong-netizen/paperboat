@@ -15,7 +15,7 @@ Default address: `ws://localhost:8765`.
 | `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults), `toolkits?: ToolkitStatus[]`, `flows?: FlowType[]` (the flow types a sheet may be, #9) | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
 | `catalog`      | `blocks: BlockDef[]`, `connectors?: Connectors` (see below), `objects?`, `dashboard?` | on connect                   |
 | `scene`        | `entities: Entity[]`, `view?: View`         | on connect, and on reset     |
-| `graph.load`   | `graph: { nodes, edges }`                   | on connect (starter graph)   |
+| `graph.load`   | `graph: { flow?, nodes, edges }`            | on connect (starter graph)   |
 | `station.load` | `station: Station`                          | on connect, after `graph.load`, if the catalog has `objects` |
 | `variables.load` | `variables: Variable[]`                   | on connect, before `graph.load`, if the backend has default variables (its descriptor's `[[variables]]`) |
 | `variables.values` | `values: { name: value }`, `error?: string`, `at?: string` | on connect and after each `variables.set`: what every variable comes to (a formula's result), or why they don't hold (`at`: the variable or block at fault) |

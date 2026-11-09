@@ -35,7 +35,9 @@ export function offeredFlows(hello: readonly FlowType[] | undefined, blocks: Blo
 
 /** A top-level sheet whose type wasn't chosen: a Step flow if a block on it has step ports or a story is on it, else a Signal flow. */
 export function inferFlow(nodes: FlowNode[]): FlowType {
-  const step = nodes.some((n) => (isBlock(n) ? !n.data.missing && hasStepPorts(inForm(n.data.def, n.data.params)) : isStory(n)));
+  // Only the sheet's own level: a step block inside a subsystem is that subsystem's business.
+  const top = nodes.filter((n) => !n.parentId);
+  const step = top.some((n) => (isBlock(n) ? !n.data.missing && hasStepPorts(inForm(n.data.def, n.data.params)) : isStory(n)));
   return step ? "step" : "signal";
 }
 

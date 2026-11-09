@@ -80,11 +80,11 @@ TEST_CASE("packages say which flow types their blocks work in (#9)") {
     CHECK(builtin(name).flows.empty());
     for (const auto& flow : tk::flow_types()) CHECK(tk::works_in(builtin(name), flow));
   }
-  // control: a Signal flow's clock; step: a Step flow's path (toolkit.toml `flows`).
+  // control: a Signal flow's clock and a Step flow's signal blocks (toolkit.toml `flows`).
   for (const char* name : {"control/pid", "control/integrator", "control/lag", "control/delay"}) {
     INFO(name);
-    CHECK(builtin(name).flows == Flows{"signal"});
-    CHECK_FALSE(tk::works_in(builtin(name), "step"));
+    CHECK(builtin(name).flows == Flows{"signal", "step"});
+    CHECK(tk::works_in(builtin(name), "step"));
   }
   for (const char* name : {"step/start", "step/when", "step/wait", "step/repeat", "step/stop", "step/say"}) {
     INFO(name);
@@ -127,7 +127,7 @@ flows = ["model"]
   CHECK(catalog.find("model-constant")->def.flows == Flows{"model"});
   const json blocks = blocks_of(catalog);
   CHECK(blocks.at("pid-anywhere").at("flows") == json::array({"signal", "step"}));
-  CHECK(blocks.at("pid").at("flows") == json::array({"signal"}));  // the package's default
+  CHECK(blocks.at("pid").at("flows") == json::array({"signal", "step"}));  // the package's default
   CHECK(blocks.at("start").at("flows") == json::array({"step"}));
   CHECK_FALSE(blocks.at("constant").contains("flows"));  // every flow type: no field
 
@@ -142,7 +142,7 @@ flows = ["model"]
 
 TEST_CASE("the flow types a domain offers: the descriptor's, else Signal flow and those its blocks name") {
   CHECK(tk::load_descriptor("domain = \"a\"\nimport = [\"base\", \"math\", \"dashboard\"]\n").flows == Flows{"signal"});
-  CHECK(tk::load_descriptor("domain = \"a\"\nimport = [\"base\", \"control\"]\n").flows == Flows{"signal"});
+  CHECK(tk::load_descriptor("domain = \"a\"\nimport = [\"base\", \"control\"]\n").flows == Flows{"signal", "step"});
   CHECK(tk::load_descriptor("domain = \"a\"\nimport = [\"step\", \"base\"]\n").flows == Flows{"signal", "step"});
   CHECK(tk::load_descriptor("domain = \"a\"\nimport = [\"base\"]\n[[blocks]]\nuse = \"base/constant\"\ntype = \"m\"\nflows = [\"model\"]\n").flows ==
         Flows{"signal", "model"});

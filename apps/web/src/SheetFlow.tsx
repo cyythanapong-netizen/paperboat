@@ -36,7 +36,13 @@ export function SheetFlow({
         {flowLabel(flow)}
       </span>
     );
-  const types = offered.includes(flow) ? offered : [...offered, flow];
+  if (!offered.includes(flow))
+    return (
+      <span className="sheet-flow lbl" title="A block on this sheet makes it this flow type; the backend doesn't offer it as a choice">
+        {flowLabel(flow)} · from the blocks
+      </span>
+    );
+  const types = offered;
   return (
     <div className="switch sheet-flow" role="radiogroup" aria-label="Sheet flow type">
       {types.map((f) => (
