@@ -20,11 +20,14 @@ Package Quick Reference
      - ``constant``, ``text``, ``boolean``, ``key``, ``key_hold``, ``to_number``, ``to_text``, ``to_boolean``, ``type_of``, ``mux``, ``demux``, ``now``, ``interval``, ``timeout``, ``delay``, ``if``, ``and``, ``or``, ``xor``, ``not``, ``compare``, ``in_range``
      - Fundamental values, type conversions, runtime clock delays, and dual signal/step logic gates.
    * - :ref:`pkg-signal`
-     - ``clock``, ``sine``, ``step``, ``ramp``, ``square``, ``ease``, ``function``, ``noise``, ``generator``
-     - Continuous time waveforms :math:`f(t)`, periodic generators, and free mathematical expressions.
+     - ``clock``, ``sine``, ``step``, ``ramp``, ``square``, ``ease``, ``function``, ``noise``, ``generator``, ``fft``
+     - Continuous time waveforms :math:`f(t)`, periodic generators, free mathematical expressions, and a spectrum.
    * - :ref:`pkg-math`
-     - ``sum``, ``product``, ``gain``, ``bias``, ``min``, ``max``, ``abs``, ``clamp``, ``wrap``, ``map``, ``expression``
-     - Arithmetic operators, dynamic multi-sign summing junctions, and range boundary transformations.
+     - ``sum``, ``product``, ``gain``, ``bias``, ``min``, ``max``, ``abs``, ``clamp``, ``wrap``, ``map``, ``expression``, ``erf``, ``gamma``, ``bessel``, ``distribution``
+     - Arithmetic operators, dynamic multi-sign summing junctions, range boundary transformations, and Boost.Math special functions and distributions.
+   * - optimization (external)
+     - ``qp``, ``lp``
+     - Quadratic and linear programs on OSQP, from a JSON problem file.
    * - :ref:`pkg-string`
      - ``string/format``, ``string/concat``, ``string/split``, ``string/replace``, ``string/length``
      - Text formatting, templating, and string manipulation operations.
@@ -124,11 +127,14 @@ Package Quick Reference
      - ``constant``, ``text``, ``boolean``, ``key``, ``key_hold``, ``to_number``, ``to_text``, ``to_boolean``, ``type_of``, ``mux``, ``demux``, ``now``, ``interval``, ``timeout``, ``delay``, ``if``, ``and``, ``or``, ``xor``, ``not``, ``compare``, ``in_range``
      - Fundamental values, type conversions, runtime clock delays, and dual signal/step logic gates.
    * - :ref:`pkg-signal`
-     - ``clock``, ``sine``, ``step``, ``ramp``, ``square``, ``ease``, ``function``, ``noise``, ``generator``
-     - Continuous time waveforms :math:`f(t)`, periodic generators, and free mathematical expressions.
+     - ``clock``, ``sine``, ``step``, ``ramp``, ``square``, ``ease``, ``function``, ``noise``, ``generator``, ``fft``
+     - Continuous time waveforms :math:`f(t)`, periodic generators, free mathematical expressions, and a spectrum.
    * - :ref:`pkg-math`
-     - ``sum``, ``product``, ``gain``, ``bias``, ``min``, ``max``, ``abs``, ``clamp``, ``wrap``, ``map``, ``expression``
-     - Arithmetic operators, dynamic multi-sign summing junctions, and range boundary transformations.
+     - ``sum``, ``product``, ``gain``, ``bias``, ``min``, ``max``, ``abs``, ``clamp``, ``wrap``, ``map``, ``expression``, ``erf``, ``gamma``, ``bessel``, ``distribution``
+     - Arithmetic operators, dynamic multi-sign summing junctions, range boundary transformations, and Boost.Math special functions and distributions.
+   * - optimization (external)
+     - ``qp``, ``lp``
+     - Quadratic and linear programs on OSQP, from a JSON problem file.
    * - :ref:`pkg-string`
      - ``string/format``, ``string/concat``, ``string/split``, ``string/replace``, ``string/length``
      - Text formatting, templating, and string manipulation operations.
@@ -290,7 +296,10 @@ C++: ``clock``, and ``generator``, the abstract parent: f is an expression (conf
 ``frequency``), ``ease`` (shapes a 0–1 progress; ``shape``: in-out, in, out or linear) and
 ``function`` (f(t): its ``f`` is a text param, typed on the block; its free names become its
 input ports, with ``t`` as the clock when unwired and other unwired inputs reading as 0;
-renaming a name in ``f`` drops the wire to the old port). A descriptor defines more the same way.
+renaming a name in ``f`` drops the wire to the old port). ``fft`` (``u`` → ``magnitude``,
+``peak_hz``) keeps the last ``size`` samples (64…1024) and outputs their amplitude spectrum
+and the strongest bin's frequency; ``window`` is none, hann or hamming, and ``rate`` 0 reads
+the run clock's. A descriptor defines more the same way.
 Expressions: numbers, names, ``+ - * / % ^``,
 comparisons (1 or 0), ``&& || !``, ``c ? a : b``, ``pi``, ``e`` and ``sin cos tan asin acos atan
 atan2 sinh cosh tanh exp log log10 sqrt abs floor ceil round sign frac min max clamp mod
@@ -316,6 +325,10 @@ Pointwise arithmetic and math operations on signals. All but the two random bloc
 - ``lerp`` (``a``, ``b``, ``t`` → ``y``: linear interpolation)
 - ``random_number`` (``min``, ``max`` → ``y``; params: ``min``, ``max``, ``integer``, ``seed``)
 - ``random_boolean`` (``p`` → ``y``; params: ``p``, ``seed``)
+- ``erf`` (``u`` → ``y``: error function, Boost.Math)
+- ``gamma`` (``u`` → ``y``; ``mode``: ``gamma``, ``log``, ``digamma``)
+- ``bessel`` (``u`` → ``y``; ``order``, ``kind``: ``J``, ``Y``, ``I``, ``K``)
+- ``distribution`` (``u`` → ``y``; ``family``: ``normal``/``uniform``/``exponential``, ``function``: ``pdf``/``cdf``/``quantile``, ``a``, ``b``: mean and standard deviation, bounds, or rate)
 
 .. _elementwise:
 
@@ -449,3 +462,14 @@ instrument, from the toolkit's ``web/index.tsx``). Station object ``image`` (pro
 Its ``toolkits.toml`` entry lists these block types in ``blocks = [...]``; the engine sends them in
 ``ToolkitStatus.blocks`` so the UI can name the toolkit when a flow uses a block that is not installed.
 A new optional toolkit does the same, with no change to the web app.
+
+optimization (external toolkit)
+-------------------------------
+
+Optional external toolkit from ``paperboat-toolkit-optimization`` (installed into
+``engine/toolkit/optimization``; ``paperboat::toolkit_optimization``, ``register_optimization``).
+Programs from a JSON file, solved by OSQP: ``qp`` (min ½·xᵀPx + qᵀx) and ``lp`` (min cᵀx),
+both with ``l ≤ Ax ≤ u``. Outputs ``x`` (numbers), ``objective``, ``iterations`` and ``status``.
+The file uses ``P``, ``q`` for a QP (``P``'s upper triangle) or ``c`` for an LP, with optional
+``A``, ``l`` and ``u``; a ``null`` bound is infinite. The block solves on its first step and keeps
+the result, so it fits a run-once (a design point, a plan, a schedule).

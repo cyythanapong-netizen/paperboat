@@ -88,6 +88,42 @@ if(PAPERBOAT_WITH_SUNDIALS)
   endblock()
 endif()
 
+# Boost.Math (BSL-1.0): the math package's special functions and distributions. Standalone mode
+# needs no other Boost library, and it is header-only, so the blocks compile it in and the SDK
+# does not have to find it.
+FetchContent_Declare(boost_math
+  URL https://github.com/boostorg/math/archive/refs/tags/boost-1.87.0.tar.gz
+  URL_HASH SHA256=33bc8bebff5e0f929397b84b52afbe9d0202d7b4ca68dc6516b08acba5edf023
+  DOWNLOAD_EXTRACT_TIMESTAMP ON)
+block()  # its own test suite would flood the build
+  set(BUILD_TESTING OFF)
+  FetchContent_MakeAvailable(boost_math)
+endblock()
+if(PAPERBOAT_INSTALL)
+  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/boost_math/LICENSE"
+          DESTINATION "${CMAKE_INSTALL_DOCDIR}/boost_math" COMPONENT runtime)
+endif()
+
+# pocketfft (BSD-3): the signal package's FFT. A single header; nothing to build or install.
+set(pocketfft_include "${CMAKE_BINARY_DIR}/third_party/pocketfft")
+set(pocketfft_header "${pocketfft_include}/pocketfft_hdronly.h")
+if(NOT EXISTS "${pocketfft_header}")
+  file(DOWNLOAD
+    https://raw.githubusercontent.com/mreineck/pocketfft/4d865cba24359b05b37da4e75aee24498c3b78e7/pocketfft_hdronly.h
+    "${pocketfft_header}"
+    EXPECTED_HASH SHA256=518a95c552aeaee352aa30122137cd9e135d23c91e2863d9272aaa758744c86d
+    STATUS pocketfft_status TLS_VERIFY ON)
+  list(GET pocketfft_status 0 pocketfft_code)
+  if(NOT pocketfft_code EQUAL 0)
+    list(GET pocketfft_status 1 pocketfft_message)
+    message(FATAL_ERROR "pocketfft download failed: ${pocketfft_message}")
+  endif()
+endif()
+if(PAPERBOAT_INSTALL)
+  install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/pocketfft/LICENSE.md"
+          DESTINATION "${CMAKE_INSTALL_DOCDIR}/pocketfft" COMPONENT runtime)
+endif()
+
 add_subdirectory(toolkit)
 add_subdirectory(core)
 
