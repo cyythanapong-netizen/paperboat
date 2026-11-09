@@ -30,6 +30,7 @@
 #include <nlohmann/json.hpp>
 #include <toml++/toml.hpp>
 
+#include "paperboat/core/backend.hpp"
 #include "paperboat/core/process.hpp"
 #include "paperboat/core/run.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
@@ -1119,9 +1120,25 @@ std::vector<ExampleBackend> BackendManager::status_examples(const fs::path& exam
 
 bool BackendManager::start_app(int port, const std::string& host, bool daemon) {
   const fs::path root = toolkit::find_repo_root();
-  if (root.empty()) {
-    std::cerr << "error: repository root not found\n";
-    return false;
+  // An installed paperboat (.deb, .rpm, .tar.gz, .zip, npm) has no checkout to run `npm run dev`
+  // in: it serves the web app built into share/paperboat/web itself.
+  if (root.empty() || !fs::is_regular_file(root / "apps" / "web" / "package.json")) {
+    const fs::path exe = platform::exe_path();
+    fs::path web = root.empty() ? fs::path{} : root / "web";
+    if (!fs::is_regular_file(web / "index.html")) web = exe.parent_path().parent_path() / "share" / "paperboat" / "web";
+    if (!fs::is_regular_file(web / "index.html")) {
+      std::cerr << "error: no web app here: run it from a Paperboat checkout (npm install), or install a release package\n";
+      return false;
+    }
+    free_port(port, 2000);
+    if (daemon) {
+      const fs::path log_path = platform::shared_tmp_dir() / "paperboat-web.log";
+      const int pid = ProcessRunner::run_detached({exe.string(), "app", "start", "--port", std::to_string(port), "--host", host}, web, {}, log_path);
+      if (pid <= 0) return false;
+      std::cout << "Web app on http://localhost:" << port << "/ in the background (PID " << pid << ", log: " << log_path << ")\n";
+      return true;
+    }
+    return serve_files(web, port, host) == 0;
   }
 
   free_port(port, 2000);

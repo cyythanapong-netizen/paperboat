@@ -23,7 +23,7 @@ if(TARGET paperboat_toolkit_opencv)
   target_compile_definitions(paperboat PRIVATE PAPERBOAT_HAS_OPENCV)
 endif()
 
-# Installed layout: bin/paperboat and share/paperboat/{toolkits.toml,apps.toml}. The binary finds
+# Installed layout: bin/paperboat and share/paperboat/{toolkits.toml,apps.toml,web/,cli/}. The binary finds
 # the registries at ../share/paperboat (toolkit::find_repo_root), so a package is relocatable.
 if(PROJECT_IS_TOP_LEVEL)
   install(TARGETS paperboat RUNTIME DESTINATION bin COMPONENT runtime)
@@ -34,4 +34,14 @@ if(PROJECT_IS_TOP_LEVEL)
           DESTINATION share/paperboat/protocol COMPONENT runtime)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../protocol/schema/paperboat-0.schema.json
           DESTINATION share/paperboat/protocol/schema COMPONENT runtime)
+  # The web app and the console, when built first (npm run build:release; scripts/build_release.sh
+  # does): `paperboat start` serves share/paperboat/web, and the prompt is share/paperboat/cli/main.js.
+  set(web_dist ${CMAKE_CURRENT_SOURCE_DIR}/../../apps/web/dist)
+  if(EXISTS ${web_dist}/index.html)
+    install(DIRECTORY ${web_dist}/ DESTINATION share/paperboat/web COMPONENT runtime)
+  endif()
+  set(cli_bundle ${CMAKE_CURRENT_SOURCE_DIR}/../../apps/cli/bundle/main.js)
+  if(EXISTS ${cli_bundle})
+    install(FILES ${cli_bundle} DESTINATION share/paperboat/cli COMPONENT runtime)
+  endif()
 endif()

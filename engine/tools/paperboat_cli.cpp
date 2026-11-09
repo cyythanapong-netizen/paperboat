@@ -1,6 +1,9 @@
 // The Paperboat unified CLI: build and start backends, list running backends,
 // manage the web application, orchestrate examples, and install/browse toolkits.
 
+#ifdef _WIN32
+#include <process.h>  // _spawnvp
+#endif
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -1328,13 +1331,11 @@ int cmd_top(const std::vector<std::string_view>&) {
   return 2;
 }
 
-// The console (apps/cli, Ink) replaces this process on a terminal. Returns only when it
-// can't: not a terminal, PAPERBOAT_NO_CONSOLE set, not built, or no `node` on PATH.
+// The console (apps/cli, Ink) takes over on a terminal: it replaces this process (POSIX) or
+// runs as its child, this one exiting with its code (Windows). Returns only when it can't: not
+// a terminal, PAPERBOAT_NO_CONSOLE set, not built, or no `node` on PATH. It is the checkout's
+// apps/cli/dist/main.js, else the bundle a release installs at share/paperboat/cli/main.js.
 bool launch_console(const std::vector<std::string>& args) {
-#ifdef _WIN32
-  (void)args;
-  return false;  // the console replaces this process with node (execvp); on Windows the basic prompt is used
-#else
   if (!platform::is_tty(0) || !platform::is_tty(1) || std::getenv("PAPERBOAT_NO_CONSOLE")) return false;
   std::error_code ec;
   const fs::path exe = platform::exe_path();
@@ -1352,12 +1353,26 @@ bool launch_console(const std::vector<std::string>& args) {
       }
       break;
     }
+    if (script.empty()) script = exe.parent_path().parent_path() / "share" / "paperboat" / "cli" / "main.js";
   }
-  if (script.empty() || !fs::is_regular_file(script)) return false;
+  if (!fs::is_regular_file(script)) return false;
 
-  setenv("PAPERBOAT_BIN", exe.c_str(), 1);
   std::vector<std::string> owned = {"node", script.string()};
   owned.insert(owned.end(), args.begin(), args.end());
+#ifdef _WIN32
+  _putenv_s("PAPERBOAT_BIN", exe.string().c_str());
+  // no exec on Windows: node runs in this console as a child, and its exit code is ours
+  std::vector<const char*> argv;
+  for (auto& a : owned) argv.push_back(a.c_str());
+  argv.push_back(nullptr);
+  const intptr_t code = _spawnvp(_P_WAIT, "node", argv.data());
+  if (code == -1) {
+    std::cerr << "note: `node` not found on PATH; using the basic prompt\n";
+    return false;
+  }
+  std::exit(static_cast<int>(code));
+#else
+  setenv("PAPERBOAT_BIN", exe.c_str(), 1);
   std::vector<char*> argv;
   for (auto& a : owned) argv.push_back(a.data());
   argv.push_back(nullptr);

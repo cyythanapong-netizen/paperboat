@@ -77,6 +77,11 @@ int port_arg(int argc, char** argv, int fallback);
 // it can't listen.
 int serve(const Backend& backend, int port);
 
+// Serves a built web app's folder (index.html, assets/) over HTTP until killed: an installed
+// paperboat's `start` with no checkout (share/paperboat/web). Unknown paths get index.html, as a
+// single-page app wants. Returns 1 when the port can't be taken.
+int serve_files(const std::filesystem::path& dir, int port, const std::string& host);
+
 // The same server, started and stopped by the caller (a host such as the Python
 // bindings, which must keep its own main loop for Ctrl+C).
 class Server {
