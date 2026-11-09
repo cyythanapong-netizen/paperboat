@@ -587,7 +587,8 @@ Serving
       :type: float
 
       Times real time (0: as fast as it can). The defaults here are what the UI shows; a user
-      may change ``duration`` and ``speed`` per run.
+      may change ``duration`` and ``speed`` per run, and ``speed`` during one (``run.speed``,
+      handled by the engine's run loop).
 
    .. py:attribute:: view
       :type: dict | None

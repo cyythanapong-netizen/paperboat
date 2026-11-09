@@ -148,7 +148,7 @@ Result run(const json& graph, core::RunCache* cache, const json& variables = nul
     if (m["type"] == "signal" && m["v"].is_number()) r.shown[m["node"]] = m["v"];
     if (m["type"] == "log") r.logs.push_back(m["text"]);
   };
-  r.status = core::run("r", graph, station, backend, emit, nullptr, stop, nullptr, variables, nullptr, cache);
+  r.status = core::run("r", graph, station, backend, emit, nullptr, stop, nullptr, variables, nullptr, nullptr, cache);
   return r;
 }
 

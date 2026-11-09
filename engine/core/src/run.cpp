@@ -153,13 +153,14 @@ Calling::~Calling() {
 }
 
 Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit, KeysNow keys, std::stop_token stop,
-         VariablesNow tune, RunCache* cache)
+         VariablesNow tune, SpeedNow speed, RunCache* cache)
     : id_(std::move(id)),
       backend_(backend),
       settings_(settings),
       emit_(std::move(emit)),
       keys_now_(std::move(keys)),
       tune_now_(std::move(tune)),
+      speed_now_(std::move(speed)),
       stop_(std::move(stop)),
       cache_(cache) {
   ctx_.dt = settings_.dt;
@@ -195,9 +196,10 @@ Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit
 }
 
 std::string Run::go(const json& graph_given, const json& station_given, const json& variables) {
-  run_start_time_ = std::chrono::steady_clock::now();
-  run_started_time_set_ = true;
-  last_lag_warn_ = run_start_time_ - std::chrono::seconds(2);  // the first lag warns at once
+  pace_wall_ = std::chrono::steady_clock::now();
+  pace_t_ = 0;
+  paced_ = true;
+  last_lag_warn_ = pace_wall_ - std::chrono::seconds(2);  // the first lag warns at once
   emit_({{"type", "run.started"}, {"run", id_}});
   json graph_json, station_json;
   try {  // variables first (#36): blocks and objects get the values they stand for
@@ -698,24 +700,58 @@ void Run::frame(const json& samples, std::optional<double> progress) {
   for (const auto& e : scene_of_blocks(blocks())) patch.push_back(e);
   if (!patch.empty()) emit_({{"type", "scene.patch"}, {"entities", patch}});
   if (progress) emit_({{"type", "run.progress"}, {"run", id_}, {"fraction", *progress}});
-  if (settings_.real_time && settings_.speed > 0) {
-    if (!run_started_time_set_) {
-      run_start_time_ = std::chrono::steady_clock::now();
-      run_started_time_set_ = true;
-    }
-    const auto now = std::chrono::steady_clock::now();
-    const auto target_time = run_start_time_ + std::chrono::duration<double>(ctx_.t / settings_.speed);
-    if (target_time > now) {
-      std::this_thread::sleep_for(target_time - now);
-    } else {
-      const auto lag = std::chrono::duration<double>(now - target_time).count();
-      if (lag > 0.2 && (now - last_lag_warn_ > std::chrono::seconds(2))) {
+  if (settings_.real_time) {
+    take_speed();
+    pace();
+  }
+}
+
+void Run::take_speed() {
+  if (!speed_now_) return;
+  const auto next = speed_now_();
+  if (!next) return;
+  const auto now = std::chrono::steady_clock::now();
+  // Re-anchor at now, at the run time the wall clock has reached at the old speed: a run ahead
+  // of the wall clock (mid-wait) waits out the rest at the new speed, and one behind it (or at
+  // max speed) goes on from where it is, its lag forgiven.
+  double at = ctx_.t;
+  if (paced_ && settings_.speed > 0)
+    at = std::min(ctx_.t, pace_t_ + std::chrono::duration<double>(now - pace_wall_).count() * settings_.speed);
+  pace_t_ = at;
+  pace_wall_ = now;
+  paced_ = true;
+  settings_.speed = *next;
+  emit_({{"type", "run.speed"}, {"run", id_}, {"speed", *next}});
+}
+
+void Run::pace() {
+  using clock = std::chrono::steady_clock;
+  if (!paced_) {  // an executor that drives frames without go()
+    pace_wall_ = clock::now();
+    pace_t_ = 0;
+    paced_ = true;
+  }
+  for (bool first = true;; first = false) {
+    if (settings_.speed <= 0) return;  // as fast as it can
+    const auto now = clock::now();
+    // Clamp the wait to an hour before the cast: a tiny speed would otherwise overflow the
+    // clock's int64 nanoseconds. The 20 ms slices re-evaluate it, so the run still stalls there.
+    const double wait_s = std::min((ctx_.t - pace_t_) / settings_.speed, 3600.0);
+    const auto due = pace_wall_ + std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(wait_s));
+    if (due <= now) {
+      const auto lag = std::chrono::duration<double>(now - due).count();
+      if (first && lag > 0.2 && (now - last_lag_warn_ > std::chrono::seconds(2))) {
         last_lag_warn_ = now;
         char buf[96];
         std::snprintf(buf, sizeof buf, "computation delay: behind real-time by %.2f s", lag);
         log("warn", buf);
       }
+      return;
     }
+    if (stop_.stop_requested()) return;
+    // A short wait at a time, so a new speed (max, say) takes at once, not after this frame's wait.
+    std::this_thread::sleep_for(std::min<clock::duration>(due - now, std::chrono::milliseconds(20)));
+    take_speed();
   }
 }
 
@@ -789,6 +825,12 @@ RunSettings with_overrides(RunSettings base, const json& settings) {
   return base;
 }
 
+double checked_speed(const json& speed) {
+  if (!speed.is_number() || !std::isfinite(speed.get<double>()) || speed.get<double>() < 0)
+    throw std::invalid_argument("speed must be a number, 0 or more (0: as fast as it can)");
+  return speed.get<double>();
+}
+
 json settings_json(const RunSettings& s) {
   json j = {{"mode", s.mode == RunSettings::Mode::Once ? "once" : "clock"}, {"duration", s.duration}, {"dt", s.dt}, {"speed", s.speed}};
   if (!s.solver.empty()) {
@@ -803,7 +845,7 @@ json settings_json(const RunSettings& s) {
 
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,
                 const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings,
-                const json& variables, const VariablesNow& tune, RunCache* cache) {
+                const json& variables, const VariablesNow& tune, const SpeedNow& speed, RunCache* cache) {
   RunSettings s;
   try {
     s = with_overrides(backend.run, settings);
@@ -814,7 +856,7 @@ std::string run(const std::string& id, const json& graph, const json& station, c
     return "failed";
   }
   toolkit::solve::set_defaults({s.solver, s.solver_options});  // this thread's "auto" solvers
-  return Run(id, backend, s, emit, keys, stop, tune, cache).go(graph, station, variables);
+  return Run(id, backend, s, emit, keys, stop, tune, speed, cache).go(graph, station, variables);
 }
 
 }  // namespace paperboat::core

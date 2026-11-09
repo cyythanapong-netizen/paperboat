@@ -33,3 +33,31 @@ test("connects to a backend, runs its starter graph and shows the results", asyn
   await page.getByRole("button", { name: "Console", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "Console" })).toContainText("running 2 blocks");
 });
+
+test("a run's speed changes while it runs: switched to max, a 10 s run ends early (#219)", async ({ page }) => {
+  await page.goto(`/?backend=${encodeURIComponent(BACKEND_URL)}`);
+  await expect(page.getByRole("banner").getByRole("status")).toHaveText("cpp-sdk-backend", { useInnerText: true, timeout: 20_000 });
+
+  // The backend's default: 10 s at 1×.
+  const dock = page.getByRole("group", { name: "Run" });
+  const speed = dock.getByRole("combobox");
+  await expect(speed).toHaveValue("1");
+  const run = dock.getByRole("button", { name: "Run" });
+  await expect(run).toBeEnabled();
+  const started = Date.now();
+  await run.click();
+  await expect(dock.getByText(/^running/)).toBeVisible();
+  await page.waitForTimeout(1000); // paced at 1×: about a tenth of the way
+
+  await speed.selectOption({ label: "max" });
+  await expect(dock.getByText("done", { exact: true })).toBeVisible({ timeout: 6_000 });
+  expect(Date.now() - started).toBeLessThan(7_000);
+  await expect(speed).toHaveValue("0"); // the speed it ran at, and the next run's
+
+  // The backend took it without a word: no unknown message, no delay warning.
+  await page.getByRole("button", { name: "Console", exact: true }).click();
+  const console = page.getByRole("dialog", { name: "Console" });
+  await expect(console).toContainText("running 2 blocks");
+  await expect(console).not.toContainText("unknown message");
+  await expect(console).not.toContainText("computation delay");
+});

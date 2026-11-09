@@ -1060,7 +1060,8 @@ Serving
    .. cpp:member:: double speed = 1.0
 
       Times real time when paced; 0: as fast as it can. The UI may change it per run,
-      with ``duration`` and ``dt`` (``graph.run``'s ``settings``).
+      with ``duration`` and ``dt`` (``graph.run``'s ``settings``), and during one
+      (``run.speed``): pacing then goes on from where the run is, at the new speed.
 
 .. cpp:function:: RunSettings with_overrides(RunSettings base, const json &settings)
 
@@ -1111,7 +1112,7 @@ Serving
 
    One run, without sockets: every event goes to ``emit``. Returns ``"done"``, ``"failed"``
    or ``"cancelled"``. For tests (with ``real_time = false``). Its last parameters (optional)
-   are the run settings' overrides, the variables, where it looks for tuned variables, and a
+   are the run settings' overrides, the variables, where it looks for tuned variables, where it finds a new speed (`SpeedNow`, `run.speed`, read between frames), and a
    :cpp:class:`RunCache`: a run that evaluates once reuses the outputs of blocks nothing
    changed for since an earlier run with the same cache.
 
@@ -1195,7 +1196,9 @@ always.
 
    .. cpp:function:: void frame(const json &samples, std::optional<double> progress)
 
-      Sends samples, the scene's changes and the run's progress; waits to keep real time.
+      Sends samples, the scene's changes and the run's progress; waits to keep real time,
+      at the speed the UI asked for last (``run.speed``): a custom executor that calls it gets
+      speed changes during a run for free.
 
    .. cpp:function:: bool cancelled()
 

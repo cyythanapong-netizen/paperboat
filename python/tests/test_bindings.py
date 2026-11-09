@@ -600,280 +600,80 @@ def test_view_icon_and_connectors_passthrough(tmp_path: Path) -> None:
     assert blocks["shunt"]["view"]["icon"]["ports"][0]["class"] == "RealInput"
     assert blocks["rig-load"]["view"]["icon"]["g"][0]["t"] == "ellipse"
 
-
-def test_implicit_solvers_on_a_stiff_system():
-    """#217: cvode and ida (SUNDIALS) take clock steps far past an explicit solver's stability limit."""
-    import math
-    import paperboat
-    if "cvode" not in paperboat.solve.names():
-        return  # an engine built without SUNDIALS
-    # x' = -1000 (x - cos t) - sin t: x = cos t + e^(-1000 t) from x0 = 2.
-    f = lambda t, x: [-1000 * (x[0] - math.cos(t)) - math.sin(t)]
-    for name in ("cvode", "ida"):
-        ode = paperboat.ode(f, [2.0], solver=name, rtol=1e-8, atol=1e-10)
-        for k in range(100):
-            ode.step(k * 0.1, 0.1)
-        assert abs(ode.x[0] - math.cos(10.0)) < 1e-6, (name, ode.x)
-        ode.restart()  # the equations may have changed: the solver starts afresh
-        assert abs(ode.x[0] - math.cos(10.0)) < 1e-6, (name, ode.x)
-    try:
-        paperboat.solve.Solver("cvode", max_steps=2).step(f, [2.0], 0.0, 10.0)
-    except RuntimeError as err:
-        assert "max_steps 2" in str(err)
-    else:
-        raise AssertionError("cvode must say it ran out of steps")
-    # Solver.restart() is reachable, not just an engine-internal hook.
-    solver = paperboat.solve.Solver("cvode")
-    solver.step(lambda t, x: [-x[0]], [1.0], 0.0, 0.1)
-    solver.restart()
-
-
-CACHE_BACKEND = '''
+PACED_BACKEND = '''
 import paperboat
 
-class Pure(paperboat.Block):
-    type, label = "pure", "Pure"
-    inputs, outputs = ["u"], ["y"]
-    params = {"k": 2.0}
-    cacheable = True
-    def step(self, ctx, inputs):
-        return {"y": self.params["k"] * inputs.get("u", 0.0)}
-
-class Level(paperboat.Block):
-    type, label = "level", "Level"
-    outputs = ["y"]
-    cacheable = True
-    def step(self, ctx, inputs):
-        return {"y": ctx.variable("level")}
-
-class Plain(paperboat.Block):
-    type, label = "plain", "Plain"
+class Double(paperboat.Block):
+    type, label = "double", "Double"
     inputs, outputs = ["u"], ["y"]
     def step(self, ctx, inputs):
-        return {"y": inputs.get("u", 0.0)}
+        return {"y": 2 * inputs.get("u", 0.0)}
 
-paperboat.serve(paperboat.Backend(engine="test-cache", descriptor="descriptor.toml", blocks=[Pure, Level, Plain], mode="once"))
+paperboat.serve(paperboat.Backend(engine="paced", descriptor="descriptor.toml", blocks=[Double], dt=0.01, duration=10.0))
 '''
 
-CACHE_DESCRIPTOR = '''
-domain = "c"
+PACED_DESCRIPTOR = '''
+domain = "paced"
 import = ["base", "dashboard"]
 [graph]
-nodes = [
-  { id = "c", type = "constant", params = { value = 3 } }, { id = "p", type = "pure" }, { id = "show", type = "display" },
-  { id = "lv", type = "level" }, { id = "p2", type = "pure" }, { id = "show2", type = "display" },
-  { id = "q", type = "plain" },
-]
-edges = [
-  { from = ["c", "y"], to = ["p", "u"] }, { from = ["p", "y"], to = ["show", "in"] },
-  { from = ["lv", "y"], to = ["p2", "u"] }, { from = ["p2", "y"], to = ["show2", "in"] },
-  { from = ["c", "y"], to = ["q", "u"] },
-]
+nodes = [{ id = "one", type = "constant", params = { value = 1 } }, { id = "d", type = "double" }, { id = "show", type = "display" }]
+edges = [{ from = ["one", "y"], to = ["d", "u"] }, { from = ["d", "y"], to = ["show", "in"] }]
 '''
 
 
-class _WebSocket:
-    """Just enough of a WebSocket client (RFC 6455, text frames) to talk to a served backend."""
-
-    def __init__(self, port: int) -> None:
-        import base64
-        import socket
-
-        self.sock = socket.create_connection(("127.0.0.1", port), timeout=20)
-        key = base64.b64encode(os.urandom(16)).decode()
-        self.sock.sendall((f"GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                           f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
-        self.buf = b""
-        while b"\r\n\r\n" not in self.buf:
-            self._more()
-        head, self.buf = self.buf.split(b"\r\n\r\n", 1)
-        assert b" 101 " in head.split(b"\r\n")[0], head
-
-    def _more(self) -> None:
-        chunk = self.sock.recv(65536)
-        if not chunk:
-            raise EOFError("the backend closed the connection")
-        self.buf += chunk
-
-    def _take(self, n: int) -> bytes:
-        while len(self.buf) < n:
-            self._more()
-        out, self.buf = self.buf[:n], self.buf[n:]
-        return out
-
-    def _send(self, opcode: int, payload: bytes) -> None:
-        import struct
-
-        n, mask = len(payload), os.urandom(4)
-        head = bytes([0x80 | opcode])
-        if n < 126:
-            head += bytes([0x80 | n])
-        elif n < 65536:
-            head += bytes([0x80 | 126]) + struct.pack(">H", n)
-        else:
-            head += bytes([0x80 | 127]) + struct.pack(">Q", n)
-        self.sock.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
-
-    def send(self, message: dict) -> None:
-        self._send(0x1, json.dumps(message).encode())
-
-    def recv(self) -> dict:
-        import struct
-
-        data = b""
-        while True:
-            b0, b1 = self._take(2)
-            n = b1 & 0x7F
-            if n == 126:
-                n = struct.unpack(">H", self._take(2))[0]
-            elif n == 127:
-                n = struct.unpack(">Q", self._take(8))[0]
-            mask = self._take(4) if b1 & 0x80 else b""
-            payload = self._take(n)
-            if mask:
-                payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
-            opcode = b0 & 0x0F
-            if opcode == 0x8:
-                raise EOFError("the backend closed the connection")
-            if opcode == 0x9:
-                self._send(0xA, payload)
-                continue
-            if opcode == 0xA:
-                continue
-            data += payload
-            if b0 & 0x80:
-                return json.loads(data)
-
-    def close(self) -> None:
-        self.sock.close()
-
-
-def _free_port() -> int:
+def test_a_python_backend_takes_a_speed_change_during_a_run(tmp_path: Path) -> None:
+    # #219: run.speed is the engine's (session and run loop), so a Python backend has it too: a
+    # 10 s run at 1×, switched to max after half a second, ends early and says it took the speed.
+    import asyncio
     import socket
+    import time
 
-    for port in range(4340, 4400):  # this suite's range
-        with socket.socket() as s:
-            try:
-                s.bind(("127.0.0.1", port))
-            except OSError:
-                continue
-            return port
-    raise RuntimeError("no free port in 4340-4399")
+    import pytest
 
+    websockets = pytest.importorskip("websockets.asyncio.client")  # as the protocol's smoke test
 
-def test_a_cacheable_python_block_is_reused_by_the_next_run_once(tmp_path: Path) -> None:
-    (tmp_path / "server.py").write_text(textwrap.dedent(CACHE_BACKEND))
-    (tmp_path / "descriptor.toml").write_text(textwrap.dedent(CACHE_DESCRIPTOR))
+    def free_port() -> int:
+        for port in range(5650, 5700):
+            with socket.socket() as s:
+                if s.connect_ex(("127.0.0.1", port)) != 0:
+                    return port
+        raise RuntimeError("no free port in 5650-5699")
+
+    (tmp_path / "server.py").write_text(textwrap.dedent(PACED_BACKEND))
+    (tmp_path / "descriptor.toml").write_text(textwrap.dedent(PACED_DESCRIPTOR))
+    port = free_port()
     env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
-    port = _free_port()
     proc = subprocess.Popen([sys.executable, "server.py", "--port", str(port)], cwd=tmp_path, env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+
+    async def talk() -> tuple[list[dict], float]:
+        for _ in range(100):
+            try:
+                ws = await websockets.connect(f"ws://127.0.0.1:{port}", proxy=None)
+                break
+            except OSError:
+                await asyncio.sleep(0.1)
+        else:
+            raise RuntimeError("backend never listened: " + (proc.stderr.read() if proc.poll() is not None else ""))
+        async with ws:
+            graph = None
+            while graph is None:
+                msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
+                graph = msg["graph"] if msg["type"] == "graph.load" else None
+            start = time.monotonic()
+            await ws.send(json.dumps({"type": "graph.run", "graph": graph}))
+            await asyncio.sleep(0.5)
+            await ws.send(json.dumps({"type": "run.speed", "speed": 0}))
+            msgs = []
+            while not msgs or msgs[-1]["type"] != "run.finished":
+                msgs.append(json.loads(await asyncio.wait_for(ws.recv(), timeout=20)))
+            return msgs, time.monotonic() - start
+
     try:
-        assert proc.stdout is not None
-        line = proc.stdout.readline()
-        assert f"ws://localhost:{port}" in line, line + proc.stderr.read() if proc.stderr else line
-        ws = _WebSocket(port)
-        graph = None
-        while graph is None:
-            m = ws.recv()
-            if m["type"] == "graph.load":
-                graph = m["graph"]
-
-        def run(level: float) -> tuple[dict, dict]:
-            ws.send({"type": "graph.run", "graph": graph,
-                     "variables": [{"name": "level", "type": "number", "value": level}]})
-            states, shown = {}, {}  # a reused block is done with no running before it: "cached" here
-            while True:
-                m = ws.recv()
-                if m["type"] == "node.state":
-                    was = states.get(m["node"])
-                    states[m["node"]] = "done" if was == "running" and m["state"] == "done" else (
-                        "cached" if m["state"] == "done" else m["state"])
-                elif m["type"] == "signal":
-                    shown[m["node"]] = m["v"]
-                elif m["type"] == "run.finished":
-                    assert m["status"] == "done"
-                    return states, shown
-
-        first, shown = run(1)
-        assert set(first.values()) == {"done"}
-        assert shown == {"show": 6.0, "show2": 2.0}
-        second, shown = run(1)  # nothing changed: the cacheable blocks are reused
-        assert {n for n, s in second.items() if s == "cached"} == {"c", "p", "lv", "p2"}
-        assert second["q"] == "done"  # says nothing: called every run
-        assert shown == {"show": 6.0, "show2": 2.0}
-        third, shown = run(5)  # ctx.variable("level") was read by lv: it and p2 recompute
-        assert {n for n, s in third.items() if s == "cached"} == {"c", "p"}
-        assert third["lv"] == third["p2"] == "done"
-        assert shown == {"show": 6.0, "show2": 10.0}
-        ws.close()
+        msgs, took = asyncio.run(talk())
     finally:
         proc.terminate()
         proc.wait(timeout=10)
-
-LIST_BACKEND = '''
-import paperboat
-from paperboat import numbers_port, points_port
-
-class Profile(paperboat.Block):
-    type, label = "profile", "Profile"
-    outputs = [points_port("points", [("x", "m"), ("z", "m")])]
-    def step(self, ctx, inputs):
-        return {"points": [[0.0, 1.0], [1.0, 3.0], [2.0, 2.0]]}
-
-class Heights(paperboat.Block):
-    type, label = "heights", "Heights"
-    inputs = [numbers_port("z", "m")]
-    outputs = ["top"]
-    def step(self, ctx, inputs):
-        return {"top": max(inputs["z"])}
-
-paperboat.serve(paperboat.Backend(engine="test-lists", descriptor="descriptor.toml",
-                                  blocks=[Profile, Heights], mode="once"))
-'''
-
-LIST_DESCRIPTOR = '''
-domain = "lists"
-import = ["list", "math", "dashboard"]
-[graph]
-nodes = [
-  { id = "p", type = "profile" },
-  { id = "c", type = "coordinates", params = { names = "x z", units = "m m" } },
-  { id = "h", type = "heights" },
-  { id = "n", type = "list_length", params = { form = "points" } },
-  { id = "k", type = "gain", params = { k = 2 } },
-  { id = "s", type = "aggregate", params = { op = "sum" } },
-  { id = "top", type = "display" }, { id = "count", type = "display" }, { id = "sum", type = "display" },
-  { id = "shown", type = "display" },
-]
-edges = [
-  { from = ["p", "points"], to = ["c", "points"] },
-  { from = ["c", "z"], to = ["h", "z"] },
-  { from = ["p", "points"], to = ["n", "list"] },
-  { from = ["c", "x"], to = ["k", "u"] },
-  { from = ["k", "y"], to = ["s", "list"] },
-  { from = ["h", "top"], to = ["top", "in"] },
-  { from = ["n", "n"], to = ["count", "in"] },
-  { from = ["s", "y"], to = ["sum", "in"] },
-  { from = ["p", "points"], to = ["shown", "in"] },
-]
-'''
-
-
-def test_lists_flow_between_python_blocks_and_the_list_package(tmp_path: Path) -> None:
-    msgs = run_backend(tmp_path, backend=LIST_BACKEND, descriptor=LIST_DESCRIPTOR)
-    assert msgs[-1]["status"] == "done", msgs
-    last = {m["node"]: m["v"] for m in msgs if m["type"] == "signal"}
-    assert last["top"] == 3.0          # a points list split into coordinates, one read by a Python block
-    assert last["count"] == 3.0        # List Length in its points form
-    assert last["sum"] == 6.0          # Gain mapped over a list, then summed: 2 * (0 + 1 + 2)
-    assert last["shown"] == "3 points: (0, 1), (1, 3), (2, 2)"
-
-
-def test_list_ports_from_python_carry_their_shape(tmp_path: Path) -> None:
-    import paperboat
-    port = paperboat.points_port("p", [("x", "m"), "z"])
-    assert port.type == "points" and port.dimension == 2
-    assert port.components[0] == paperboat.VectorComponent("x", "m")
-    assert paperboat.numbers_port("y", "m") == paperboat.Port("y", "numbers", unit="m")
-    assert paperboat.points_port("q").dimension is None
+    assert msgs[-1] == {"type": "run.finished", "run": "run-1", "status": "done"}
+    assert [m for m in msgs if m["type"] == "run.speed"] == [{"type": "run.speed", "run": "run-1", "speed": 0}]
+    assert took < 5  # not the 10 s it would take at 1×

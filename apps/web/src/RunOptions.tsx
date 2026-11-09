@@ -6,7 +6,8 @@ const SPEEDS = [0.25, 0.5, 1, 2, 4, 0];
 
 /**
  * How long and how fast the next run goes, beside Run. Starts at the backend's defaults
- * (hello.run); only what the user changed is sent with graph.run. Hidden for a backend
+ * (hello.run); only what the user changed is sent with graph.run. The speed also changes a
+ * run in progress (run.speed, #219), and shows the speed it runs at. Hidden for a backend
  * that evaluates once, or doesn't say.
  */
 export function RunOptions({ defaults, value, onChange }: { defaults: RunSettings; value: RunSettings; onChange: (v: RunSettings) => void }) {
@@ -52,7 +53,7 @@ export function RunOptions({ defaults, value, onChange }: { defaults: RunSetting
       >
         ∞
       </button>
-      <select value={speed} onChange={(e) => set({ speed: Number(e.target.value) })}>
+      <select value={speed} title="Times real time; during a run, it changes the run at once" onChange={(e) => set({ speed: Number(e.target.value) })}>
         {SPEEDS.map((x) => (
           <option key={x} value={x}>
             {x === 0 ? "max" : `${x}×`}
