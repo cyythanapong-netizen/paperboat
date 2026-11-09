@@ -184,3 +184,20 @@ export function resolveBlocks(nodes: FlowNode[], edges: Wire[], blocks: BlockDef
   });
   return changed ? out : nodes;
 }
+
+/**
+ * Wires to a block that's gone (its station object was removed), or to a port it no longer
+ * has (a magic block switched form), go too. Returns `edges` itself when all stay.
+ */
+export function withoutLooseWires(nodes: FlowNode[], edges: Wire[]): Wire[] {
+  const ports = new Map<string, Set<string> | null>(
+    nodes.map((n) => [n.id, isBlock(n) && !n.data.missing ? new Set([...portsOf(n).inputs, ...portsOf(n).outputs].map((p) => p.id)) : null]),
+  );
+  const has = (id: string, port: string | null | undefined) => {
+    if (!ports.has(id)) return false;
+    const p = ports.get(id);
+    return p === null || p === undefined || p.has(port ?? ""); // groups and missing blocks keep their wires
+  };
+  const kept = edges.filter((e) => has(e.source, e.sourceHandle) && has(e.target, e.targetHandle));
+  return kept.length === edges.length ? edges : kept;
+}

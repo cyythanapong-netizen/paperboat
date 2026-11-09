@@ -4,10 +4,10 @@ import { useEngine } from "./engine";
 import { BrowserWindow, DRAG_TYPE, dragging, type Item } from "./Browser";
 import { FlowEditor, type FlowControls } from "./FlowEditor";
 import { RunStates } from "./flowContexts";
-import { isBlock, makeWire, portsOf, resolveBlocks, syncLinked, type FlowNode, type Wire } from "./flowModel";
+import { isBlock, type FlowNode, type Wire } from "./flowModel";
 import { fromGraph, toFlow, toGraph, withBlock } from "./flowGraph";
-import { absolute, isFrame, levelOf } from "./groups";
-import type { DashboardLayout, Project, RunSettings, Station, ToolkitStatus } from "./protocol";
+import { isFrame, levelOf } from "./groups";
+import type { DashboardLayout, Project, RunSettings, ToolkitStatus } from "./protocol";
 import { addRecent, ago, buildProject, clearAutosave, loadAutosave, loadRecent, parseProject, projectFileName, projectName, saveAutosave, saveRecent, stringify, type Stored } from "./project";
 import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from "./projectFiles";
 import { Notice, ProjectLabel, type NoticeSpec } from "./ProjectUI";
@@ -15,11 +15,13 @@ import { VariablesSheet, VarsContext } from "./Variables";
 import { toToml, type Use } from "./bindings";
 import { ConsoleWindow } from "@paperboat/shared/components";
 import { Dashboard } from "./Dashboard";
-import { instrumentMeta } from "./instruments";
 import { loadSaved, save as saveLayout } from "./dashboardLayout";
 import { remembered, useDrawer } from "./remembered";
 import { PAGE_IDS, useUiLock } from "./uiLock";
 import { useVariables, varsApiFor } from "./variablesState";
+import { useCanvasSync } from "./canvasSync";
+import { useBoardWiring } from "./boardWiring";
+import { runBlocker, runClock } from "./runStatus";
 import { MODES, PAGES, Panel, Rail, StatusPill, Switch, ThemeToggle, useTheme, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
 const SceneView = lazy(() => import("./SceneView").then((m) => ({ default: m.SceneView })));
 import { StationGraph, type StationControls } from "./StationGraph";
@@ -77,7 +79,6 @@ export function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Wire>([]);
   const { fitView, screenToFlowPosition } = useReactFlow();
-  const [station, setStation] = useState<Station | null>(null);
   const [runSettings, setRunSettings] = useState<RunSettings>({});
   // Variables (#36): the backend's defaults, then the user's own, kept in the project (#34).
   const { variables, keepVars, setVariables, varsHistory, undoVars } = useVariables(state, send, subscribe);
@@ -95,71 +96,8 @@ export function App() {
   const [consoleShown, setConsoleShown] = useState(false);
   useEffect(() => setRunSettings({}), [state.engine]); // another backend: its own defaults
 
-  // What the canvas and station were loaded as, and from which backend: a backend that
-  // comes back (restarted, reconnected) doesn't overwrite what the user changed since.
-  const canvas = useRef({ engine: "", graph: "", station: "" });
-  const current = useRef({ nodes, edges, station });
-  current.current = { nodes, edges, station };
-
-  // The backend decides what the station opens with (station.load); edits go back to it.
-  useEffect(() => {
-    const mine = current.current.station;
-    const edited = mine && canvas.current.engine === state.engine && JSON.stringify(mine) !== canvas.current.station;
-    if (edited) {
-      send({ type: "station.set", station: mine }); // keep the user's station; tell the backend
-      return;
-    }
-    setStation(state.station);
-    canvas.current.station = JSON.stringify(state.station);
-  }, [state.station, state.engine, send]);
-  const editStation = useCallback(
-    (next: Station) => {
-      setStation(next);
-      send({ type: "station.set", station: next });
-    },
-    [send],
-  );
-
-  // Linked blocks follow the station: one per object that spawns one.
-  useEffect(() => {
-    setNodes((ns) => syncLinked(ns, station, state.objects, state.blocks));
-  }, [station, state.objects, state.blocks, setNodes]);
-  // Wires to a block that's gone (its station object was removed), or to a port it no
-  // longer has (a magic block switched form), go too.
-  useEffect(() => {
-    const ports = new Map<string, Set<string> | null>(
-      nodes.map((n) => [n.id, isBlock(n) && !n.data.missing ? new Set([...portsOf(n).inputs, ...portsOf(n).outputs].map((p) => p.id)) : null]),
-    );
-    const has = (id: string, port: string | null | undefined) => {
-      if (!ports.has(id)) return false;
-      const p = ports.get(id);
-      return p === null || p === undefined || p.has(port ?? "");  // groups and missing blocks keep their wires
-    };
-    setEdges((es) => {
-      const kept = es.filter((e) => has(e.source, e.sourceHandle) && has(e.target, e.targetHandle));
-      return kept.length === es.length ? es : kept;
-    });
-  }, [nodes, setEdges]);
-
-  // The backend decides what the canvas opens with (graph.load), unless the user changed
-  // the canvas since this same backend loaded it: then the canvas stays, checked against the
-  // (perhaps new) catalog, so a block that's gone shows as missing instead of vanishing.
-  useEffect(() => {
-    const now = current.current;
-    const edited =
-      now.nodes.length > 0 &&
-      canvas.current.engine === state.engine &&
-      JSON.stringify(toGraph(now.nodes, now.edges)) !== canvas.current.graph;
-    if (edited) {
-      setNodes((ns) => resolveBlocks(ns, now.edges, state.blocks));
-      return;
-    }
-    const g = state.loaded ? fromGraph(state.loaded, state.blocks) : { nodes: [], edges: [] };
-    setNodes(g.nodes);
-    setEdges(g.edges);
-    canvas.current = { ...canvas.current, engine: state.engine, graph: JSON.stringify(toGraph(g.nodes, g.edges)) };
-    requestAnimationFrame(() => fitView());
-  }, [state.loaded, state.blocks, state.engine, setNodes, setEdges, fitView]);
+  // The canvas and the station follow the backend, keeping what the user changed since it loaded them.
+  const { station, editStation } = useCanvasSync(state, send, nodes, edges, setNodes, setEdges, fitView);
 
   // Ctrl+Z / Ctrl+Shift+Z on the Flow canvas; a new graph from the backend starts afresh.
   const history = useUndo(nodes, edges, setNodes, setEdges, state.loaded);
@@ -299,59 +237,8 @@ export function App() {
       </button>
     );
   };
-  const monitors = useMemo(
-    () =>
-      Object.fromEntries(
-        nodes
-          .filter(isBlock)
-          .filter((n) => n.data.def.kind === "monitor" || !!n.data.def.instrument)
-          .map((n) => {
-            const kind = n.data.def.instrument ?? "graph";
-            return [n.id, { kind, params: n.data.params, ...instrumentMeta(kind), ...absolute(n, nodes), ...wiring(n) }];
-          }),
-      ),
-    [nodes, edges], // eslint-disable-line react-hooks/exhaustive-deps -- wiring reads nodes and edges
-  );
-  // A monitor's inputs and the output wired into each, for an instrument's legend.
-  function wiring(n: FlowNode) {
-    const sources: Record<string, { label: string; unit?: string }> = {};
-    for (const e of edges) {
-      if (e.target !== n.id || !e.targetHandle) continue;
-      const src = nodes.find((m) => m.id === e.source);
-      const port = src && isBlock(src) ? portsOf(src).outputs.find((p) => p.id === e.sourceHandle) : undefined;
-      sources[e.targetHandle] = { label: `${e.source}.${e.sourceHandle}`, ...(port?.unit ? { unit: port.unit } : {}) };
-    }
-    return { inputs: isBlock(n) ? portsOf(n).inputs.map((p) => p.id) : [], sources };
-  }
-  // What an instrument's + tap offers: every block output that carries numbers.
-  const taps = useMemo(
-    () =>
-      nodes.filter(isBlock).flatMap((n) =>
-        portsOf(n)
-          .outputs.filter((p) => (p.type ?? "signal") !== "step" && p.type !== "text")
-          .map((p) => ({ id: `${n.id}\u0000${p.id}`, label: `${n.id}.${p.id}`, ...(p.unit ? { unit: p.unit } : {}) })),
-      ),
-    [nodes],
-  );
-  // + tap: wire output `id` into the monitor's first free input; if all are used and its inputs
-  // follow an `inputs` count (ports_from = "inputs"), add one. One undo step.
-  const tap = (monitor: string, id: string) => {
-    const [source, sourceHandle] = id.split("\u0000");
-    const node = nodes.find((n) => n.id === monitor);
-    if (!node || !isBlock(node)) return;
-    const inputs = portsOf(node).inputs.map((p) => p.id);
-    const used = new Set(edges.filter((e) => e.target === monitor).map((e) => e.targetHandle));
-    if (edges.some((e) => e.target === monitor && e.source === source && e.sourceHandle === sourceHandle)) return;
-    let input = inputs.find((i) => !used.has(i));
-    if (!input) {
-      if (node.data.def.ports_from !== "inputs") return log("warn", `${monitor} has no free input to tap ${source}.${sourceHandle}`);
-      if (inputs.length >= 26) return log("warn", `${monitor} has 26 inputs, all wired: remove one to tap ${source}.${sourceHandle}`);
-      input = String.fromCharCode(97 + inputs.length);
-      setNodes((ns) => ns.map((n) => (n.id === monitor && isBlock(n) ? { ...n, data: { ...n.data, params: { ...n.data.params, inputs: inputs.length + 1 } } } : n)));
-    }
-    setEdges((es) => [...es, makeWire({ source, sourceHandle, target: monitor, targetHandle: input }, "signal")]);
-    log("info", `tap ${source}.${sourceHandle} → ${monitor}.${input}`);
-  };
+  // The Board's instruments are the monitor blocks; + tap wires an output into one.
+  const { monitors, taps, tap } = useBoardWiring(nodes, edges, setNodes, setEdges, log);
   const errors = state.logs.filter((l) => l.level === "error").length;
   const open = (p: Page) => {
     setPage(p);
@@ -379,15 +266,7 @@ export function App() {
   const hasMissingBlocks = nodes.some((n) => isBlock(n) && n.data.missing);
   const hasMissingToolkits = state.toolkits.some((t) => t.required && !t.installed);
   const canRun = state.connection === "open" && !running && !hasMissingBlocks && !hasMissingToolkits;
-  const whyNotRun = running
-    ? "A run is in progress"
-    : state.connection !== "open"
-      ? "Not connected to a backend"
-      : hasMissingToolkits
-        ? "Required toolkits are not installed"
-        : hasMissingBlocks
-          ? "Flow contains blocks with missing types"
-          : "";
+  const whyNotRun = runBlocker(running, state.connection, hasMissingToolkits, hasMissingBlocks);
   const run = () => {
     if (hasMissingToolkits) {
       setMissingDialog(state.toolkits.filter((t) => t.required && !t.installed));
@@ -405,20 +284,7 @@ export function App() {
   };
 
   const status = state.run?.status;
-  const durationVal = Number(runSettings.duration ?? state.runDefaults.duration);
-  const isInfinite = durationVal <= 0;
-  const simTime = state.run?.simTime ?? (isInfinite ? 0 : (state.run ? state.run.progress * durationVal : 0));
-  const speed = Number(runSettings.speed ?? state.runDefaults.speed ?? 1);
-  const wallElapsed = state.run?.startedAt ? (Date.now() - state.run.startedAt) / 1000 : 0;
-  const expectedWall = speed > 0 ? simTime / speed : 0;
-  const delaySeconds = speed > 0 && wallElapsed > 1.2 && simTime > 0 ? wallElapsed - expectedWall : 0;
-  const isDelayed = delaySeconds > 0.2;
-
-  const elapsed = state.run
-    ? isInfinite
-      ? `${simTime.toFixed(1)} s`
-      : `${(state.run.progress * durationVal).toFixed(1)} / ${durationVal} s`
-    : "";
+  const { elapsed, delaySeconds, isDelayed } = runClock(state.run, runSettings, state.runDefaults, Date.now());
   const delayNotice = isDelayed ? <span className="run-delay" title="Real-time pacing is falling behind the wall clock"> ⚠ delay +{delaySeconds.toFixed(1)}s</span> : null;
 
   // ---- Projects (#82): the whole session as one file ----

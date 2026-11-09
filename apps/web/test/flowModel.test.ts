@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { connect, freeId, hasStepPorts, makeNode, makeWire, missingDef, resolveBlocks, syncLinked, type FlowNode, type Wire } from "../src/flowModel.ts";
+import { connect, freeId, hasStepPorts, makeNode, makeWire, missingDef, resolveBlocks, syncLinked, withoutLooseWires, type FlowNode, type Wire } from "../src/flowModel.ts";
 import type { BlockDef } from "../src/protocol.ts";
 
 const gain: BlockDef = { type: "gain", label: "Gain", kind: "function", inputs: [{ id: "in" }], outputs: [{ id: "out" }], params: [{ id: "k", type: "number", default: 1 }] };
@@ -68,4 +68,19 @@ test("a block whose type goes is missing, and whole again when it comes back", (
   assert.ok(back[0].type === "block");
   assert.deepEqual(back[0].type === "block" && back[0].data.params, { k: 5, bias: 0 });
   assert.equal(back[0].type === "block" && back[0].data.missing, undefined);
+});
+
+test("wires that lost a block or a port go; groups and missing blocks keep theirs", () => {
+  const a = makeNode(gain, "a", 0, 0);
+  const b = makeNode(gain, "b", 0, 0);
+  const lost = { ...makeNode(gain, "lost", 0, 0), data: { def: gain, params: {}, missing: true } };
+  const edges = [
+    makeWire({ source: "a", sourceHandle: "out", target: "b", targetHandle: "in" }, "signal"),
+    makeWire({ source: "a", sourceHandle: "gone", target: "b", targetHandle: "in" }, "signal"),
+    makeWire({ source: "a", sourceHandle: "out", target: "c", targetHandle: "in" }, "signal"),
+    makeWire({ source: "lost", sourceHandle: "whatever", target: "b", targetHandle: "in" }, "signal"),
+  ];
+  assert.deepEqual(withoutLooseWires([a, b, lost], edges).map((w) => w.id), ["a.out-b.in", "lost.whatever-b.in"]);
+  const kept = edges.slice(0, 1);
+  assert.equal(withoutLooseWires([a, b], kept), kept); // all stay: the same array
 });
