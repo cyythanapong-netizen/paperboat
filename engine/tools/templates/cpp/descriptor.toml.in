@@ -4,7 +4,7 @@
 # page opens with. The domain's own blocks (domain/blocks.hpp: Scale) are its package "@name@",
 # without listing them here.
 domain = "@name@"
-import = ["base", "signal", "dashboard"]  # Constant…; Sine, Clock…; Graph, Display
+import = ["base", "control", "dashboard", "math", "signal", "step", "string"]  # the built-in packages
 
 [station]
 view = "graph"  # no station objects yet: the Station page shows the graph

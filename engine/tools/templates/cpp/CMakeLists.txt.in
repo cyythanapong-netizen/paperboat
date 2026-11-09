@@ -18,5 +18,5 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}")
 
 add_executable(@target@ main.cpp)
 target_include_directories(@target@ PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(@target@ PRIVATE paperboat::core)
+target_link_libraries(@target@ PRIVATE paperboat::core paperboat::warnings)
 target_compile_definitions(@target@ PRIVATE PAPERBOAT_DESCRIPTOR="${CMAKE_CURRENT_SOURCE_DIR}/descriptor.toml")

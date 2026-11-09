@@ -21,6 +21,17 @@ void replace_all(std::string& text, std::string_view from, std::string_view to) 
   }
 }
 
+// A path as a POSIX shell word, for the `cd` the command prints.
+std::string shell_quote(std::string_view text) {
+  std::string out = "'";
+  for (const char c : text) {
+    if (c == '\'') out += "'\\''";
+    else out += c;
+  }
+  out += "'";
+  return out;
+}
+
 // The program a C++ backend builds: paperboat-<name> (`paperboat build` and `run` look for paperboat-*).
 std::string program_name(const std::string& name) {
   return name.starts_with("paperboat-") ? name : "paperboat-" + name;
@@ -167,7 +178,7 @@ int cmd_new(const std::vector<std::string_view>& args) {
   std::cout << "[ok] created " << (is_cpp ? "C++" : "Python") << " backend \"" << opts.name << "\" in " << res.dir.string()
             << '\n';
   for (const auto& f : res.files) std::cout << "  " << f.generic_string() << '\n';
-  std::cout << "\nNext steps:\n  cd " << where << '\n';
+  std::cout << "\nNext steps:\n  cd " << shell_quote(where) << '\n';
   if (is_cpp) {
     std::cout << "  paperboat build     compile it (CMake; the first build compiles the engine too)\n";
   } else {
