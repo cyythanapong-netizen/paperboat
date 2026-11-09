@@ -43,3 +43,28 @@ jobs:
       - run: npm test -w @paperboat/web
       - run: npm test -w @paperboat/cli
       - run: npm run build
+
+  # npm ci, not npm install: it fails if package-lock.json loses the macOS builds of the native
+  # packages (typescript, rolldown, lightningcss), as a lockfile made on one platform can
+  web-macos:
+    name: Web app and console on macOS arm64
+    runs-on: macos-15  # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: paperboat
+      - uses: actions/checkout@v4
+        with:
+          repository: paperboatlab/paperboat-shared
+          path: paperboat-shared
+          token: ${{ secrets.DOWNSTREAM_TOKEN || github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: paperboat-shared
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test -w @paperboat/web
+      - run: npm test -w @paperboat/cli
+      - run: npm run build

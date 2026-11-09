@@ -1,4 +1,4 @@
-# Release packages: .deb, .rpm and .tar.gz (Linux), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
+# Release packages: .deb, .rpm and .tar.gz (Linux), .tar.gz (macOS arm64), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
 # A tag v<version> publishes; pull requests and manual runs only build and check the packages.
 # The version is engine/CMakeLists.txt's project(paperboat VERSION ...); the tag must match it.
 # Publishing to npm needs the NPM_TOKEN secret (an automation token for the @paperboat scope); without it
@@ -131,6 +131,61 @@ jobs:
           name: linux
           path: dist/
 
+  macos:
+    name: macOS arm64 (.tar.gz, npm)
+    needs: web
+    runs-on: macos-15  # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5  # a pip that may install (the system one is externally managed)
+        with:
+          python-version: "3.12"
+      - name: Version
+        id: version
+        run: |
+          v=$(sed -nE 's/^project\(paperboat VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' engine/CMakeLists.txt)
+          pre=$(sed -nE 's/^set\(PAPERBOAT_PRERELEASE "([^"]*)".*/\1/p' engine/CMakeLists.txt)
+          v=$v${pre:+-$pre}
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      # The web app and the console, built once (job web): plain JavaScript, the same on every OS.
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-console
+          path: apps
+      - run: brew list ninja >/dev/null 2>&1 || brew install ninja
+      # libc++ is part of macOS, so no static runtime here; the binary runs on macOS 13 and later.
+      - name: Build and test
+        run: |
+          cmake -S engine -B engine/build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DPAPERBOAT_BUILD_TESTS=ON
+          cmake --build engine/build
+          engine/build/tests/paperboat_tests
+      - name: Package (.tar.gz, npm)
+        run: |
+          v=${{ steps.version.outputs.version }}
+          (cd engine/build && cpack -G TGZ -B "$GITHUB_WORKSPACE/dist")
+          cmake --install engine/build --prefix "$RUNNER_TEMP/root"
+          python3 scripts/pack_npm.py --version "$v" --out dist/npm --target darwin-arm64 --prefix "$RUNNER_TEMP/root"
+          python3 scripts/pack_npm.py --version "$v" --out dist/npm --main
+      - name: The npm packages install on a clean Node, run, and build and check a backend
+        run: |
+          prefix=$(mktemp -d)
+          npm install -g --prefix "$prefix" dist/npm/paperboatlabs-cli-darwin-arm64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz
+          "$prefix/bin/paperboat" --version
+          "$prefix/bin/paperboat" pkg list
+          pip install -q websockets jsonschema
+          cp -r engine/tests/sdk-backend "$RUNNER_TEMP/sdk-backend" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
+          "$prefix/bin/paperboat" build "$RUNNER_TEMP/sdk-backend"   # against the SDK in the platform package
+          "$prefix/bin/paperboat" check "$RUNNER_TEMP/sdk-backend"
+          rm "$GITHUB_WORKSPACE"/dist/npm/paperboatlabs-cli-[0-9]*.tgz   # the launcher is published from the Linux job
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/
+
   windows:
     needs: web
     # ponytail: off until Windows is brought up again (the console and web app paths are in, untested there)
@@ -203,7 +258,7 @@ jobs:
 
   publish:
     name: Publish (tags only)
-    needs: [linux]
+    needs: [linux, macos]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     permissions:
@@ -232,6 +287,7 @@ jobs:
         run: |
           if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::notice::NPM_TOKEN is not set; skipping npm"; exit 0; fi
           case "$GITHUB_REF_NAME" in *-*) tag=--tag=${GITHUB_REF_NAME#*-}; tag=${tag%%.*};; esac   # alpha.1 -> --tag alpha, never "latest"
-          for f in dist/npm/paperboatlabs-cli-*-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz; do
+          for f in dist/npm/paperboatlabs-cli-linux-x64-*.tgz dist/npm/paperboatlabs-cli-darwin-arm64-*.tgz \
+                   dist/npm/paperboatlabs-cli-win32-x64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz; do
             npm publish "$f" --access public --provenance $tag
           done
