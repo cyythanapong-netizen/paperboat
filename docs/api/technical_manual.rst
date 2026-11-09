@@ -103,6 +103,9 @@ Interactive Control Messages
 While a run is active, the client can dispatch real-time events:
 
 - `run.cancel`: Immediately signals the scheduler to abort execution.
+- `run.speed`: Changes the run's speed (`{ speed: 4 }`; `0` is as fast as it can). Pacing
+  re-anchors at the moment of the change, so the run goes on from where it is at the new
+  speed, and the backend answers with `run.speed` (`run`, `speed`) once it took it.
 - `input`: Forwards raw keyboard events (`{ key: "ArrowUp", down: true }`) to any active
   `Key` blocks in the flow.
 - `station.set`: Transmits edited station properties from the Station panel. The backend

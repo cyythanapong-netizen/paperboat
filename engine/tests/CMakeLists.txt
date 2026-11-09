@@ -19,6 +19,7 @@ add_executable(paperboat_tests
   station_test.cpp
   core_test.cpp
   cache_test.cpp
+  speed_test.cpp
   variables_test.cpp
   connection_test.cpp
   toolkit_phase1_test.cpp

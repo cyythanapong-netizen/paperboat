@@ -1582,6 +1582,29 @@
       ],
       "additionalProperties": false
     },
+    "run.speed": {
+      "description": "Both ways (#219). UI → backend: the speed changed during a run; the run goes on from where it is at this speed (between runs it is ignored; one out of range is refused with a log error). Backend → UI: the run took it, from now on at this speed.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "run.speed"
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Times real time (1: as the clock goes; 0: as fast as it can), as RunSettings.speed."
+        },
+        "run": {
+          "type": "string",
+          "description": "The run that took it (backend → UI only)."
+        }
+      },
+      "required": [
+        "type",
+        "speed"
+      ],
+      "additionalProperties": false
+    },
     "input": {
       "type": "object",
       "properties": {
@@ -1709,6 +1732,7 @@
             "run.started",
             "run.progress",
             "run.finished",
+            "run.speed",
             "signal",
             "node.state",
             "node.progress",
@@ -1878,6 +1902,18 @@
           "if": {
             "properties": {
               "type": {
+                "const": "run.speed"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/run.speed"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "signal"
               }
             }
@@ -1950,6 +1986,7 @@
             "station.set",
             "variables.set",
             "run.cancel",
+            "run.speed",
             "input",
             "backend.restart",
             "toolkit.install",
@@ -2006,6 +2043,18 @@
           },
           "then": {
             "$ref": "#/$defs/run.cancel"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run.speed"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/run.speed"
           }
         },
         {
