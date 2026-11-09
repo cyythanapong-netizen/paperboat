@@ -62,6 +62,7 @@ void add_substring(Registry& registry) {
     double len = get_or(p, "length", -1.0);
     return std::make_unique<Substring>(start, len);
   };
+  sub.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(sub));
 }
 

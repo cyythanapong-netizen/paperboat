@@ -7,7 +7,8 @@
 // - Clock: step everything on a clock (a Signal flow, or a Step flow if the graph has step
 //   blocks), streaming signals and scene patches.
 // - Once: evaluate a Signal flow a single time (a build, a query, a geometry), then show
-//   the result. Wires may carry lists, tables and text.
+//   the result. Wires may carry lists, tables and text. Given a cache, a run reuses the
+//   outputs of blocks that nothing changed for since the last run (cache.hpp).
 
 #include <functional>
 #include <memory>
@@ -41,6 +42,7 @@ RunSettings with_overrides(RunSettings base, const json& settings);
 json settings_json(const RunSettings& settings);
 
 class Executor;  // executor.hpp: how a graph runs
+class RunCache;  // cache.hpp: outputs a run-once keeps for the next
 
 // What a backend is made of. A simple backend fills one and calls serve() (backend.hpp).
 struct Backend {
@@ -72,8 +74,10 @@ json scene_message(const Station& station, const toolkit::DomainState* state, co
 // the variables (#36) the graph's and station's references resolve against. `tune`: where
 // the run looks for a changed variables list while it runs; a variable the run started with
 // that is marked `tunable` takes its new value from it (#75), the others stay as they were.
+// `cache`: a run that evaluates once reuses the outputs of blocks nothing changed for since
+// an earlier run with the same cache (cache.hpp), and keeps its own; null: none.
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,
                 const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings = nullptr,
-                const json& variables = nullptr, const VariablesNow& tune = nullptr);
+                const json& variables = nullptr, const VariablesNow& tune = nullptr, RunCache* cache = nullptr);
 
 }  // namespace paperboat::core

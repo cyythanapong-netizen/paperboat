@@ -7,6 +7,7 @@
 
 #include "paperboat/core/backend.hpp"
 #include "paperboat/core/backend_manager.hpp"
+#include "paperboat/core/cache.hpp"
 
 #include <paperboat/toolkit/installer.hpp>
 #include <paperboat/toolkit/platform.hpp>
@@ -35,6 +36,7 @@ struct Session::State {
   std::optional<json> tuned;  // the list the UI sent during a run (#75), until the run takes it
   int runs = 0;
   std::atomic<int> live_run{0};  // the number of the run that is going, else 0
+  RunCache cache;  // what runs that evaluate once keep for the next run of this session
   std::mutex toolkit_mutex;
   std::string busy_toolkit;
   std::string busy_action;
@@ -152,7 +154,12 @@ void Session::on_message(const std::string& text) {
       s.pressed.clear();
       return down;
     };
-    // Assigning a new jthread stops and joins the previous run first.
+    // Stop and join the previous run before starting this one. A new jthread starts as soon as it
+    // is constructed, while the old one may still be emitting or pruning the cache.
+    if (s.run.joinable()) {
+      s.run.request_stop();
+      s.run.join();
+    }
     s.run = std::jthread([&s, id, number, graph = msg.value("graph", json::object()), station, variables, keys_now, tune_now,
                           settings = msg.value("settings", json())](std::stop_token stop) {
       auto emit = [&s, number](const json& m) {
@@ -170,7 +177,7 @@ void Session::on_message(const std::string& text) {
         }
         s.emit(m);
       };
-      core::run(id, graph, station, s.backend, emit, keys_now, stop, settings, variables, tune_now);
+      core::run(id, graph, station, s.backend, emit, keys_now, stop, settings, variables, tune_now, &s.cache);
     });
   } else if (type == "station.set") {
     // An edit on the Station page: check it, keep it, and show it.

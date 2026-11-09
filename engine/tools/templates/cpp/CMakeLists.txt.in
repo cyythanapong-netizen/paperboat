@@ -1,0 +1,22 @@
+# A backend is a CMake project of its own that links the engine (paperboat::core).
+cmake_minimum_required(VERSION 3.25)
+project(@ident@ LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# `paperboat build` picks the engine: a Paperboat checkout's sources (-DPAPERBOAT_ENGINE_DIR=…),
+# else the SDK an installed package ships (find_package).
+if(PAPERBOAT_ENGINE_DIR)
+  add_subdirectory(${PAPERBOAT_ENGINE_DIR} paperboat EXCLUDE_FROM_ALL)
+else()
+  find_package(Paperboat 0.1 CONFIG REQUIRED)
+endif()
+# The program lands in build/ under every generator (backend.toml's run), also multi-config ones.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}")
+
+add_executable(@target@ main.cpp)
+target_include_directories(@target@ PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(@target@ PRIVATE paperboat::core paperboat::warnings)
+target_compile_definitions(@target@ PRIVATE PAPERBOAT_DESCRIPTOR="${CMAKE_CURRENT_SOURCE_DIR}/descriptor.toml")

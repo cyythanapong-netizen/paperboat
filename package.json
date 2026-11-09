@@ -15,6 +15,7 @@
     "build:release": "npm exec -w @paperboat/web -- vite build && npm run bundle -w @paperboat/cli",
     "cli": "./bin/paperboat",
     "typecheck": "npm run typecheck -w @paperboat/web && npm run typecheck -w @paperboat/cli",
+    "e2e": "npm run e2e -w @paperboat/web --",
     "backend:thermostat": "./bin/paperboat run 01",
     "backend:cart-pole-02": "./bin/paperboat run 02",
     "backend:mass-spring": "./bin/paperboat run mass-spring",

@@ -128,6 +128,12 @@ class Block:
     # as one instance per element, each with its own self.params and state, and each output
     # is gathered into a vector. step() still sees floats.
     elementwise: bool = False
+    # True for a block whose outputs depend on nothing but its params, its inputs and the
+    # variables it reads through ctx.variable() (no clock, keys, ctx.state, randomness, files
+    # or other side effects): a backend with mode="once" then reuses its outputs from the last
+    # run while none of those changed (its node.state is then "done" with no "running"). None or
+    # False: called every run.
+    cacheable: bool | None = None
 
     def __init__(self, params: dict) -> None:
         self.params = params

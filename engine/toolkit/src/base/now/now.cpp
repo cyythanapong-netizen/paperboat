@@ -29,6 +29,7 @@ void add_now(Registry& registry) {
   now_t.def.description = "Current run clock in milliseconds.";
   now_t.def.view = {.compact = true, .glyph = "now"};
   now_t.make = [](const Values&, const Config&) { return std::make_unique<Now>(); };
+  now_t.def.cacheable = false;  // reads the clock
   registry.add(std::move(now_t));
 }
 

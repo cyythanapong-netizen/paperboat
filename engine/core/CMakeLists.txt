@@ -17,6 +17,7 @@ endif()
 add_library(paperboat_core
   src/station.cpp
   src/graph.cpp
+  src/cache.cpp
   src/run.cpp
   src/executors.cpp
   src/session.cpp

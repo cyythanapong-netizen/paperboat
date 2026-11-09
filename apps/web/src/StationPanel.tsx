@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ParamRow } from "./FlowEditor";
+import { ParamRow } from "./ParamFields";
 import { RemoveIcon } from "./RemoveIcon";
 import type { ObjectDef, Station, StationObject } from "./protocol";
 import { withoutObject } from "./StationGraph";

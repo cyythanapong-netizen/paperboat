@@ -626,3 +626,187 @@ def test_implicit_solvers_on_a_stiff_system():
     solver = paperboat.solve.Solver("cvode")
     solver.step(lambda t, x: [-x[0]], [1.0], 0.0, 0.1)
     solver.restart()
+
+
+CACHE_BACKEND = '''
+import paperboat
+
+class Pure(paperboat.Block):
+    type, label = "pure", "Pure"
+    inputs, outputs = ["u"], ["y"]
+    params = {"k": 2.0}
+    cacheable = True
+    def step(self, ctx, inputs):
+        return {"y": self.params["k"] * inputs.get("u", 0.0)}
+
+class Level(paperboat.Block):
+    type, label = "level", "Level"
+    outputs = ["y"]
+    cacheable = True
+    def step(self, ctx, inputs):
+        return {"y": ctx.variable("level")}
+
+class Plain(paperboat.Block):
+    type, label = "plain", "Plain"
+    inputs, outputs = ["u"], ["y"]
+    def step(self, ctx, inputs):
+        return {"y": inputs.get("u", 0.0)}
+
+paperboat.serve(paperboat.Backend(engine="test-cache", descriptor="descriptor.toml", blocks=[Pure, Level, Plain], mode="once"))
+'''
+
+CACHE_DESCRIPTOR = '''
+domain = "c"
+import = ["base", "dashboard"]
+[graph]
+nodes = [
+  { id = "c", type = "constant", params = { value = 3 } }, { id = "p", type = "pure" }, { id = "show", type = "display" },
+  { id = "lv", type = "level" }, { id = "p2", type = "pure" }, { id = "show2", type = "display" },
+  { id = "q", type = "plain" },
+]
+edges = [
+  { from = ["c", "y"], to = ["p", "u"] }, { from = ["p", "y"], to = ["show", "in"] },
+  { from = ["lv", "y"], to = ["p2", "u"] }, { from = ["p2", "y"], to = ["show2", "in"] },
+  { from = ["c", "y"], to = ["q", "u"] },
+]
+'''
+
+
+class _WebSocket:
+    """Just enough of a WebSocket client (RFC 6455, text frames) to talk to a served backend."""
+
+    def __init__(self, port: int) -> None:
+        import base64
+        import socket
+
+        self.sock = socket.create_connection(("127.0.0.1", port), timeout=20)
+        key = base64.b64encode(os.urandom(16)).decode()
+        self.sock.sendall((f"GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
+                           f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
+        self.buf = b""
+        while b"\r\n\r\n" not in self.buf:
+            self._more()
+        head, self.buf = self.buf.split(b"\r\n\r\n", 1)
+        assert b" 101 " in head.split(b"\r\n")[0], head
+
+    def _more(self) -> None:
+        chunk = self.sock.recv(65536)
+        if not chunk:
+            raise EOFError("the backend closed the connection")
+        self.buf += chunk
+
+    def _take(self, n: int) -> bytes:
+        while len(self.buf) < n:
+            self._more()
+        out, self.buf = self.buf[:n], self.buf[n:]
+        return out
+
+    def _send(self, opcode: int, payload: bytes) -> None:
+        import struct
+
+        n, mask = len(payload), os.urandom(4)
+        head = bytes([0x80 | opcode])
+        if n < 126:
+            head += bytes([0x80 | n])
+        elif n < 65536:
+            head += bytes([0x80 | 126]) + struct.pack(">H", n)
+        else:
+            head += bytes([0x80 | 127]) + struct.pack(">Q", n)
+        self.sock.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
+
+    def send(self, message: dict) -> None:
+        self._send(0x1, json.dumps(message).encode())
+
+    def recv(self) -> dict:
+        import struct
+
+        data = b""
+        while True:
+            b0, b1 = self._take(2)
+            n = b1 & 0x7F
+            if n == 126:
+                n = struct.unpack(">H", self._take(2))[0]
+            elif n == 127:
+                n = struct.unpack(">Q", self._take(8))[0]
+            mask = self._take(4) if b1 & 0x80 else b""
+            payload = self._take(n)
+            if mask:
+                payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+            opcode = b0 & 0x0F
+            if opcode == 0x8:
+                raise EOFError("the backend closed the connection")
+            if opcode == 0x9:
+                self._send(0xA, payload)
+                continue
+            if opcode == 0xA:
+                continue
+            data += payload
+            if b0 & 0x80:
+                return json.loads(data)
+
+    def close(self) -> None:
+        self.sock.close()
+
+
+def _free_port() -> int:
+    import socket
+
+    for port in range(4340, 4400):  # this suite's range
+        with socket.socket() as s:
+            try:
+                s.bind(("127.0.0.1", port))
+            except OSError:
+                continue
+            return port
+    raise RuntimeError("no free port in 4340-4399")
+
+
+def test_a_cacheable_python_block_is_reused_by_the_next_run_once(tmp_path: Path) -> None:
+    (tmp_path / "server.py").write_text(textwrap.dedent(CACHE_BACKEND))
+    (tmp_path / "descriptor.toml").write_text(textwrap.dedent(CACHE_DESCRIPTOR))
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
+    port = _free_port()
+    proc = subprocess.Popen([sys.executable, "server.py", "--port", str(port)], cwd=tmp_path, env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    try:
+        assert proc.stdout is not None
+        line = proc.stdout.readline()
+        assert f"ws://localhost:{port}" in line, line + proc.stderr.read() if proc.stderr else line
+        ws = _WebSocket(port)
+        graph = None
+        while graph is None:
+            m = ws.recv()
+            if m["type"] == "graph.load":
+                graph = m["graph"]
+
+        def run(level: float) -> tuple[dict, dict]:
+            ws.send({"type": "graph.run", "graph": graph,
+                     "variables": [{"name": "level", "type": "number", "value": level}]})
+            states, shown = {}, {}  # a reused block is done with no running before it: "cached" here
+            while True:
+                m = ws.recv()
+                if m["type"] == "node.state":
+                    was = states.get(m["node"])
+                    states[m["node"]] = "done" if was == "running" and m["state"] == "done" else (
+                        "cached" if m["state"] == "done" else m["state"])
+                elif m["type"] == "signal":
+                    shown[m["node"]] = m["v"]
+                elif m["type"] == "run.finished":
+                    assert m["status"] == "done"
+                    return states, shown
+
+        first, shown = run(1)
+        assert set(first.values()) == {"done"}
+        assert shown == {"show": 6.0, "show2": 2.0}
+        second, shown = run(1)  # nothing changed: the cacheable blocks are reused
+        assert {n for n, s in second.items() if s == "cached"} == {"c", "p", "lv", "p2"}
+        assert second["q"] == "done"  # says nothing: called every run
+        assert shown == {"show": 6.0, "show2": 2.0}
+        third, shown = run(5)  # ctx.variable("level") was read by lv: it and p2 recompute
+        assert {n for n, s in third.items() if s == "cached"} == {"c", "p"}
+        assert third["lv"] == third["p2"] == "done"
+        assert shown == {"show": 6.0, "show2": 10.0}
+        ws.close()
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)

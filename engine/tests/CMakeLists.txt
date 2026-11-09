@@ -18,6 +18,7 @@ add_executable(paperboat_tests
   step_test.cpp
   station_test.cpp
   core_test.cpp
+  cache_test.cpp
   variables_test.cpp
   connection_test.cpp
   toolkit_phase1_test.cpp
@@ -34,6 +35,11 @@ if(TARGET paperboat_toolkit_opencv)
 endif()
 target_compile_definitions(paperboat_tests
   PRIVATE PAPERBOAT_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+# `paperboat new` (tools/paperboat_new.cpp): only when the tools are built.
+if(TARGET paperboat_new)
+  target_sources(paperboat_tests PRIVATE new_test.cpp)
+  target_link_libraries(paperboat_tests PRIVATE paperboat_new)
+endif()
 
 include(Catch)
 catch_discover_tests(paperboat_tests)

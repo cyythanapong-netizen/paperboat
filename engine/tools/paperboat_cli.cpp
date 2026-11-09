@@ -3,6 +3,8 @@
 
 #ifdef _WIN32
 #include <process.h>  // _spawnvp
+#else
+#include <unistd.h>  // execvp
 #endif
 #include <algorithm>
 #include <cstdlib>
@@ -29,6 +31,7 @@
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
 #endif
+#include "paperboat_new.hpp"
 #include "paperboat_tui.hpp"
 
 namespace {
@@ -81,8 +84,11 @@ Start and stop (the web app, backends and programs):
   run [path | pkg.ppk]       Start a backend (the same options as start)
 
 Backends:
+  new <name> [--cpp | --python] [--dir <path>]
+                             Scaffold a new backend in ./<name> (or --dir) that passes `check` as it is:
+                             a block, a starter graph and its expected.json. C++ by default.
   backends [--json]          List the backends you can run (examples, installed)
-  build [path] [--clean]     Compile a C++ backend
+  build [path] [--clean]     Compile a C++ backend (a Python one has nothing to compile)
   rebuild [path]             Clean and compile a C++ backend (build --clean)
   open <file.ppj> [--run] [--port <N>] [--no-build]
                              Open a saved project file with its backend (--run: headless)
@@ -280,7 +286,12 @@ int cmd_build(const std::vector<std::string_view>& args) {
     else if (!a.starts_with("-") && path.empty()) path = std::string(a);
   }
   const fs::path dir = core::BackendManager::resolve_backend_dir(path);
-  if (core::BackendManager::detect_backend_kind(dir) != core::BackendKind::Cpp) {
+  const auto kind = core::BackendManager::detect_backend_kind(dir);
+  if (kind == core::BackendKind::Python) {  // the same steps for both: build, check, run
+    std::cout << "[ok] " << dir.filename().string() << " is a Python backend: nothing to compile\n";
+    return 0;
+  }
+  if (kind != core::BackendKind::Cpp) {
     std::cerr << "error: not a C++ backend: " << (path.empty() ? dir.string() : path) << '\n';
     return 2;
   }
@@ -1277,6 +1288,8 @@ const std::vector<CommandSpec>& command_table() {
        {"--port", "--no-build", "--clean", "--time", "--verbose", "--var"}, "backend"},
       {"open", cmd_open, "Open a saved project file (.ppj, .paperboat.json)", {}, {},
        {"--run", "--port", "--no-build"}, "project"},
+      {"new", paperboat::cli::cmd_new, "Scaffold a new backend that passes check (C++ or Python)", {}, {},
+       {"--cpp", "--python", "--dir"}},
       {"build", cmd_build, "Compile a C++ backend", {}, {}, {"--clean"}, "backend"},
       {"rebuild", cmd_rebuild, "Clean and compile a C++ backend", {}, {}, {}, "backend"},
       {"backends", cmd_backends, "List the backends you can run", {}, {}, {"--json"}},

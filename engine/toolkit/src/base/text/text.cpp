@@ -29,6 +29,7 @@ void add_text(Registry& registry) {
     auto it = config.find("value");
     return std::make_unique<TextValue>(it == config.end() ? "" : it->second);
   };
+  text.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(text));
 }
 

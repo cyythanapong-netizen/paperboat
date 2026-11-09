@@ -12,12 +12,20 @@ if(TARGET paperboat_toolkit_opencv)
   target_compile_definitions(paperboat-toolkit PRIVATE PAPERBOAT_HAS_OPENCV)
 endif()
 
+# `paperboat new`: the scaffolder and the templates it writes, embedded (new_templates.cmake).
+# A library of its own so the tests call it too; never installed (linked into the binary).
+include(new_templates.cmake)
+paperboat_embed_templates(${CMAKE_CURRENT_BINARY_DIR}/new_templates.cpp)
+add_library(paperboat_new STATIC paperboat_new.cpp ${CMAKE_CURRENT_BINARY_DIR}/new_templates.cpp)
+target_include_directories(paperboat_new PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(paperboat_new PRIVATE paperboat_warnings)
+
 add_executable(paperboat paperboat_cli.cpp)
 target_compile_definitions(paperboat PRIVATE PAPERBOAT_VERSION="${PAPERBOAT_VERSION}")
 if(PAPERBOAT_STATIC_RUNTIME AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_link_options(paperboat PRIVATE -static-libstdc++ -static-libgcc)
 endif()
-target_link_libraries(paperboat PRIVATE paperboat::core paperboat::toolkit nlohmann_json::nlohmann_json tomlplusplus::tomlplusplus paperboat::warnings)
+target_link_libraries(paperboat PRIVATE paperboat_new paperboat::core paperboat::toolkit nlohmann_json::nlohmann_json tomlplusplus::tomlplusplus paperboat::warnings)
 if(TARGET paperboat_toolkit_opencv)
   target_link_libraries(paperboat PRIVATE paperboat::toolkit_opencv)
   target_compile_definitions(paperboat PRIVATE PAPERBOAT_HAS_OPENCV)
