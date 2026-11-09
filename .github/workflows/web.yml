@@ -7,6 +7,16 @@ on:
   push:
     branches: [dev, main]
   pull_request:
+    paths:
+      - "apps/web/**"
+      - "apps/cli/**"
+      # the instruments live in engine/toolkit and are typed and tested with the app
+      - "engine/toolkit/**"
+      - "protocol/**"
+      - "docs/_static/tokens.css"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/web.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -32,6 +42,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            paperboat/package-lock.json
+            paperboat-shared/package-lock.json
       - name: The protocol types are generated from the schema, and current
         run: python3 protocol/gen_ts.py --check
       - name: The design tokens are current
@@ -48,6 +62,9 @@ jobs:
   # packages (typescript, rolldown, lightningcss), as a lockfile made on one platform can
   web-macos:
     name: Web app and console on macOS arm64
+    # macOS runners cost about ten Linux minutes and run in parallel, so they are checked on
+    # pushes to dev and main; label a PR `ci:macos` to run them before merging.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
     runs-on: macos-15  # Apple Silicon
     steps:
       - uses: actions/checkout@v4

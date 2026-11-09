@@ -6,6 +6,10 @@ on:
   push:
     branches: [dev, main]
   pull_request:
+    paths:
+      - "docs/**"
+      - "protocol/**"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 concurrency:

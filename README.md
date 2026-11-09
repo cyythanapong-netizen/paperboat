@@ -21,6 +21,10 @@ what they send.<br><br>
 | Release | `.deb`, `.rpm`, `.tar.gz`, `.zip` and the npm packages, built on a `v<version>` tag | [![release](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml/badge.svg)](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml) [![latest release](https://img.shields.io/github/v/release/paperboatlab/paperboat?include_prereleases&label=latest)](https://github.com/paperboatlab/paperboat/releases) |
 | Docs | the [API reference](https://paperboatlab.github.io/paperboat/), warnings as errors | [![docs](https://github.com/paperboatlab/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
 
+On a pull request each workflow runs only when the change can affect it (its `paths`), and the
+macOS jobs run on pushes to `dev` and `main` — or on a PR labelled `ci:macos` — so a PR waits on
+Linux alone. Everything runs on `dev` and `main`.
+
 ## Documentation
 
 Full documentation, guides, and API references are hosted on GitHub Pages:  

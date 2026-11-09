@@ -164,6 +164,9 @@ jobs:
 
   macos:
     name: macOS arm64 (.tar.gz, npm)
+    # macOS runners cost about ten Linux minutes and run in parallel, so they are checked on
+    # pushes to dev and main; label a PR `ci:macos` to run them before merging.
+    if: github.event_name != 'pull_request'
     needs: web
     runs-on: macos-15  # Apple Silicon
     steps:
