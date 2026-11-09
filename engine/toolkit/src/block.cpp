@@ -26,6 +26,15 @@ std::string_view to_string(Kind kind) {
 
 std::vector<Entity> Block::entities() const { return {}; }
 
+std::string_view monitor_state_name(MonitorState state) {
+  switch (state) {
+    case MonitorState::Ok: return "ok";
+    case MonitorState::Warn: return "warn";
+    case MonitorState::Trip: return "trip";
+  }
+  return "ok";
+}
+
 BlockDef in_form(const BlockDef& def, std::string_view form) {
   for (const auto& f : def.forms) {
     if (f.name != form) continue;

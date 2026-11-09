@@ -25,8 +25,11 @@ Default address: `ws://localhost:8765`.
 | `run.progress` | `run: string`, `fraction: number` (0–1)     | during a run                 |
 | `run.speed`    | `run: string`, `speed: number`              | during a run, when it took a `run.speed` from the UI (#219): it goes on at this speed from now. The UI shows it as the run's speed |
 | `signal`       | `node: string`, `t: number`, `v: number \| string \| number[]`, `components?: VectorComponent[]`, `port?: string` | per sample, for monitor nodes. A monitor with `sample_per_input` (a scope) sends one per wired input, `port` naming it (absent: `in`), and one with `whole_vector` keeps a vector whole. `t` is the x value: time in a simulation, list index otherwise; a Display monitor, and a Graph in a clock run (one trace per component), get a whole vector as `number[]` with its source component labels; a Graph in a run-once gets it by index. A layout instrument's optional `settings` is that instrument's own table (schema `InstrumentSettings`; its shape is the toolkit's, the engine only carries it) |
-| `node.state`   | `node: string`, `state: "running" \| "done" \| "failed"` (later also `queued`, `cached`, `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once sends each block `running` then `done` as it evaluates them, or only `done` for a block whose outputs it reused from an earlier run (see [Caching](#caching)); any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks |
+| `node.state`   | `node: string`, `state: "queued" \| "running" \| "done" \| "cached" \| "failed"` (later also `cancelled`) | A Step flow sends `running` when a path arrives at a block and `done` when it leaves; a run-once first sends every block `queued` (waiting its turn in this run), then each `running` then `done` as it evaluates them, or `cached` (no `running`) for a block whose outputs it reused from an earlier run (see [Caching](#caching)); any run sends `failed` for the block that failed it (an unknown type, an error), which the UI marks. A block still `queued` when the run ends (it failed or was cancelled first) never ran |
 | `node.progress` | `node: string`, `fraction: number` (0–1) | How far a block's long step has got (`Context::progress`), at most ~20 a second per block; the UI shows it on the running block |
+| `metric`       | `node: string`, `series: string`, `x: number`, `y: number`, `unit?: string` | A point of a series that isn't on the run clock (`Context::metric`): a solver's residual against its iteration, a sweep's cost against its case. `x` is the block's, or the series' next index (0, 1, 2…) when it gave none; `unit` is y's. A NaN or infinite point isn't sent |
+| `monitor.state` | `node: string`, `state: "ok" \| "warn" \| "trip"`, `t: number`, `v?: number`, `port?: string` | When a monitor's state changes (`Context::monitor_state`: a Lamp lights or goes out), never for a repeat; every monitor starts a run at `ok`. `t` is when (the run clock, as a signal's), for a marker on the scope; `v` the value that changed it; `port` the input, for a monitor of several (absent: `in`) |
+| `frame`        | `node: string`, `t: number`, `view?: [xmin, ymin, xmax, ymax]`, `shapes?: FrameShape[]`, `field?: FrameField` | A live picture a block draws (`Context::frame`; a pendulum, a velocity field, a deformed shape), at most ~20 a second per block, and its latest always at the end of a block in a run-once and of the run. See [Frames](#frames) |
 | `log`          | `level: "info" \| "warn" \| "error"`, `text`, `node?: string` | any time. `node`: the block or station object that wrote it, or that failed |
 | `toolkits.status` | `toolkits: ToolkitStatus[]`              | when an optional toolkit's installation or busy state changes. `ToolkitStatus.blocks` lists the block types a toolkit provides (from `toolkits.toml`), so the UI names the toolkit to install for a missing block |
 | `run.finished` | `run: string`, `status: "done" \| "failed" \| "cancelled"` | when a run ends |
@@ -441,14 +444,39 @@ something it depends on changed since the run that computed it: its type, params
 (variables included, once resolved), the values on its wires (so a station object changed
 reaches only the blocks it feeds, and a change upstream that gives the same values stops
 there), the variables it read, its `file` params' files. A reused block is reported
-`node.state: "done"` with no `running` before it (a `cached` state is for later: it needs
-`NodeState` and the shared TypeScript types to change together); its signals, scene entities
-and the logs it wrote are sent as when it ran, and the run's last log says how many blocks it
-reused. Only blocks that declare themselves pure (pure functions of
+`node.state: "cached"` with no `running` before it; its signals, scene entities, the logs it
+wrote and the `metric`, `monitor.state` and `frame` messages it sent are sent as when it ran (its
+last frame only), and the run's last log says how many blocks it reused. Only blocks that declare themselves pure (pure functions of
 those inputs: no clock, keys, domain state, randomness or side effects) are reused; a run on
 a clock, a Step flow or a block that reads keys or draws at random always computes. A run
 cancelled while a block computes doesn't keep that block's result. The C++ engine does all
 this (`engine/core/include/paperboat/core/cache.hpp`).
+
+## Frames
+
+A `frame` is a small live view, not a result (CFD fields go in binary frames, later). Its
+coordinates are the block's own, y up; `view` is the area shown (absent: what fits the shapes).
+
+```jsonc
+{ "type": "frame", "node": "pendulum-view", "t": 1.25, "view": [-1.2, -1.2, 1.2, 1.2],
+  "shapes": [
+    { "t": "line", "p": [[0, 0], [0.71, -0.71]] },                        // open, through p
+    { "t": "circle", "p": [[0.71, -0.71]], "r": 0.08, "fill": "signal" },  // at p[0], radius r
+    { "t": "poly", "p": [[-1, -1.1], [1, -1.1], [1, -1.2], [-1, -1.2]], "fill": "sunken" },  // closed
+    { "t": "text", "p": [[0, 1]], "s": "θ = 45°", "stroke": "muted" }     // s at p[0]
+  ],
+  "field": { "w": 3, "h": 2, "v": [0, 0.5, 1, 0.2, null, 0.8], "min": 0, "max": 1 } }
+```
+
+- `shapes` (`FrameShape`, at most 2000): `line`, `poly`, `circle`, `text`. Styles are the
+  `view.icon` tokens, never colours: `stroke` `ink` (default), `muted`, `signal` or `danger`;
+  `fill` `none` (default), `ink`, `raised`, `sunken` or `signal`.
+- `field` (`FrameField`, at most 65536 cells): `w` × `h` values row by row from the top, drawn
+  over the view (or the whole frame) on a sequential scale from `min` to `max` (absent: the
+  values' own range); `null` is a cell with no value (a wall, outside the domain).
+- The C++ engine checks a frame before it sends it: one it can't send (an unknown shape or
+  token, a point that isn't finite, a field whose size is wrong) warns once in the Console,
+  tagged with the block, and is dropped.
 
 ## Groups
 

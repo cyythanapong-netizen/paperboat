@@ -425,6 +425,53 @@ def test_a_python_block_reads_and_sets_a_tunable_variable(tmp_path: Path) -> Non
     assert [m["values"] for m in msgs if m["type"] == "variables.patch"] == [{"g": 4.0}]
 
 
+EVENTS_BACKEND = '''
+import paperboat
+
+class Watch(paperboat.Block):
+    type, label = "watch", "Watch"
+    inputs, outputs = ["u"], ["y"]
+    def step(self, ctx, inputs):
+        u = inputs.get("u", 0.0)
+        ctx.metric("residual", 1.0 / (1.0 + u))           # x: the next index
+        ctx.metric("cost", u * u, x=u, unit="J")
+        ctx.monitor_state("trip" if u > 0.25 else "ok", u)
+        ctx.frame(shapes=[{"t": "circle", "p": [[u, 0.0]], "r": 0.1, "fill": "signal"}],
+                  field={"w": 2, "h": 1, "v": [u, None]}, view=[-1, -1, 1, 1])
+        return {"y": u}
+
+paperboat.serve(paperboat.Backend(engine="test-events", descriptor="descriptor.toml", blocks=[Watch],
+                                  dt=0.1, duration=0.5, emit_every=1))
+'''
+
+EVENTS_DESCRIPTOR = '''
+domain = "events"
+import = ["signal", "dashboard"]
+[graph]
+nodes = [{ id = "c", type = "clock" }, { id = "w", type = "watch" }, { id = "show", type = "display" }]
+edges = [{ from = ["c", "t"], to = ["w", "u"] }, { from = ["w", "y"], to = ["show", "in"] }]
+'''
+
+
+def test_a_python_block_sends_metric_monitor_state_and_frame(tmp_path: Path) -> None:
+    # #17: ctx.metric, ctx.monitor_state and ctx.frame become per-node events the schema allows.
+    import jsonschema
+
+    msgs = run_backend(tmp_path, backend=EVENTS_BACKEND, descriptor=EVENTS_DESCRIPTOR)
+    schema = json.loads((ROOT / "protocol" / "schema" / "paperboat-0.schema.json").read_text())
+    validator = jsonschema.Draft202012Validator({**schema, "$ref": "#/$defs/toUI"})
+    for m in msgs:
+        validator.validate(m)
+    residual = [m for m in msgs if m["type"] == "metric" and m["series"] == "residual"]
+    assert [m["x"] for m in residual] == [0, 1, 2, 3, 4, 5]
+    cost = [m for m in msgs if m["type"] == "metric" and m["series"] == "cost"]
+    assert cost[-1]["unit"] == "J" and abs(cost[-1]["x"] - 0.5) < 1e-9
+    states = [m for m in msgs if m["type"] == "monitor.state"]
+    assert [(m["node"], m["state"], m["t"]) for m in states] == [("w", "trip", 0.3)]  # on the change only
+    frames = [m for m in msgs if m["type"] == "frame"]
+    assert frames and frames[-1]["t"] == 0.5 and frames[-1]["field"]["v"][1] is None
+
+
 def test_solve_ode_scalar_and_list():
     import math
     import paperboat

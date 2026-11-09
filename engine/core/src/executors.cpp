@@ -63,8 +63,10 @@ class Once final : public Executor {
  public:
   std::string execute(Run& run) override {
     run.at_time(0);
-    // Block by block, each reported running then done (only done: reused from an earlier run):
-    // a long pipeline shows where it is, and a cancel stops it between two blocks.
+    // Every block queued first, then block by block, each reported running then done (cached:
+    // reused from an earlier run): a long pipeline shows where it is and what is still to come,
+    // and a cancel stops it between two blocks.
+    for (const auto& id : run.graph().order) run.node_state(id, "queued");
     json samples = json::array();
     for (const auto& id : run.graph().order) {
       if (run.cancelled()) return "cancelled";

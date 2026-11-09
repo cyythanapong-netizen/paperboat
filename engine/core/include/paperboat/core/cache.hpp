@@ -2,7 +2,7 @@
 
 // What a run that evaluates once keeps between runs: each block's outputs, so the next run
 // reuses those of blocks nothing changed for and computes only the rest (a reused block's
-// node.state is "done" with no "running" before it). A session keeps one; a run is given it
+// node.state is "cached", with no "running" before it). A session keeps one; a run is given it
 // (core::run's `cache`).
 //
 // An entry is the block's last good result, by node id, with all it was made from: what the
@@ -49,6 +49,7 @@ class RunCache {
     toolkit::Values outputs;
     std::vector<toolkit::Entity> entities;                 // what it drew (Block::entities)
     std::vector<std::pair<std::string, std::string>> logs;  // (level, text) it wrote, shown again
+    std::vector<nlohmann::json> events;                     // metric, monitor.state, frame messages it sent, sent again
   };
 
   // The entry for `node` if it was made from `signature` and `inputs`, and each variable it

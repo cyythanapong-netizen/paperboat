@@ -44,7 +44,16 @@ Message Quick Reference
      - Lightweight differential entity updates (positions, rotations, colors).
    * -
      - ``node.state``
-     - Step flow lifecycle transitions (``running``, ``done``, ``failed``).
+     - Block lifecycle (``queued``, ``running``, ``done``, ``cached``, ``failed``).
+   * -
+     - ``metric``
+     - A point of a series off the run clock (a residual against its iteration).
+   * -
+     - ``monitor.state``
+     - A monitor's state changed (``ok``, ``warn``, ``trip``), with the value that did it.
+   * -
+     - ``frame``
+     - A live picture: 2D shapes and/or a small field image.
    * -
      - ``run.progress``
      - Fractional execution progress (0.0 to 1.0) towards duration.
@@ -85,7 +94,11 @@ Backend → UI
 ``run.progress``   ``run``, ``fraction`` (0–1)
 ``run.speed``      ``run``, ``speed``: the run took a new speed (below) and goes on at it
 ``signal``         ``node``, ``t``, ``v`` (number, text or vector), ``components?``, ``port?`` (a Scope's input). A monitor's sample
-``node.state``     ``node``, ``state``: ``running``, ``done``, ``failed``
+``node.state``     ``node``, ``state``: ``queued``, ``running``, ``done``, ``cached``, ``failed``
+``node.progress``  ``node``, ``fraction`` (0–1). A block's long step, at most ~20 a second
+``metric``         ``node``, ``series``, ``x``, ``y``, ``unit?``. ``Context::metric``
+``monitor.state``  ``node``, ``state``: ``ok``, ``warn``, ``trip``; ``t``, ``v?``, ``port?``. On a change
+``frame``          ``node``, ``t``, ``view?``, ``shapes?``, ``field?``. ``Context::frame``
 ``log``            ``level``, ``text``, ``node?``
 ``run.finished``   ``run``, ``status``: ``done``, ``failed``, ``cancelled``
 =================  =====================================================================

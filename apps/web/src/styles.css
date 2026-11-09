@@ -340,6 +340,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .block-tag { font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .tag-running { color: var(--signal); font-weight: 500; }
 .tag-failed, .tag-missing { color: var(--danger); font-weight: 500; }
+/* Waiting its turn, or reused from an earlier run: said in words, in the muted ink (no colour: not live). */
+.tag-queued, .tag-cached { color: var(--text-muted); font-weight: 500; }
 .linked-tag { font: 400 var(--size-2xs) var(--font-mono); color: var(--text-muted); text-transform: none; }
 .block.step .block-title { border-bottom-color: var(--line-ink); }
 .block.step { border-color: var(--line-ink); }

@@ -8,6 +8,7 @@ import { PageIcon } from "./Shell";
 import { ParamRow } from "./ParamFields";
 import { ConnectorsContext, IconWires, RunStates } from "./flowContexts";
 import { hasStepPorts, inForm, type BlockNode, type Wire } from "./flowModel";
+import { runWord } from "./engine";
 
 /** Generic node: everything it shows comes from the backend's BlockDef. */
 export function Block({ id, data, selected }: NodeProps<BlockNode>) {
@@ -18,6 +19,7 @@ export function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { params, missing, commented, commentMode, comment } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
+  const word = runWord(states, id);
   const connectors = useContext(ConnectorsContext);
   const iconWires = useContext(IconWires);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -46,7 +48,7 @@ export function Block({ id, data, selected }: NodeProps<BlockNode>) {
         params={params}
         selected={!!selected}
         commented={commented}
-        word={failed ? "failed" : active ? "running" : undefined}
+        word={word}
         progress={progress}
         onExpand={() => setExpanded(true)}
         connectors={connectors}
@@ -78,17 +80,15 @@ export function Block({ id, data, selected }: NodeProps<BlockNode>) {
       : "// commented"
     : missing
       ? "missing"
-      : failed
-        ? "failed"
-        : active
-          ? "running"
-          : def.linked
-            ? "linked"
-            : step
-              ? "step"
-              : def.kind === "function"
-                ? "fn"
-                : def.kind;
+      : word
+        ? word
+        : def.linked
+          ? "linked"
+          : step
+            ? "step"
+            : def.kind === "function"
+              ? "fn"
+              : def.kind;
   return (
     <div
       className={classes.filter(Boolean).join(" ")}

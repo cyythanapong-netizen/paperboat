@@ -1796,6 +1796,9 @@
             "signal",
             "node.state",
             "node.progress",
+            "metric",
+            "monitor.state",
+            "frame",
             "log",
             "toolkits.status"
           ]
@@ -2004,6 +2007,42 @@
           },
           "then": {
             "$ref": "#/$defs/node.progress"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "metric"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/metric"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "monitor.state"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/monitor.state"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "frame"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/frame"
           }
         },
         {
@@ -2581,12 +2620,115 @@
       ]
     },
     "NodeState": {
-      "description": "What a run says about a block. A Step flow sends running (a path arrived) and done (it left); any run sends failed for the block at fault.",
+      "description": "What a run says about a block. A Step flow sends running (a path arrived) and done (it left); a run-once sends every block queued (waiting its turn in this run) before the first runs, then running and done, or cached for a block whose outputs it reused from an earlier run (never running); any run sends failed for the block at fault.",
       "enum": [
+        "queued",
         "running",
         "done",
+        "cached",
         "failed"
       ]
+    },
+    "MonitorState": {
+      "description": "What a monitor says about what it watches (a Lamp): ok, warn (near its limit) or trip (past it).",
+      "enum": [
+        "ok",
+        "warn",
+        "trip"
+      ]
+    },
+    "FrameShape": {
+      "description": "One shape of a frame, in the frame's coordinates (y up). line: open, through p; poly: closed, through p; circle: at p[0], radius r; text: s at p[0]. Styles are view.icon tokens (stroke ink by default, fill none), never colours.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "t",
+        "p"
+      ],
+      "properties": {
+        "t": {
+          "enum": [
+            "line",
+            "poly",
+            "circle",
+            "text"
+          ]
+        },
+        "p": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "r": {
+          "type": "number",
+          "minimum": 0,
+          "description": "A circle's radius."
+        },
+        "s": {
+          "type": "string",
+          "description": "A text's text."
+        },
+        "stroke": {
+          "enum": [
+            "ink",
+            "muted",
+            "signal",
+            "danger"
+          ]
+        },
+        "fill": {
+          "enum": [
+            "none",
+            "ink",
+            "raised",
+            "sunken",
+            "signal"
+          ]
+        }
+      }
+    },
+    "FrameField": {
+      "description": "A small field image: w × h values row by row from the top (null: no value, such as a wall), drawn over the frame's view on a sequential scale from min to max (absent: the values' own range). At most 65536 cells.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "w",
+        "h",
+        "v"
+      ],
+      "properties": {
+        "w": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "h": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "v": {
+          "type": "array",
+          "maxItems": 65536,
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      }
     },
     "StationView": {
       "description": "How the Station page shows the station: the built-in scene, a graph of station objects, or the backend's own page (web; page is its path on the backend's port).",
@@ -2794,6 +2936,116 @@
         "type",
         "node",
         "fraction"
+      ],
+      "additionalProperties": false
+    },
+    "metric": {
+      "description": "A point of a series a block reports off the run clock (Context::metric): a solver's residual against its iteration, a sweep's cost against its case. One point per message.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "metric"
+        },
+        "node": {
+          "type": "string"
+        },
+        "series": {
+          "type": "string",
+          "description": "The series' name, one of the block's own."
+        },
+        "x": {
+          "type": "number",
+          "description": "The block's x (an iteration), or the series' next index (0, 1, 2…) when it gave none."
+        },
+        "y": {
+          "type": "number"
+        },
+        "unit": {
+          "type": "string",
+          "description": "y's unit."
+        }
+      },
+      "required": [
+        "type",
+        "node",
+        "series",
+        "x",
+        "y"
+      ],
+      "additionalProperties": false
+    },
+    "monitor.state": {
+      "description": "A monitor's state changed (Context::monitor_state): a Lamp lit or went out. Sent on a change only; every monitor starts a run at ok.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "monitor.state"
+        },
+        "node": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/$defs/MonitorState"
+        },
+        "t": {
+          "type": "number",
+          "description": "When it changed: the run clock (as a signal's t), for a marker on the scope."
+        },
+        "v": {
+          "type": "number",
+          "description": "The value that changed it (tripped it)."
+        },
+        "port": {
+          "type": "string",
+          "description": "The input it is about, for a monitor of several. Absent: in."
+        }
+      },
+      "required": [
+        "type",
+        "node",
+        "state",
+        "t"
+      ],
+      "additionalProperties": false
+    },
+    "frame": {
+      "description": "A live picture a block draws (Context::frame): 2D shapes and/or a small field image, at most ~20 a second per block, and its latest at the end of a block in a run-once and of the run.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "frame"
+        },
+        "node": {
+          "type": "string"
+        },
+        "t": {
+          "type": "number",
+          "description": "The run clock when it was drawn."
+        },
+        "view": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {
+            "type": "number"
+          },
+          "description": "The area shown, [xmin, ymin, xmax, ymax], y up. Absent: what fits the shapes."
+        },
+        "shapes": {
+          "type": "array",
+          "maxItems": 2000,
+          "items": {
+            "$ref": "#/$defs/FrameShape"
+          }
+        },
+        "field": {
+          "$ref": "#/$defs/FrameField"
+        }
+      },
+      "required": [
+        "type",
+        "node",
+        "t"
       ],
       "additionalProperties": false
     },

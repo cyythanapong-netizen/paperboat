@@ -9,11 +9,17 @@ import type { WirePoint, WireRoute } from "./wireRouting.ts";
 export const RunStates = createContext<{
   active: ReadonlySet<string>;
   failed: ReadonlySet<string>;
+  /** Waiting their turn in the run (queued). */
+  queued: ReadonlySet<string>;
+  /** Reused from an earlier run (cached). */
+  cached: ReadonlySet<string>;
   /** How far a block's long step has got (node.progress). */
   progress: Readonly<Record<string, number>>;
 }>({
   active: new Set(),
   failed: new Set(),
+  queued: new Set(),
+  cached: new Set(),
   progress: {},
 });
 
