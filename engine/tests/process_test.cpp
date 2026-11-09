@@ -11,37 +11,16 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "paperboat/core/process.hpp"
+#include "test_platform.hpp"
 
 using paperboat::core::ProcessRunner;
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
+using test_platform::sh;
+using test_platform::sleeper;
+using test_platform::wait_for;
 
 namespace {
-
-// A command line for the platform's shell.
-std::vector<std::string> sh(const std::string& posix, const std::string& windows) {
-#ifdef _WIN32
-  (void)posix;
-  return {"cmd", "/c", windows};
-#else
-  (void)windows;
-  return {"sh", "-c", posix};
-#endif
-}
-
-// A process that stays alive for about `seconds`.
-std::vector<std::string> sleeper(int seconds) {
-  return sh("sleep " + std::to_string(seconds), "ping -n " + std::to_string(seconds + 1) + " 127.0.0.1 >nul");
-}
-
-bool wait_for(const std::function<bool()>& done, std::chrono::milliseconds limit = 5s) {
-  const auto start = std::chrono::steady_clock::now();
-  while (!done()) {
-    if (std::chrono::steady_clock::now() - start > limit) return false;
-    std::this_thread::sleep_for(20ms);
-  }
-  return true;
-}
 
 // A long-lived process that is not our child, as a backend is not the child of the `paperboat stop` that ends it
 // (a zombie child would still look alive). `own_group`: it leads a process group of its own. Returns its pid.
@@ -50,8 +29,13 @@ int daemon_sleeper(bool own_group) {
   (void)own_group;
   return ProcessRunner::run_detached(sleeper(30));  // no zombies here: a finished process is gone
 #else
+  // macOS has no setsid command; there `set -m` (job control) gives the background job a
+  // process group of its own, as setsid does
+  const std::string job = "sleep 30 >/dev/null 2>&1 &";
   const auto r = ProcessRunner::run_sync(
-      {"sh", "-c", std::string(own_group ? "setsid " : "") + "sleep 30 >/dev/null 2>&1 & echo $!"});
+      {"sh", "-c",
+       own_group ? "if command -v setsid >/dev/null 2>&1; then setsid " + job + " else set -m; " + job + " fi; echo $!"
+                 : job + " echo $!"});
   const int pid = std::atoi(r.stdout_text.c_str());
   if (own_group) wait_for([&] { return kill(-pid, 0) == 0; });  // setsid runs a moment after the shell has exited
   return pid;

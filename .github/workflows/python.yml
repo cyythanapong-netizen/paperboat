@@ -31,3 +31,36 @@ jobs:
       - name: Check the protocol schema is a valid JSON Schema
         run: python -c "import json, jsonschema; jsonschema.Draft202012Validator.check_schema(json.load(open('protocol/schema/paperboat-0.schema.json')))"
 
+
+  python-macos:
+    name: Python bindings on macOS arm64
+    runs-on: macos-15  # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test tools
+        run: pip install pytest jsonschema numpy
+      - name: Build the extension (paperboat._engine)
+        run: cmake -S python -B python/build -DCMAKE_BUILD_TYPE=Release -DPython_EXECUTABLE="$(which python)" && cmake --build python/build -j 4
+      - name: Test the bindings
+        run: python -m pytest -q python/tests
+
+  python-windows:
+    name: Python bindings on Windows x64
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install test tools
+        run: pip install pytest jsonschema numpy
+      - name: Build the extension (paperboat._engine)
+        run: cmake -S python -B python/build -A x64 -DPython_EXECUTABLE="$(which python)" && cmake --build python/build --config Release --parallel 4
+      - name: Test the bindings
+        run: python -m pytest -q python/tests

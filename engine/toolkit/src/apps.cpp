@@ -10,6 +10,7 @@
 #include <toml++/toml.hpp>
 
 #include "paperboat/toolkit/descriptor.hpp"
+#include "paperboat/toolkit/platform.hpp"
 
 namespace paperboat::toolkit {
 namespace {
@@ -116,8 +117,8 @@ bool installed(std::string_view name) { return fs::is_regular_file(apps_dir() / 
 fs::path apps_dir() {
   if (const char* v = std::getenv("PAPERBOAT_HOME"); v && *v) return fs::path(v) / "apps";
   if (const char* v = std::getenv("XDG_DATA_HOME"); v && *v) return fs::path(v) / "paperboat" / "apps";
-  const char* home = std::getenv("HOME");
-  return fs::path(home && *home ? home : ".") / ".local" / "share" / "paperboat" / "apps";
+  const fs::path home = platform::home_dir();  // %USERPROFILE% on Windows, where HOME is usually unset
+  return (home.empty() ? fs::path(".") : home) / ".local" / "share" / "paperboat" / "apps";
 }
 
 std::vector<AppEntry> parse_apps_manifest(std::string_view toml_text) {

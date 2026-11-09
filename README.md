@@ -117,9 +117,11 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ### Install
 
 ```sh
-npm install -g @paperboatlabs/cli        # Linux x64 today; Windows x64 is being brought up. The native binary is an optional dependency
+npm install -g @paperboatlabs/cli        # Linux x64, macOS arm64 (Apple Silicon) and Windows x64. The native binary is an optional dependency
 sudo apt install ./paperboat_<version>_amd64.deb   # Debian / Ubuntu, from the GitHub release
 sudo dnf install ./paperboat-<version>.x86_64.rpm  # Fedora / RHEL
+tar xzf paperboat-<version>-Darwin-arm64.tar.gz      # macOS 13+ on Apple Silicon, from the GitHub release
+Expand-Archive paperboat-<version>-Windows-AMD64.zip  # Windows x64 (PowerShell), from the GitHub release
 ```
 
 A package install is the CLI and the apps: `paperboat` opens the console (needs `node`),

@@ -32,5 +32,6 @@ target_link_libraries(_engine PRIVATE paperboat::core)
 if(SKBUILD)
   install(TARGETS _engine LIBRARY DESTINATION paperboat)
 else()
-  set_target_properties(_engine PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/paperboat")
+  # $<1:...>: multi-config generators (Visual Studio) would otherwise add a Release/ or Debug/ folder
+  set_target_properties(_engine PROPERTIES LIBRARY_OUTPUT_DIRECTORY "$<1:${CMAKE_CURRENT_SOURCE_DIR}/paperboat>")
 endif()

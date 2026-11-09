@@ -12,6 +12,7 @@
 #include "paperboat/toolkit/descriptor.hpp"
 #include "paperboat/toolkit/installer.hpp"
 #include "rig.hpp"
+#include "test_platform.hpp"
 
 namespace tk = paperboat::toolkit;
 using Catch::Matchers::ContainsSubstring;
@@ -549,7 +550,7 @@ blocks = ["gray", "canny"]
 
   {
     std::ofstream out(root / "toolkits.toml");
-    out << "[[toolkits]]\nname = \"opencv\"\nrepo = \"" << remote.string()
+    out << "[[toolkits]]\nname = \"opencv\"\nrepo = \"" << test_platform::text_path(remote)
         << "\"\ndescription = \"OpenCV toolkit\"\noptional = true\nengine = \">=0.1\"\n";
   }
   {
@@ -560,11 +561,9 @@ blocks = ["gray", "canny"]
     std::ofstream out(remote / "toolkit.toml");
     out << "name = \"opencv\"\nregister = [\"register_opencv\"]\n";
   }
-  REQUIRE(std::system(("git -C '" + remote.string() +
-                       "' init -q && git -C '" + remote.string() +
-                       "' config user.email test@example.com && git -C '" + remote.string() +
-                       "' config user.name test && git -C '" + remote.string() +
-                       "' add toolkit.toml && git -C '" + remote.string() + "' commit -qm init")
+  const std::string git = "git -C " + test_platform::quoted(remote.string()) + " ";
+  REQUIRE(std::system((git + "init -q && " + git + "config user.email test@example.com && " + git +
+                       "config user.name test && " + git + "add toolkit.toml && " + git + "commit -qm init")
                           .c_str()) == 0);
 
   auto list = tk::list_toolkits(root, backend_dir);

@@ -5,9 +5,11 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <winternl.h>  // UNICODE_STRING
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <atomic>
 #include <chrono>
 #include <map>
@@ -26,6 +28,14 @@ std::wstring widen(std::string_view s) {
   std::wstring w(static_cast<std::size_t>(n), L'\0');
   MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), w.data(), n);
   return w;
+}
+
+std::string narrow(std::wstring_view w) {
+  if (w.empty()) return {};
+  const int n = WideCharToMultiByte(CP_UTF8, 0, w.data(), static_cast<int>(w.size()), nullptr, 0, nullptr, nullptr);
+  std::string s(static_cast<std::size_t>(n), '\0');
+  WideCharToMultiByte(CP_UTF8, 0, w.data(), static_cast<int>(w.size()), s.data(), n, nullptr, nullptr);
+  return s;
 }
 
 // One argument as CommandLineToArgvW reads it back ("Everyone quotes command line arguments the wrong way").
@@ -424,6 +434,35 @@ bool ProcessRunner::kill_pgid(int pgid, int sig, int timeout_ms) {
   return wait_gone(pgid, timeout_ms);
 }
 
-std::string ProcessRunner::read_cmdline(int) { return {}; }  // not available without WMI; callers treat empty as unknown
+// The command line the process was started with (NtQueryInformationProcess, ProcessCommandLineInformation,
+// Windows 8.1 and later), else its program's path. Empty when the process cannot be opened.
+std::string ProcessRunner::read_cmdline(int pid) {
+  if (pid <= 0) return {};
+  HANDLE h = open_process(pid, PROCESS_QUERY_LIMITED_INFORMATION);
+  if (!h) return {};
+  std::wstring text;
+  using QueryInformation = LONG(WINAPI*)(HANDLE, ULONG, PVOID, ULONG, PULONG);
+  static const auto query = reinterpret_cast<QueryInformation>(
+      reinterpret_cast<void*>(GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "NtQueryInformationProcess")));
+  constexpr ULONG kProcessCommandLineInformation = 60;
+  if (query) {
+    ULONG size = 0;
+    query(h, kProcessCommandLineInformation, nullptr, 0, &size);  // fails, and says how big a buffer it needs
+    if (size >= sizeof(UNICODE_STRING)) {
+      std::vector<std::byte> buf(size);
+      if (query(h, kProcessCommandLineInformation, buf.data(), size, &size) >= 0) {
+        const auto* line = reinterpret_cast<const UNICODE_STRING*>(buf.data());
+        if (line->Buffer) text.assign(line->Buffer, line->Length / sizeof(wchar_t));
+      }
+    }
+  }
+  if (text.empty()) {
+    std::wstring image(MAX_PATH, L'\0');
+    DWORD n = static_cast<DWORD>(image.size());
+    if (QueryFullProcessImageNameW(h, 0, image.data(), &n)) text.assign(image.data(), n);
+  }
+  CloseHandle(h);
+  return narrow(text);
+}
 
 }  // namespace paperboat::core

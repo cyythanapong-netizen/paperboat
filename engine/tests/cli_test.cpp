@@ -1,12 +1,20 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <map>
-#include <sys/wait.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <winsock2.h>
+#else
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
+#endif
 
 #include "paperboat/core/backend_manager.hpp"
 #include "paperboat/core/process.hpp"
@@ -16,20 +24,24 @@
 #include "paperboat/toolkit/opencv.hpp"
 #endif
 #include "../tools/paperboat_tui.hpp"
+#include "test_platform.hpp"
 #include <nlohmann/json.hpp>
 
 using Catch::Matchers::ContainsSubstring;
 namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
 namespace fs = std::filesystem;
+using test_platform::current_pid;
+using test_platform::sh;
+using test_platform::text_path;
 
 TEST_CASE("ProcessRunner sync execution captures exit code and output") {
-  auto res = core::ProcessRunner::run_sync({"echo", "hello", "paperboat"});
+  auto res = core::ProcessRunner::run_sync(sh("echo hello paperboat", "echo hello paperboat"));
   CHECK(res.ok());
   CHECK(res.exit_code == 0);
   CHECK_THAT(res.stdout_text, ContainsSubstring("hello paperboat"));
 
-  auto err_res = core::ProcessRunner::run_sync({"sh", "-c", "echo 'failed' >&2; exit 42"});
+  auto err_res = core::ProcessRunner::run_sync(sh("echo 'failed' >&2; exit 42", "echo failed 1>&2& exit /b 42"));
   CHECK_FALSE(err_res.ok());
   CHECK(err_res.exit_code == 42);
   CHECK_THAT(err_res.stderr_text, ContainsSubstring("failed"));
@@ -37,7 +49,7 @@ TEST_CASE("ProcessRunner sync execution captures exit code and output") {
 
 TEST_CASE("ProcessRunner sync timeout kills hanging command") {
   auto start = std::chrono::steady_clock::now();
-  auto res = core::ProcessRunner::run_sync({"sleep", "10"}, {}, {}, std::chrono::milliseconds(150));
+  auto res = core::ProcessRunner::run_sync(test_platform::sleeper(10), {}, {}, std::chrono::milliseconds(150));
   auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
       std::chrono::steady_clock::now() - start);
 
@@ -45,41 +57,89 @@ TEST_CASE("ProcessRunner sync timeout kills hanging command") {
   CHECK(elapsed.count() < 2000);
 }
 
+namespace {
+// `line` is `prefix` then a path naming `dir` (pwd and %CD% may spell it differently from fs::canonical:
+// a symlinked or an 8.3 short temp dir).
+bool names_dir(const std::string& line, const std::string& prefix, const fs::path& dir) {
+  std::error_code ec;
+  return line.starts_with(prefix) && fs::equivalent(fs::path(line.substr(prefix.size())), dir, ec);
+}
+}  // namespace
+
 TEST_CASE("ProcessRunner stream and detached runs pass cwd, env and output through") {
   const fs::path dir = fs::temp_directory_path() / "pb_process_test";
   fs::create_directories(dir);
   const std::vector<std::pair<std::string, std::string>> env{{"PB_PROBE", "on"}};
 
-  // Lines per stream: CRLF trimmed, a tail with no newline still delivered.
+  // Lines per stream: CRLF trimmed (cmd's echo ends every line with one), a tail with no newline still delivered.
   std::map<std::string, std::vector<std::string>> lines;
   core::ProcessRunner::run_stream(
-      {"sh", "-c", "printf 'a\\r\\nb\\n'; printf 'e1\\n' >&2; printf \"$PB_PROBE $(pwd)\""}, dir, env,
-      [&](std::string_view stream, std::string_view line) { lines[std::string(stream)].emplace_back(line); });
-  CHECK(lines["stdout"] == std::vector<std::string>{"a", "b", "on " + fs::canonical(dir).string()});
+      sh("printf 'a\\r\\nb\\n'; printf 'e1\\n' >&2; printf \"$PB_PROBE $(pwd)\"",
+         "echo a& echo b& 1>&2 echo e1& <nul set /p =%PB_PROBE% %CD%"),
+      dir, env, [&](std::string_view stream, std::string_view line) { lines[std::string(stream)].emplace_back(line); });
+  REQUIRE(lines["stdout"].size() == 3);
+  CHECK(lines["stdout"][0] == "a");
+  CHECK(lines["stdout"][1] == "b");
+  CHECK(names_dir(lines["stdout"][2], "on ", dir));
   CHECK(lines["stderr"] == std::vector<std::string>{"e1"});
 
   // The exit code survives the pump reaping the child.
-  CHECK(core::ProcessRunner::run_stream({"sh", "-c", "exit 0"}) == 0);
-  CHECK(core::ProcessRunner::run_stream({"sh", "-c", "exit 3"}) == 3);
+  CHECK(core::ProcessRunner::run_stream(sh("exit 0", "exit /b 0")) == 0);
+  CHECK(core::ProcessRunner::run_stream(sh("exit 3", "exit /b 3")) == 3);
 
   const fs::path log = dir / "detached.log";
   fs::remove(log);
-  const int pid = core::ProcessRunner::run_detached({"sh", "-c", "echo \"$PB_PROBE $(pwd)\"; echo err >&2"}, dir, env, log);
+  const int pid = core::ProcessRunner::run_detached(
+      sh("echo \"$PB_PROBE $(pwd)\"; echo err >&2", "echo(%PB_PROBE% %CD%& 1>&2 echo err"), dir, env, log);
   REQUIRE(pid > 0);
-  int status = 0;
-  waitpid(pid, &status, 0);
+  CHECK(test_platform::wait_exit(pid));
   std::ifstream in(log);
   std::string a, b;
   std::getline(in, a);
   std::getline(in, b);
-  CHECK(a == "on " + fs::canonical(dir).string());
+  CHECK(names_dir(a, "on ", dir));
   CHECK(b == "err");
+  in.close();
   fs::remove_all(dir);
 }
 
 TEST_CASE("ProcessRunner is_alive correctly identifies active and dead pids") {
-  CHECK(core::ProcessRunner::is_alive(getpid()));
+  CHECK(core::ProcessRunner::is_alive(current_pid()));
   CHECK_FALSE(core::ProcessRunner::is_alive(9999999));
+}
+
+TEST_CASE("BackendManager finds the process listening on a port, and its command line") {
+  // a listening socket of our own, on a port the kernel picks
+#ifdef _WIN32
+  WSADATA wsa;
+  REQUIRE(WSAStartup(MAKEWORD(2, 2), &wsa) == 0);
+  const SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
+  REQUIRE(sock != INVALID_SOCKET);
+  int len = sizeof(sockaddr_in);
+#else
+  const int sock = socket(AF_INET, SOCK_STREAM, 0);
+  REQUIRE(sock >= 0);
+  socklen_t len = sizeof(sockaddr_in);
+#endif
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = 0;
+  REQUIRE(bind(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0);
+  REQUIRE(listen(sock, 1) == 0);
+  REQUIRE(getsockname(sock, reinterpret_cast<sockaddr*>(&addr), &len) == 0);
+  const int port = ntohs(addr.sin_port);
+
+  CHECK(core::BackendManager::is_port_listening(port));
+  CHECK(core::BackendManager::find_pid_by_port(port) == current_pid());
+  CHECK_THAT(core::ProcessRunner::read_cmdline(current_pid()), ContainsSubstring("paperboat_tests"));
+#ifdef _WIN32
+  closesocket(sock);
+  WSACleanup();
+#else
+  close(sock);
+#endif
+  CHECK(core::BackendManager::find_pid_by_port(port) == 0);
 }
 
 TEST_CASE("BackendManager port inspection and registry") {
@@ -87,13 +147,18 @@ TEST_CASE("BackendManager port inspection and registry") {
   CHECK_FALSE(core::BackendManager::is_port_listening(59483));
 
   // Runtime registry paths
-  CHECK(core::BackendManager::runtime_dir() == fs::path("/tmp/paperboat-runtime"));
-  CHECK(core::BackendManager::runtime_record_path(8765) == fs::path("/tmp/paperboat-runtime/backend-8765.json"));
+#ifdef _WIN32
+  const fs::path shared = fs::temp_directory_path();  // no /tmp on Windows: the system temp dir
+#else
+  const fs::path shared = "/tmp";
+#endif
+  CHECK(core::BackendManager::runtime_dir() == shared / "paperboat-runtime");
+  CHECK(core::BackendManager::runtime_record_path(8765) == shared / "paperboat-runtime" / "backend-8765.json");
 
   // Register a mock running backend
   core::RunningBackend mock;
   mock.port = 59483;
-  mock.pid = getpid();
+  mock.pid = current_pid();
   mock.engine = "test-engine";
   mock.domain = "test-domain";
   mock.cwd = fs::current_path();
@@ -108,6 +173,35 @@ TEST_CASE("BackendManager port inspection and registry") {
   // Unregister cleans up
   core::BackendManager::unregister_running_backend(59483);
   CHECK_FALSE(fs::exists(rec_path));
+}
+
+TEST_CASE("prepare_python_env finds a venv's python and extends PYTHONPATH the platform's way") {
+  const fs::path root = fs::temp_directory_path() / "pb_python_env";
+  std::error_code ec;
+  fs::remove_all(root, ec);
+#ifdef _WIN32
+  const fs::path venv_python = fs::path(".venv") / "Scripts" / "python.exe";
+  const std::string sep = ";";
+#else
+  const fs::path venv_python = fs::path(".venv") / "bin" / "python3";
+  const std::string sep = ":";
+#endif
+  const fs::path backend = root / "backend";
+  fs::create_directories((backend / venv_python).parent_path());
+  std::ofstream(backend / venv_python) << "";
+  const char* was = std::getenv("PYTHONPATH");
+  const std::string saved = was ? was : "";
+  test_platform::set_env("PYTHONPATH", "elsewhere");
+
+  const auto env = core::BackendManager::prepare_python_env(root, backend);
+  CHECK(env.python_bin == backend / venv_python);
+  const auto path = std::ranges::find(env.env, std::string("PYTHONPATH"), &std::pair<std::string, std::string>::first);
+  REQUIRE(path != env.env.end());
+  CHECK(path->second == (root / "python").string() + sep + "elsewhere");
+
+  if (was) test_platform::set_env("PYTHONPATH", saved);
+  else test_platform::unset_env("PYTHONPATH");
+  fs::remove_all(root, ec);
 }
 
 TEST_CASE("BackendManager check_backend validates missing vs valid descriptors") {
@@ -172,7 +266,11 @@ TEST_CASE("BackendManifest load_manifest validates schema and required fields") 
   CHECK(m_valid.name == "my-service");
   CHECK(m_valid.version == "1.2.3");
   CHECK(m_valid.language == "cpp");
+#ifdef _WIN32
+  CHECK(m_valid.run == "build/my-bin.exe");  // a C++ backend's program, named without .exe in backend.toml
+#else
   CHECK(m_valid.run == "build/my-bin");
+#endif
   CHECK(m_valid.port == 9000);
   CHECK(m_valid.descriptor == "descriptor.toml");
   CHECK(m_valid.toolkits == std::vector<std::string>{"opencv"});
@@ -488,11 +586,20 @@ TEST_CASE("list_toolkits includes built-in toolkit and inspect_toolkit categoriz
   CHECK_FALSE(unknown_res.found);
 }
 
+namespace {
+// The CLI built with these tests (its path from CMake: tools/paperboat, or tools/<config>/paperboat.exe under
+// a multi-config generator), else an installed bin/paperboat.
+fs::path find_cli() {
+#ifdef PAPERBOAT_CLI
+  if (fs::is_regular_file(PAPERBOAT_CLI)) return PAPERBOAT_CLI;
+#endif
+  const fs::path beside = paperboat::platform::exe_path().parent_path().parent_path() / "tools" / "paperboat";
+  return fs::is_regular_file(beside) ? beside : fs::path{"bin/paperboat"};
+}
+}  // namespace
+
 TEST_CASE("paperboat open validates project file and backend") {
-  fs::path cli = "bin/paperboat";
-  if (!fs::is_regular_file(cli)) cli = "engine/build/dev/tools/paperboat";
-  if (!fs::is_regular_file(cli)) cli = fs::current_path() / "engine" / "build" / "dev" / "tools" / "paperboat";
-  if (!fs::is_regular_file(cli)) cli = fs::current_path().parent_path() / "tools" / "paperboat";
+  const fs::path cli = find_cli();
   REQUIRE(fs::is_regular_file(cli));
 
   // Missing file fails
@@ -527,20 +634,12 @@ TEST_CASE("paperboat open validates project file and backend") {
   std::ofstream(backend_dir / "server.py") << "import sys; sys.exit(0)\n";
 
   const fs::path valid_proj = fs::temp_directory_path() / "test_run.ppj";
-  std::ofstream(valid_proj) << "{\"paperboat\": 0, \"backend\": \"" + backend_dir.string() + "\", \"flow\": {\"nodes\": [], \"edges\": []}}";
+  std::ofstream(valid_proj) << "{\"paperboat\": 0, \"backend\": \"" + text_path(backend_dir) + "\", \"flow\": {\"nodes\": [], \"edges\": []}}";
   auto res5 = core::ProcessRunner::run_sync({cli.string(), "open", valid_proj.string(), "--run", "--no-build"});
   CHECK(res5.exit_code == 0);
   fs::remove(valid_proj);
   fs::remove_all(backend_dir);
 }
-
-namespace {
-// The CLI built with these tests: <build>/tests/paperboat_tests -> <build>/tools/paperboat.
-fs::path find_cli() {
-  const fs::path beside = paperboat::platform::exe_path().parent_path().parent_path() / "tools" / "paperboat";
-  return fs::is_regular_file(beside) ? beside : fs::path{"bin/paperboat"};
-}
-}  // namespace
 
 TEST_CASE("every command in the table is in the help menu and the prompt's help") {
   const fs::path cli = find_cli();

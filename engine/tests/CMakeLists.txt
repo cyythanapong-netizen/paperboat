@@ -1,12 +1,3 @@
-# Windows builds only the process-layer tests; the rest of the suite uses POSIX (setenv, sh, /tmp).
-if(WIN32)
-  add_executable(paperboat_process_tests process_test.cpp)
-  target_link_libraries(paperboat_process_tests PRIVATE paperboat::core Catch2::Catch2WithMain paperboat_warnings)
-  include(Catch)
-  catch_discover_tests(paperboat_process_tests)
-  return()
-endif()
-
 add_executable(paperboat_tests
   descriptor_test.cpp
   control_test.cpp
@@ -31,6 +22,11 @@ if(TARGET paperboat_toolkit_opencv)
 endif()
 target_compile_definitions(paperboat_tests
   PRIVATE PAPERBOAT_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+# The CLI tests run the paperboat built here, wherever the generator puts it (tools/Debug/paperboat.exe under Visual Studio).
+if(TARGET paperboat)
+  add_dependencies(paperboat_tests paperboat)
+  target_compile_definitions(paperboat_tests PRIVATE PAPERBOAT_CLI="$<TARGET_FILE:paperboat>")
+endif()
 
 include(Catch)
 catch_discover_tests(paperboat_tests)

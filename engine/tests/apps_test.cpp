@@ -6,9 +6,11 @@
 
 #include "paperboat/toolkit/apps.hpp"
 #include "paperboat/toolkit/update.hpp"
+#include "test_platform.hpp"
 
 namespace fs = std::filesystem;
 namespace tk = paperboat::toolkit;
+using test_platform::quoted;
 
 TEST_CASE("apps.toml parses, and an app's name and repo are required") {
   const auto apps = tk::parse_apps_manifest(R"(
@@ -64,7 +66,7 @@ TEST_CASE("pkg lifecycle: deps first, versions from tags, update, uninstall guar
     const fs::path d = tmp / "remote" / name;
     fs::create_directories(d);
     std::ofstream(d / "a.txt") << name;
-    const std::string g = "git -C '" + d.string() + "' ";
+    const std::string g = "git -C " + quoted(d.string()) + " ";
     REQUIRE(sh(g + "init -q && " + g + "config user.email t@e.com && " + g + "config user.name t && " + g +
                "add -A && " + g + "commit -qm one && " + g + "tag v0.1.0"));
     return d;
@@ -72,10 +74,10 @@ TEST_CASE("pkg lifecycle: deps first, versions from tags, update, uninstall guar
   const fs::path lib = repo("lib"), ui = repo("ui");
   fs::create_directories(tmp / "root" / "engine" / "toolkit");
   std::ofstream(tmp / "root" / "apps.toml")
-      << "[[apps]]\nname = \"lib\"\nrepo = \"" << lib.string() << "\"\nbuild = [\"true\"]\n"
-      << "[[apps]]\nname = \"ui\"\nrepo = \"" << ui.string() << "\"\ndeps = [\"lib\"]\n"
+      << "[[apps]]\nname = \"lib\"\nrepo = \"" << test_platform::text_path(lib) << "\"\nbuild = [\"git --version\"]\n"
+      << "[[apps]]\nname = \"ui\"\nrepo = \"" << test_platform::text_path(ui) << "\"\ndeps = [\"lib\"]\n"
       << "build = [\"mkdir dist\"]\noutput = \"dist\"\n";
-  setenv("PAPERBOAT_HOME", (tmp / "home").c_str(), 1);
+  test_platform::set_env("PAPERBOAT_HOME", (tmp / "home").string());
   const fs::path root = tmp / "root";
 
   CHECK(tk::list_app_versions("ui", root) == std::vector<std::string>{"0.1.0"});
@@ -96,7 +98,7 @@ TEST_CASE("pkg lifecycle: deps first, versions from tags, update, uninstall guar
   CHECK_FALSE(fs::exists(tmp / "home" / "apps" / "ui"));
   CHECK_FALSE(tk::install_app("nope", {}, root).ok);
 
-  unsetenv("PAPERBOAT_HOME");
+  test_platform::unset_env("PAPERBOAT_HOME");
   fs::remove_all(tmp, ec);
 }
 
@@ -106,14 +108,14 @@ TEST_CASE("update: a checkout is fast-forwarded, and refused when dirty or diver
   fs::remove_all(tmp, ec);
   fs::create_directories(tmp / "origin");
   const auto sh = [](const std::string& c) { return std::system(c.c_str()) == 0; };
-  const auto git = [](const fs::path& d) { return "git -C '" + d.string() + "' "; };
+  const auto git = [](const fs::path& d) { return "git -C " + quoted(d.string()) + " "; };
   const auto commit = [&](const fs::path& d, const std::string& file, const std::string& msg) {
     std::ofstream(d / file) << msg;
     return sh(git(d) + "add -A && " + git(d) + "-c user.email=t@e.com -c user.name=t commit -qm " + msg);
   };
   REQUIRE(sh(git(tmp / "origin") + "init -q -b main"));
   REQUIRE(commit(tmp / "origin", "a.txt", "one"));
-  REQUIRE(sh("git clone -q '" + (tmp / "origin").string() + "' '" + (tmp / "work").string() + "'"));
+  REQUIRE(sh("git clone -q " + quoted((tmp / "origin").string()) + " " + quoted((tmp / "work").string())));
   const fs::path work = tmp / "work";
 
   CHECK(tk::check_checkout(tmp).error == "not a git checkout");
