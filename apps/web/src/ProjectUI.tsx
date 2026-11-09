@@ -68,11 +68,23 @@ export function Notice({ spec, onClose }: { spec: NoticeSpec; onClose: () => voi
   );
 }
 
+/** Whether a flex row has wrapped: some child starts below where another ends. */
+function wrapped(row: HTMLElement): boolean {
+  let top = -Infinity, bottom = Infinity;
+  for (const c of row.children) {
+    const r = c.getBoundingClientRect();
+    if (r.height === 0) continue; // nothing drawn (the spacer)
+    top = Math.max(top, r.top);
+    bottom = Math.min(bottom, r.bottom);
+  }
+  return top >= bottom;
+}
+
 /**
  * The project's name in the bar, with a dot while there are changes not saved. It sits in the bar's flow
  * (after the menus, before the bar's spacer) and is pushed right toward the bar's centre, but never by more
  * than the spacer's room: centred while the bar has space, then sliding toward the menus, then truncating,
- * and never under the keys on the right. On a wrapping (narrow) bar it simply follows the menus.
+ * and never under the keys on the right. Once the bar wraps onto two lines it simply follows the menus.
  */
 export function ProjectLabel({ name, dirty }: { name: string; dirty: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -82,7 +94,7 @@ export function ProjectLabel({ name, dirty }: { name: string; dirty: boolean }) 
     const place = () => {
       el.style.marginLeft = ""; // measure from where the flow puts it
       const spacer = bar.querySelector<HTMLElement>(":scope > .spacer");
-      if (!spacer || getComputedStyle(bar).flexWrap !== "nowrap") return;
+      if (!spacer || wrapped(bar)) return;
       const b = bar.getBoundingClientRect(), r = el.getBoundingClientRect();
       const shift = Math.min(b.left + b.width / 2 - r.width / 2 - r.left, spacer.getBoundingClientRect().width);
       if (shift >= 1) el.style.marginLeft = `${Math.floor(shift)}px`;
