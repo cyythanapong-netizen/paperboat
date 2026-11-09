@@ -285,7 +285,7 @@ td code { white-space: nowrap; }
     <p>Each monitor block in the flow becomes one instrument on the Dashboard. You lay the instruments out once and the layout is saved with the project, so the Dashboard needs no separate UI work.</p>
     <ul>
       <li><b>Scope</b> (the graph; goal: the "mother of all scopes", with zoom, cursors, triggers, X–Y and export) takes any number of signals and overlays them. <b>Diff mode</b> plots A − B when the units match, and A against B on two axes when they don't.</li>
-      <li><b>Lamp</b> takes a threshold and shows green, amber or red. It latches when tripped and has an optional output that stops the run.</li>
+      <li><b>Lamp</b> takes a threshold and a comparison and lights in the signal colour (a warning) or red (a trip), saying its state in words. It can latch when tripped, and its output <code>y</code> can stop the run.</li>
       <li><b>Readout</b> shows the current value, the peak and the RMS.</li>
       <li><b>Taps:</b> drag any port or wire onto a graph to add that signal. Dragging a block's input and its output onto the same graph gives a before/after comparison, such as commanded force against reaction force, or a filter's input against its output.</li>
     </ul>
@@ -573,7 +573,7 @@ void register_structural(Domain&amp; d) {
       <div class="ms">
         <span class="id">M1 · Flow page · partly done</span>
         <h3>Flow and Dashboard</h3>
-        <p class="done"><b>Done when:</b> the web app lists block types from the backend, builds a flow, edits params through generated forms, runs it and shows progress and logs live. Scope, Lamp and Readout instruments work, and dragging a port onto a scope adds a tap. <b>So far:</b> the palette, typed wiring, delete, number params, live plots, progress and Console work against five backends; Lamp, Readout and taps are open.</p>
+        <p class="done"><b>Done when:</b> the web app lists block types from the backend, builds a flow, edits params through generated forms, runs it and shows progress and logs live. Scope, Lamp and Readout instruments work, and dragging a port onto a scope adds a tap. <b>So far:</b> the palette, typed wiring, delete, number params, live plots, progress and Console work against five backends, and the Lamp instrument (<code>dashboard/lamp</code>: a threshold, a comparison, an optional latch, an output <code>y</code> that can stop a run) is done; Readout and taps are open.</p>
       </div>
       <div class="ms">
         <span class="id">M2 · Structural</span>

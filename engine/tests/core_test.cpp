@@ -1041,6 +1041,55 @@ TEST_CASE("a dashboard Switch runs from its descriptor params and is sampled as 
   }
 }
 
+TEST_CASE("a dashboard Lamp runs from its descriptor params, is sampled as a signal and can stop a run") {
+  static const tk::Catalog catalog =
+      tk::load_descriptor("domain = \"lamps\"\nimport = [\"step\", \"signal\", \"dashboard\"]\n", tk::builtins());
+  const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 0.5, .emit_every = 1, .real_time = false}};
+  // sin(2π t) over half a second: above 0.9 only around t = 0.25, back near 0 at the end.
+  const auto graph = [](const json& params) {
+    return json{{"nodes", {{{"id", "wave"}, {"type", "sine"}}, {{"id", "lamp"}, {"type", "lamp"}, {"params", params}}}},
+                {"edges", {{{"from", {"wave", "y"}}, {"to", {"lamp", "in"}}}}}};
+  };
+  const auto lamp_signals = [](const Collected& out) {
+    std::vector<double> v;
+    for (const auto& m : out.messages)
+      if (m["type"] == "signal" && m["node"] == "lamp") v.push_back(m["v"]);
+    return v;
+  };
+  SECTION("unlatched: on only while the wave is above the threshold") {
+    Collected out;
+    CHECK(core::run("r", graph({{"threshold", 0.9}, {"op", ">"}}), nullptr, backend, out.emit(), nullptr, {}) == "done");
+    const auto v = lamp_signals(out);
+    REQUIRE(v.size() > 10);
+    CHECK(v.front() == 0.0);
+    CHECK(std::ranges::find(v, 1.0) != v.end());
+    CHECK(v.back() == 0.0);
+  }
+  SECTION("latched: stays on to the end of the run") {
+    Collected out;
+    CHECK(core::run("r", graph({{"threshold", 0.9}, {"op", ">"}, {"latch", true}}), nullptr, backend, out.emit(), nullptr, {}) == "done");
+    CHECK(lamp_signals(out).front() == 0.0);
+    CHECK(out.last_signal("lamp") == 1.0);
+  }
+  SECTION("below: the op chosen in the UI reaches the block") {
+    Collected out;
+    CHECK(core::run("r", graph({{"threshold", 0.9}, {"op", "<"}}), nullptr, backend, out.emit(), nullptr, {}) == "done");
+    CHECK(lamp_signals(out).front() == 1.0);
+    CHECK(out.last_signal("lamp") == 1.0);
+  }
+  SECTION("its output stops a Step flow when it trips") {
+    json g = graph({{"threshold", 0.9}, {"op", ">"}});
+    g["nodes"].push_back({{"id", "trip"}, {"type", "when"}});
+    g["nodes"].push_back({{"id", "end"}, {"type", "stop"}});
+    g["edges"].push_back({{"from", {"lamp", "y"}}, {"to", {"trip", "cond"}}});
+    g["edges"].push_back({{"from", {"trip", "next"}}, {"to", {"end", "in"}}});
+    Collected out;
+    CHECK(core::run("r", g, nullptr, backend, out.emit(), nullptr, {}) == "done");
+    CHECK_THAT(logs(out).back(), ContainsSubstring("stopped by end"));
+    CHECK(out.last_signal("lamp") == 1.0);  // the run ended while the lamp was lit
+  }
+}
+
 TEST_CASE("commented out blocks are excluded from simulation and do not create cycles") {
   static const tk::Catalog catalog = tk::load_descriptor("domain = \"test\"\nimport = [\"math\", \"dashboard\"]\n", tk::builtins());
   const core::Backend backend{.engine = "test", .catalog = &catalog, .run = {.dt = 0.01, .duration = 0.1, .emit_every = 1, .real_time = false}};
