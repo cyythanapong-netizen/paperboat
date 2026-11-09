@@ -83,7 +83,7 @@ TEST_CASE("Base Toolkit: Type and Conversion") {
     CHECK(get_text(b->step(ctx, {{"in", 1.0}}), "y") == "number");
     CHECK(get_text(b->step(ctx, {{"in", std::string("hi")}}), "y") == "text");
     CHECK(get_text(b->step(ctx, {{"in", Vector{1.0}}}), "y") == "vector");
-    CHECK(get_text(b->step(ctx, {{"in", Table{{{1.0}}}}}), "y") == "table");
+    CHECK(get_text(b->step(ctx, {{"in", Table{{1.0}}}}), "y") == "table");
     CHECK(get_text(b->step(ctx, {}), "y") == "empty");
   }
 }

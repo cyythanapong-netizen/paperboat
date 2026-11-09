@@ -44,8 +44,13 @@ struct Twice final : tk::Block {
 };
 
 const tk::Catalog& mixed() {
+  // control works in Step flows too, so the PID here is one made for a Signal flow only
   static const tk::Catalog catalog = tk::load_descriptor(R"(domain = "mixed"
 import = ["step", "base", "signal", "math", "control", "dashboard"]
+[[blocks]]
+use = "control/pid"
+type = "signal-pid"
+flows = ["signal"]
 )");
   return catalog;
 }
@@ -56,7 +61,7 @@ json step_graph() {
            {{{"id", "start"}, {"type", "start"}},
             {{"id", "wait"}, {"type", "wait"}},
             {{"id", "one"}, {"type", "constant"}},
-            {{"id", "pid"}, {"type", "pid"}}}},
+            {{"id", "pid"}, {"type", "signal-pid"}}}},
           {"edges", {{{"from", {"start", "next"}}, {"to", {"wait", "in"}}}, {{"from", {"one", "y"}}, {"to", {"pid", "e"}}}}}};
 }
 
@@ -169,7 +174,7 @@ TEST_CASE("the engine refuses a block on a sheet of a flow type it doesn't work 
   // Not chosen (a graph from before sheets had a type): nothing is refused.
   CHECK_NOTHROW(core::prepare_graph(step_graph(), catalog, none));
 
-  // A Step flow sheet: the PID (control: Signal flow only) is refused, naming it.
+  // A Step flow sheet: the PID (Signal flow only) is refused, naming it.
   json g = step_graph();
   g["flow"] = "step";
   std::string node;
