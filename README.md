@@ -54,26 +54,20 @@ protocol/                 WebSocket protocol spec, JSON Schema, smoke_test.py an
 ../paperboat-examples/    example backends, each a project of its own that uses Paperboat
                           (copy one anywhere and it still runs). Not in this repository: they
                           live in paperboat-examples, which is not publicly available; with access,
-                          clone it next to this one (or set PAPERBOAT_EXAMPLES_DIR)
-  mass-spring-python/     simulation: a sine pushes a mass on a spring (Python)
-  cart-pole-cpp/          simulation, closed loop: PID balances a pole. C++: the blocks
-                          come from the toolkit, the Cart-pole station object is its own
-                          code; add more cart-poles on the Station page
-  parametric-python/      no simulation: a grid shaped by a wave and an attractor
-                          becomes boxes in the scene, Grasshopper style (Python)
-  runner-python/          2D game: jump crates and duck bars; the flow is the autopilot,
-                          or wire the Key blocks and play with Space and ↓. Its Station is
-                          its own web page (Python)
-  animation-python/       Step flow: move, rotate and scale a 3D actor in sequence,
-                          Scratch style; the active block lights up (Python)
-  parts-cpp/              no simulation: count bolts, nuts and washers in a photo with an
-                          OpenCV pipeline on the Flow page (C++)
-  chain-python/           a structure built on the Station as a graph (masses, springs,
-                          dampers), tested from the Flow page as stories (Python)
-  supply-python/          no physics: a supply network on the Station as a graph, the
-                          ordering policy on the Flow page (Python)
-  double-pendulum-cpp/    simulation: three stories (RLS payload identification, energy
-                          swing-up, and LQR balance) with vector ports on the Flow page (C++)
+                          clone it next to this one (or set PAPERBOAT_EXAMPLES_DIR).
+                          Ten numbered tutorials, 01–10, from a first clocked Signal flow to
+                          vector wires, custom web stations and an acausal Modelica reference:
+  01-smart-thermostat-python/  clocked Signal flow, bang-bang heating (Python)
+  02-cart-pole-cpp/            a StationObject in code: PID balances a cart-pole (C++)
+  03-low-poly-island-python/   evaluated once: procedural terrain and list wires (Python)
+  04-cocktail-barista-python/  Step flow: Excel menu, Board Choice, groups, subsystem, E-stop (Python)
+  05-rover-lander-python/      custom HTML5 web station, manual vs GNC landing (Python)
+  06-robot-pick-place-python/  ABB-style palletizer, IK, quintic trajectories, fork (Python)
+  07-airfoil-cfd-python/       D2Q9 lattice-Boltzmann wind tunnel and lift/drag (Python)
+  08-air-hockey-tracker-cpp/   optional OpenCV toolkit, HSV→centroid, puck tracking (C++)
+  09-modular-synth-cpp/        vector wires [6], six-voice synth, Scope and Speaker (C++)
+  10-train-pantograph-cpp/     active pantograph regulator, catenary, arcing (C++/Modelica)
+  legacy/                      the nine earlier backends, archived for reference
 docs/                     plan, and the API reference (docs/api; live at https://paperboatlab.github.io/paperboat/)
 ```
 

@@ -2,12 +2,13 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { Entity, View } from "./protocol";
+import { meshGeometry, meshLook, paintField } from "./meshes";
 import { viewCube } from "@paperboat/shared/viewCube";
 
 /** `look` is what the geometry and material were built from; when it changes, rebuild. */
 type World = { scene: THREE.Scene; objects: Map<string, { obj: THREE.Object3D; look: string }> };
 
-const lookOf = (e: Entity) => JSON.stringify([e.shape, e.size, e.color, e.src]);
+const lookOf = (e: Entity) => JSON.stringify([e.shape, e.size, e.color, e.src, e.shape === "mesh" ? meshLook(e) : null]);
 
 function dispose(obj: THREE.Object3D) {
   if (obj instanceof THREE.Mesh || obj instanceof THREE.Line) {
@@ -31,6 +32,12 @@ function createObject(e: Entity, flat = false): THREE.Object3D {
     texture.colorSpace = THREE.SRGBColorSpace;
     return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: texture }));
   }
+  if (e.shape === "mesh") {
+    const geometry = meshGeometry(e);
+    const field = geometry.getAttribute("color") !== undefined;
+    const options = { color: field ? 0xffffff : color, vertexColors: field, side: THREE.DoubleSide };
+    return new THREE.Mesh(geometry, flat ? new THREE.MeshBasicMaterial(options) : new THREE.MeshStandardMaterial(options));
+  }
   const [a, b, c] = e.size ?? [1, 1, 1];
   const geometry =
     e.shape === "sphere" ? new THREE.SphereGeometry(a, 24, 16)
@@ -46,6 +53,7 @@ function applyEntity(obj: THREE.Object3D, e: Entity) {
     attr.setXYZ(1, ...(e.to ?? e.pos));
     attr.needsUpdate = true;
   } else {
+    if (e.shape === "mesh" && obj instanceof THREE.Mesh) paintField(obj.geometry, e);
     obj.position.set(...e.pos);
     obj.rotation.set(...(e.rot ?? [0, 0, 0]));
     obj.scale.set(...(e.scale ?? [1, 1, 1]));

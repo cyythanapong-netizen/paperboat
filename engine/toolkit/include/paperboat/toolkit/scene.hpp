@@ -39,6 +39,11 @@ Entity circle(std::string id, double x, double y, double radius, std::string col
 
 // A bar of square section from `a` to `b` (a link, a pole, a strut).
 Entity rod(std::string id, Vec a, Vec b, double thickness, std::string color = "#888888");
+// A triangle mesh at `pos`: `vertices` x, y, z per vertex and `indices` three per triangle,
+// in the mesh's own frame. `values` (optional) is a field over it that the UI colours from
+// `range` (both 0: the field's own min and max).
+Entity mesh(std::string id, std::vector<double> vertices, std::vector<double> indices, std::string color = "#888888",
+            Vec pos = {}, std::vector<double> values = {}, std::array<double, 2> range = {});
 // A coil spring from `a` to `b`: a zigzag of lines `width` across, ids `id/0`, `id/1`…
 // The same number of lines whatever its length, so a patch updates them all.
 std::vector<Entity> spring(const std::string& id, Vec a, Vec b, int coils = 8, double width = 0.2,
