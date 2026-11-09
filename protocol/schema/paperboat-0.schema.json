@@ -593,6 +593,10 @@
           ],
           "description": "Thermal wires are dashed grey, not red."
         },
+        "color": {
+          "type": "string",
+          "description": "The connector's own fill, when a user-defined class gives one (#43)."
+        },
         "potential": {
           "type": "array",
           "items": {
