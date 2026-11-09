@@ -1,4 +1,4 @@
-# Release packages: .deb, .rpm and .tar.gz (Linux), .tar.gz (macOS arm64), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
+# Release packages: .deb, .rpm and .tar.gz (Linux), .tar.gz (macOS arm64), .zip (Windows x64), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
 # Every package ships the Python bindings (pb#223) in lib/paperboat/python, so a Python backend runs
 # with no pip step: paperboat._engine for CPython 3.11 and, through the stable ABI, for 3.12 and later
 # (scripts/build_python.sh). The same builds' wheels (paperboat-*.whl) go to the release too.
@@ -263,8 +263,6 @@ jobs:
 
   windows:
     needs: web
-    # ponytail: off until Windows is brought up again (the console and web app paths are in, untested there)
-    if: false
     name: Windows (.zip, npm)
     runs-on: windows-2022
     defaults:
@@ -330,7 +328,7 @@ jobs:
         run: |
           python scripts/check_bundle.py --self-test
           python scripts/check_bundle.py --prefix "$RUNNER_TEMP/root"
-          Get-ChildItem dist/*.zip | ForEach-Object { python scripts/check_bundle.py --archive $_.FullName }
+          python scripts/check_bundle.py --archive dist/*.zip dist/*.whl
       - name: "SDK: the .zip builds and checks a backend"
         run: |
           v=${{ steps.version.outputs.version }}
@@ -356,6 +354,13 @@ jobs:
           node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" check "$RUNNER_TEMP/py-backend"
           cd "$GITHUB_WORKSPACE"
           rm dist/npm/paperboatlabs-cli-[0-9]*.tgz   # the launcher is published from the Linux job
+      - name: The web app is served from the .zip, and stops
+        run: |
+          exe=$(ls "$RUNNER_TEMP"/pb/*/bin/paperboat.exe)
+          "$exe" start --daemon --port 3047
+          curl -sf --retry 15 --retry-connrefused --retry-delay 1 http://localhost:3047/ | grep -q '<div id="root"' && echo "web app served"
+          "$exe" list
+          "$exe" stop
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -363,7 +368,7 @@ jobs:
 
   publish:
     name: Publish (tags only)
-    needs: [linux, macos]
+    needs: [linux, macos, windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     permissions:
