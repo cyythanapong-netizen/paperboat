@@ -1,0 +1,43 @@
+/* The lamp instrument. The frame (.instrument, .screen, .idle) is the app's. The screen is black
+   in both themes, so one set of colours serves light and dark; the signal and danger tokens follow
+   the theme. Lit: a disc in the tone with a soft glow and the word in the tone. Off: a dark disc
+   ringed in the screen's dim grey and the word dim. Idle (no run yet): the dashed placeholder. */
+.instrument.lamp-instrument { --lamp-tone: var(--signal); --lamp-size: 26px; }
+.instrument.lamp-instrument.tone-danger { --lamp-tone: var(--danger); }
+.size-large .instrument.lamp-instrument, .size-xlarge .instrument.lamp-instrument { --lamp-size: 56px; }
+
+.lamp-screen { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); min-width: 0; }
+.lamp-disc {
+  flex: none;
+  width: var(--lamp-size);
+  height: var(--lamp-size);
+  border-radius: var(--radius-round);
+  background: var(--night-200);
+  border: 1.5px solid var(--text-on-screen-muted);
+  transition: background var(--motion), border-color var(--motion), box-shadow var(--motion);
+}
+.lamp-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lamp-label {
+  font: 500 var(--size-2xs) / 1.2 var(--font-sans);
+  color: var(--text-on-screen);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lamp-word {
+  font: 500 var(--size-md) / 1.1 var(--font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-on-screen-muted);
+}
+.size-large .lamp-word, .size-xlarge .lamp-word { font-size: var(--size-xl); }
+
+.instrument.lamp-instrument.on .lamp-disc {
+  background: var(--lamp-tone);
+  border-color: var(--lamp-tone);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--lamp-tone) 22%, transparent), 0 0 18px color-mix(in srgb, var(--lamp-tone) 55%, transparent);
+}
+.instrument.lamp-instrument.on .lamp-word { color: var(--lamp-tone); }
+
+.instrument.lamp-instrument.idle .lamp-disc { background: transparent; border: 1.5px dashed var(--line-strong); }
+.instrument.lamp-instrument.idle .lamp-label, .instrument.lamp-instrument.idle .lamp-word { color: var(--text-muted); }

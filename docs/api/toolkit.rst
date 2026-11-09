@@ -32,7 +32,7 @@ Package Quick Reference
      - ``pid``, ``rate_limiter``, ``deadband``, ``hysteresis``, ``lowpass``, ``integrator``
      - Dynamic feedback controllers, signal filters, and rate-of-change limiters.
    * - :ref:`pkg-dashboard`
-     - ``graph``, ``display``, ``scope``, ``image``
+     - ``graph``, ``display``, ``scope``, ``lamp``, ``image``
      - Telemetry instruments piping signals to real-time oscilloscopes, digital readouts, and visual frames.
    * - :ref:`pkg-step`
      - ``start``, ``when``, ``wait``, ``if``, ``repeat``, ``while``, ``say``, ``join``, ``stop``
@@ -133,7 +133,7 @@ Package Quick Reference
      - ``pid``, ``rate_limiter``, ``deadband``, ``hysteresis``, ``lowpass``, ``integrator``
      - Dynamic feedback controllers, signal filters, and rate-of-change limiters.
    * - :ref:`pkg-dashboard`
-     - ``graph``, ``display``, ``scope``, ``image``
+     - ``graph``, ``display``, ``scope``, ``lamp``, ``image``
      - Telemetry instruments piping signals to real-time oscilloscopes, digital readouts, and visual frames.
    * - :ref:`pkg-step`
      - ``start``, ``when``, ``wait``, ``if``, ``repeat``, ``while``, ``say``, ``join``, ``stop``
@@ -356,6 +356,11 @@ Control: ``switch`` (output ``y``, 0 or 1), a Board switch the user flips during
 ``mode`` is ``toggle`` (a click flips it) or ``momentary`` (on while held); ``initial`` is its
 state at the start of a run; ``key`` also binds a keyboard key. A Monitor that declares outputs,
 like ``switch``, runs as an ordinary block and is shown from its first output.
+Indicator: ``lamp`` (``in`` → ``y``, 0 or 1), lit while ``in`` passes ``threshold`` by ``op``
+(``>``, ``>=``, ``<``, ``<=``, ``==``, ``!=``; the default ``> 0.5`` lights on a boolean); with
+``latch`` it stays on from its first trip until the run ends. ``label`` is its text on the
+Dashboard and ``color`` its colour when lit: ``signal`` or ``danger``. Its output can end a run
+(a Step flow's ``when`` → ``stop``).
 
 .. _pkg-control:
 

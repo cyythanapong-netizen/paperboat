@@ -6,7 +6,7 @@ Instruments
 
 A **monitor** block (kind ``monitor``) shows a value on the Dashboard; its definition's
 ``instrument`` says how: ``graph`` (a plot over time, or over list index in a run-once),
-``display`` (the latest number or text), ``image`` (a picture) or ``scope`` (see below). The engine samples each
+``display`` (the latest number or text), ``lamp`` (on or off against a threshold, see below), ``image`` (a picture) or ``scope`` (see below). The engine samples each
 monitor once per pass and sends ``signal`` messages (``v`` is a number, or text for a
 display or an image's data URL). A monitor that must turn its input into something showable
 returns it as output ``value`` (``opencv/view`` turns an image into a data URL); otherwise its
@@ -43,6 +43,17 @@ single }``). A backend may ship one:
    instruments = [
      { block = "scope1", size = "xlarge", settings = { window = 2, trigger = { source = "a", level = 0 } } },
    ]
+
+Lamp
+~~~~
+
+``lamp`` (``dashboard/lamp``) is an indicator: on while its input passes ``threshold`` by ``op``
+(``>`` by default, also ``>=``, ``<``, ``<=``, ``==``, ``!=``), or, with ``latch``, from the first
+time it does until the run ends. The engine decides (a tuned ``threshold`` applies at once) and
+sends its state as 1 or 0; the block also outputs it as ``y``, so a trip can stop a run. On the
+Dashboard it is a disc lit in the signal colour, or red with ``color = "danger"``, beside its
+``label`` and its state in words (``on``/``off``, ``tripped``/``armed`` when it latches); the
+caption holds the condition (``> 10 · latch``).
 
 Layout
 ------
