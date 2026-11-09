@@ -114,6 +114,25 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ./bin/paperboat stop squero-studio-om    # `start` and `stop` take a backend or a program; with no target, the web app
 ```
 
+### Start a backend of your own
+
+`paperboat new` writes a minimal backend that passes `paperboat check` as it is: one block
+(`Scale`) in `domain/`, a starter graph in `descriptor.toml` and the `expected.json` it
+matches. The templates are built into the binary, so it works from an installed package too.
+
+```sh
+paperboat new my-backend            # C++ (the default), in ./my-backend; --dir <path> for another folder
+paperboat new my-backend --python   # Python: needs the paperboat module (npm run build:python, or pip install ./python)
+cd my-backend
+paperboat build                     # compile it (a Python backend has nothing to compile)
+paperboat check                     # manifest, catalog, protocol smoke test, golden run
+paperboat run                       # ws://localhost:8790
+paperboat start                     # the web app: open http://localhost:3047/?backend=ws://localhost:8790
+```
+
+It never overwrites: a folder that exists must be empty. Then add blocks in `domain/`, use
+them in the descriptor's `[graph]` and update `expected.json` (docs/api: Quickstart, Testing).
+
 ### Install
 
 ```sh

@@ -96,12 +96,13 @@ jobs:
             (paperboat start --port 3047 >/tmp/web.log 2>&1 &) && sleep 2 &&
             curl -sf http://localhost:3047/ | grep -q "<div id=\"root\"" && echo "web app served"'
       # The SDK (pb#177): with only the packages installed, a C++ backend builds and passes paperboat check.
-      - name: "SDK: paperboat + paperboat-dev on Debian 12 build and check a backend"
+      - name: "SDK: paperboat + paperboat-dev on Debian 12 build and check a backend, and one paperboat new writes"
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" debian:bookworm sh -ec '
             apt-get update -qq && apt-get install -y -qq /dist/paperboat_*.deb /dist/paperboat-dev_*.deb python3-pip >/dev/null
             pip install -q --break-system-packages websockets jsonschema
-            cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend'
+            cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend
+            cd /tmp && paperboat new demo && paperboat build demo && paperboat check demo'  # its embedded C++ template
       - name: "The .rpms on Fedora: install, run, and build and check a backend"
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" fedora:latest sh -ec '

@@ -48,6 +48,8 @@ export const FLAG_HELP: Record<string, string> = {
   '--fast': 'manifest and catalog only',
   '--out': 'package path',
   '--dir': 'folder',
+  '--cpp': 'a C++ backend (the default)',
+  '--python': 'a Python backend',
   '--host': 'listen host',
   '--daemon': 'run in the background',
   '--version': 'toolkit version',

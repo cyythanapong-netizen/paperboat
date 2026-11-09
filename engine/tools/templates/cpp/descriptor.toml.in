@@ -1,0 +1,27 @@
+# @name@: a new Paperboat backend, a Scale block on a starter graph. Made by paperboat new.
+#
+# The descriptor says what the UI shows: the packages the palette has and the graph the Flow
+# page opens with. The domain's own blocks (domain/blocks.hpp: Scale) are its package "@name@",
+# without listing them here.
+domain = "@name@"
+import = ["base", "signal", "dashboard"]  # Constant…; Sine, Clock…; Graph, Display
+
+[station]
+view = "graph"  # no station objects yet: the Station page shows the graph
+
+# The starter graph. Checked against the catalog when the backend starts.
+[graph]
+nodes = [
+  { id = "wave", type = "sine", pos = [0, 0] },
+  { id = "louder", type = "scale", params = { gain = 2 }, pos = [250, 0] },
+  { id = "plot", type = "graph", pos = [500, 0] },
+  { id = "three", type = "constant", params = { value = 3 }, pos = [0, 200] },
+  { id = "doubled", type = "scale", params = { gain = 2 }, pos = [250, 200] },
+  { id = "result", type = "display", pos = [500, 200] },
+]
+edges = [
+  { from = ["wave", "y"], to = ["louder", "u"] },
+  { from = ["louder", "y"], to = ["plot", "in"] },
+  { from = ["three", "y"], to = ["doubled", "u"] },
+  { from = ["doubled", "y"], to = ["result", "in"] },
+]

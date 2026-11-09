@@ -5,6 +5,12 @@ A backend is a folder of its own: a descriptor, its domain code, and a few lines
 serve it. Both versions below make the same app: a counter whose **Add** block adds its
 input to a running total, shown on the Dashboard.
 
+.. tip::
+
+   ``paperboat new my-backend`` (``--python`` for Python) writes a backend like these that
+   passes ``paperboat check`` as it is, with its ``backend.toml`` and ``expected.json``: a
+   starting point to edit instead of an empty folder.
+
 C++
 ---
 
