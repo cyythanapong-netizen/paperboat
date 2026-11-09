@@ -7,6 +7,14 @@ on:
   push:
     branches: [dev, main]
   pull_request:
+    paths:
+      - "apps/web/**"
+      - "apps/cli/**"
+      - "engine/**"
+      - "protocol/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/e2e.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -26,6 +34,10 @@ jobs:
       CXX: g++-14
       CC: gcc-14
       CMAKE_GENERATOR: Ninja  # also for the backend, which `paperboat build` configures
+      CCACHE_DIR: ${{ github.workspace }}/paperboat/.ccache
+      CCACHE_COMPILERCHECK: content
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_C_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,8 +50,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            paperboat/package-lock.json
+            paperboat-shared/package-lock.json
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build ccache
+      - uses: actions/cache@v4
+        with:
+          path: paperboat/.ccache
+          key: ccache-${{ runner.os }}-e2e-${{ hashFiles('apps/web/**', 'engine/**') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-e2e-
       - run: npm ci
         working-directory: paperboat-shared
       - run: npm ci
@@ -62,6 +84,9 @@ jobs:
 
   e2e-macos:
     name: Web app end to end (Chromium, macOS arm64)
+    # macOS runners cost about ten Linux minutes and run in parallel, so they are checked on
+    # pushes to dev and main; label a PR `ci:macos` to run them before merging.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
     runs-on: macos-15  # Apple Silicon
     env:
       CMAKE_GENERATOR: Ninja

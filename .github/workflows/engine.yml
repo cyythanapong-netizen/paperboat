@@ -1,10 +1,16 @@
 # The engine and its tests (C++). One workflow per check, so each has its own README badge.
 name: engine
 
+# The Linux jobs run on every pull request that can affect them; the macOS one runs on pushes
+# to dev and main (or a PR labelled `ci:macos`), so a PR waits on Linux alone.
 on:
   push:
     branches: [dev, main]
   pull_request:
+    paths:
+      - "engine/**"
+      - "protocol/**"
+      - ".github/workflows/engine.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,10 +27,22 @@ jobs:
     env:
       CXX: g++-14
       CC: gcc-14
+      # ccache turns a re-run of a PR (a rebase, a flaky job) into a few minutes instead of ten.
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_COMPILERCHECK: content
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_C_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build ccache
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-engine-${{ matrix.sundials }}-${{ hashFiles('engine/**', 'protocol/**') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-engine-${{ matrix.sundials }}-
+            ccache-${{ runner.os }}-engine-
       - name: Configure
         run: cmake -S engine -B engine/build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPAPERBOAT_BUILD_TESTS=ON -DPAPERBOAT_WITH_SUNDIALS=${{ matrix.sundials }}
       - name: Build
@@ -35,6 +53,9 @@ jobs:
 
   engine-macos:
     name: Engine on macOS arm64 (C++ build and tests)
+    # macOS runners cost about ten Linux minutes and run in parallel, so they are checked on
+    # pushes to dev and main; label a PR `ci:macos` to run them before merging.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
     runs-on: macos-15  # Apple Silicon
     steps:
       - uses: actions/checkout@v4

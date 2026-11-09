@@ -5,6 +5,13 @@ on:
   push:
     branches: [dev, main]
   pull_request:
+    paths:
+      - "python/**"
+      - "engine/**"
+      - "protocol/**"
+      - "apps/cli/**"
+      - "scripts/build_python.sh"
+      - ".github/workflows/python.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -17,13 +24,25 @@ jobs:
     env:
       CXX: g++-14
       CC: gcc-14
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_COMPILERCHECK: content
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_C_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Install test tools
-        run: pip install pytest jsonschema numpy
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends ccache
+          pip install pytest jsonschema numpy
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-python-${{ hashFiles('python/**', 'engine/**') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-python-
       - name: Build the extension (paperboat._engine)
         run: cmake -S python -B python/build -DCMAKE_BUILD_TYPE=Release -DPython_EXECUTABLE="$(which python)" && cmake --build python/build -j 4
       - name: Test the bindings
@@ -34,6 +53,9 @@ jobs:
 
   python-macos:
     name: Python bindings on macOS arm64
+    # macOS runners cost about ten Linux minutes and run in parallel, so they are checked on
+    # pushes to dev and main; label a PR `ci:macos` to run them before merging.
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')
     runs-on: macos-15  # Apple Silicon
     steps:
       - uses: actions/checkout@v4
@@ -54,6 +76,10 @@ jobs:
       CXX: g++-14
       CC: gcc-14
       CMAKE_GENERATOR: Ninja
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_COMPILERCHECK: content
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CMAKE_C_COMPILER_LAUNCHER: ccache
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -61,8 +87,14 @@ jobs:
           python-version: "3.12"
       - name: Install build tools and test tools
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build ccache
           pip install websockets jsonschema numpy
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-${{ runner.os }}-scaffold-${{ hashFiles('engine/**', 'python/**') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-scaffold-
       - name: Build the CLI and the bindings
         run: |
           cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Debug -DPAPERBOAT_BUILD_TESTS=OFF
