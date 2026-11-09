@@ -11,7 +11,7 @@ const here = fileURLToPath(new URL(".", import.meta.url));
 function packageRoot(file: string): string {
   let dir = dirname(file);
   while (!existsSync(join(dir, "package.json")) && dirname(dir) !== dir) dir = dirname(dir);
-  return dir;
+  return existsSync(join(dir, "package.json")) ? dir : "";
 }
 
 /**
@@ -23,13 +23,17 @@ function packageRoot(file: string): string {
  */
 function sharedFolders(): string[] {
   const folders: string[] = [];
+  const add = (folder: string) => {
+    if (folder && !folders.includes(folder)) folders.push(folder);
+  };
   try {
     const shared = packageRoot(createRequire(import.meta.url).resolve("@paperboat/shared"));
-    folders.push(shared);
+    add(shared);
+    if (!shared) return folders;
     const fromShared = createRequire(join(shared, "package.json"));
     for (const font of ["@fontsource/geist-sans", "@fontsource/geist-mono"]) {
       try {
-        folders.push(packageRoot(fromShared.resolve(font)));
+        add(packageRoot(fromShared.resolve(font)));
       } catch {
         // not installed there: the app's own copy (inside the workspace) is used
       }
