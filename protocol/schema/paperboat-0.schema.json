@@ -183,7 +183,10 @@
     "Dash": {
       "enum": [
         "solid",
-        "axis"
+        "axis",
+        "dash",
+        "dot",
+        "dashdot"
       ],
       "description": "Never red: dashed red means missing only."
     },

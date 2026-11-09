@@ -189,7 +189,7 @@ All primitive visual styles must be token names; raw colors, hex codes, or arbit
 | --- | --- | --- |
 | `stroke` | `"ink"` (default), `"muted"`, `"signal"` | `--text`, `--line-strong`, `--signal` (live state only, never decoration) |
 | `weight` | `"thin"`, `"normal"` (default), `"wire"` | 1px, 1.5px, 2px |
-| `dash` | `"solid"` (default), `"axis"` | Solid or `2 2` axis dash (never red; dashed red is reserved for missing) |
+| `dash` | `"solid"` (default), `"axis"`, `"dash"`, `"dot"`, `"dashdot"` | Solid, `2 2` axis, or one of the three shared line styles (never red; dashed red is reserved for missing) |
 | `fill` | `"none"` (default), `"ink"`, `"raised"`, `"sunken"` | `--text`, `--surface-raised`, `--surface-sunken` |
 | `corner` | `"0"` (default), `"sm"`, `"md"` | 0px, 3px, 5px radius |
 | `font` | `"sans"` (default), `"mono"` | `--font-sans`, `--font-mono` |
