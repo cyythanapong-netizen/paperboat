@@ -1,0 +1,17 @@
+"""The domain's own blocks. Add a block: a class here, listed in server.py's blocks, then
+use its type in descriptor.toml. Reference: docs/api (Python API)."""
+
+import paperboat
+
+
+class Scale(paperboat.Block):
+    # Its definition (what the palette shows): class attributes.
+    type, label = "scale", "Scale"
+    description = "Multiplies its input by a gain."
+    inputs, outputs = ["u"], ["y"]
+    params = {"gain": 2}          # the defaults; self.params holds this instance's values
+
+    # What runs: once per pass of the clock, inputs in, outputs out. A block may keep state
+    # between steps in its own attributes; ctx.log("text", "warn") writes to the Console.
+    def step(self, ctx, inputs):
+        return {"y": self.params["gain"] * inputs.get("u", 0.0)}

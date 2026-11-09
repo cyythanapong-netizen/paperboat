@@ -61,6 +61,7 @@ inline void add_test(Registry& registry, const std::string& type, const std::str
   t.def.ports_from = std::move(ports_from);
   t.make = [test](const Values& p, const Config&) { return std::make_unique<LogicValue>(test, p); };
   t.make_step = [test](const Values& p, const Config&) { return std::make_unique<Branch>(test, p); };
+  t.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(t));
 }
 

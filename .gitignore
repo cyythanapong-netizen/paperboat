@@ -12,6 +12,9 @@ ARCHITECTURE.md
 # --- Builds ---
 build/
 dist/
+apps/cli/bundle/
+apps/web/e2e/test-results/
+apps/web/e2e/playwright-report/
 docs/api/_build/
 *.egg-info/
 python/paperboat/_engine*.so

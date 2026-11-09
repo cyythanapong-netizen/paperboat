@@ -36,6 +36,7 @@ void add_if(Registry& registry) {
   t.make_step = [](const Values& p, const Config&) {
     return std::make_unique<Branch>([](const Values& in, const Values&) { return holds(in, "cond"); }, p);
   };
+  t.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(t));
 }
 

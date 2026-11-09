@@ -1,0 +1,19 @@
+domain = "sdk-backend-python"
+import = ["base", "dashboard"]
+
+[station]
+view = "graph"
+
+# 2 -> times 3 -> plus 1 -> 7: a toolkit block feeding the two Python blocks in server.py.
+[graph]
+nodes = [
+  { id = "two", type = "constant", params = { value = 2 }, pos = [0, 0] },
+  { id = "triple", type = "gain-py", params = { k = 3 }, pos = [200, 0] },
+  { id = "plus-one", type = "offset-py", pos = [400, 0] },
+  { id = "show", type = "display", pos = [600, 0] },
+]
+edges = [
+  { from = ["two", "y"], to = ["triple", "u"] },
+  { from = ["triple", "y"], to = ["plus-one", "u"] },
+  { from = ["plus-one", "y"], to = ["show", "in"] },
+]

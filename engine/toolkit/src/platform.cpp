@@ -11,6 +11,9 @@
 #else
 #include <unistd.h>
 #endif
+#ifdef __APPLE__
+#include <mach-o/dyld.h>  // _NSGetExecutablePath
+#endif
 
 namespace paperboat::platform {
 
@@ -44,6 +47,17 @@ fs::path exe_path() {
     }
     buf.resize(buf.size() * 2);
   }
+#elif defined(__APPLE__)
+  // no /proc on macOS: ask dyld, then resolve symlinks (an npm or Homebrew bin/ link) the way
+  // /proc/self/exe does on Linux
+  uint32_t size = 0;
+  _NSGetExecutablePath(nullptr, &size);
+  std::string buf(size, '\0');
+  if (_NSGetExecutablePath(buf.data(), &size) != 0) return {};
+  buf.resize(std::char_traits<char>::length(buf.c_str()));
+  std::error_code ec;
+  const fs::path p = fs::canonical(buf, ec);
+  return ec ? fs::path(buf) : p;
 #else
   std::error_code ec;
   const fs::path p = fs::read_symlink("/proc/self/exe", ec);

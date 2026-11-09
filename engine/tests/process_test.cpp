@@ -50,8 +50,13 @@ int daemon_sleeper(bool own_group) {
   (void)own_group;
   return ProcessRunner::run_detached(sleeper(30));  // no zombies here: a finished process is gone
 #else
+  // macOS has no setsid command; there `set -m` (job control) gives the background job a
+  // process group of its own, as setsid does
+  const std::string job = "sleep 30 >/dev/null 2>&1 &";
   const auto r = ProcessRunner::run_sync(
-      {"sh", "-c", std::string(own_group ? "setsid " : "") + "sleep 30 >/dev/null 2>&1 & echo $!"});
+      {"sh", "-c",
+       own_group ? "if command -v setsid >/dev/null 2>&1; then setsid " + job + " else set -m; " + job + " fi; echo $!"
+                 : job + " echo $!"});
   const int pid = std::atoi(r.stdout_text.c_str());
   if (own_group) wait_for([&] { return kill(-pid, 0) == 0; });  // setsid runs a moment after the shell has exited
   return pid;

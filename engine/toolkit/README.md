@@ -12,7 +12,7 @@ its domain state).
 | `base`    | What every domain needs, in every flow type. Values of each datatype: `constant` (Number, a float), `text` (Text), `boolean` (Boolean: 1 or 0), `variable` (a project variable's value by its `name`; live if the variable is `tunable`) · input: `key` (1 while its `key` param's key is held, from the UI's `input` messages) · logic, as magic blocks (two forms, picked by the `form` param: `signal` computes `y`, `step` branches `in` → `yes`/`no`): `if` (signal: `a` while `cond` holds, else `b`), `and`, `or`, `not`, `compare` (`op`) |
 | `signal`  | Signals f(t): t is the block's input `t` when wired (a step's `progress`), else the run clock. C++: `clock`, and the abstract parent `generator` (f is an expression). TOML definitions on it (`src/signal/blocks.toml`): `sine`, `step`, `ramp`, `square`, `ease` (shape a 0–1 progress; `shape`: in-out, in, out, linear), `function` (f(t): type f on the block; its free names are its inputs, with t as the clock when unwired) |
 | `math`    | Pointwise arithmetic on signals: `gain`, `sum`, `threshold`, `saturation` |
-| `dashboard` | Monitors, shown on the Dashboard as instruments: `graph` (plots its input over time), `display` (its latest value as a number or text) |
+| `dashboard` | Monitors, shown on the Dashboard as instruments: `graph` (plots its input over time), `display` (its latest value as a number or text), `scope`, `lamp` (on while its input passes `threshold` by `op`; `latch`; outputs `y`), and the `switch` control |
 | `control` | Dynamics that run on a clock in a Signal flow: `pid`, and without direct feedthrough (a feedback loop may pass through them) `integrator`, `lag`, `delay` (`steps`, `initial`) |
 | `step`    | The path of a Step flow, with step ports. Hats: `start` (once), `when` (each time signal `cond` rises, e.g. a key; a path alongside the others). Then `wait` (`seconds`), `repeat` (leaves by `loop` `times` times, then `done`), `stop` (ends the whole run). Branch with a `base` logic block in its step form |
 | `opencv`  | External optional toolkit (`paperboat-toolkit-opencv`, installed into `engine/toolkit/opencv`; `paperboat::toolkit_opencv`, `register_opencv`). Image filters on `image` ports: `gray`, `blur`, `median`, `threshold`, `adaptive_threshold`, `hsv_range`, `canny`, `erode`, `dilate`, `open`, `close`, `invert`, `distance` · monitor: `view` (an image instrument) · station: `image` (a picture from a `file` prop; its linked block outputs it) |
@@ -237,6 +237,12 @@ graph and station).
    goes in `<block>/icon.hpp`) and register it from `void add_<block>(Registry&)` in the
    package namespace. The folder name is the registration: no manifest, registry or list to
    edit. A helper two blocks share goes in a `<topic>_shared.hpp` in the package folder.
-3. Add C++ tests in `engine/tests/`. If it is a new built-in package, create
+3. Say whether a run that evaluates once may reuse its outputs from an earlier run
+   (`BlockDef::cacheable`): `true` for a pure function of its params, text, inputs and the
+   variables it reads through `Context::variable` (text, format, conversions); `false` for a
+   block that reads keys or the clock, draws at random, or acts on anything else (key,
+   random_number, now). Unset, it follows `Block::stateless()` (the `Stateless` math blocks are
+   reused). The core keeps the results (`engine/core/include/paperboat/core/cache.hpp`).
+4. Add C++ tests in `engine/tests/`. If it is a new built-in package, create
    `src/<package>/toolkit.toml` with its `name`; the built-in registry and build discover it
    without edits to `registry.cpp` or the top-level toolkit source list.

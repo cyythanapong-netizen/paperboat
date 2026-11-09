@@ -80,6 +80,34 @@ ix::HttpResponsePtr http(const Backend& backend, const ix::HttpRequestPtr& reque
 
 }  // namespace
 
+int serve_files(const fs::path& dir, int port, const std::string& host) {
+  ix::initNetSystem();
+  std::error_code ec;
+  const fs::path root = fs::weakly_canonical(dir, ec);
+  ix::HttpServer server(port, host);
+  server.setOnConnectionCallback([&root](const ix::HttpRequestPtr& request, const std::shared_ptr<ix::ConnectionState>&) {
+    std::string path = decode(request->uri.substr(0, request->uri.find('?')));
+    std::error_code e;
+    fs::path file = fs::weakly_canonical(root / (path.size() > 1 ? path.substr(1) : "index.html"), e);
+    const auto inside = file.lexically_relative(root);
+    if (e || inside.empty() || *inside.begin() == "..") return respond(404, "text/plain", "not found\n");
+    if (!fs::is_regular_file(file)) file = root / "index.html";  // the app's own routes
+    std::ifstream in(file, std::ios::binary);
+    if (!in) return respond(404, "text/plain", "not found\n");
+    std::stringstream body;
+    body << in.rdbuf();
+    return respond(200, content_type(file), body.str());
+  });
+  if (auto [ok, error] = server.listen(); !ok) {
+    std::cerr << "error: cannot serve the web app on port " << port << ": " << error << '\n';
+    return 1;
+  }
+  server.start();
+  std::cout << "Paperboat web app on http://localhost:" << port << "/  (Ctrl+C stops it)" << std::endl;
+  server.wait();
+  return 0;
+}
+
 struct Server::State {
   State(const Backend& b, int p) : backend(b), port(p), server(p, "127.0.0.1") {}
   const Backend& backend;

@@ -26,10 +26,15 @@
 #include <sys/types.h>
 #include <unistd.h>
 #endif
+#ifdef __APPLE__
+#include <arpa/inet.h>  // ntohs
+#include <libproc.h>    // proc_listpids, proc_pidfdinfo
+#endif
 
 #include <nlohmann/json.hpp>
 #include <toml++/toml.hpp>
 
+#include "paperboat/core/backend.hpp"
 #include "paperboat/core/process.hpp"
 #include "paperboat/core/run.hpp"
 #include "paperboat/toolkit/descriptor.hpp"
@@ -202,6 +207,34 @@ int BackendManager::find_pid_by_port(int port) {
   for (DWORD i = 0; i < table->dwNumEntries; ++i)
     if (ntohs(static_cast<u_short>(table->table[i].dwLocalPort)) == port) return static_cast<int>(table->table[i].dwOwningPid);
   return 0;
+#elif defined(__APPLE__)
+  // no /proc on macOS: walk each process's file descriptors with libproc and find the TCP
+  // socket listening on `port`. Only processes of this user are readable, which is all the
+  // backends paperboat starts.
+  const int bytes = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
+  if (bytes <= 0) return 0;
+  std::vector<pid_t> pids(static_cast<std::size_t>(bytes) / sizeof(pid_t) + 64);
+  const int got = proc_listpids(PROC_ALL_PIDS, 0, pids.data(), static_cast<int>(pids.size() * sizeof(pid_t)));
+  if (got <= 0) return 0;
+  pids.resize(static_cast<std::size_t>(got) / sizeof(pid_t));
+  for (const pid_t pid : pids) {
+    if (pid <= 0) continue;
+    const int fd_bytes = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, nullptr, 0);
+    if (fd_bytes <= 0) continue;
+    std::vector<proc_fdinfo> fds(static_cast<std::size_t>(fd_bytes) / sizeof(proc_fdinfo));
+    const int fd_got = proc_pidinfo(pid, PROC_PIDLISTFDS, 0, fds.data(), static_cast<int>(fds.size() * sizeof(proc_fdinfo)));
+    if (fd_got <= 0) continue;
+    fds.resize(static_cast<std::size_t>(fd_got) / sizeof(proc_fdinfo));
+    for (const auto& fd : fds) {
+      if (fd.proc_fdtype != PROX_FDTYPE_SOCKET) continue;
+      socket_fdinfo si{};
+      if (proc_pidfdinfo(pid, fd.proc_fd, PROC_PIDFDSOCKETINFO, &si, sizeof(si)) != static_cast<int>(sizeof(si))) continue;
+      if (si.psi.soi_kind != SOCKINFO_TCP) continue;
+      const auto& tcp = si.psi.soi_proto.pri_tcp;
+      if (tcp.tcpsi_state == TSI_S_LISTEN && ntohs(static_cast<uint16_t>(tcp.tcpsi_ini.insi_lport)) == port) return pid;
+    }
+  }
+  return 0;
 #else
 
   // Search socket inode in /proc/net/tcp and /proc/net/tcp6
@@ -297,10 +330,12 @@ bool BackendManager::free_port(int port, int timeout_ms) {
     ProcessRunner::kill_pid(pid, SIGTERM, timeout_ms / 2);
   }
 
+#ifndef __APPLE__  // macOS fuser takes no port/tcp; find_pid_by_port already covers it there
   // Fallback to fuser -k
   if (is_port_listening(port)) {
     ProcessRunner::run_sync({"fuser", "-k", std::to_string(port) + "/tcp"});
   }
+#endif
 
   auto start = std::chrono::steady_clock::now();
   while (is_port_listening(port)) {
@@ -535,26 +570,84 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
   return true;
 }
 
+namespace {
+
+#ifdef _WIN32
+constexpr char kPathSep = ';';
+#else
+constexpr char kPathSep = ':';
+#endif
+
+// A virtualenv's interpreter in `dir`/.venv, or empty.
+fs::path venv_python(const fs::path& dir) {
+  if (dir.empty()) return {};
+#ifdef _WIN32
+  const fs::path py = dir / ".venv" / "Scripts" / "python.exe";
+#else
+  const fs::path py = dir / ".venv" / "bin" / "python3";
+#endif
+  std::error_code ec;
+  return fs::is_regular_file(py, ec) ? py : fs::path{};
+}
+
+// The interpreter to run when nothing names one: python3, or on Windows python when there is no
+// python3.exe on PATH (the python.org installer makes only python.exe and py.exe).
+std::string default_python() {
+#ifdef _WIN32
+  if (const char* path = std::getenv("PATH")) {
+    std::stringstream dirs(path);
+    std::error_code ec;
+    for (std::string dir; std::getline(dirs, dir, kPathSep);) {
+      if (!dir.empty() && fs::is_regular_file(fs::path(dir) / "python3.exe", ec)) return "python3";
+    }
+  }
+  return "python";
+#else
+  return "python3";
+#endif
+}
+
+}  // namespace
+
+fs::path BackendManager::python_package_dir(const fs::path& root) {
+  std::error_code ec;
+  if (!root.empty() && fs::is_regular_file(root / "python" / "paperboat" / "__init__.py", ec)) return root / "python";
+  if (const fs::path exe = platform::exe_path(); !exe.empty()) {
+    const fs::path dir = exe.parent_path().parent_path() / "lib" / "paperboat" / "python";
+    if (fs::is_regular_file(dir / "paperboat" / "__init__.py", ec)) return dir;
+  }
+  return {};
+}
+
 BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& repo_root,
                                                             const fs::path& backend_dir) {
   PythonEnv env;
   const fs::path root = repo_root.empty() ? toolkit::find_repo_root(backend_dir) : repo_root;
 
-  // 1. Resolve python binary: backend venv -> root venv -> system python3
-  if (!backend_dir.empty() && fs::is_regular_file(backend_dir / ".venv" / "bin" / "python3")) {
-    env.python_bin = backend_dir / ".venv" / "bin" / "python3";
-  } else if (!root.empty() && fs::is_regular_file(root / ".venv" / "bin" / "python3")) {
-    env.python_bin = root / ".venv" / "bin" / "python3";
+  // 1. The interpreter: the backend's venv, $PAPERBOAT_PYTHON, the checkout's venv, python3.
+  if (fs::path py = venv_python(backend_dir); !py.empty()) {
+    env.python_bin = py;
+  } else if (const char* named = std::getenv("PAPERBOAT_PYTHON"); named && *named) {
+    if (fs::path path(named); path.has_parent_path() && !fs::is_regular_file(path)) {
+      std::cerr << "warning: PAPERBOAT_PYTHON=" << named << " is not a file; using python3\n";
+      env.python_bin = default_python();
+    } else {
+      env.python_bin = named;
+    }
+  } else if (fs::path root_py = venv_python(root); !root_py.empty()) {
+    env.python_bin = root_py;
   } else {
-    env.python_bin = "python3";
+    env.python_bin = default_python();
   }
 
-  // 2. Set PYTHONPATH to root/python
-  if (!root.empty()) {
-    std::string pythonpath = (root / "python").string();
+  // 2. `import paperboat`: the checkout's python/, or the package's lib/paperboat/python (pb#223),
+  //    before whatever PYTHONPATH already has.
+  const fs::path py_dir = python_package_dir(root);
+  if (!py_dir.empty()) {
+    std::string pythonpath = py_dir.string();
     const char* cur = std::getenv("PYTHONPATH");
     if (cur && *cur) {
-      pythonpath += ":" + std::string(cur);
+      pythonpath += kPathSep + std::string(cur);
     }
     env.env.emplace_back("PYTHONPATH", pythonpath);
   }
@@ -563,8 +656,9 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
   env.env.emplace_back("NO_PROXY", "localhost,127.0.0.1");
   env.env.emplace_back("PYTHONUNBUFFERED", "1");  // log lines reach `paperboat run` as they are printed
 
-  // 3. Ensure C++ Python bindings (_engine*.so) are built
-  if (!root.empty() && fs::is_directory(root / "python")) {
+  // 3. A checkout builds its C++ Python bindings (_engine*.so / .pyd) in place when missing or stale.
+  //    A package ships them built.
+  if (!root.empty() && py_dir == root / "python" && fs::is_regular_file(root / "python" / "CMakeLists.txt")) {
     bool need_bindings_build = false;
     bool has_so = false;
     std::error_code ec;
@@ -575,7 +669,7 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
     if (fs::is_directory(pkg_dir)) {
       for (const auto& entry : fs::directory_iterator(pkg_dir, ec)) {
         auto fn = entry.path().filename().string();
-        if (fn.starts_with("_engine") && fn.ends_with(".so")) {
+        if (fn.starts_with("_engine") && (fn.ends_with(".so") || fn.ends_with(".pyd"))) {
           has_so = true;
           so_time = fs::last_write_time(entry.path(), ec);
           break;
@@ -598,7 +692,7 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
     if (need_bindings_build) {
       fs::path py_build = root / "python" / "build";
       ProcessRunner::run_sync({"cmake", "-S", (root / "python").string(), "-B", py_build.string()});
-      ProcessRunner::run_sync({"cmake", "--build", py_build.string()});
+      ProcessRunner::run_sync({"cmake", "--build", py_build.string(), "--config", "Release"});
     }
   }
 
@@ -1119,9 +1213,25 @@ std::vector<ExampleBackend> BackendManager::status_examples(const fs::path& exam
 
 bool BackendManager::start_app(int port, const std::string& host, bool daemon) {
   const fs::path root = toolkit::find_repo_root();
-  if (root.empty()) {
-    std::cerr << "error: repository root not found\n";
-    return false;
+  // An installed paperboat (.deb, .rpm, .tar.gz, .zip, npm) has no checkout to run `npm run dev`
+  // in: it serves the web app built into share/paperboat/web itself.
+  if (root.empty() || !fs::is_regular_file(root / "apps" / "web" / "package.json")) {
+    const fs::path exe = platform::exe_path();
+    fs::path web = root.empty() ? fs::path{} : root / "web";
+    if (!fs::is_regular_file(web / "index.html")) web = exe.parent_path().parent_path() / "share" / "paperboat" / "web";
+    if (!fs::is_regular_file(web / "index.html")) {
+      std::cerr << "error: no web app here: run it from a Paperboat checkout (npm install), or install a release package\n";
+      return false;
+    }
+    free_port(port, 2000);
+    if (daemon) {
+      const fs::path log_path = platform::shared_tmp_dir() / "paperboat-web.log";
+      const int pid = ProcessRunner::run_detached({exe.string(), "app", "start", "--port", std::to_string(port), "--host", host}, web, {}, log_path);
+      if (pid <= 0) return false;
+      std::cout << "Web app on http://localhost:" << port << "/ in the background (PID " << pid << ", log: " << log_path << ")\n";
+      return true;
+    }
+    return serve_files(web, port, host) == 0;
   }
 
   free_port(port, 2000);

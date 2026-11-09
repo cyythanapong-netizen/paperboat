@@ -5,6 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <cstring>
 #include <fcntl.h>
 #include <fstream>
 #include <poll.h>
@@ -13,6 +14,9 @@
 #include <sys/wait.h>
 #include <thread>
 #include <unistd.h>
+#ifdef __APPLE__
+#include <sys/sysctl.h>  // KERN_PROCARGS2
+#endif
 
 extern char** environ;
 
@@ -89,7 +93,14 @@ void process_buffer_lines(std::string& buffer, std::string_view stream_name, con
   for (const auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
   argv.push_back(nullptr);
 
+#ifdef __APPLE__
+  // macOS has no execvpe: we are the forked child, so swap in the new environment and let
+  // execvp search PATH
+  environ = envp.data();
+  execvp(argv[0], argv.data());
+#else
   execvpe(argv[0], argv.data(), envp.data());
+#endif
   _exit(127);
 }
 
@@ -374,6 +385,31 @@ bool ProcessRunner::kill_pgid(int pgid, int sig, int timeout_ms) {
 
 std::string ProcessRunner::read_cmdline(int pid) {
   if (pid <= 0) return {};
+#ifdef __APPLE__
+  // no /proc on macOS: KERN_PROCARGS2 gives argc, the exec path, padding NULs, then argv
+  int mib[3] = {CTL_KERN, KERN_PROCARGS2, pid};
+  int argmax_mib[2] = {CTL_KERN, KERN_ARGMAX};
+  int argmax = 0;
+  std::size_t len = sizeof(argmax);
+  if (sysctl(argmax_mib, 2, &argmax, &len, nullptr, 0) != 0 || argmax <= 0) return {};
+  std::string buf(static_cast<std::size_t>(argmax), '\0');
+  len = buf.size();
+  if (sysctl(mib, 3, buf.data(), &len, nullptr, 0) != 0 || len < sizeof(int)) return {};
+  int argc = 0;
+  std::memcpy(&argc, buf.data(), sizeof(argc));
+  std::size_t i = sizeof(argc);
+  while (i < len && buf[i] != '\0') ++i;  // the exec path
+  while (i < len && buf[i] == '\0') ++i;  // its padding
+  std::string cmd;
+  for (int n = 0; n < argc && i < len; ++n) {
+    const std::size_t end = buf.find('\0', i);
+    if (!cmd.empty()) cmd += ' ';
+    cmd.append(buf, i, (end == std::string::npos ? len : end) - i);
+    if (end == std::string::npos) break;
+    i = end + 1;
+  }
+  return cmd;
+#else
   std::ifstream f("/proc/" + std::to_string(pid) + "/cmdline");
   if (!f) return {};
   std::string cmd;
@@ -384,6 +420,7 @@ std::string ProcessRunner::read_cmdline(int pid) {
   }
   while (!cmd.empty() && cmd.back() == ' ') cmd.pop_back();
   return cmd;
+#endif
 }
 
 }  // namespace paperboat::core

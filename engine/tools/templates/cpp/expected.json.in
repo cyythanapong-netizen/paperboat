@@ -1,0 +1,5 @@
+{
+  "run": "build/@target@",
+  "status": "done",
+  "signals": { "result": [6, 1e-9] }
+}

@@ -138,8 +138,10 @@ initializers may leave any out.
     .. cpp:member:: std::string type = "signal"
 
        ``"signal"`` (a value), ``"step"`` (control, in a Step flow) or a shape: ``"image"``,
-       ``"points"``, ``"vector"``… A wire joins ports of one type. ``"numbers"`` remains a
-       compatible name for numeric vectors.
+       ``"points"``, ``"vector"``… A wire joins ports of one type. Lists (#24): ``"numbers"`` is a
+       list of numbers (any length; it joins ``"vector"`` ports, a vector being a list of fixed
+       length) and ``"points"`` a list of points (a ``Table``, one row per point). Make them with
+       :cpp:func:`numbers_port` and :cpp:func:`points_port`; see :ref:`pkg-list`.
 
     .. cpp:member:: std::string unit
 
@@ -147,7 +149,8 @@ initializers may leave any out.
 
     .. cpp:member:: std::optional<std::size_t> dimension
 
-       A vector's fixed length. Absent: dynamic length; component metadata also fixes it.
+       A vector's fixed length. Absent: dynamic length; component metadata also fixes it. On a
+       ``"points"`` port, the coordinates of each point (the list's own length is never declared).
 
     .. cpp:member:: std::vector<VectorComponent> components
 
@@ -177,6 +180,14 @@ initializers may leave any out.
    Make a ``"vector"`` port. For example,
    ``vector_port("state", {{"x", "m"}, {"angle", "rad"}})`` puts a mixed-unit state on one
    wire while retaining the names and units of its components.
+
+.. cpp:function:: PortDef numbers_port(std::string id, std::string unit = {})
+.. cpp:function:: PortDef points_port(std::string id, std::vector<VectorComponent> coordinates = {})
+
+   Make a list port (#24): ``"numbers"``, a list of numbers in one ``unit``, or ``"points"``, a
+   list of points; ``points_port("profile", {{"x", "m"}, {"z", "m"}})`` fixes each point's
+   coordinates and their units. A block gives a list of numbers as a ``Vector`` and a list of
+   points as a ``Table``.
 
 .. cpp:struct:: ParamDef
 
@@ -308,6 +319,18 @@ initializers may leave any out.
       generators, Integrator, Lag and PID are elementwise; Delay is not (it moves whole
       values). A block that needs the whole vector (a norm, a dot product) declares
       :cpp:func:`vector_port` ports instead.
+
+   .. cpp:member:: std::optional<bool> cacheable
+
+      Whether a run that evaluates once may reuse this block's outputs from an earlier run
+      (see :cpp:class:`RunCache`) instead of calling it, when nothing it depends on changed:
+      its type, params, text, the values on its wires and the variables it read through
+      :cpp:func:`Context::variable`. ``true``: it is a pure function of those (no clock, keys,
+      domain state, randomness, files other than its ``file`` params, or side effects): the
+      text, conversion, logic, If and Variable blocks. ``false``: it is always called
+      (Random Number, Key, Now). Unset: as its instance says, :cpp:func:`Block::stateless`
+      (Constant, Gain, Sum, Mux… are reused). Runs on a clock and Step flows never reuse
+      outputs.
 
 .. cpp:struct:: Form
 
@@ -476,7 +499,9 @@ What runs
 
    .. cpp:function:: const Value *variable(std::string_view name) const
 
-      A variable's value now, or null if there is none of that name.
+      A variable's value now, or null if there is none of that name. The run records the
+      read (``variable_read_fn``), so a run-once's cache knows which variables a block's
+      result depends on.
 
    .. cpp:function:: bool set_variable(std::string_view name, const Value &value) const
 
@@ -529,7 +554,9 @@ What runs
 
       True for a block whose outputs depend on its inputs and the clock alone. When
       ``set_param`` returns false the run then makes it again with the new params. A block
-      that is neither takes the change with the next run (the Console says so, once).
+      that is neither takes the change with the next run (the Console says so, once). Unless
+      its :cpp:member:`BlockDef::cacheable` says otherwise, a run-once may reuse a stateless
+      block's outputs from an earlier run.
 
 .. cpp:class:: Step
 
@@ -1056,7 +1083,30 @@ Serving
 .. cpp:function:: std::string run(const std::string &id, const json &graph, const json &station, const Backend &backend, const Emit &emit, const KeysNow &keys, const std::stop_token &stop)
 
    One run, without sockets: every event goes to ``emit``. Returns ``"done"``, ``"failed"``
-   or ``"cancelled"``. For tests (with ``real_time = false``).
+   or ``"cancelled"``. For tests (with ``real_time = false``). Its last parameters (optional)
+   are the run settings' overrides, the variables, where it looks for tuned variables, and a
+   :cpp:class:`RunCache`: a run that evaluates once reuses the outputs of blocks nothing
+   changed for since an earlier run with the same cache.
+
+.. cpp:class:: RunCache
+
+   ``<paperboat/core/cache.hpp>``. What runs that evaluate once keep between runs: each
+   block's last good result by node id, with what it was computed from (its type, ports,
+   params, text, lanes, the run's ``dt`` and solver, its ``file`` params' files; the values
+   on its wires; the variables it read). A later run reuses it only when all of these are
+   the same, comparing values exactly (numbers bit for bit, a handle by the object it holds).
+   Comparing values rather than the graph upstream invalidates exactly what a change
+   reaches: a station object changed reaches only the blocks its linked block feeds, and an
+   upstream change that gives the same values stops there. Only blocks that may be reused
+   (:cpp:member:`BlockDef::cacheable`) are kept; a block that set a variable, or was still
+   being computed when the run was cancelled, is not. A session keeps one per connection.
+   Thread-safe.
+
+   .. cpp:function:: std::size_t size() const
+
+   .. cpp:function:: bool contains(std::string_view node) const
+
+   .. cpp:function:: void clear()
 
 Run styles
 ----------
@@ -1103,6 +1153,14 @@ always.
    .. cpp:function:: json pass()
 
       Every signal block once, in order. Returns the monitors' samples, for ``frame``.
+
+   .. cpp:function:: json evaluate(const std::string &id)
+
+      One block of a run that evaluates once: its outputs from the run's
+      :cpp:class:`RunCache` when nothing it depends on changed (``node.state`` ``done`` with
+      no ``running`` before it; the logs it wrote are shown again), else called (``running``,
+      then ``done``) and, if it may be reused, kept for the next run. Returns its samples.
+      What the once executor calls for each block in order.
 
    .. cpp:function:: std::optional<std::string> advance()
 

@@ -1,0 +1,100 @@
+# The web app end to end: Vite in headless Chromium against a real engine backend
+# (engine/tests/sdk-backend). One workflow per check, so it has its own README badge.
+# @paperboat/shared is the sibling paperboat-shared repo, so both are checked out side by side.
+name: e2e
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: paperboat
+
+jobs:
+  # Connect, run the starter graph, see the results (apps/web/e2e).
+  # Only the console (the paperboat target) is built from the engine here; engine.yml builds and tests the rest.
+  e2e:
+    name: Web app end to end (Chromium, Linux)
+    runs-on: ubuntu-24.04
+    env:
+      CXX: g++-14
+      CC: gcc-14
+      CMAKE_GENERATOR: Ninja  # also for the backend, which `paperboat build` configures
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: paperboat
+      - uses: actions/checkout@v4
+        with:
+          repository: paperboatlab/paperboat-shared
+          path: paperboat-shared
+          token: ${{ secrets.DOWNSTREAM_TOKEN || github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build
+      - run: npm ci
+        working-directory: paperboat-shared
+      - run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build the console
+        run: cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Debug -DPAPERBOAT_BUILD_TESTS=OFF && cmake --build engine/build --target paperboat
+      - name: Build the sdk-backend
+        run: ./bin/paperboat build engine/tests/sdk-backend
+      - name: End-to-end tests
+        run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-linux
+          path: |
+            paperboat/apps/web/e2e/playwright-report/
+            paperboat/apps/web/e2e/test-results/
+          retention-days: 14
+
+  e2e-macos:
+    name: Web app end to end (Chromium, macOS arm64)
+    runs-on: macos-15  # Apple Silicon
+    env:
+      CMAKE_GENERATOR: Ninja
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: paperboat
+      - uses: actions/checkout@v4
+        with:
+          repository: paperboatlab/paperboat-shared
+          path: paperboat-shared
+          token: ${{ secrets.DOWNSTREAM_TOKEN || github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install build tools
+        run: brew list ninja >/dev/null 2>&1 || brew install ninja
+      - run: npm ci
+        working-directory: paperboat-shared
+      - run: npm ci
+      - name: Install Chromium
+        run: npx playwright install chromium
+      - name: Build the console
+        run: cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Debug -DPAPERBOAT_BUILD_TESTS=OFF && cmake --build engine/build --target paperboat
+      - name: Build the sdk-backend
+        run: ./bin/paperboat build engine/tests/sdk-backend
+      - name: End-to-end tests
+        run: npm run e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-macos
+          path: |
+            paperboat/apps/web/e2e/playwright-report/
+            paperboat/apps/web/e2e/test-results/
+          retention-days: 14

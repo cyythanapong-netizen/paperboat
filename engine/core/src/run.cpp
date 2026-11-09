@@ -8,7 +8,10 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
 #include <exception>
+#include <filesystem>
 #include <optional>
 #include <stdexcept>
 #include <thread>
@@ -60,6 +63,71 @@ json entities_json(const std::vector<toolkit::Entity>& list) {
   return out;
 }
 
+// A block a run-once took from the cache: it gives the outputs and draws what it did then.
+class Reused final : public toolkit::Block {
+ public:
+  explicit Reused(std::shared_ptr<const RunCache::Entry> entry) : entry_(std::move(entry)) {}
+  toolkit::Values step(const toolkit::Context&, const toolkit::Values&) override { return entry_->outputs; }
+  std::vector<toolkit::Entity> entities() const override { return entry_->entities; }
+  bool stateless() const override { return true; }
+
+ private:
+  std::shared_ptr<const RunCache::Entry> entry_;
+};
+
+// A value in a cache signature: exact (a number keeps every digit; inf and nan are named).
+json signature_value(const toolkit::Value& value) {
+  const auto number = [](double x) -> json {
+    if (std::isnan(x)) return "nan";
+    if (std::isinf(x)) return x > 0 ? "inf" : "-inf";
+    return x;
+  };
+  if (const double* x = std::get_if<double>(&value)) return number(*x);
+  if (const auto* v = std::get_if<toolkit::Vector>(&value)) {
+    json out = json::array();
+    for (double x : *v) out.push_back(number(x));
+    return out;
+  }
+  if (const auto* table = std::get_if<toolkit::Table>(&value)) {
+    json out = json::array();
+    for (const auto& row : *table) {
+      json r = json::array();
+      for (double x : row) r.push_back(number(x));
+      out.push_back(std::move(r));
+    }
+    return out;
+  }
+  if (const auto* text = std::get_if<std::string>(&value)) return json{{"text", *text}};
+  const auto& handle = std::get<toolkit::Handle>(value);
+  return json{{"handle", handle.kind}, {"at", reinterpret_cast<std::uintptr_t>(handle.data.get())}};
+}
+
+json ports_json(const std::vector<toolkit::PortDef>& ports) {
+  json out = json::array();
+  for (const auto& p : ports) {
+    json components = json::array();
+    for (const auto& c : p.components) components.push_back({c.id, c.unit});
+    out.push_back({p.id, p.type, p.unit, p.dimension ? json(*p.dimension) : json(), components, p.broadcast});
+  }
+// A list of points as a readout (#24): how many, and the first few. A signal sample carries a
+// number, text or a vector, not a table.
+std::string points_text(const toolkit::Table& points) {
+  const auto number = [](double v) {
+    char buf[32];
+    std::snprintf(buf, sizeof buf, "%.4g", v);
+    return std::string(buf);
+  };
+  std::string out = std::to_string(points.size()) + (points.size() == 1 ? " point" : " points");
+  constexpr std::size_t kShown = 4;
+  for (std::size_t i = 0; i < points.size() && i < kShown; ++i) {
+    out += i == 0 ? ": (" : ", (";
+    for (std::size_t c = 0; c < points[i].size(); ++c) out += (c ? ", " : "") + number(points[i][c]);
+    out += ")";
+  }
+  if (points.size() > kShown) out += ", …";
+  return out;
+}
+
 void validate_vector_outputs(const Node& node, const toolkit::Values& values) {
   for (const auto& port : node.def.outputs) {
     const auto value = values.find(port.id);
@@ -82,18 +150,20 @@ Calling::~Calling() {
 }
 
 Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit, KeysNow keys, std::stop_token stop,
-         VariablesNow tune)
+         VariablesNow tune, RunCache* cache)
     : id_(std::move(id)),
       backend_(backend),
       settings_(settings),
       emit_(std::move(emit)),
       keys_now_(std::move(keys)),
       tune_now_(std::move(tune)),
-      stop_(std::move(stop)) {
+      stop_(std::move(stop)),
+      cache_(cache) {
   ctx_.dt = settings_.dt;
   ctx_.keys_down = &keys_;
   ctx_.variables = &live_variables_;
   log_ = [this](std::string_view node, std::string_view level, std::string_view text) {
+    if (recording_ && node == recording_->node) recording_->logs.emplace_back(level, text);
     json msg = log_msg(std::string(level), std::string(text));
     if (!node.empty()) msg["node"] = node;
     emit_(msg);
@@ -109,8 +179,16 @@ Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit
     emit_({{"type", "node.progress"}, {"node", node}, {"fraction", fraction}});
   };
   ctx_.progress_fn = &progress_;
-  set_variable_ = [this](std::string_view name, const toolkit::Value& value) { return set_variable(name, value); };
+  set_variable_ = [this](std::string_view name, const toolkit::Value& value) {
+    if (recording_) recording_->set_variable = true;
+    return set_variable(name, value);
+  };
   ctx_.set_variable_fn = &set_variable_;
+  variable_read_ = [this](std::string_view name, const toolkit::Value* value) {
+    if (recording_ && ctx_.node == recording_->node)
+      recording_->variables.try_emplace(std::string(name), value ? std::optional(*value) : std::nullopt);
+  };
+  ctx_.variable_read_fn = &variable_read_;
 }
 
 std::string Run::go(const json& graph_given, const json& station_given, const json& variables) {
@@ -196,6 +274,11 @@ void Run::fail(const std::string& node, const std::string& text) {
 }
 
 std::string Run::finish(const std::string& status) {
+  if (status == "done" && cache_ && evaluated_) {  // what the graph no longer has needn't be kept
+    std::set<std::string, std::less<>> ids;
+    for (const auto& [id, node] : g_.nodes) ids.insert(id);
+    cache_->keep_only(ids);
+  }
   if (status == "done") {
     if (state_)
       if (auto summary = state_->summary()) emit_(log_msg("info", *summary));
@@ -405,6 +488,19 @@ json Run::pass_over(const std::vector<std::string>& order) {
         for (std::size_t i = 0; i < vector->size(); ++i)
           samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", i}, {"v", (*vector)[i]}});
       }
+    } else if (const auto* points = toolkit::get_if<toolkit::Table>(shown, "in")) {
+      if (!node.def.whole_vector && settings_.mode == RunSettings::Mode::Once) {
+        // A Graph in a run-once plots a list of points as a curve: the second coordinate over
+        // the first (a point of one coordinate over its index).
+        for (std::size_t i = 0; i < points->size(); ++i) {
+          const auto& p = (*points)[i];
+          const bool xy = p.size() >= 2;
+          samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", xy ? p[0] : static_cast<double>(i)},
+                             {"v", xy ? p[1] : p.empty() ? 0.0 : p[0]}});
+        }
+      } else {
+        samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", points_text(*points)}});
+      }
     } else {
       samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", toolkit::get_or(shown, "in")}});
     }
@@ -476,6 +572,92 @@ json Run::pass_over(const std::vector<std::string>& order) {
     const auto call = calling(id);
     node.block->step(ctx_, inputs_of(node));
   }
+  return samples;
+}
+
+std::optional<std::string> Run::cache_signature(const Node& node) const {
+  if (!cache_ || !node.block || node.object || node.commented || !node.def.feedthrough) return std::nullopt;
+  if (!node.def.cacheable.value_or(node.block->stateless())) return std::nullopt;
+  json params = json::object();
+  for (const auto& [k, v] : node.params) params[k] = signature_value(v);
+  json files = json::object();  // a file param's file may change between runs: its time and size
+  for (const auto& p : node.def.params) {
+    if (p.type != "file") continue;
+    const auto text = node.text.find(p.id);
+    if (text == node.text.end() || text->second.empty()) continue;
+    std::filesystem::path path(text->second);
+    if (path.is_relative()) path = backend_.catalog->dir / path;
+    std::error_code ec;
+    const auto time = std::filesystem::last_write_time(path, ec);
+    const auto size = ec ? 0 : std::filesystem::file_size(path, ec);
+    const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(time.time_since_epoch()).count();
+    files[p.id] = ec ? json("missing") : json{static_cast<std::int64_t>(ns), static_cast<std::uint64_t>(size)};
+  }
+  const auto& o = settings_.solver_options;
+  const json signature = {
+      {"catalog", reinterpret_cast<std::uintptr_t>(backend_.catalog)},
+      {"type", node.def.type},
+      {"template", node.entry && node.entry->from ? node.entry->from->name : ""},
+      {"inputs", ports_json(node.def.inputs)},
+      {"outputs", ports_json(node.def.outputs)},
+      {"params", params},
+      {"text", node.text},
+      {"files", files},
+      {"lanes", node.lanes ? json(*node.lanes) : json()},
+      {"t", signature_value(ctx_.t)},
+      {"dt", signature_value(ctx_.dt)},
+      {"solver", {settings_.solver, signature_value(o.rtol), signature_value(o.atol), signature_value(o.min_step),
+                  signature_value(o.max_step), o.max_steps, o.sub_steps}},
+  };
+  return signature.dump();
+}
+
+json Run::evaluate(const std::string& id) {
+  evaluated_ = true;
+  auto& node = g_.nodes.at(id);
+  std::optional<std::string> signature;
+  toolkit::Values inputs;
+  std::shared_ptr<const RunCache::Entry> hit;
+  {
+    const auto call = calling(id);
+    signature = cache_signature(node);
+    if (signature) {
+      inputs = inputs_of(node);
+      hit = cache_->find(id, *signature, inputs, live_variables_);
+    }
+  }
+  if (hit) {  // what it gave last time, through the pass like any block (its instrument shows it)
+    node.block = std::make_unique<Reused>(hit);
+    // Done, with no running before it: the protocol's NodeState has no "cached" yet (adding it
+    // means changing the shared TypeScript types, @paperboat/shared, in step with the schema).
+    node_state(id, "done");
+    for (const auto& [level, text] : hit->logs) log_(id, level, text);
+    ++reused_;
+    return pass_over({id});
+  }
+  node_state(id, "running");
+  if (signature) recording_ = Recording{.node = id, .variables = {}, .logs = {}, .set_variable = false};
+  json samples;
+  try {
+    samples = pass_over({id});
+  } catch (...) {
+    recording_.reset();  // a block that failed keeps what it had (a result for other inputs)
+    throw;
+  }
+  const auto recorded = std::exchange(recording_, std::nullopt);
+  // Kept unless it did more than give outputs (set a variable), or the run was cancelled before
+  // it was done: a block cut short may have given less than its result.
+  if (recorded && recorded->set_variable) {
+    cache_->erase(id);
+  } else if (recorded && !stop_.stop_requested()) {
+    cache_->store(id, {.signature = std::move(*signature),
+                       .inputs = std::move(inputs),
+                       .variables = recorded->variables,
+                       .outputs = outputs_[id],
+                       .entities = node.block->entities(),
+                       .logs = recorded->logs});
+  }
+  node_state(id, "done");
   return samples;
 }
 
@@ -617,7 +799,7 @@ json settings_json(const RunSettings& s) {
 
 std::string run(const std::string& id, const json& graph, const json& station, const Backend& backend,
                 const Emit& emit, const KeysNow& keys, const std::stop_token& stop, const json& settings,
-                const json& variables, const VariablesNow& tune) {
+                const json& variables, const VariablesNow& tune, RunCache* cache) {
   RunSettings s;
   try {
     s = with_overrides(backend.run, settings);
@@ -628,7 +810,7 @@ std::string run(const std::string& id, const json& graph, const json& station, c
     return "failed";
   }
   toolkit::solve::set_defaults({s.solver, s.solver_options});  // this thread's "auto" solvers
-  return Run(id, backend, s, emit, keys, stop, tune).go(graph, station, variables);
+  return Run(id, backend, s, emit, keys, stop, tune, cache).go(graph, station, variables);
 }
 
 }  // namespace paperboat::core

@@ -162,7 +162,13 @@
       "enum": [
         "ink",
         "muted",
-        "signal"
+        "signal",
+        "electrical",
+        "translational",
+        "thermal",
+        "fluid",
+        "magnetic",
+        "rotational"
       ],
       "description": "ink = --text, muted = --line-strong, signal = --signal (live state only)."
     },
@@ -177,7 +183,10 @@
     "Dash": {
       "enum": [
         "solid",
-        "axis"
+        "axis",
+        "dash",
+        "dot",
+        "dashdot"
       ],
       "description": "Never red: dashed red means missing only."
     },
@@ -186,7 +195,13 @@
         "none",
         "ink",
         "raised",
-        "sunken"
+        "sunken",
+        "electrical",
+        "translational",
+        "thermal",
+        "fluid",
+        "magnetic",
+        "rotational"
       ],
       "description": "none, --text, --surface-raised or --surface-sunken."
     },
@@ -592,6 +607,10 @@
             "dashed"
           ],
           "description": "Thermal wires are dashed grey, not red."
+        },
+        "color": {
+          "type": "string",
+          "description": "The connector's own fill, when a user-defined class gives one (#43)."
         },
         "potential": {
           "type": "array",

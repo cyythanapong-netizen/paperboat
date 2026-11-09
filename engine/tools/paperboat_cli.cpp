@@ -1,6 +1,11 @@
 // The Paperboat unified CLI: build and start backends, list running backends,
 // manage the web application, orchestrate examples, and install/browse toolkits.
 
+#ifdef _WIN32
+#include <process.h>  // _spawnvp
+#else
+#include <unistd.h>  // execvp
+#endif
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -26,6 +31,7 @@
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
 #endif
+#include "paperboat_new.hpp"
 #include "paperboat_tui.hpp"
 
 namespace {
@@ -78,8 +84,11 @@ Start and stop (the web app, backends and programs):
   run [path | pkg.ppk]       Start a backend (the same options as start)
 
 Backends:
+  new <name> [--cpp | --python] [--dir <path>]
+                             Scaffold a new backend in ./<name> (or --dir) that passes `check` as it is:
+                             a block, a starter graph and its expected.json. C++ by default.
   backends [--json]          List the backends you can run (examples, installed)
-  build [path] [--clean]     Compile a C++ backend
+  build [path] [--clean]     Compile a C++ backend (a Python one has nothing to compile)
   rebuild [path]             Clean and compile a C++ backend (build --clean)
   open <file.ppj> [--run] [--port <N>] [--no-build]
                              Open a saved project file with its backend (--run: headless)
@@ -120,10 +129,13 @@ Updating:
 
 Packages (apps from other repositories, see apps.toml):
   pkg list [--json]          The programs and libraries, installed or not (KIND column)
-  pkg install <name>[@<V>]   Clone a release (default: newest, else main) and build it
-  pkg update <name|--all>    Install the newest release of an installed app
+  pkg install <name>[@<V>]   Clone a release (default: newest, else main) and build it. Deps resolve
+                             in their apps.toml range (paperboat-shared@0.1); one installed outside it
+                             fails the install, or with --force is reinstalled in range
+  pkg update <name|--all>    Install the newest release of an installed app (not a prerelease); a dep
+                             stays in the range of the apps that need it
   pkg uninstall <name>       Remove an app
-  pkg versions <name>        Release versions on GitHub, newest first
+  pkg versions <name>        Release versions on GitHub, prereleases too, newest first
   pkg path <name>            The installed app's output folder
 
 Console:
@@ -277,7 +289,12 @@ int cmd_build(const std::vector<std::string_view>& args) {
     else if (!a.starts_with("-") && path.empty()) path = std::string(a);
   }
   const fs::path dir = core::BackendManager::resolve_backend_dir(path);
-  if (core::BackendManager::detect_backend_kind(dir) != core::BackendKind::Cpp) {
+  const auto kind = core::BackendManager::detect_backend_kind(dir);
+  if (kind == core::BackendKind::Python) {  // the same steps for both: build, check, run
+    std::cout << "[ok] " << dir.filename().string() << " is a Python backend: nothing to compile\n";
+    return 0;
+  }
+  if (kind != core::BackendKind::Cpp) {
     std::cerr << "error: not a C++ backend: " << (path.empty() ? dir.string() : path) << '\n';
     return 2;
   }
@@ -835,17 +852,19 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
 // `toolkit`, but into a per-user store, and what's built is an app, not a toolkit of this engine.
 int cmd_pkg(const std::vector<std::string_view>& args) {
   if (args.empty()) {
-    std::cerr << "usage: paperboat pkg <list|install|update|uninstall|versions|path> [name[@version]] [--version V] [--all] [--json]\n";
+    std::cerr << "usage: paperboat pkg <list|install|update|uninstall|versions|path> [name[@version]] [--version V] [--all] [--force] [--json]\n";
     return 2;
   }
   const auto sub = args[0];
   bool json_out = false;
   bool all = false;
+  bool force = false;
   std::string name;
   std::string version;
   for (std::size_t i = 1; i < args.size(); ++i) {
     if (args[i] == "--json") json_out = true;
     else if (args[i] == "--all") all = true;
+    else if (args[i] == "--force") force = true;
     else if ((args[i] == "--version" || args[i] == "-v") && i + 1 < args.size()) version = std::string(args[++i]);
     else if (!args[i].starts_with("-") && name.empty()) name = std::string(args[i]);
   }
@@ -858,18 +877,39 @@ int cmd_pkg(const std::vector<std::string_view>& args) {
     const auto list = tk::list_apps();
     if (json_out) {
       json arr = json::array();
-      for (const auto& a : list)
+      for (const auto& a : list) {
+        json deps = json::array(), ranges = json::object();
+        for (const auto& d : a.deps) {
+          deps.push_back(d.name);
+          if (!d.range.empty()) ranges[d.name] = d.range;
+        }
         arr.push_back({{"name", a.name}, {"repo", a.repo}, {"description", a.description},
-                       {"installed", a.installed}, {"version", a.version}, {"deps", a.deps}, {"kind", a.kind},
-                       {"launch", a.launch}, {"port", a.port}});
+                       {"installed", a.installed}, {"version", a.version}, {"deps", deps}, {"dep_ranges", ranges},
+                       {"built_with", a.built_with}, {"kind", a.kind}, {"launch", a.launch}, {"port", a.port}});
+      }
       std::cout << arr.dump(2) << '\n';
       return 0;
     }
     if (list.empty()) std::cerr << "no apps (apps.toml not found in the repository root)\n";
     std::cout << std::left << std::setw(20) << "NAME" << std::setw(9) << "KIND" << std::setw(15) << "VERSION" << "DESCRIPTION\n";
-    for (const auto& a : list)
+    for (const auto& a : list) {
       std::cout << std::left << std::setw(20) << a.name << std::setw(9) << a.kind << std::setw(15)
                 << (a.installed ? a.version : "not installed") << a.description << '\n';
+      if (!a.installed) continue;
+      for (const auto& d : a.deps) {  // what it was built against, and whether the dep installed now still pairs
+        const auto it = std::ranges::find(list, d.name, &tk::AppEntry::name);
+        const std::string now = it != list.end() && it->installed ? it->version : "";
+        const std::string built = a.built_with.contains(d.name) ? a.built_with.at(d.name) : "";
+        std::string line = "with " + d.name + " " + (built.empty() ? "?" : built);
+        if (!d.range.empty()) line += " (needs " + d.range + ")";
+        if (now.empty()) line += "; it is not installed now";
+        else if (now != built) line += "; " + now + " is installed now";
+        if (!now.empty() && !tk::dep_satisfied(now, d, a.version))
+          line += ", outside the range: paperboat pkg install " + a.name + (a.version == "dev" ? "" : "@" + a.version) +
+                  " --force";
+        std::cout << std::string(44, ' ') << line << '\n';
+      }
+    }
     return 0;
   }
   if (sub == "update" && all) {
@@ -878,7 +918,7 @@ int cmd_pkg(const std::vector<std::string_view>& args) {
       if (!a.installed) continue;
       const auto r = tk::install_app(a.name, {}, {}, [](std::string_view l, std::string_view t) {
         (l == "error" ? std::cerr : std::cout) << "[" << l << "] " << t << '\n';
-      });
+      }, force);
       if (!r.ok) std::cerr << "paperboat pkg: " << r.message << '\n';
       failed += !r.ok;
     }
@@ -889,7 +929,7 @@ int cmd_pkg(const std::vector<std::string_view>& args) {
     return 2;
   }
   if (sub == "versions") {
-    const auto versions = tk::list_app_versions(name);
+    const auto versions = tk::list_app_versions(name, {}, true);
     for (const auto& v : versions) std::cout << v << '\n';
     if (versions.empty()) std::cerr << "no release tags for \"" << name << "\"; install takes main (\"dev\")\n";
     return 0;
@@ -907,7 +947,7 @@ int cmd_pkg(const std::vector<std::string_view>& args) {
     (level == "error" ? std::cerr : std::cout) << "[" << level << "] " << text << '\n';
   };
   tk::ToolkitResult res;
-  if (sub == "install" || sub == "add" || sub == "update") res = tk::install_app(name, version, {}, log);
+  if (sub == "install" || sub == "add" || sub == "update") res = tk::install_app(name, version, {}, log, force);
   else if (sub == "uninstall" || sub == "remove") res = tk::uninstall_app(name, {}, log);
   else {
     std::cerr << "error: unknown pkg subcommand: " << sub << '\n';
@@ -1274,6 +1314,8 @@ const std::vector<CommandSpec>& command_table() {
        {"--port", "--no-build", "--clean", "--time", "--verbose", "--var"}, "backend"},
       {"open", cmd_open, "Open a saved project file (.ppj, .paperboat.json)", {}, {},
        {"--run", "--port", "--no-build"}, "project"},
+      {"new", paperboat::cli::cmd_new, "Scaffold a new backend that passes check (C++ or Python)", {}, {},
+       {"--cpp", "--python", "--dir"}},
       {"build", cmd_build, "Compile a C++ backend", {}, {}, {"--clean"}, "backend"},
       {"rebuild", cmd_rebuild, "Clean and compile a C++ backend", {}, {}, {}, "backend"},
       {"backends", cmd_backends, "List the backends you can run", {}, {}, {"--json"}},
@@ -1289,7 +1331,7 @@ const std::vector<CommandSpec>& command_table() {
       {"unpack", cmd_unpack, "Unpack and verify a .ppk", {}, {}, {"--dir", "--json-stream"}, "ppk"},
       {"update", cmd_update, "Pull this repository and its app checkouts, rebuild", {}, {}, {"--check", "--no-build"}},
       {"pkg", cmd_pkg, "Apps from other repositories (package manager)", {},
-       {"list", "install", "update", "uninstall", "versions", "path"}, {"--json", "--all", "--version"}},
+       {"list", "install", "update", "uninstall", "versions", "path"}, {"--json", "--all", "--version", "--force"}},
       {"top", cmd_top, "Process dashboard (console)"},
       {"commands", cmd_commands, "The command table", {}, {}, {"--json"}},
   };
@@ -1328,13 +1370,11 @@ int cmd_top(const std::vector<std::string_view>&) {
   return 2;
 }
 
-// The console (apps/cli, Ink) replaces this process on a terminal. Returns only when it
-// can't: not a terminal, PAPERBOAT_NO_CONSOLE set, not built, or no `node` on PATH.
+// The console (apps/cli, Ink) takes over on a terminal: it replaces this process (POSIX) or
+// runs as its child, this one exiting with its code (Windows). Returns only when it can't: not
+// a terminal, PAPERBOAT_NO_CONSOLE set, not built, or no `node` on PATH. It is the checkout's
+// apps/cli/dist/main.js, else the bundle a release installs at share/paperboat/cli/main.js.
 bool launch_console(const std::vector<std::string>& args) {
-#ifdef _WIN32
-  (void)args;
-  return false;  // the console replaces this process with node (execvp); on Windows the basic prompt is used
-#else
   if (!platform::is_tty(0) || !platform::is_tty(1) || std::getenv("PAPERBOAT_NO_CONSOLE")) return false;
   std::error_code ec;
   const fs::path exe = platform::exe_path();
@@ -1352,12 +1392,26 @@ bool launch_console(const std::vector<std::string>& args) {
       }
       break;
     }
+    if (script.empty()) script = exe.parent_path().parent_path() / "share" / "paperboat" / "cli" / "main.js";
   }
-  if (script.empty() || !fs::is_regular_file(script)) return false;
+  if (!fs::is_regular_file(script)) return false;
 
-  setenv("PAPERBOAT_BIN", exe.c_str(), 1);
   std::vector<std::string> owned = {"node", script.string()};
   owned.insert(owned.end(), args.begin(), args.end());
+#ifdef _WIN32
+  _putenv_s("PAPERBOAT_BIN", exe.string().c_str());
+  // no exec on Windows: node runs in this console as a child, and its exit code is ours
+  std::vector<const char*> argv;
+  for (auto& a : owned) argv.push_back(a.c_str());
+  argv.push_back(nullptr);
+  const intptr_t code = _spawnvp(_P_WAIT, "node", argv.data());
+  if (code == -1) {
+    std::cerr << "note: `node` not found on PATH; using the basic prompt\n";
+    return false;
+  }
+  std::exit(static_cast<int>(code));
+#else
+  setenv("PAPERBOAT_BIN", exe.c_str(), 1);
   std::vector<char*> argv;
   for (auto& a : owned) argv.push_back(a.data());
   argv.push_back(nullptr);

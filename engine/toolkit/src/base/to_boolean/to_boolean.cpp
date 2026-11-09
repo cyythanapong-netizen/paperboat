@@ -57,6 +57,7 @@ void add_to_boolean(Registry& registry) {
   to_bool.def.description = "Truthiness coercion: non-zero numbers and non-empty values become 1, else 0.";
   to_bool.def.view = {.compact = true, .glyph = "?0/1"};
   to_bool.make = [](const Values&, const Config&) { return std::make_unique<ToBoolean>(); };
+  to_bool.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(to_bool));
 }
 

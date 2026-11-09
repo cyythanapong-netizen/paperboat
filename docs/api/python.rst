@@ -10,8 +10,15 @@ are what the engine calls**. The classes a backend passes become the domain's pa
 (named after the descriptor's ``domain``), so the palette has them without the descriptor
 listing them.
 
-Install: ``pip install ./python`` (or ``npm run build:python`` and ``PYTHONPATH=python`` while
-developing). Never implement a framework feature here: add it to the engine and bind it.
+Install: nothing to do with a paperboat package (.deb, .rpm, .tar.gz, .zip, npm): it ships the
+module in ``lib/paperboat/python`` and ``paperboat run`` / ``check`` put it on ``PYTHONPATH`` for
+the backend process. To ``import paperboat`` in a process the CLI did not start (an IDE, a
+service), install the wheel instead. It is
+built for CPython 3.11 and, through the stable ABI (abi3), for every CPython from 3.12 on; the
+interpreter is the backend's ``.venv``, else ``$PAPERBOAT_PYTHON``, else ``python3``. Elsewhere:
+``pip install`` a release wheel, or ``pip install ./python`` (or ``npm run build:python`` and
+``PYTHONPATH=python`` while developing). Never implement a framework feature here: add it to the
+engine and bind it.
 
 API Quick Reference
 -------------------
@@ -173,6 +180,15 @@ Blocks
       element (and every number input whole), and gathers each output into a vector of N;
       ``step`` still sees floats. With only numbers in, nothing changes. A block that needs
       the whole vector declares :py:func:`vector_port` ports instead and gets a list.
+
+   .. py:attribute:: cacheable
+      :type: bool | None
+
+      ``True`` for a block whose outputs depend on nothing but its params, its inputs and the
+      variables it reads through ``ctx.variable()`` (no clock, keys, ``ctx.state``,
+      randomness, files or side effects). A backend with ``mode="once"`` then reuses its
+      outputs from the last run while none of those changed. Default ``None``: called every
+      run.
 
    .. py:attribute:: feedthrough
       :type: bool

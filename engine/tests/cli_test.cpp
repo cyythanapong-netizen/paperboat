@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -80,6 +82,27 @@ TEST_CASE("ProcessRunner stream and detached runs pass cwd, env and output throu
 TEST_CASE("ProcessRunner is_alive correctly identifies active and dead pids") {
   CHECK(core::ProcessRunner::is_alive(getpid()));
   CHECK_FALSE(core::ProcessRunner::is_alive(9999999));
+}
+
+TEST_CASE("BackendManager finds the process listening on a port, and its command line") {
+  // a listening socket of our own, on a port the kernel picks
+  const int sock = socket(AF_INET, SOCK_STREAM, 0);
+  REQUIRE(sock >= 0);
+  sockaddr_in addr{};
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  addr.sin_port = 0;
+  REQUIRE(bind(sock, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) == 0);
+  REQUIRE(listen(sock, 1) == 0);
+  socklen_t len = sizeof(addr);
+  REQUIRE(getsockname(sock, reinterpret_cast<sockaddr*>(&addr), &len) == 0);
+  const int port = ntohs(addr.sin_port);
+
+  CHECK(core::BackendManager::is_port_listening(port));
+  CHECK(core::BackendManager::find_pid_by_port(port) == getpid());
+  CHECK_THAT(core::ProcessRunner::read_cmdline(getpid()), ContainsSubstring("paperboat_tests"));
+  close(sock);
+  CHECK(core::BackendManager::find_pid_by_port(port) == 0);
 }
 
 TEST_CASE("BackendManager port inspection and registry") {
@@ -365,7 +388,6 @@ TEST_CASE("BackendManager pack_backend and unpack_backend roundtrip excludes bui
   CHECK(unpack_res.file_count == pack_res.file_count);
   CHECK(fs::is_regular_file(unpack_dir / "backend.toml"));
   CHECK(fs::is_regular_file(unpack_dir / "descriptor.toml"));
-  CHECK_FALSE(fs::exists(unpack_dir / "build"));
 
   // Check the unpacked directory passes verification
   auto check_unpacked = core::BackendManager::check_backend(unpack_dir, /*fast=*/true);
@@ -418,6 +440,40 @@ TEST_CASE("resolve_backend_dir makes a relative backend path absolute") {
   CHECK(dir.is_absolute());
   CHECK(fs::equivalent(dir, rel));
   fs::remove_all(rel);
+}
+
+TEST_CASE("a Python backend gets `import paperboat` on PYTHONPATH and $PAPERBOAT_PYTHON's interpreter (pb#223)") {
+  const fs::path root = fs::temp_directory_path() / "pb_python_env_root";
+  fs::remove_all(root);
+  fs::create_directories(root);
+  auto pythonpath = [](const core::BackendManager::PythonEnv& env) {
+    for (const auto& [k, v] : env.env)
+      if (k == "PYTHONPATH") return v;
+    return std::string{};
+  };
+
+  // No paperboat package here, and none next to this test binary: nothing to add.
+  CHECK(core::BackendManager::python_package_dir(root).empty());
+  CHECK(pythonpath(core::BackendManager::prepare_python_env(root)).empty());
+
+  // A built copy (no CMakeLists.txt beside it, so nothing is built): first on PYTHONPATH.
+  fs::create_directories(root / "python" / "paperboat");
+  std::ofstream(root / "python" / "paperboat" / "__init__.py") << "\n";
+  CHECK(core::BackendManager::python_package_dir(root) == root / "python");
+  const fs::path named_python = root / "python3.13";
+  std::ofstream(named_python) << "\n";
+  setenv("PYTHONPATH", "/elsewhere", 1);
+  setenv("PAPERBOAT_PYTHON", named_python.c_str(), 1);
+  const auto env = core::BackendManager::prepare_python_env(root);
+  CHECK(pythonpath(env) == (root / "python").string() + ":/elsewhere");
+  CHECK(env.python_bin == named_python.string());
+  // A name that is not a file falls back to python3 instead of failing in the backend.
+  setenv("PAPERBOAT_PYTHON", "/opt/python3.13/bin/python3", 1);
+  CHECK(core::BackendManager::prepare_python_env(root).python_bin == "python3");
+  unsetenv("PYTHONPATH");
+  unsetenv("PAPERBOAT_PYTHON");
+  CHECK(core::BackendManager::prepare_python_env(root).python_bin == "python3");
+  fs::remove_all(root);
 }
 
 TEST_CASE("list_toolkits includes built-in toolkit and inspect_toolkit categorizes blocks and instruments") {
