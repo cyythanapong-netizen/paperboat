@@ -219,6 +219,7 @@ Top-level `connectors` in `catalog` defines the physical/causal domain connector
 - `size`: handle dimension (8, 10, or 12 px; hit area is always 40px `wireSnap` radius).
 - `weight`: wire line thickness (1.2, 1.8, or 2.0 px).
 - `dash`: optional wire dash (`"solid"` | `"dashed"` for thermal grey wires).
+- `color`: optional fill for the connector's ports, from a user-defined class (#43).
 - `potential`, `flow`, `stream`: optional quantities list (`[{ id, unit }]`).
 
 Built-in class table:
