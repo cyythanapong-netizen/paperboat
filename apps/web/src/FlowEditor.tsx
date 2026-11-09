@@ -26,6 +26,7 @@ import { WireEdge } from "./WireEdge";
 import { LevelCrumbs } from "./LevelCrumbs";
 import { SelectionDialog } from "./SelectionDialog";
 import { DropHint } from "./DropHint";
+import { usePortDirections } from "./usePortDirections";
 
 const nodeTypes = { block: Block, frame: GroupBox, boundary: Boundary };
 const edgeTypes = { wire: WireEdge };
@@ -129,6 +130,7 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
   const { wireDrag, handlers } = useWireDrag(rules, setEdges, store, screenToFlowPosition);
   const iconWires = useMemo(() => iconWireCounts(nodes, edges), [nodes, edges]);
   const wrap = useRef<HTMLDivElement>(null);
+  usePortDirections(wrap);
   const addable = useMemo<Item[]>(() => blocks.filter((b) => !b.linked).map((def) => ({ kind: "block", def })), [blocks]);
   const [quick, setQuick] = useState<{ x: number; y: number } | null>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null); // over the canvas, else null
