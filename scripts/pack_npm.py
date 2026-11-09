@@ -3,7 +3,7 @@
 
     cmake --install engine/build --prefix dist/root
     python3 scripts/pack_npm.py --version 0.1.0 --out dist/npm --target linux-x64 \\
-        --prefix dist/root                             # @paperboatlabs/cli-linux-x64 (binary + SDK)
+        --prefix dist/root                             # @paperboatlabs/cli-linux-x64 (binary + SDK; or darwin-arm64)
     python3 scripts/pack_npm.py --version 0.1.0 --out dist/npm --main     # @paperboatlabs/cli
 
 Each runs `npm pack`, leaving a .tgz in --out. Publish the platform packages first, the launcher last
@@ -26,6 +26,7 @@ REPO = "git+https://github.com/paperboatlab/paperboat.git"
 # target -> (npm os, npm cpu, libc, binary name)
 TARGETS = {
     "linux-x64": ("linux", "x64", "glibc", "paperboat"),
+    "darwin-arm64": ("darwin", "arm64", None, "paperboat"),
     "win32-x64": ("win32", "x64", None, "paperboat.exe"),
 }
 
