@@ -1,2 +1,4 @@
 # Clocked dynamic blocks.
 name = "control"
+# The flow types its blocks work in (#9): a Signal flow's clock.
+flows = ["signal"]

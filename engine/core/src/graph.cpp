@@ -124,6 +124,9 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
   Graph out;
   std::vector<std::string> ids;  // in graph order, so ties sort the same way every run
 
+  // The sheet's flow type (#9): each block must work in it.
+  if (auto mismatch = toolkit::flow_mismatch(graph, catalog)) throw GraphError(mismatch->node, mismatch->message);
+
   // Story groups first: which blocks belong to which story.
   std::map<std::string, double> story_seconds;
   std::map<std::string, bool> story_reset;

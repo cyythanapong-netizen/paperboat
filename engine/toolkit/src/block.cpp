@@ -282,6 +282,42 @@ bool has_step_ports(const BlockDef& def) {
   return std::ranges::any_of(def.inputs, step) || std::ranges::any_of(def.outputs, step);
 }
 
+const std::vector<std::string>& flow_types() {
+  static const std::vector<std::string> types{"signal", "step", "state", "model"};
+  return types;
+}
+
+bool is_flow_type(std::string_view flow) { return std::ranges::find(flow_types(), flow) != flow_types().end(); }
+
+std::string flow_label(std::string_view flow) {
+  std::string out(flow);
+  if (!out.empty()) out[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(out[0])));
+  return out + " flow";
+}
+
+std::string flows_label(const std::vector<std::string>& flows) {
+  if (flows.empty()) return "every flow type";
+  std::string out;
+  for (std::size_t i = 0; i < flows.size(); ++i)
+    out += (i == 0 ? "" : i + 1 == flows.size() ? " or " : ", ") + flow_label(flows[i]);
+  return out;
+}
+
+void check_flows(const std::vector<std::string>& flows, const std::string& at) {
+  if (flows.empty()) throw std::invalid_argument(at + ": flows is empty; leave it out for every flow type");
+  std::string known;
+  for (const auto& f : flow_types()) known += (known.empty() ? "" : ", ") + f;
+  for (std::size_t i = 0; i < flows.size(); ++i) {
+    if (!is_flow_type(flows[i])) throw std::invalid_argument(at + ": no flow type \"" + flows[i] + "\" (" + known + ")");
+    if (std::ranges::find(flows.begin(), flows.begin() + static_cast<std::ptrdiff_t>(i), flows[i]) != flows.begin() + static_cast<std::ptrdiff_t>(i))
+      throw std::invalid_argument(at + ": flow type \"" + flows[i] + "\" is listed twice");
+  }
+}
+
+bool works_in(const BlockDef& def, std::string_view flow) {
+  return def.flows.empty() || std::ranges::find(def.flows, flow) != def.flows.end();
+}
+
 namespace {
 std::string a_port(const std::string& type) {
   return std::string(std::string_view("aeiou").find(type.empty() ? 'x' : type[0]) != std::string_view::npos ? "an " : "a ") + type + " port";

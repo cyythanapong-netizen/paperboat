@@ -114,6 +114,20 @@ View view_from(const json& v, const std::string& at) {
   return out;
 }
 
+// `flows = ["signal", "step"]`: flow types (#9), checked.
+std::vector<std::string> flows_from(const json& v, const std::string& at) {
+  if (!v.is_array() || !std::ranges::all_of(v, [](const json& f) { return f.is_string(); }))
+    throw DescriptorError(at + ": flows is a list of flow types, such as [\"signal\", \"step\"]");
+  std::vector<std::string> flows;
+  for (const auto& f : v) flows.push_back(f.get<std::string>());
+  try {
+    check_flows(flows, at);
+  } catch (const std::invalid_argument& err) {
+    throw DescriptorError(err.what());
+  }
+  return flows;
+}
+
 // `units = { force = "N", kp = "N/rad" }`: the units of a block's ports and number params
 // (or a station object's props), by id. A wire between two ports with units must keep them.
 void apply_units(const json& e, std::vector<ParamDef>& params, BlockDef* block, const std::string& at, const std::string& name) {
@@ -141,7 +155,7 @@ void apply_units(const json& e, std::vector<ParamDef>& params, BlockDef* block, 
 }
 
 CatalogEntry from_template(const json& e, const std::string& at, const Registry& registry) {
-  only_fields(e, {"use", "type", "label", "description", "params", "defaults", "config", "view", "units"}, at);
+  only_fields(e, {"use", "type", "label", "description", "params", "defaults", "config", "view", "units", "flows"}, at);
   const auto name = e.at("use").get<std::string>();
   const Template* t = registry.find(name);
   if (!t) {
@@ -156,6 +170,8 @@ CatalogEntry from_template(const json& e, const std::string& at, const Registry&
   entry.def.description = e.value("description", t->def.description);
   // The look is inherited from the template; a `view` overrides single keys of it.
   if (e.contains("view")) entry.def.view = entry.def.view.overridden_by(view_from(e.at("view"), at + ".view"));
+  // The flow types it works in (#9): the template's (its package's default), or these.
+  if (e.contains("flows")) entry.def.flows = flows_from(e.at("flows"), at);
   // A definition on a parent (TOML inheriting C++): its own params come after the parent's.
   if (e.contains("params")) {
     if (!t->extendable) throw DescriptorError(at + ": " + name + " takes no new params (it isn't a parent for definitions)");
@@ -383,9 +399,16 @@ void load_variables(const json& doc, Catalog& catalog) {
 // catalog so a typo fails at load, not when the UI opens.
 void load_starters(const json& doc, Catalog& catalog) {
   json graph = doc.value("graph", json::object());
-  only_fields(graph, {"nodes", "edges", "groups"}, "graph");
+  only_fields(graph, {"flow", "nodes", "edges", "groups"}, "graph");
   const json groups = doc.value("graph", json::object()).value("groups", json::array());
+  const json flow = graph.value("flow", json());
   graph = {{"nodes", graph.value("nodes", json::array())}, {"edges", graph.value("edges", json::array())}};
+  // The sheet's flow type (#9), if the starter says.
+  if (!flow.is_null()) {
+    if (!flow.is_string() || !is_flow_type(flow.get<std::string>()))
+      throw DescriptorError("graph.flow must be a flow type: signal, step, state or model");
+    graph = {{"flow", flow}, {"nodes", graph["nodes"]}, {"edges", graph["edges"]}};
+  }
   std::set<std::string> ids;
   for (std::size_t i = 0; i < graph["nodes"].size(); ++i) {
     auto& n = graph["nodes"][i];
@@ -462,6 +485,7 @@ void load_starters(const json& doc, Catalog& catalog) {
     }
   }
   if (!groups.empty()) graph["groups"] = groups;
+  if (auto mismatch = flow_mismatch(nlohmann::json::parse(graph.dump()), catalog)) throw DescriptorError("graph: " + mismatch->message);
   catalog.graph = graph.dump();
 
   if (!doc.contains("station")) return;
@@ -587,7 +611,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
   } catch (const toml::parse_error& err) {
     throw DescriptorError("not valid TOML: " + at_line(err.source()) + ": " + std::string(err.description()));
   }
-  only_fields(doc, {"domain", "import", "toolkit", "toolkits", "blocks", "objects", "graph", "station", "dashboard", "variables", "connectors"}, "descriptor");
+  only_fields(doc, {"domain", "import", "toolkit", "toolkits", "blocks", "objects", "graph", "station", "dashboard", "variables", "connectors", "flows"}, "descriptor");
 
   Catalog catalog;
   catalog.domain = doc.value("domain", std::string{});
@@ -721,6 +745,17 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
   if (catalog.entries.empty() && catalog.objects.empty())
     throw DescriptorError("descriptor: the catalog is empty: import packages, use templates, or register the domain's "
                           "own under the package \"" + catalog.domain + "\"");
+  // The flow types a sheet may be (#9): the descriptor's, else a Signal flow and every one
+  // a block names.
+  if (doc.contains("flows")) {
+    catalog.flows = flows_from(doc.at("flows"), "descriptor");
+  } else {
+    for (const auto& flow : flow_types())
+      if (flow == "signal" || std::ranges::any_of(catalog.entries, [&](const CatalogEntry& e) {
+            return std::ranges::find(e.def.flows, flow) != e.def.flows.end();
+          }))
+        catalog.flows.push_back(flow);
+  }
   load_dashboard(doc, catalog);
   load_variables(doc, catalog);
   load_starters(doc, catalog);
@@ -778,6 +813,56 @@ Catalog load_descriptor_file(const std::filesystem::path& path, const Registry& 
   return catalog;
 }
 
+std::optional<FlowMismatch> flow_mismatch(const nlohmann::json& graph, const Catalog& catalog) {
+  if (!graph.is_object() || !graph.contains("flow")) return std::nullopt;
+  const auto& f = graph.at("flow");
+  if (!f.is_string() || !is_flow_type(f.get<std::string>()))
+    return FlowMismatch{"", "the sheet's flow type must be signal, step, state or model"};
+  const auto flow = f.get<std::string>();
+  if (std::ranges::find(catalog.flows, flow) == catalog.flows.end())
+    return FlowMismatch{"", "this sheet is a " + flow_label(flow) + ", which this backend doesn't offer (it offers a " +
+                                flows_label(catalog.flows) + ")"};
+  // The story a block is in, if any, through the groups around it (a subsystem in a story too).
+  std::map<std::string, std::string> group_of, parent_of, kind_of;
+  for (const auto& g : graph.value("groups", nlohmann::json::array())) {
+    if (!g.is_object() || !g.contains("id") || !g["id"].is_string()) continue;
+    const auto id = g["id"].get<std::string>();
+    kind_of[id] = g.value("kind", std::string{"visual"});
+    if (g.contains("parent") && g["parent"].is_string()) parent_of[id] = g["parent"].get<std::string>();
+    for (const auto& n : g.value("nodes", nlohmann::json::array()))
+      if (n.is_string()) group_of[n.get<std::string>()] = id;
+  }
+  const auto story_around = [&](const std::string& node) -> std::string {
+    auto it = group_of.find(node);
+    if (it == group_of.end()) return {};
+    std::string g = it->second;
+    for (std::size_t up = 0; up <= kind_of.size(); ++up) {  // bounded: parents may go round
+      if (auto k = kind_of.find(g); k != kind_of.end() && k->second == "story") return g;
+      auto p = parent_of.find(g);
+      if (p == parent_of.end()) break;
+      g = p->second;
+    }
+    return {};
+  };
+  for (const auto& n : graph.value("nodes", nlohmann::json::array())) {
+    if (!n.is_object() || !n.contains("type") || !n["type"].is_string()) continue;
+    if (n.value("commented", false) && n.value("comment_mode", std::string{"out"}) == "out") continue;  // not run
+    const auto* entry = catalog.find(n["type"].get<std::string>());
+    if (!entry) continue;  // an unknown type: the graph's own check reports it
+    const auto id = n.value("id", std::string{});
+    const auto story = story_around(id);
+    const std::string sheet = story.empty() ? flow : "signal";
+    if (works_in(entry->def, sheet)) continue;
+    const auto& works = entry->def.flows;
+    const std::string what = "block " + id + " (" + entry->def.label + ") works only in a " + flows_label(works);
+    if (!story.empty())
+      return FlowMismatch{id, what + ", not in story " + story + ": a story runs its blocks as a Signal flow"};
+    return FlowMismatch{id, what + ", not on this " + flow_label(flow) + " sheet: remove it, or make the sheet a " +
+                                flow_label(works.front())};
+  }
+  return std::nullopt;
+}
+
 std::string catalog_message(const Catalog& catalog, int indent) {
   auto ports = [](const std::vector<PortDef>& list) {
     json out = json::array();
@@ -829,6 +914,7 @@ std::string catalog_message(const Catalog& catalog, int indent) {
     if (!e.def.inputs_from.empty()) block["inputs_from"] = e.def.inputs_from;
     if (!e.def.outputs_from.empty()) block["outputs_from"] = e.def.outputs_from;
     if (e.def.elementwise) block["elementwise"] = true;
+    if (!e.def.flows.empty()) block["flows"] = e.def.flows;  // absent: every flow type
     if (!e.def.view.empty()) {
       json view = json::object();
       if (e.def.view.compact) view["compact"] = *e.def.view.compact;

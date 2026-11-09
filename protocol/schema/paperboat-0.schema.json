@@ -678,6 +678,15 @@
       },
       "description": "Connector classes the blocks' icon ports refer to (§4), by Modelica class short name."
     },
+    "FlowType": {
+      "enum": [
+        "signal",
+        "step",
+        "state",
+        "model"
+      ],
+      "description": "What a sheet is (#9): a Signal flow (values flow one way), a Step flow (control passes along step wires), a State flow (transitions between states) or a Model flow (acausal physical connections)."
+    },
     "BlockDef": {
       "type": "object",
       "properties": {
@@ -779,6 +788,15 @@
         "description": {
           "type": "string",
           "description": "One line in plain words: what it does. Shown on its card in the block browser. Optional."
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FlowType"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "The flow types it works in (#9): the palette offers it only on a sheet of one of these, and the engine refuses it on another. Absent: every flow type."
         }
       },
       "required": [
@@ -976,6 +994,10 @@
     "Graph": {
       "type": "object",
       "properties": {
+        "flow": {
+          "$ref": "#/$defs/FlowType",
+          "description": "The sheet's flow type (#9): each block must work in it (inside a story, a Signal flow). Absent: not chosen; nothing is checked, and the UI takes a Step flow if a block has step ports, else a Signal flow."
+        },
         "nodes": {
           "type": "array",
           "items": {
@@ -1141,6 +1163,13 @@
             "$ref": "#/$defs/ToolkitStatus"
           },
           "description": "Available optional toolkits and their installed status on this machine."
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FlowType"
+          },
+          "description": "The flow types this backend offers (#9): what a sheet may be. Absent (an older backend): a Signal flow, and a Step flow if a block has step ports."
         }
       },
       "required": [

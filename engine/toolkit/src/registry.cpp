@@ -90,6 +90,12 @@ std::vector<std::string> Registry::packages() const {
   return out;
 }
 
+void Registry::default_flows(std::string_view package, const std::vector<std::string>& flows) {
+  check_flows(flows, std::string(package) + "/toolkit.toml");
+  for (auto& t : templates_)
+    if (in_package(t.name, package) && t.def.flows.empty()) t.def.flows = flows;
+}
+
 const Registry& builtins() {
   static const Registry registry = [] {
     Registry r;
