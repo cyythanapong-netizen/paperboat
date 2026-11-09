@@ -68,3 +68,30 @@ jobs:
       - run: npm test -w @paperboat/web
       - run: npm test -w @paperboat/cli
       - run: npm run build
+
+  web-windows:
+    name: Web app and console on Windows x64
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+        working-directory: paperboat
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: paperboat
+      - uses: actions/checkout@v4
+        with:
+          repository: paperboatlab/paperboat-shared
+          path: paperboat-shared
+          token: ${{ secrets.DOWNSTREAM_TOKEN || github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+        working-directory: paperboat-shared
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test -w @paperboat/web
+      - run: npm test -w @paperboat/cli
+      - run: npm run build

@@ -1,4 +1,4 @@
-# Release packages: .deb, .rpm and .tar.gz (Linux), .tar.gz (macOS arm64), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
+# Release packages: .deb, .rpm and .tar.gz (Linux), .tar.gz (macOS arm64), .zip (Windows x64), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
 # A tag v<version> publishes; pull requests and manual runs only build and check the packages.
 # The version is engine/CMakeLists.txt's project(paperboat VERSION ...); the tag must match it.
 # Publishing to npm needs the NPM_TOKEN secret (an automation token for the @paperboat scope); without it
@@ -181,6 +181,13 @@ jobs:
           "$prefix/bin/paperboat" build "$RUNNER_TEMP/sdk-backend"   # against the SDK in the platform package
           "$prefix/bin/paperboat" check "$RUNNER_TEMP/sdk-backend"
           rm "$GITHUB_WORKSPACE"/dist/npm/paperboatlabs-cli-[0-9]*.tgz   # the launcher is published from the Linux job
+      - name: The web app is served from the .tar.gz, and stops
+        run: |
+          mkdir -p "$RUNNER_TEMP/pb" && tar xzf dist/paperboat-*.tar.gz -C "$RUNNER_TEMP/pb" --strip-components=1
+          "$RUNNER_TEMP/pb/bin/paperboat" start --daemon --port 3047
+          curl -sf --retry 15 --retry-connrefused --retry-delay 1 http://localhost:3047/ | grep -q '<div id="root"' && echo "web app served"
+          "$RUNNER_TEMP/pb/bin/paperboat" list
+          "$RUNNER_TEMP/pb/bin/paperboat" stop
       - uses: actions/upload-artifact@v4
         with:
           name: macos
@@ -188,8 +195,6 @@ jobs:
 
   windows:
     needs: web
-    # ponytail: off until Windows is brought up again (the console and web app paths are in, untested there)
-    if: false
     name: Windows (.zip, npm)
     runs-on: windows-2022
     defaults:
@@ -251,6 +256,13 @@ jobs:
           node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" --version
           node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" pkg list
           rm dist/npm/paperboatlabs-cli-[0-9]*.tgz   # the launcher is published from the Linux job
+      - name: The web app is served from the .zip, and stops
+        run: |
+          exe=$(ls "$RUNNER_TEMP"/pb/*/bin/paperboat.exe)
+          "$exe" start --daemon --port 3047
+          curl -sf --retry 15 --retry-connrefused --retry-delay 1 http://localhost:3047/ | grep -q '<div id="root"' && echo "web app served"
+          "$exe" list
+          "$exe" stop
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -258,7 +270,7 @@ jobs:
 
   publish:
     name: Publish (tags only)
-    needs: [linux, macos]
+    needs: [linux, macos, windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-22.04
     permissions:
