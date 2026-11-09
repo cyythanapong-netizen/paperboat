@@ -94,7 +94,7 @@ std::vector<json> run(const json& graph, core::RunSettings settings, core::RunCa
   const core::Backend backend{.engine = "test", .catalog = &catalog(), .run = settings};
   std::vector<json> out;
   const auto status = core::run("r", graph, nullptr, backend, [&](const json& m) { out.push_back(m); }, nullptr, {}, nullptr,
-                                nullptr, nullptr, cache);
+                                nullptr, nullptr, nullptr, cache);
   REQUIRE(status == "done");
   return out;
 }
