@@ -382,18 +382,14 @@ TEST_CASE("BackendManager pack_backend and unpack_backend roundtrip excludes bui
   CHECK(pack_res.file_count >= 6);
   CHECK(fs::is_regular_file(pkg_path));
 
-  // Unpack backend and verify checksums
-  auto unpack_res = core::BackendManager::unpack_backend(pkg_path, unpack_dir, /*verify=*/true);
+  // Unpack backend (the packer always verifies checksums). Not verify=true: its check builds a
+  // C++ backend into unpack_dir/build, so the folder would hold build files the package never had.
+  auto unpack_res = core::BackendManager::unpack_backend(pkg_path, unpack_dir, /*verify=*/false);
   REQUIRE(unpack_res.ok);
   CHECK(unpack_res.file_count == pack_res.file_count);
   CHECK(fs::is_regular_file(unpack_dir / "backend.toml"));
   CHECK(fs::is_regular_file(unpack_dir / "descriptor.toml"));
-  // Build junk is left out; an empty `build/` entry is harmless.
-  bool build_files = false;
-  if (fs::is_directory(unpack_dir / "build"))
-    for (const auto& entry : fs::recursive_directory_iterator(unpack_dir / "build", ec))
-      build_files = build_files || entry.is_regular_file();
-  CHECK_FALSE(build_files);
+  CHECK_FALSE(fs::exists(unpack_dir / "build"));
 
   // Check the unpacked directory passes verification
   auto check_unpacked = core::BackendManager::check_backend(unpack_dir, /*fast=*/true);
