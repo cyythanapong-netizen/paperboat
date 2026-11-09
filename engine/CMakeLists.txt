@@ -62,6 +62,25 @@ FetchContent_MakeAvailable(ixwebsocket)
 add_subdirectory(toolkit)
 add_subdirectory(core)
 
+# Apple's libc++ up to the macOS 15 SDK (Xcode 16) still ships <stop_token> and std::jthread as
+# experimental, off unless _LIBCPP_ENABLE_EXPERIMENTAL is defined; from the macOS 26 SDK they are on.
+# Both are header-only there. PUBLIC: core's own headers use std::stop_token, so everything that
+# includes them (tests, the Python module, SDK backends through the exported target) needs it too.
+if(APPLE)
+  include(CheckCXXSourceCompiles)
+  set(_pb_jthread_src "#include <stop_token>\n#include <thread>\nint main() { std::jthread t([](std::stop_token) {}); }")
+  check_cxx_source_compiles("${_pb_jthread_src}" PAPERBOAT_HAS_JTHREAD)
+  if(NOT PAPERBOAT_HAS_JTHREAD)
+    set(CMAKE_REQUIRED_DEFINITIONS -D_LIBCPP_ENABLE_EXPERIMENTAL)
+    check_cxx_source_compiles("${_pb_jthread_src}" PAPERBOAT_HAS_JTHREAD_EXPERIMENTAL)
+    unset(CMAKE_REQUIRED_DEFINITIONS)
+    if(NOT PAPERBOAT_HAS_JTHREAD_EXPERIMENTAL)
+      message(FATAL_ERROR "This C++ standard library has no std::jthread / <stop_token> (C++20); use Xcode 16 or later")
+    endif()
+    target_compile_definitions(paperboat_core PUBLIC _LIBCPP_ENABLE_EXPERIMENTAL)
+  endif()
+endif()
+
 if(PAPERBOAT_INSTALL)
   include(CMakePackageConfigHelpers)
   set(PAPERBOAT_CMAKE_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/Paperboat)
