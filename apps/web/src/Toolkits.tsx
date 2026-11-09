@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useDismiss } from "@paperboat/shared/components";
 import { missingRequiredToolkits } from "./engine";
 import type { ToolkitStatus } from "./protocol";
 import { useFocusReturn } from "./ProjectUI";
@@ -25,6 +26,7 @@ export function MissingToolkitsDialog({
   });
 
   useFocusReturn(root);
+  useDismiss(root, onCancel, { outside: false });
 
   return (
     <section
@@ -33,13 +35,6 @@ export function MissingToolkitsDialog({
       aria-label="Install missing toolkits"
       data-own-keys
       ref={root}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          e.stopPropagation();
-          onCancel();
-        }
-      }}
     >
       <header className="console-head">
         <h2>{missing.length === 1 ? `Install missing toolkit “${missing[0].name}”?` : "Install missing toolkits?"}</h2>
@@ -140,6 +135,8 @@ export function ToolkitsButton({
   const items = toolkits;
   const anyBusy = items.some((t) => !!t.busy);
 
+  useDismiss(wrap, () => setOpen(false), { enabled: open });
+
   useEffect(() => {
     if (!open) return;
     for (const t of items) {
@@ -147,18 +144,6 @@ export function ToolkitsButton({
         onVersions?.(t.name);
       }
     }
-    const onDown = (e: MouseEvent) => {
-      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("mousedown", onDown);
-    window.addEventListener("keydown", onKey);
-    return () => {
-      window.removeEventListener("mousedown", onDown);
-      window.removeEventListener("keydown", onKey);
-    };
   }, [open, items, onVersions]);
 
   return (

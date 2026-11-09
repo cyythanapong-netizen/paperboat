@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useDismiss } from "@paperboat/shared/components";
 import type { BlockDef, ObjectDef, ParamDef, PortDef } from "./protocol";
 import { GlideBrackets } from "./Shell";
 import { readStored, writeStored } from "./storage.ts";
@@ -187,11 +188,7 @@ export function BrowserWindow({
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
-  useEffect(() => {
-    const onKey = (e: globalThis.KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useDismiss(box, onClose);
 
   return (
     <div className="browser" ref={box} style={{ left: at.x, top: at.y }} role="dialog" aria-label={title}>
@@ -262,11 +259,7 @@ export function QuickAdd({ items, at, onPick, onClose }: { items: Item[]; at: { 
     const r = el.getBoundingClientRect();
     setPos({ x: Math.min(at.x, window.innerWidth - r.width - 8), y: Math.min(at.y, window.innerHeight - r.height - 8) });
   }, [at]);
-  useEffect(() => {
-    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && onClose();
-    window.addEventListener("mousedown", away);
-    return () => window.removeEventListener("mousedown", away);
-  }, [onClose]);
+  useDismiss(box, onClose);
   const onKey = (e: KeyboardEvent) => {
     e.stopPropagation(); // typing here is not input for the backend
     if (e.key === "ArrowDown") (e.preventDefault(), setI((v) => Math.min(v + 1, list.length - 1)));

@@ -2,6 +2,8 @@
 // done to them all at once.
 
 import { NodeToolbar, Position } from "@xyflow/react";
+import { useRef, useState } from "react";
+import { useDismiss } from "@paperboat/shared/components";
 import type { Expose, GroupData, GroupNode } from "./groups";
 import { isBlock, portsOf, type BlockNode, type FlowNode, type Wire } from "./flowModel";
 
@@ -118,9 +120,12 @@ function ExposeMenu({ block, group, set }: { block: BlockNode; group: GroupNode;
   const toggle = (side: Expose["side"], port: string) =>
     set(is(side, port) ? list.filter((x) => !(x.side === side && x.to[0] === block.id && x.to[1] === port)) : [...list, { side, to: [block.id, port] }]);
   const rows = [...def.inputs.map((p) => ({ side: "in" as const, id: p.id })), ...def.outputs.map((p) => ({ side: "out" as const, id: p.id }))];
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDetailsElement>(null);
+  useDismiss(box, () => setOpen(false), { enabled: open });
   if (rows.length === 0) return null;
   return (
-    <details className="expose-menu">
+    <details className="expose-menu" ref={box} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
       <summary className="key small" title="Show a port of this block on the group, even with no wire yet">
         Expose port
       </summary>
