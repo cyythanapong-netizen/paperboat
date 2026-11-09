@@ -10,6 +10,8 @@ watch the results live. Backends are written in C++ or Python; the web UI builds
 what they send.<br><br>
 📖 <strong>Documentation website: <a href="https://paperboatlab.github.io/paperboat/">https://paperboatlab.github.io/paperboat/</a></strong></p>
 
+<p align="center"><img src=".github/readme/demo.gif" width="100%" alt="Paperboat demo: on the Flow page a PID loop (square-wave setpoint, sum, PID, two lags) feeds two scopes and a display; kp is changed from 4 to 6, Run is pressed, and the Board plots the setpoint, the response and the control effort live as the 10 s run advances"></p>
+
 | Check | What it runs | `dev` |
 | --- | --- | --- |
 | Engine | C++ build and the engine tests | [![engine](https://github.com/paperboatlab/paperboat/actions/workflows/engine.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/engine.yml?query=branch%3Adev) |
