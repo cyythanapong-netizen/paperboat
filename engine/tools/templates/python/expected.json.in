@@ -1,0 +1,5 @@
+{
+  "run": "server.py",
+  "status": "done",
+  "signals": { "result": [6, 1e-9] }
+}

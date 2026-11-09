@@ -10,6 +10,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -71,6 +72,10 @@ struct Catalog {
   std::string station_view = "scene";
   std::string station_page;
   std::vector<std::string> missing_imports;
+  // The flow types the domain offers (#9): what a sheet may be, sent in hello. The
+  // descriptor's top-level `flows`, else a Signal flow and every flow type a block of the
+  // catalog names (flow_types() order).
+  std::vector<std::string> flows;
 
   const CatalogEntry* find(std::string_view type) const;
   const ObjectEntry* find_object(std::string_view type) const;
@@ -97,6 +102,17 @@ void define_blocks(Registry& registry, const std::string& package, std::string_v
 // The `domain` name in a descriptor's text, before loading it (a host that registers the
 // domain's own templates needs the package name first).
 std::string descriptor_domain(std::string_view toml_text);
+
+// A sheet's flow type (#9) against its blocks: the graph's `flow` ("signal", "step"…) must be
+// one the catalog offers, and each block, one that works in its sheet: the graph's type, or a
+// Signal flow inside a story (a story runs its blocks as a Signal flow). A graph without `flow`
+// is not checked (it was made before sheets had a type); nor are commented-out blocks, or
+// types the catalog lacks (the graph's own check reports those). `node`: the block, if any.
+struct FlowMismatch {
+  std::string node;
+  std::string message;
+};
+std::optional<FlowMismatch> flow_mismatch(const nlohmann::json& graph, const Catalog& catalog);
 
 // The protocol's `catalog` message for this catalog, as JSON text (compact when indent < 0).
 std::string catalog_message(const Catalog& catalog, int indent = -1);

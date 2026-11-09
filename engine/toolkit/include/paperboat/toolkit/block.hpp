@@ -27,13 +27,19 @@ struct VectorComponent {
 };
 
 // A port. Its type: "signal" carries a value; "step" carries control in a Step flow (the
-// run passes along a step wire from one block to the next). Others ("points", …) carry
+// run passes along a step wire from one block to the next). Others ("image", …) carry
 // values of that shape. A wire joins an output to an input of the same `type` ("signal", "image",
 // "numbers"…), and step ports only to step ports; "any" takes (or gives) any value but a
 // step. With a `unit` on both ends ("N", "m", "rad"…) they must agree; a port without one
 // connects to anything of its type. A vector port may declare a fixed `dimension`, and
 // optionally ordered `components` with labels and per-component units. A `broadcast`
 // signal port (on an elementwise block) also joins a vector port: see BlockDef::elementwise.
+//
+// Lists (#24): "numbers" is a list of numbers (a Vector of any length; it joins "vector"
+// ports, a vector being a list of fixed length) and "points" a list of points (a Table, one
+// row per point). On a points port, `dimension` and `components` describe each point, not the
+// list: [x, z] is 2 coordinates, and their units are checked by position as a vector's are.
+// A list's own length is never declared.
 struct PortDef {
   std::string id = {};
   std::string type = "signal";
@@ -46,6 +52,9 @@ struct PortDef {
 // Why a wire may not join output `from` to input `to`, if it may not.
 std::optional<std::string> wire_mismatch(const PortDef& from, const PortDef& to);
 bool is_vector_type(std::string_view type);
+// "numbers" or "points": a port that carries a list (#24).
+bool is_list_type(std::string_view type);
+// A vector port's length, or a points port's coordinates per point, when declared.
 std::optional<std::size_t> vector_dimension(const PortDef& port);
 
 // A typed vector port. With no dimension it accepts any length; component metadata also
@@ -53,6 +62,11 @@ std::optional<std::size_t> vector_dimension(const PortDef& port);
 PortDef vector_port(std::string id);
 PortDef vector_port(std::string id, std::size_t dimension);
 PortDef vector_port(std::string id, std::vector<VectorComponent> components);
+
+// A list-of-numbers port ("numbers", any length) and a list-of-points port ("points"). The
+// points' `coordinates`, if given, fix how many each point has and label them ([x, z]).
+PortDef numbers_port(std::string id, std::string unit = {});
+PortDef points_port(std::string id, std::vector<VectorComponent> coordinates = {});
 
 // A setting on a block or a station object, edited in the UI. Number types reach a block
 // as numbers (default_value): "number", and "boolean" (1 or 0, a checkbox). Text types
@@ -168,6 +182,11 @@ struct BlockDef {
   // its "file" params, or other side effects). False: it is always called (Random, Key).
   // Unset: as its instance says, Block::stateless(). Runs on a clock never reuse outputs.
   std::optional<bool> cacheable = {};
+  // The flow types it works in (#9): "signal", "step", "state", "model" (flow_types()). Empty:
+  // every one. A package sets its default in its toolkit.toml (`flows = ["signal"]`), a block
+  // may set its own, and a descriptor entry overrides it (`flows = [...]`). The palette offers
+  // a block only on a sheet of a type it works in, and the engine refuses it on another.
+  std::vector<std::string> flows = {};
 };
 
 // The definition in form `form` (that form's ports); `def` itself if it has no forms, or
@@ -197,6 +216,20 @@ BlockDef with_inputs(const BlockDef& def, std::string_view text);
 
 // True for a block on a Step flow's path: one with a step port.
 bool has_step_ports(const BlockDef& def);
+
+// Flow types (#9): what a sheet is, and which ones a block works in (BlockDef::flows).
+// The known flow types, in order: signal, step, state, model.
+const std::vector<std::string>& flow_types();
+bool is_flow_type(std::string_view flow);
+// "Signal flow", "Step flow"…
+std::string flow_label(std::string_view flow);
+// `flows` in words: "Signal flow", "Signal flow or Step flow"; empty: "every flow type".
+std::string flows_label(const std::vector<std::string>& flows);
+// Throws std::invalid_argument naming `at` for an unknown flow type, one listed twice, or an
+// empty list (leave the list out for every flow type).
+void check_flows(const std::vector<std::string>& flows, const std::string& at);
+// True if the block works on a sheet of type `flow` (a block with no flows works in every one).
+bool works_in(const BlockDef& def, std::string_view flow);
 
 // A station object type: a thing on the Station page (a body, a joint) whose properties
 // are edited only there. A toolkit package can offer these as well as blocks. An object
@@ -255,8 +288,9 @@ using KeySet = std::set<std::string, std::less<>>;               // KeyboardEven
 // by position), else signs ("+-+"). Throws std::invalid_argument on bad names.
 BlockDef with_dynamic_ports(const BlockDef& def, const Values& params, const Config& text);
 
-// Why a value doesn't fit a declared vector port, if it doesn't. Used on block inputs and
-// outputs so a dynamic vector is still checked against a fixed-size port at run time.
+// Why a value doesn't fit a declared vector or points port, if it doesn't. Used on block inputs
+// and outputs so a dynamic vector is still checked against a fixed-size port at run time, and a
+// points port gets a table (or an empty list) whose points have its number of coordinates.
 std::optional<std::string> vector_value_mismatch(const PortDef& port, const Value& value);
 
 class DomainState;
@@ -441,10 +475,12 @@ class Step {
 // The block an elementwise def (BlockDef::elementwise) runs as on vectors: `lanes` instances
 // made by `make`, each fed its element of every vector input and the whole of every scalar
 // one, its outputs gathered into vectors. `lanes` 0: made on the first step, from the length
-// of the vectors that arrive. Vectors of different lengths fail, naming the port. A param
-// change goes to every lane. (The engine makes these; a block never needs to.)
+// of the vectors that arrive; a list that changes length later remakes stateless lanes and
+// fails a stateful block (its states are per element). Vectors of different lengths fail,
+// naming the port. A param change goes to every lane. (The engine makes these; a block never
+// needs to.)
 std::unique_ptr<Block> make_lanes(std::function<std::unique_ptr<Block>(const Values& params)> make, Values params,
-                                  std::size_t lanes);
+                                  std::size_t lanes, std::vector<std::string> number_outputs = {});
 
 // The element-wise def as it runs on vectors of `lanes` (0: a length known only at run time):
 // its outputs become vector ports of that length, labelled with `components` (a vector

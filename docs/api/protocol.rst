@@ -73,6 +73,9 @@ Message Quick Reference
      - ``run.cancel``
      - Abort the running simulation loop immediately.
    * -
+     - ``run.speed``
+     - Change the speed of the run in progress; the backend answers with ``run.speed`` once the run took it.
+   * -
      - ``input``
      - Forward key and dashboard-control down/up events to ``Key`` and ``Switch`` blocks.
        A press shows for at least one pass, even if it is released before the pass runs.
@@ -81,7 +84,7 @@ Backend → UI
 ------------
 
 =================  =====================================================================
-``hello``          ``protocol``, ``engine``, ``station: {view, page?}``. On connect
+``hello``          ``protocol``, ``engine``, ``station: {view, page?}``, ``flows?``. On connect
 ``catalog``        ``blocks``, ``objects?``. On connect
 ``scene``          ``entities``, ``view?``. On connect, after a station edit, after a run-once
 ``graph.load``     ``graph``: the starter. On connect
@@ -89,6 +92,7 @@ Backend → UI
 ``scene.patch``    ``entities`` (changed fields). During a run
 ``run.started``    ``run``
 ``run.progress``   ``run``, ``fraction`` (0–1)
+``run.speed``      ``run``, ``speed``: the run took a new speed (below) and goes on at it
 ``signal``         ``node``, ``t``, ``v`` (number, text or vector), ``components?``, ``port?`` (a Scope's input). A monitor's sample
 ``node.state``     ``node``, ``state``: ``queued``, ``running``, ``done``, ``cached``, ``failed``
 ``node.progress``  ``node``, ``fraction`` (0–1). A block's long step, at most ~20 a second
@@ -108,6 +112,9 @@ UI → Backend
                    ``hello.run``'s; the solver is what ``auto`` solvers use)
 ``station.set``    ``station``: an edit on the Station page; answered with ``scene``
 ``run.cancel``     —
+``run.speed``      ``speed`` (times real time, 0 as fast as it can): during a run, its new speed.
+                   The run goes on from where it is; ignored between runs, refused (a ``log``
+                   error) out of range
 ``input``          ``key`` (a ``KeyboardEvent.code``), ``down``
 =================  =====================================================================
 

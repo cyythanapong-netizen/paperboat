@@ -1,2 +1,4 @@
 # Step-flow control blocks.
 name = "step"
+# The flow types its blocks work in (#9): the path of a Step flow.
+flows = ["step"]

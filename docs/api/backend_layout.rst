@@ -44,11 +44,11 @@ The ``backend.toml`` file at the root of the backend folder configures identific
    run = "build/paperboat-cart-pole"
    port = 8766
    descriptor = "descriptor.toml"
-   solver = "rk4"                   # optional: default solver ("rk4", "rk45", "rk2", "euler", "discrete")
+   solver = "rk4"                   # optional: default solver ("rk4", "rk45", "rk2", "euler", "discrete", "cvode", "ida")
    toolkits = ["opencv"]            # optional: required toolkits
 
    [run.solver_options]             # optional: the solver's options (#196)
-   rtol = 1e-7                      # rk45: tolerances, smallest and largest sub-step
+   rtol = 1e-7                      # rk45, cvode, ida: tolerances, smallest and largest sub-step
    max_step = 0.001
    sub_steps = 4                    # rk4, rk2, euler: fixed sub-steps per clock step
 
@@ -83,10 +83,10 @@ Field Reference
   *String*. Relative path to the domain descriptor file (default: ``"descriptor.toml"``).
 
 ``[backend].solver``
-  *Optional string*. Default numerical ODE solver for simulation runs and dynamic models (e.g. ``"rk4"``, ``"rk45"``, ``"rk2"``, ``"euler"``, ``"discrete"``). May also be placed under ``[run].solver``. If the built-in solvers API or continuous blocks/models are used and unspecified, defaults to ``"rk4"``. It is the run's solver: every block and station object whose own ``solver`` is ``auto`` uses it, until the Run menu picks another.
+  *Optional string*. Default numerical ODE solver for simulation runs and dynamic models (``"rk4"``, ``"rk45"``, ``"rk2"``, ``"euler"``, ``"discrete"``, or the implicit ``"cvode"`` and ``"ida"`` for stiff systems: SUNDIALS, see :cpp:func:`paperboat::toolkit::solve::make`). May also be placed under ``[run].solver``. If the built-in solvers API or continuous blocks/models are used and unspecified, defaults to ``"rk4"``. It is the run's solver: every block and station object whose own ``solver`` is ``auto`` uses it, until the Run menu picks another.
 
 ``[run.solver_options]``
-  *Optional table*. The run's solver options: ``rtol``, ``atol``, ``min_step``, ``max_step``, ``max_steps`` (``rk45``) and ``sub_steps`` (``rk4``, ``rk2``, ``euler``); see :cpp:struct:`paperboat::toolkit::solve::Options`. ``paperboat`` passes ``[run]`` to the backend it starts (``PAPERBOAT_RUN``), which announces it in ``hello.run``; Run > Solver settings… overrides it per run.
+  *Optional table*. The run's solver options: ``rtol``, ``atol``, ``min_step``, ``max_step``, ``max_steps`` (``rk45``, ``cvode``, ``ida``) and ``sub_steps`` (``rk4``, ``rk2``, ``euler``); see :cpp:struct:`paperboat::toolkit::solve::Options`. ``paperboat`` passes ``[run]`` to the backend it starts (``PAPERBOAT_RUN``), which announces it in ``hello.run``; Run > Solver settings… overrides it per run.
 
 ``[backend].toolkits``
   *Optional list of strings*. Required optional toolkits that must be installed in the engine (e.g. ``["opencv"]``), or ``["__all__"]`` to import and require all toolkits and built-in packages available in the Paperboat repository.
@@ -107,7 +107,7 @@ Stages
 ~~~~~~
 
 1. **Manifest & Layout**: Validates ``backend.toml`` syntax and fields (including ``solver`` against supported algorithms), verifies that descriptor, build files, and golden files exist, checks toolkit prerequisites, and validates descriptor syntax with line-accurate error reporting.
-2. **Catalog & Block Completeness**: Confirms that all templates imported or referenced in ``[[blocks]]`` and ``[graph]`` exist either in built-in toolkits, declared optional toolkits, or domain code. When ``toolkit = ["__all__"]`` or ``import = ["__all__"]`` is specified, all built-in packages (``base``, ``control``, ``dashboard``, ``math``, ``signal``, ``step``, ``string``) and installed toolkits are loaded into the catalog. Also checks whether the built-in solvers API or continuous blocks/models are used, ensures a valid solver is resolved, and verifies solver instantiation.
+2. **Catalog & Block Completeness**: Confirms that all templates imported or referenced in ``[[blocks]]`` and ``[graph]`` exist either in built-in toolkits, declared optional toolkits, or domain code. When ``toolkit = ["__all__"]`` or ``import = ["__all__"]`` is specified, all built-in packages (``base``, ``control``, ``dashboard``, ``list``, ``math``, ``signal``, ``step``, ``string``) and installed toolkits are loaded into the catalog. Also checks whether the built-in solvers API or continuous blocks/models are used, ensures a valid solver is resolved, and verifies solver instantiation.
 3. **Live Protocol Smoke Test**: Builds C++ backends incrementally or prepares the Python environment, allocates an isolated ephemeral TCP port, spawns the backend, and runs ``protocol/smoke_test.py`` over WebSockets. Skipped if ``--fast`` is specified.
 4. **Golden Run Comparison**: Executes the starter flow headless (``--run``), validates all emitted events against JSON Schema, and verifies output tolerances and signals against ``expected.json``. Skipped if ``--fast`` is specified or no golden test is declared.
 

@@ -46,7 +46,7 @@ class Run {
   // `cache`: where a run that evaluates once finds the outputs of earlier runs and keeps its
   // own (see evaluate); null: every block is called.
   Run(std::string id, const Backend& backend, RunSettings settings, Emit emit, KeysNow keys, std::stop_token stop,
-      VariablesNow tune = nullptr, RunCache* cache = nullptr);
+      VariablesNow tune = nullptr, SpeedNow speed = nullptr, RunCache* cache = nullptr);
 
   // Makes the station and graph (references to `variables` resolved first, #36), runs them
   // with the backend's executor (or the default) and reports the end. Returns "done",
@@ -79,7 +79,8 @@ class Run {
   // After a pass: station objects move under their linked blocks' inputs, then the domain
   // state. Returns a message if the domain ends the run.
   std::optional<std::string> advance();
-  // Sends samples, the scene's changes and the run's progress; waits to keep real time.
+  // Sends samples, the scene's changes and the run's progress; waits to keep real time, at the
+  // speed the UI asked for last (#219).
   void frame(const json& samples, std::optional<double> progress);
   // The whole scene, with what blocks show (after a run-once).
   json scene(bool with_blocks) const;
@@ -122,6 +123,13 @@ class Run {
   void send_event(json message);
   // Warns once per `key` in the Console, tagged with the block.
   void warn_once(std::string_view node, const std::string& key, const std::string& text);
+  // A new speed from the UI, if one came (#219): pacing goes on from where it is at that speed,
+  // and the UI hears it took it (run.speed).
+  void take_speed();
+  // Waits until the wall clock reaches the run clock at the run's speed, taking a new speed
+  // while it waits; warns when computation has fallen behind.
+  void pace();
+
   // What a block whose outputs may be reused is, for the cache: type, ports, params, text,
   // lanes, the run's dt and solver, its files. None for a block that is always called.
   std::optional<std::string> cache_signature(const Node& node) const;
@@ -141,6 +149,7 @@ class Run {
   Emit emit_;
   KeysNow keys_now_;
   VariablesNow tune_now_;
+  SpeedNow speed_now_;
   std::stop_token stop_;
   toolkit::KeySet keys_;
   std::string failed_;  // the block that threw, if one did
@@ -161,8 +170,11 @@ class Run {
   bool evaluated_ = false;  // evaluate() ran: a run that ends done drops other nodes' entries
   json pending_;  // the variables list with this pass's set_variable writes; null when none
   std::map<std::string, std::chrono::steady_clock::time_point, std::less<>> progress_sent_;  // node → last node.progress
-  std::chrono::steady_clock::time_point run_start_time_{};
-  bool run_started_time_set_ = false;
+  // Pacing's anchor (#219): run time pace_t_ was due at wall time pace_wall_, at settings_.speed
+  // since. A speed change moves it to now, so the run neither jumps ahead nor stalls.
+  std::chrono::steady_clock::time_point pace_wall_{};
+  double pace_t_ = 0;
+  bool paced_ = false;
   std::chrono::steady_clock::time_point last_lag_warn_{};
   toolkit::Context ctx_;
   json graph_given_;               // as the UI sent it, references and all (to resolve again when a variable is tuned)

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { Entity, View } from "./protocol";
-import { viewCube } from "./viewCube";
+import { viewCube } from "@paperboat/shared/viewCube";
 
 /** `look` is what the geometry and material were built from; when it changes, rebuild. */
 type World = { scene: THREE.Scene; objects: Map<string, { obj: THREE.Object3D; look: string }> };

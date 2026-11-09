@@ -1,0 +1,20 @@
+"""The backend's program: the domain's blocks on the C++ engine (the `paperboat` module).
+
+    python3 server.py [--port N]    serve the protocol (default ws://localhost:@port@)
+    python3 server.py --run         run the starter graph once, headless: JSON lines
+"""
+
+from pathlib import Path
+
+import paperboat
+
+from domain.blocks import Scale
+
+if __name__ == "__main__":
+    paperboat.serve(paperboat.Backend(
+        engine="@name@",
+        descriptor=Path(__file__).with_name("descriptor.toml"),
+        blocks=[Scale],   # the domain's package: the palette has them without the descriptor listing them
+        duration=5.0,     # a run lasts 5 s of the run clock (dt 0.01 s); the UI may change it per run
+        port=@port@,
+    ))

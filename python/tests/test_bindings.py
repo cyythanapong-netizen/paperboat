@@ -315,7 +315,10 @@ edges = [{ from = ["m", "x"], to = ["x", "in"] }]
 
 def test_a_python_model_is_stepped_by_the_engines_solver(tmp_path: Path) -> None:
     import math
-    for solver, tolerance in (("rk4", 1e-7), ("rk45", 1e-5), ("euler", 0.1)):
+    sys.path.insert(0, str(ROOT / "python"))
+    import paperboat
+    implicit = [(name, 1e-5) for name in ("cvode", "ida") if name in paperboat.solve.names()]
+    for solver, tolerance in [("rk4", 1e-7), ("rk45", 1e-5), ("euler", 0.1), *implicit]:
         msgs = run_backend(tmp_path, MODEL_BACKEND, MODEL_DESCRIPTOR.replace("SOLVER", solver))
         assert msgs[-1]["status"] == "done", msgs
         x = [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "x"][-1]
@@ -544,6 +547,9 @@ def test_solve_helper_functions():
     assert s_euler.solver == "euler"
     s_disc = paperboat.solve.discrete(lambda t, x: [x[0] * 0.5], [1.0])
     assert s_disc.solver == "discrete"
+    if "cvode" in paperboat.solve.names():
+        assert paperboat.solve.cvode(lambda t, x: [-x[0]], [1.0]).solver == "cvode"
+        assert paperboat.solve.ida(lambda t, x: [-x[0]], [1.0]).solver == "ida"
     s_disc.step(0.1)
     assert abs(s_disc.x[0] - 0.5) < 1e-12
 
@@ -641,188 +647,132 @@ def test_view_icon_and_connectors_passthrough(tmp_path: Path) -> None:
     assert blocks["shunt"]["view"]["icon"]["ports"][0]["class"] == "RealInput"
     assert blocks["rig-load"]["view"]["icon"]["g"][0]["t"] == "ellipse"
 
-
-
-
-CACHE_BACKEND = '''
+PACED_BACKEND = '''
 import paperboat
 
-class Pure(paperboat.Block):
-    type, label = "pure", "Pure"
-    inputs, outputs = ["u"], ["y"]
-    params = {"k": 2.0}
-    cacheable = True
-    def step(self, ctx, inputs):
-        return {"y": self.params["k"] * inputs.get("u", 0.0)}
-
-class Level(paperboat.Block):
-    type, label = "level", "Level"
-    outputs = ["y"]
-    cacheable = True
-    def step(self, ctx, inputs):
-        return {"y": ctx.variable("level")}
-
-class Plain(paperboat.Block):
-    type, label = "plain", "Plain"
+class Double(paperboat.Block):
+    type, label = "double", "Double"
     inputs, outputs = ["u"], ["y"]
     def step(self, ctx, inputs):
-        return {"y": inputs.get("u", 0.0)}
+        return {"y": 2 * inputs.get("u", 0.0)}
 
-paperboat.serve(paperboat.Backend(engine="test-cache", descriptor="descriptor.toml", blocks=[Pure, Level, Plain], mode="once"))
+paperboat.serve(paperboat.Backend(engine="paced", descriptor="descriptor.toml", blocks=[Double], dt=0.01, duration=10.0))
 '''
 
-CACHE_DESCRIPTOR = '''
-domain = "c"
+PACED_DESCRIPTOR = '''
+domain = "paced"
 import = ["base", "dashboard"]
 [graph]
-nodes = [
-  { id = "c", type = "constant", params = { value = 3 } }, { id = "p", type = "pure" }, { id = "show", type = "display" },
-  { id = "lv", type = "level" }, { id = "p2", type = "pure" }, { id = "show2", type = "display" },
-  { id = "q", type = "plain" },
-]
-edges = [
-  { from = ["c", "y"], to = ["p", "u"] }, { from = ["p", "y"], to = ["show", "in"] },
-  { from = ["lv", "y"], to = ["p2", "u"] }, { from = ["p2", "y"], to = ["show2", "in"] },
-  { from = ["c", "y"], to = ["q", "u"] },
-]
+nodes = [{ id = "one", type = "constant", params = { value = 1 } }, { id = "d", type = "double" }, { id = "show", type = "display" }]
+edges = [{ from = ["one", "y"], to = ["d", "u"] }, { from = ["d", "y"], to = ["show", "in"] }]
 '''
 
 
-class _WebSocket:
-    """Just enough of a WebSocket client (RFC 6455, text frames) to talk to a served backend."""
-
-    def __init__(self, port: int) -> None:
-        import base64
-        import socket
-
-        self.sock = socket.create_connection(("127.0.0.1", port), timeout=20)
-        key = base64.b64encode(os.urandom(16)).decode()
-        self.sock.sendall((f"GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
-                           f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n").encode())
-        self.buf = b""
-        while b"\r\n\r\n" not in self.buf:
-            self._more()
-        head, self.buf = self.buf.split(b"\r\n\r\n", 1)
-        assert b" 101 " in head.split(b"\r\n")[0], head
-
-    def _more(self) -> None:
-        chunk = self.sock.recv(65536)
-        if not chunk:
-            raise EOFError("the backend closed the connection")
-        self.buf += chunk
-
-    def _take(self, n: int) -> bytes:
-        while len(self.buf) < n:
-            self._more()
-        out, self.buf = self.buf[:n], self.buf[n:]
-        return out
-
-    def _send(self, opcode: int, payload: bytes) -> None:
-        import struct
-
-        n, mask = len(payload), os.urandom(4)
-        head = bytes([0x80 | opcode])
-        if n < 126:
-            head += bytes([0x80 | n])
-        elif n < 65536:
-            head += bytes([0x80 | 126]) + struct.pack(">H", n)
-        else:
-            head += bytes([0x80 | 127]) + struct.pack(">Q", n)
-        self.sock.sendall(head + mask + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
-
-    def send(self, message: dict) -> None:
-        self._send(0x1, json.dumps(message).encode())
-
-    def recv(self) -> dict:
-        import struct
-
-        data = b""
-        while True:
-            b0, b1 = self._take(2)
-            n = b1 & 0x7F
-            if n == 126:
-                n = struct.unpack(">H", self._take(2))[0]
-            elif n == 127:
-                n = struct.unpack(">Q", self._take(8))[0]
-            mask = self._take(4) if b1 & 0x80 else b""
-            payload = self._take(n)
-            if mask:
-                payload = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
-            opcode = b0 & 0x0F
-            if opcode == 0x8:
-                raise EOFError("the backend closed the connection")
-            if opcode == 0x9:
-                self._send(0xA, payload)
-                continue
-            if opcode == 0xA:
-                continue
-            data += payload
-            if b0 & 0x80:
-                return json.loads(data)
-
-    def close(self) -> None:
-        self.sock.close()
-
-
-def _free_port() -> int:
+def test_a_python_backend_takes_a_speed_change_during_a_run(tmp_path: Path) -> None:
+    # #219: run.speed is the engine's (session and run loop), so a Python backend has it too: a
+    # 10 s run at 1×, switched to max after half a second, ends early and says it took the speed.
+    import asyncio
     import socket
+    import time
 
-    for port in range(4340, 4400):  # this suite's range
-        with socket.socket() as s:
-            try:
-                s.bind(("127.0.0.1", port))
-            except OSError:
-                continue
-            return port
-    raise RuntimeError("no free port in 4340-4399")
+    import pytest
 
+    websockets = pytest.importorskip("websockets.asyncio.client")  # as the protocol's smoke test
 
-def test_a_cacheable_python_block_is_reused_by_the_next_run_once(tmp_path: Path) -> None:
-    (tmp_path / "server.py").write_text(textwrap.dedent(CACHE_BACKEND))
-    (tmp_path / "descriptor.toml").write_text(textwrap.dedent(CACHE_DESCRIPTOR))
+    def free_port() -> int:
+        for port in range(5650, 5700):
+            with socket.socket() as s:
+                if s.connect_ex(("127.0.0.1", port)) != 0:
+                    return port
+        raise RuntimeError("no free port in 5650-5699")
+
+    (tmp_path / "server.py").write_text(textwrap.dedent(PACED_BACKEND))
+    (tmp_path / "descriptor.toml").write_text(textwrap.dedent(PACED_DESCRIPTOR))
+    port = free_port()
     env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
-    port = _free_port()
     proc = subprocess.Popen([sys.executable, "server.py", "--port", str(port)], cwd=tmp_path, env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+
+    async def talk() -> tuple[list[dict], float]:
+        for _ in range(100):
+            try:
+                ws = await websockets.connect(f"ws://127.0.0.1:{port}", proxy=None)
+                break
+            except OSError:
+                await asyncio.sleep(0.1)
+        else:
+            raise RuntimeError("backend never listened: " + (proc.stderr.read() if proc.poll() is not None else ""))
+        async with ws:
+            graph = None
+            while graph is None:
+                msg = json.loads(await asyncio.wait_for(ws.recv(), timeout=20))
+                graph = msg["graph"] if msg["type"] == "graph.load" else None
+            start = time.monotonic()
+            await ws.send(json.dumps({"type": "graph.run", "graph": graph}))
+            await asyncio.sleep(0.5)
+            await ws.send(json.dumps({"type": "run.speed", "speed": 0}))
+            msgs = []
+            while not msgs or msgs[-1]["type"] != "run.finished":
+                msgs.append(json.loads(await asyncio.wait_for(ws.recv(), timeout=20)))
+            return msgs, time.monotonic() - start
+
     try:
-        assert proc.stdout is not None
-        line = proc.stdout.readline()
-        assert f"ws://localhost:{port}" in line, line + proc.stderr.read() if proc.stderr else line
-        ws = _WebSocket(port)
-        graph = None
-        while graph is None:
-            m = ws.recv()
-            if m["type"] == "graph.load":
-                graph = m["graph"]
-
-        def run(level: float) -> tuple[dict, dict]:
-            ws.send({"type": "graph.run", "graph": graph,
-                     "variables": [{"name": "level", "type": "number", "value": level}]})
-            states, shown = {}, {}  # a reused block is done with no running before it: "cached" here
-            while True:
-                m = ws.recv()
-                if m["type"] == "node.state":
-                    was = states.get(m["node"])
-                    states[m["node"]] = "done" if was == "running" and m["state"] == "done" else (
-                        "cached" if m["state"] == "done" else m["state"])
-                elif m["type"] == "signal":
-                    shown[m["node"]] = m["v"]
-                elif m["type"] == "run.finished":
-                    assert m["status"] == "done"
-                    return states, shown
-
-        first, shown = run(1)
-        assert set(first.values()) == {"done"}
-        assert shown == {"show": 6.0, "show2": 2.0}
-        second, shown = run(1)  # nothing changed: the cacheable blocks are reused
-        assert {n for n, s in second.items() if s == "cached"} == {"c", "p", "lv", "p2"}
-        assert second["q"] == "done"  # says nothing: called every run
-        assert shown == {"show": 6.0, "show2": 2.0}
-        third, shown = run(5)  # ctx.variable("level") was read by lv: it and p2 recompute
-        assert {n for n, s in third.items() if s == "cached"} == {"c", "p"}
-        assert third["lv"] == third["p2"] == "done"
-        assert shown == {"show": 6.0, "show2": 10.0}
-        ws.close()
+        msgs, took = asyncio.run(talk())
     finally:
         proc.terminate()
         proc.wait(timeout=10)
+    assert msgs[-1] == {"type": "run.finished", "run": "run-1", "status": "done"}
+    assert [m for m in msgs if m["type"] == "run.speed"] == [{"type": "run.speed", "run": "run-1", "speed": 0}]
+    assert took < 5  # not the 10 s it would take at 1×
+
+FLOWS_BACKEND = '''
+import json, pathlib
+import paperboat
+from paperboat import Port
+
+class Anywhere(paperboat.Block):
+    type, inputs, outputs = "anywhere", ["u"], ["y"]
+
+class Clocked(paperboat.Block):
+    type, inputs, outputs = "clocked", ["u"], ["y"]
+    flows = ["signal"]
+
+class Resistor(paperboat.Block):
+    type, inputs, outputs = "resistor", ["p"], ["n"]
+    flows = ("model",)
+
+class Beep(paperboat.Step):
+    type = "beep"
+
+b = paperboat.Backend(engine="flows", descriptor="descriptor.toml", blocks=[Anywhere, Clocked, Resistor, Beep])
+h = paperboat._engine.make(b.engine, str(pathlib.Path(__file__).parent / b.descriptor), b.blocks, b.objects, b.state, b.mode,
+                           b.dt, b.duration, b.emit_every, b.view, b.speed, b.solver, b.connectors)
+print(h.catalog_json())
+'''
+
+
+def test_a_python_block_says_which_flow_types_it_works_in(tmp_path: Path) -> None:
+    # #9: `flows` on a block class; a Step works in a Step flow unless it says; none: every flow type.
+    (tmp_path / "descriptor.toml").write_text('domain = "flows"\nimport = ["control"]\n')
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
+
+    def catalog(backend: str) -> subprocess.CompletedProcess:
+        (tmp_path / "inspect_flows.py").write_text(textwrap.dedent(backend))
+        return subprocess.run([sys.executable, "inspect_flows.py"], cwd=tmp_path, env=env, capture_output=True, text=True,
+                              timeout=60)
+
+    proc = catalog(FLOWS_BACKEND)
+    assert proc.returncode == 0, proc.stderr
+    blocks = {b["type"]: b for b in json.loads(proc.stdout.strip())["blocks"]}
+    assert "flows" not in blocks["anywhere"]
+    assert blocks["clocked"]["flows"] == ["signal"]
+    assert blocks["resistor"]["flows"] == ["model"]
+    assert blocks["beep"]["flows"] == ["step"]
+    assert blocks["pid"]["flows"] == ["signal"]  # the control package's default
+
+    proc = catalog(FLOWS_BACKEND.replace('flows = ("model",)', 'flows = ("liquid",)'))
+    assert proc.returncode != 0
+    assert 'Resistor: no flow type "liquid" (signal, step, state, model)' in proc.stderr
+    proc = catalog(FLOWS_BACKEND.replace('flows = ("model",)', 'flows = "model"'))
+    assert proc.returncode != 0
+    assert "Resistor: flows must be a list of flow types" in proc.stderr

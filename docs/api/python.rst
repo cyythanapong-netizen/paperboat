@@ -10,8 +10,15 @@ are what the engine calls**. The classes a backend passes become the domain's pa
 (named after the descriptor's ``domain``), so the palette has them without the descriptor
 listing them.
 
-Install: ``pip install ./python`` (or ``npm run build:python`` and ``PYTHONPATH=python`` while
-developing). Never implement a framework feature here: add it to the engine and bind it.
+Install: nothing to do with a paperboat package (.deb, .rpm, .tar.gz, .zip, npm): it ships the
+module in ``lib/paperboat/python`` and ``paperboat run`` / ``check`` put it on ``PYTHONPATH`` for
+the backend process. To ``import paperboat`` in a process the CLI did not start (an IDE, a
+service), install the wheel instead. It is
+built for CPython 3.11 and, through the stable ABI (abi3), for every CPython from 3.12 on; the
+interpreter is the backend's ``.venv``, else ``$PAPERBOAT_PYTHON``, else ``python3``. Elsewhere:
+``pip install`` a release wheel, or ``pip install ./python`` (or ``npm run build:python`` and
+``PYTHONPATH=python`` while developing). Never implement a framework feature here: add it to the
+engine and bind it.
 
 API Quick Reference
 -------------------
@@ -137,6 +144,11 @@ Blocks
       :type: str
 
       One line in plain words: what it does. Shown on its card in the block browser.
+
+   .. py:attribute:: flows
+      :type: list[str]
+
+      The flow types it works in; empty: every type (#9).
 
    .. py:attribute:: view
       :type: dict
@@ -353,7 +365,8 @@ Bound from the engine's toolkit (C++: :cpp:class:`Model`, ``paperboat::solve``,
    .. py:attribute:: solver
       :type: str
 
-      ``"rk4"`` (default), ``"rk45"``, ``"rk2"``, ``"euler"`` or ``"discrete"``. A
+      ``"rk4"`` (default), ``"rk45"``, ``"rk2"``, ``"euler"``, ``"discrete"``, or the
+      implicit ``"cvode"`` and ``"ida"`` (SUNDIALS, for stiff systems). A
       ``solver`` prop (``Param("rk4", "enum", paperboat.solve.names())``) wins, so the user
       can pick one on the Station page.
 
@@ -399,15 +412,23 @@ Bound from the engine's toolkit (C++: :cpp:class:`Model`, ``paperboat::solve``,
 
 .. py:class:: solve.Solver(name="rk4", rtol=1e-6, atol=1e-9, max_steps=100000)
 
-   A solver kept between steps (``rk45`` carries its step size). ``step(f, x, t, dt)``
+   A solver kept between steps (``rk45`` carries its step size, ``cvode`` and ``ida`` their
+   history: keep one rather than calling :py:func:`solve.step` each time). ``step(f, x, t, dt)``
    returns the new state. An unknown name raises ``ValueError`` naming the solvers.
 
+   .. py:method:: restart()
+
+      Forget what it carries between steps: call it after the equations change.
+
 .. py:function:: solve.names() -> list[str]
+
+   ``rk4``, ``rk45``, ``rk2``, ``euler``, ``discrete``, then ``cvode`` and ``ida`` when the
+   engine is built with SUNDIALS (the default).
 
 .. py:function:: ode(f, x0, solver="rk4", **options) -> ODE
 
    Bootstrap an ODE system :math:`dx/dt = f(t, x)` with a built-in solver
-   (``"rk4"``, ``"rk45"``, ``"rk2"``, ``"euler"``, or ``"discrete"``). Returns an :py:class:`ODE`
+   (``"rk4"``, ``"rk45"``, ``"rk2"``, ``"euler"``, ``"discrete"``, ``"cvode"`` or ``"ida"``). Returns an :py:class:`ODE`
    instance whose state is advanced by ``ode.step(dt)`` or ``ode.step(t, dt)``.
 
 .. py:class:: ODE
@@ -425,8 +446,13 @@ Bound from the engine's toolkit (C++: :cpp:class:`Model`, ``paperboat::solve``,
 
       Advance the ODE state by one step. Supports calling as ``step(dt)`` or ``step(t, dt)``.
 
+   .. py:method:: restart()
+
+      Forget the solver's history: call it after the equations change.
+
 Convenience solver constructors are also available directly on ``paperboat.solve``:
-``solve.ode``, ``solve.rk4``, ``solve.rk45``, ``solve.rk2``, ``solve.euler``, and ``solve.discrete``.
+``solve.ode``, ``solve.rk4``, ``solve.rk45``, ``solve.rk2``, ``solve.euler``, ``solve.discrete``,
+``solve.cvode`` and ``solve.ida``.
 
 The scene builders return :py:class:`Entity` objects; ``entities()`` may return them,
 dicts, or lists of them (a spring), mixed. Points are ``(x, y)`` or ``(x, y, z)``.
@@ -585,7 +611,8 @@ Serving
       :type: float
 
       Times real time (0: as fast as it can). The defaults here are what the UI shows; a user
-      may change ``duration`` and ``speed`` per run.
+      may change ``duration`` and ``speed`` per run, and ``speed`` during one (``run.speed``,
+      handled by the engine's run loop).
 
    .. py:attribute:: view
       :type: dict | None

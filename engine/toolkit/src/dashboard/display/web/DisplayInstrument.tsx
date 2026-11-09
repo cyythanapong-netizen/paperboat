@@ -1,20 +1,16 @@
 import type { InstrumentProps } from "@paperboat/host";
+import { readout } from "./readout";
 
 export function DisplayInstrument({ name, latest, vector, idle }: InstrumentProps) {
+  const { text, count } = readout(latest, vector);
   return (
     <figure className={`instrument display${idle ? " idle" : ""}`}>
       <div className="screen">
-        <output>
-          {typeof latest === "number"
-            ? +latest.toFixed(4)
-            : Array.isArray(latest)
-              ? `[${vector ?? latest.map((v) => +v.toFixed(4)).join(", ")}]`
-              : String(latest ?? "–")}
-        </output>
+        <output>{text}</output>
       </div>
       <figcaption>
         <span>{name}</span>
-        <span>display</span>
+        <span>{count === undefined ? "display" : `${count} ${count === 1 ? "value" : "values"}`}</span>
       </figcaption>
     </figure>
   );

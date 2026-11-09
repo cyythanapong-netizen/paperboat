@@ -6,6 +6,8 @@
 # makes it work: its icon, its web/ (instruments, CSS, tests), its design. A `definitions` TOML file is
 # registered last.
 # (A manifest with an explicit `register = [...]` list keeps that list instead.)
+# A manifest's `flows = ["signal"]` is the flow types its blocks work in (#9), for each block
+# that names none of its own; without it, they work in every flow type.
 set(PAPERBOAT_TOOLKIT_CORE_SOURCES
   src/block.cpp
   src/bases.cpp
@@ -40,6 +42,7 @@ foreach(manifest IN LISTS toolkit_manifests)
   file(STRINGS "${manifest}" name_line REGEX "^name[ \t]*=")
   file(STRINGS "${manifest}" register_line REGEX "^register[ \t]*=")
   file(STRINGS "${manifest}" definitions_line REGEX "^definitions[ \t]*=")
+  file(STRINGS "${manifest}" flows_line REGEX "^flows[ \t]*=")
   if(NOT name_line)
     message(FATAL_ERROR "${manifest}: needs a name field")
   endif()
@@ -83,6 +86,16 @@ foreach(manifest IN LISTS toolkit_manifests)
     string(APPEND package_registration_calls "  ${package}::${function}(registry);\n")
   endforeach()
   file(APPEND "${package_registry_cpp}" "}  // namespace paperboat::toolkit::${package}\n\n")
+  if(flows_line)
+    if(NOT flows_line MATCHES "^flows[ \t]*=[ \t]*\\[[ \t]*(\"[a-z]+\"[ \t]*,?[ \t]*)+\\][ \t]*(#.*)?$")
+      message(FATAL_ERROR "${manifest}: flows must be a list of flow types on one line, such as flows = [\"signal\"]")
+    endif()
+    string(REGEX REPLACE "^flows[ \t]*=[ \t]*\\[(.*)\\][ \t]*(#.*)?$" "\\1" flows_text "${flows_line}")
+    string(REGEX REPLACE "[ \t]" "" flows_text "${flows_text}")
+    string(REGEX REPLACE ",$" "" flows_text "${flows_text}")
+    # Checked (known flow types, none twice) when the registry is built: Registry::default_flows.
+    string(APPEND package_registration_calls "  registry.default_flows(\"${package}\", {${flows_text}});\n")
+  endif()
 
   # A package may define blocks on a C++ parent in TOML. Embed those definitions in the
   # same library, using the package name for the symbol convention (signal -> kSignalBlocks).
@@ -127,3 +140,8 @@ set_target_properties(paperboat_toolkit PROPERTIES EXPORT_NAME toolkit)
 target_link_libraries(paperboat_toolkit
   PUBLIC nlohmann_json::nlohmann_json  # variables.hpp takes the protocol's JSON
   PRIVATE $<BUILD_INTERFACE:tomlplusplus::tomlplusplus> paperboat_warnings)
+if(PAPERBOAT_WITH_SUNDIALS)  # solve.cpp's cvode and ida; the SDK finds SUNDIALS (PaperboatConfig.cmake)
+  target_sources(paperboat_toolkit PRIVATE src/implicit.cpp)
+  target_link_libraries(paperboat_toolkit PRIVATE SUNDIALS::cvode SUNDIALS::ida)
+  set_property(SOURCE src/solve.cpp APPEND PROPERTY COMPILE_DEFINITIONS PAPERBOAT_WITH_SUNDIALS)
+endif()

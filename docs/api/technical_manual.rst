@@ -103,6 +103,9 @@ Interactive Control Messages
 While a run is active, the client can dispatch real-time events:
 
 - `run.cancel`: Immediately signals the scheduler to abort execution.
+- `run.speed`: Changes the run's speed (`{ speed: 4 }`; `0` is as fast as it can). Pacing
+  re-anchors at the moment of the change, so the run goes on from where it is at the new
+  speed, and the backend answers with `run.speed` (`run`, `speed`) once it took it.
 - `input`: Forwards raw keyboard events (`{ key: "ArrowUp", down: true }`) to any active
   `Key` blocks in the flow.
 - `station.set`: Transmits edited station properties from the Station panel. The backend
@@ -145,6 +148,8 @@ block is instantiated:
    - `step` → `step`
    - `vector` → `vector` (with matching component lengths)
    - `vector` → an elementwise block's `signal` port (marked `broadcast`)
+   - `numbers` (a list of numbers, #24) → `numbers`, `vector` or a `broadcast` port, one unit
+   - `points` (a list of points, #24) → `points`, coordinates per point and their units matching
 3. **Cycle Detection**: Direct feedthrough cycles (algebraic loops) in Signal flows are
    prohibited. A loop is permitted only if it is broken by a state-holding block (such as an
    explicit `Delay` block, a `Step` flow path boundary, or a Station object's linked block

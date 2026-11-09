@@ -48,7 +48,11 @@ def run(example: Path, expected: dict) -> list[str]:
         cmd = [sys.executable, target, "--run"]
         if "duration" in expected:
             cmd += ["--duration", str(expected["duration"])]
-        env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
+        # A checkout's python/ before what PYTHONPATH has: `paperboat check` from a package sets it
+        # to the package's lib/paperboat/python, and there is no python/ next to protocol/ (pb#223).
+        env = dict(os.environ)
+        if (ROOT / "python" / "paperboat").is_dir():
+            env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(ROOT / "python"), os.environ.get("PYTHONPATH")]))
     else:
         if os.name == "nt" and not Path(target).suffix:  # a C++ backend's run names it without .exe
             target += ".exe"

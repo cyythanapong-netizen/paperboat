@@ -610,6 +610,42 @@ cafebabecafebabecafebabecafebabecafebabe	refs/tags/v1.0.0-rc1
   CHECK(tags[3] == "0.1.0");
 }
 
+TEST_CASE("parse_release_tags orders prereleases by SemVer precedence when asked") {
+  const std::string mock_tags = R"(
+a	refs/tags/v0.1.0
+b	refs/tags/v0.1.0-alpha.2
+c	refs/tags/v0.1.0-alpha.10
+d	refs/tags/v0.1.0-alpha
+e	refs/tags/v0.1.0-beta.1
+f	refs/tags/v0.1.0-rc.1^{}
+g	refs/tags/v0.1.1-alpha.1
+h	refs/tags/v0.0.9
+i	refs/tags/v0.1.0+build.5
+)";
+  CHECK(tk::parse_release_tags(mock_tags) == std::vector<std::string>{"0.1.0", "0.0.9"});
+  CHECK(tk::parse_release_tags(mock_tags, true) ==
+        std::vector<std::string>{"0.1.1-alpha.1", "0.1.0", "0.1.0-rc.1", "0.1.0-beta.1", "0.1.0-alpha.10",
+                                 "0.1.0-alpha.2", "0.1.0-alpha", "0.0.9"});
+  CHECK(*tk::parse_version("0.1.0-alpha.2") < *tk::parse_version("0.1.0"));
+  CHECK(*tk::parse_version("v0.1.0-1") < *tk::parse_version("0.1.0-alpha"));  // numeric before alphanumeric
+  CHECK_FALSE(tk::parse_version("0.1"));
+  CHECK_FALSE(tk::parse_version("0.1.0-"));
+  CHECK_FALSE(tk::parse_version("0.1.0-a..b"));
+}
+
+TEST_CASE("a version range is the leading numbers of a version, prereleases included") {
+  CHECK(tk::version_in_range("0.1.0-alpha.2", "0.1"));
+  CHECK(tk::version_in_range("0.1.7", "0.1"));
+  CHECK(tk::version_in_range("v0.1.7", "0"));
+  CHECK(tk::version_in_range("0.1.2-rc.1", "0.1.2"));
+  CHECK_FALSE(tk::version_in_range("0.2.0", "0.1"));
+  CHECK_FALSE(tk::version_in_range("1.1.0", "0.1"));
+  CHECK_FALSE(tk::version_in_range("dev", "0.1"));
+  CHECK(tk::valid_version_range("0.1"));
+  CHECK_FALSE(tk::valid_version_range("0.1.x"));
+  CHECK_FALSE(tk::valid_version_range(""));
+}
+
 TEST_CASE("optional imports in descriptor ignore missing packages and clean starters") {
   const std::string toml = R"(
 domain = "test"

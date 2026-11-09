@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { arrangeFlowNodes, canArrangeFlow } from "../src/flowLayout.ts";
-import type { FlowNode, Wire } from "../src/FlowEditor.tsx";
+import type { FlowNode, Wire } from "../src/flowModel.ts";
 import type { GroupNode } from "../src/groups.tsx";
 
 function block(id: string, parentId?: string, at = { x: 900, y: 900 }, size = { width: 120, height: 80 }): FlowNode {

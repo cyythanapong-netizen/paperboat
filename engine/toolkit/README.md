@@ -12,9 +12,9 @@ its domain state).
 | `base`    | What every domain needs, in every flow type. Values of each datatype: `constant` (Number, a float), `text` (Text), `boolean` (Boolean: 1 or 0), `variable` (a project variable's value by its `name`; live if the variable is `tunable`) · input: `key` (1 while its `key` param's key is held, from the UI's `input` messages) · logic, as magic blocks (two forms, picked by the `form` param: `signal` computes `y`, `step` branches `in` → `yes`/`no`): `if` (signal: `a` while `cond` holds, else `b`), `and`, `or`, `not`, `compare` (`op`) |
 | `signal`  | Signals f(t): t is the block's input `t` when wired (a step's `progress`), else the run clock. C++: `clock`, and the abstract parent `generator` (f is an expression). TOML definitions on it (`src/signal/blocks.toml`): `sine`, `step`, `ramp`, `square`, `ease` (shape a 0–1 progress; `shape`: in-out, in, out, linear), `function` (f(t): type f on the block; its free names are its inputs, with t as the clock when unwired) |
 | `math`    | Pointwise arithmetic on signals: `gain`, `sum`, `threshold`, `saturation` |
-| `dashboard` | Monitors, shown on the Dashboard as instruments: `graph` (plots its input over time), `display` (its latest value as a number or text) |
-| `control` | Dynamics that run on a clock in a Signal flow: `pid`, and without direct feedthrough (a feedback loop may pass through them) `integrator`, `lag`, `delay` (`steps`, `initial`) |
-| `step`    | The path of a Step flow, with step ports. Hats: `start` (once), `when` (each time signal `cond` rises, e.g. a key; a path alongside the others). Then `wait` (`seconds`), `repeat` (leaves by `loop` `times` times, then `done`), `stop` (ends the whole run). Branch with a `base` logic block in its step form |
+| `dashboard` | Monitors, shown on the Dashboard as instruments: `graph` (plots its input over time), `display` (its latest value as a number or text), `scope`, `lamp` (on while its input passes `threshold` by `op`; `latch`; outputs `y`), and the `switch` control |
+| `control` | Dynamics that run on a clock in a Signal flow, and as signal blocks in a Step flow (`flows = ["signal", "step"]`): `pid`, and without direct feedthrough (a feedback loop may pass through them) `integrator`, `lag`, `delay` (`steps`, `initial`) |
+| `step`    | The path of a Step flow (`flows = ["step"]`), with step ports. Hats: `start` (once), `when` (each time signal `cond` rises, e.g. a key; a path alongside the others). Then `wait` (`seconds`), `repeat` (leaves by `loop` `times` times, then `done`), `stop` (ends the whole run). Branch with a `base` logic block in its step form |
 | `opencv`  | External optional toolkit (`paperboat-toolkit-opencv`, installed into `engine/toolkit/opencv`; `paperboat::toolkit_opencv`, `register_opencv`). Image filters on `image` ports: `gray`, `blur`, `median`, `threshold`, `adaptive_threshold`, `hsv_range`, `canny`, `erode`, `dilate`, `open`, `close`, `invert`, `distance` · monitor: `view` (an image instrument) · station: `image` (a picture from a `file` prop; its linked block outputs it) |
 
 ## Package layout
@@ -45,6 +45,20 @@ Descriptions and view defaults belong to the block definition in its source file
 descriptor that defines a block on a parent inherits its description/view and can override
 the description or individual view keys. This keeps a block's behavior, palette entry and
 look together.
+
+**Flow types (#9).** A block works in the flow types `BlockDef::flows` names (`signal`,
+`step`, `state`, `model`); an empty list means every one. A package's `toolkit.toml` sets the
+default for its blocks with `flows = ["signal"]` (one line), a block in code may set its own
+(a `Step` defined with `define_block` defaults to `["step"]`), and a descriptor entry overrides
+both. The catalog carries the list as `flows` (absent: every flow type), the Flow page's palette
+offers a block only on a sheet of a type it works in, and the engine refuses it on another.
+
+| Package | Flow types |
+| ------- | ---------- |
+| `base`, `signal`, `math`, `dashboard`, `string` | every one (a value, a wave, arithmetic, a monitor work anywhere; in a Step flow they run once per clock step) |
+| `control` | `signal` (a clock's dynamics) |
+| `step` | `step` (the path itself) |
+| a domain's own | every one, unless the block says (`flows` in C++ or Python) or the descriptor does; e.g. an electrical package: `model` |
 
 An optional toolkit with extra dependencies (such as OpenCV) lives in
 `engine/toolkit/<package>/`, with its own `toolkit.toml` and `CMakeLists.txt`. The engine
@@ -133,6 +147,10 @@ packages: their blocks and station objects) and `[[objects]]` (station object ty
 Domain objects are implemented by the backend (`StationObject`); toolkit ones by the
 toolkit.
 
+**Flow types offered** (optional): top-level `flows = ["signal", "step"]` says what a sheet
+may be on this domain, sent in `hello.flows`. Without it: a Signal flow, and every flow type a
+block of the catalog names (a domain importing `step` offers a Step flow too).
+
 **Starters** (optional, checked against the catalog when loaded):
 
 ```toml
@@ -142,6 +160,7 @@ objects = [
 ]
 
 [graph]                         # graph.load: the Flow page's opening graph; empty if absent
+flow = "signal"                 # optional: the sheet's flow type; each block must work in it
 nodes = [
   { id = "pid-theta", type = "pid", params = { kp = 40, kd = 8 }, pos = [260, 0] },
   { id = "cart-pole-1", type = "cart-pole", pos = [0, 120] },
@@ -187,6 +206,7 @@ through `python/paperboat/toolkit.py`, which mirrors `base` and `step`.
 | `description` | optional | optional | one line, shown on its card in the block browser (default: the template's) |
 | `view`     | optional | — | how the UI draws it: `{ compact = true, glyph = "gain", value = "{k}" }`; any key, and a key not given is the template's (see below) |
 | `defaults` | optional | — | `{param: number}` overriding template defaults |
+| `flows`    | optional | — | the flow types it works in, `["signal", "step"]` (default: the template's, see Flow types) |
 | `config`   | optional | — | `{key: string}` fixed at load time, not shown in the UI |
 | `kind`     | — | required | `source`, `probe`, `function` or `monitor` |
 | `inputs` / `outputs` | — | optional | port ids, or `{ id = "x", type = "position" }` tables |
