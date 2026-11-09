@@ -101,13 +101,6 @@ export function App() {
 
   // (Alt+1–3, Alt+M, Alt+V and Ctrl+K are commands now: see `commands` below.)
 
-  useEffect(() => {
-    if (!consoleShown) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setConsoleShown(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [consoleShown]);
-
   // Selecting a variable unselects the blocks and wires, so their actions don't cover its own (#79).
   useEffect(() => {
     if (!openVar) return;

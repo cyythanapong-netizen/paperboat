@@ -1,18 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { useLayoutEffect, useRef } from "react";
+import { useDismiss, useFocusReturn } from "@paperboat/shared/components";
 
-/**
- * Focus for a window floating over the page: on open, its first button (the primary
- * `button.run` before the rest) when `root` is given; on close, back to where focus was.
- */
-export function useFocusReturn(root?: RefObject<HTMLElement | null>) {
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    root?.current?.querySelector<HTMLElement>("button.run, button")?.focus();
-    return () => {
-      if (before?.isConnected) before.focus?.();
-    };
-  }, []);
-}
+export { useFocusReturn };
 
 /** A question or a message for the user, and what they can do about it. */
 export type NoticeSpec = {
@@ -35,6 +24,7 @@ export function Notice({ spec, onClose }: { spec: NoticeSpec; onClose: () => voi
     a.run?.();
   };
   useFocusReturn(root);
+  useDismiss(root, () => choose(spec.actions[spec.actions.length - 1]), { outside: false });
   return (
     <section
       className="console-window notice"
@@ -42,12 +32,6 @@ export function Notice({ spec, onClose }: { spec: NoticeSpec; onClose: () => voi
       aria-label={spec.title}
       data-own-keys
       ref={root}
-      onKeyDown={(e) => {
-        if (e.key !== "Escape") return;
-        e.preventDefault();
-        e.stopPropagation();
-        choose(spec.actions[spec.actions.length - 1]);
-      }}
     >
       <header className="console-head">
         <h2>{spec.title}</h2>

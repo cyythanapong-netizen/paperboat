@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useDismiss } from "@paperboat/shared/components";
 import { generateSalt, hashPasscode, verifyPasscode, type LockConfig } from "./lock";
 import { useFocusReturn } from "./ProjectUI";
 
@@ -17,6 +18,7 @@ export function LockDialog({
 }) {
   const root = useRef<HTMLElement>(null);
   useFocusReturn(root);
+  useDismiss(root, onClose);
 
   const isLocked = !!lock && !unlocked;
 
@@ -96,13 +98,6 @@ export function LockDialog({
       aria-label={isLocked ? "Unlock Project UI" : "Project UI Lock"}
       data-own-keys
       ref={root}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          e.stopPropagation();
-          onClose();
-        }
-      }}
       style={{ maxWidth: 440 }}
     >
       <header className="console-head">
