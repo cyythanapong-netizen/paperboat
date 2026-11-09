@@ -21,7 +21,7 @@ type Props = {
   editStation: (next: Station) => void;
   running: boolean;
   stationCanvas: MutableRefObject<StationControls | null>;
-  theme: string;
+  theme: "light" | "dark";
   gridOn: boolean;
   cameraProjection: "persp" | "iso";
   /** Ids already used, on the Station and the Flow. */

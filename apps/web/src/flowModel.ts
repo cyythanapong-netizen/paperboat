@@ -1,4 +1,4 @@
-// What the Flow canvas holds, and the pure functions that make and mend it: blocks from the
+// What the Flow canvas holds, and the model functions that make and mend it: blocks from the
 // catalog, wires between their ports, and keeping both in step with the station and the catalog.
 
 import { addEdge, MarkerType, type Connection, type Edge, type Node } from "@xyflow/react";
