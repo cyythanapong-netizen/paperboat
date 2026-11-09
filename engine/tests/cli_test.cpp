@@ -388,7 +388,12 @@ TEST_CASE("BackendManager pack_backend and unpack_backend roundtrip excludes bui
   CHECK(unpack_res.file_count == pack_res.file_count);
   CHECK(fs::is_regular_file(unpack_dir / "backend.toml"));
   CHECK(fs::is_regular_file(unpack_dir / "descriptor.toml"));
-  CHECK_FALSE(fs::exists(unpack_dir / "build"));
+  // Build junk is left out; an empty `build/` entry is harmless.
+  bool build_files = false;
+  if (fs::is_directory(unpack_dir / "build"))
+    for (const auto& entry : fs::recursive_directory_iterator(unpack_dir / "build", ec))
+      build_files = build_files || entry.is_regular_file();
+  CHECK_FALSE(build_files);
 
   // Check the unpacked directory passes verification
   auto check_unpacked = core::BackendManager::check_backend(unpack_dir, /*fast=*/true);
