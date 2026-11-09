@@ -60,7 +60,7 @@ struct BackendManifest {
   std::string descriptor = "descriptor.toml";
   std::vector<std::string> toolkits;
   std::string golden;    // from [test].golden
-  std::string solver;    // default solver: "rk4", "rk45", "rk2", "euler", "discrete"
+  std::string solver;    // default solver: "rk4", "rk45", "rk2", "euler", "discrete", "cvode", "ida"
   // [run] solver and [run.solver_options] as graph.run settings JSON ("" if neither); the
   // backend gets it as PAPERBOAT_RUN and announces it in hello.run.
   std::string run_settings;

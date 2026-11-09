@@ -300,13 +300,13 @@ export function App() {
   const { missingDialog, setMissingDialog, restartBackend, installToolkit, toolkitVersions, uninstallToolkit, installAll } = useToolkitInstall(state, send, log, nodes);
 
   // ---- The commands (#78): what the menus, the command search and the shortcuts all run ----
-  const { usesSolvers, currentSolver } = solverChoice(state, nodes, runSettings);
+  const { usesSolvers, currentSolver, solvers } = solverChoice(state, nodes, runSettings);
   const commands = menuCommands({
     state, send, openFile, saveProject, lastSession, restore, recent, openProject, projectLock, unlocked, locked, lockedArrange, setLockModalOpen, setBackendOpen, restartBackend,
     history, undoOpen, flow, stationCanvas, setBrowser, running, variables, varsShown, setVarsShown,
     setSearchOpen, mode, setMode, allowedModes, page, setPage, open, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, errors,
     gridOn, setGridChoice, cameraProjection, setCameraProjection, arrangeCanvas, arrange, setArrange,
-    canRun, whyNotRun, run, usesSolvers, currentSolver, setRunSettings, setSolverOpen,
+    canRun, whyNotRun, run, usesSolvers, currentSolver, solvers, setRunSettings, setSolverOpen,
   });
   useShortcuts(commands);
 

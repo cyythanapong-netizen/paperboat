@@ -2604,19 +2604,28 @@
             "rk45",
             "rk2",
             "euler",
-            "discrete"
+            "discrete",
+            "cvode",
+            "ida"
           ],
-          "description": "The run's solver: what a block or station object whose own solver is auto integrates with."
+          "description": "The run's solver: what a block or station object whose own solver is auto integrates with. cvode and ida (implicit, for stiff systems) need an engine built with SUNDIALS."
+        },
+        "solvers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The solvers this engine has (solve::names()), the default first. In hello.run only: the UI offers these and hides the rest."
         },
         "solver_options": {
           "type": "object",
           "description": "The run's solver options (#196); each left out keeps the backend's.",
           "properties": {
-            "rtol": { "type": "number", "exclusiveMinimum": 0, "description": "Relative tolerance (rk45)." },
-            "atol": { "type": "number", "minimum": 0, "description": "Absolute tolerance (rk45)." },
-            "min_step": { "type": "number", "minimum": 0, "description": "Smallest sub-step, s, before rk45 gives up (0: automatic)." },
-            "max_step": { "type": "number", "minimum": 0, "description": "Largest rk45 sub-step, s (0: the clock step)." },
-            "max_steps": { "type": "integer", "minimum": 1, "description": "rk45 sub-steps in one clock step before it gives up." },
+            "rtol": { "type": "number", "exclusiveMinimum": 0, "description": "Relative tolerance (rk45, cvode, ida)." },
+            "atol": { "type": "number", "minimum": 0, "description": "Absolute tolerance (rk45, cvode, ida)." },
+            "min_step": { "type": "number", "minimum": 0, "description": "Smallest sub-step, s, before rk45, cvode or ida gives up (0: automatic)." },
+            "max_step": { "type": "number", "minimum": 0, "description": "Largest rk45, cvode or ida sub-step, s (0: the clock step)." },
+            "max_steps": { "type": "integer", "minimum": 1, "description": "rk45, cvode or ida sub-steps in one clock step before it gives up." },
             "sub_steps": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "Fixed sub-steps per clock step (rk4, rk2, euler)." }
           },
           "additionalProperties": false

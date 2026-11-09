@@ -30,7 +30,7 @@ struct RunSettings {
   bool real_time = true;   // pace emits at wall-clock speed (tests turn it off)
   double speed = 1.0;      // times real time when paced; 0: as fast as it can
   // The run's solver and its options: what a block or object whose `solver` is "auto" uses
-  // ("rk4", "rk45", "rk2", "euler", "discrete").
+  // ("rk4", "rk45", "rk2", "euler", "discrete", "cvode", "ida": solve::names()).
   std::string solver = "rk4";
   toolkit::solve::Options solver_options = {};
 };

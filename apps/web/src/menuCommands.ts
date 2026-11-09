@@ -8,13 +8,13 @@ import { ago, changed, type Stored } from "./project";
 import { PAGES, type Mode, type Page, type Theme } from "./Shell";
 import { isModeAllowed, isPageAllowed, type LockConfig } from "./lock";
 import { SEARCH_CHORD, type Command } from "./commands";
-import { SOLVERS, SOLVER_LABELS } from "./SolverDialog";
+import { availableSolvers, SOLVER_LABELS, type Solver } from "./solvers";
 import { isBlock, type FlowNode } from "./flowModel";
 import type { FlowControls } from "./FlowEditor";
 import type { StationControls } from "./StationGraph";
 import { count } from "./words";
 
-export type SolverOption = (typeof SOLVERS)[number];
+export type SolverOption = Solver;
 
 /** Whether the Run menu offers solvers (the backend or a block has one), and the one in use. */
 export function solverChoice(state: EngineState, nodes: FlowNode[], runSettings: RunSettings) {
@@ -24,8 +24,11 @@ export function solverChoice(state: EngineState, nodes: FlowNode[], runSettings:
     state.objects.some((o) => o.props?.some((p) => p.id === "solver")) ||
     nodes.some((n) => isBlock(n) && (n.data.def.type === "integrator" || n.data.def.type === "lag" || n.data.params?.solver !== undefined)),
   );
-  const currentSolver = ((runSettings.solver ?? state.runDefaults.solver ?? "rk4").toLowerCase()) as SolverOption;
-  return { usesSolvers, currentSolver };
+  const solvers = availableSolvers(state.runDefaults);
+  const asked = ((runSettings.solver ?? state.runDefaults.solver ?? "rk4").toLowerCase()) as SolverOption;
+  // A project saved against another engine may name a solver this one hasn't; show the first it has.
+  const currentSolver = solvers.includes(asked) ? asked : (solvers[0] ?? "rk4");
+  return { usesSolvers, currentSolver, solvers };
 }
 
 /** Everything the commands read and do, as the app has it now. */
@@ -85,6 +88,7 @@ export type CommandContext = {
   run: () => void;
   usesSolvers: boolean;
   currentSolver: SolverOption;
+  solvers: SolverOption[];
   setRunSettings: (f: (prev: RunSettings) => RunSettings) => void;
   setSolverOpen: (open: boolean) => void;
 };
@@ -95,7 +99,7 @@ export function menuCommands(c: CommandContext): Command[] {
     history, undoOpen, flow, stationCanvas, setBrowser, running, variables, varsShown, setVarsShown,
     setSearchOpen, mode, setMode, allowedModes, page, setPage, open, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, errors,
     gridOn, setGridChoice, cameraProjection, setCameraProjection, arrangeCanvas, arrange, setArrange,
-    canRun, whyNotRun, run, usesSolvers, currentSolver, setRunSettings, setSolverOpen,
+    canRun, whyNotRun, run, usesSolvers, currentSolver, solvers, setRunSettings, setSolverOpen,
   } = c;
   const flowInView = mode === "commander" || (mode === "lookout" ? flowDrawer.open : page === "flow");
   const stationInView = view === "graph" && (mode === "commander" || (mode === "lookout" ? stationDrawer.open : page === "station"));
@@ -232,7 +236,7 @@ export function menuCommands(c: CommandContext): Command[] {
     },
     { id: "run.cancel", label: "Cancel", menu: "run", group: "run", enabled: running, why: "No run in progress", run: () => send({ type: "run.cancel" }) },
     ...(usesSolvers
-      ? SOLVERS.map((s) => ({
+      ? solvers.map((s) => ({
           id: `run.solver.${s}`,
           label: SOLVER_LABELS[s],
           menu: "run" as const,

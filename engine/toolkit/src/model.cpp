@@ -19,4 +19,6 @@ void Model::set_solver(std::string_view solver, solve::Options options) {
   solver_ = solve::make(solver, options);
 }
 
+void Model::restart() { solver_->restart(); }
+
 }  // namespace paperboat::toolkit

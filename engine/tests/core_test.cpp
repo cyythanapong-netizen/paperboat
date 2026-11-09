@@ -768,6 +768,10 @@ TEST_CASE("graph.run's settings override the backend's run settings") {
   CHECK_THROWS_WITH(core::with_overrides(base, json{{"duration", "long"}}), ContainsSubstring("duration"));
   CHECK_THROWS_WITH(core::with_overrides(base, json{{"duration", 1e6}, {"dt", 1e-3}}), ContainsSubstring("10 million"));
   CHECK(core::settings_json(base)["mode"] == "clock");
+  // hello.run names the solvers this engine has (#217): the UI offers no others.
+  const json hello = core::settings_json(base);
+  CHECK(std::ranges::find(hello["solvers"], "rk4") != hello["solvers"].end());
+  CHECK(std::ranges::find(hello["solvers"], "discrete") != hello["solvers"].end());
 
   // The solver and its options (#196): given ones over the backend's, checked.
   const auto o = core::with_overrides(base, json{{"solver", "rk45"}, {"solver_options", {{"rtol", 1e-8}, {"max_step", 0.001}}}});

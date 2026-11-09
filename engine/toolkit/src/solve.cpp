@@ -4,6 +4,10 @@
 #include <cmath>
 #include <stdexcept>
 
+#ifdef PAPERBOAT_WITH_SUNDIALS
+#include "implicit.hpp"
+#endif
+
 namespace paperboat::toolkit::solve {
 namespace {
 
@@ -158,6 +162,7 @@ class Rk45 final : public Solver {
       if (h < 1e-14 * std::max(1.0, std::abs(t))) throw std::runtime_error("rk45: the step size fell to nothing (a singularity?)");
     }
   }
+  void restart() override { h_ = 0; }
   std::string_view name() const override { return "rk45"; }
 
  private:
@@ -168,7 +173,11 @@ class Rk45 final : public Solver {
 }  // namespace
 
 const std::vector<std::string>& names() {
-  static const std::vector<std::string> list = {"rk4", "rk45", "rk2", "euler", "discrete"};
+  static const std::vector<std::string> list = {"rk4", "rk45", "rk2", "euler", "discrete",
+#ifdef PAPERBOAT_WITH_SUNDIALS
+                                                "cvode", "ida"
+#endif
+  };
   return list;
 }
 
@@ -212,6 +221,13 @@ std::unique_ptr<Solver> make(std::string_view name, Options options) {
   if (name == "rk2") return std::make_unique<Rk2>(options.sub_steps);
   if (name == "euler") return std::make_unique<Euler>(options.sub_steps);
   if (name == "discrete") return std::make_unique<Discrete>();
+#ifdef PAPERBOAT_WITH_SUNDIALS
+  if (name == "cvode") return make_cvode(options);
+  if (name == "ida") return make_ida(options);
+#else
+  if (name == "cvode" || name == "ida")
+    throw std::invalid_argument("solver \"" + std::string(name) + "\" needs an engine built with SUNDIALS (PAPERBOAT_WITH_SUNDIALS)");
+#endif
   std::string known;
   for (const auto& n : names()) known += (known.empty() ? "" : ", ") + n;
   throw std::invalid_argument("no solver \"" + std::string(name) + "\" (auto, " + known + ")");

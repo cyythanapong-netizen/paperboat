@@ -59,6 +59,35 @@ FetchContent_Declare(ixwebsocket SYSTEM  # SYSTEM goes right after the name: CMa
   URL https://github.com/machinezone/IXWebSocket/archive/refs/tags/v12.1.0.tar.gz)
 FetchContent_MakeAvailable(ixwebsocket)
 
+# Implicit solvers (solve.hpp: "cvode", "ida") from SUNDIALS (BSD-3, LLNL): CVODE and IDA only, static,
+# serial, no MPI, OpenMP, LAPACK or examples. Off: the engine has only its explicit solvers.
+option(PAPERBOAT_WITH_SUNDIALS "The implicit solvers cvode and ida (SUNDIALS)" ON)
+if(PAPERBOAT_WITH_SUNDIALS)
+  block()  # SUNDIALS' own options, set for its build (sundials_option writes them to its cache entries)
+    set(BUILD_STATIC_LIBS ON)
+    set(BUILD_SHARED_LIBS OFF)
+    foreach(package ARKODE CVODES IDAS KINSOL)
+      set(SUNDIALS_ENABLE_${package} OFF)
+    endforeach()
+    set(SUNDIALS_ENABLE_CVODE ON)
+    set(SUNDIALS_ENABLE_IDA ON)
+    foreach(off MPI OPENMP PTHREAD LAPACK KLU FORTRAN PYTHON NVECTOR_MANYVECTOR C_EXAMPLES CXX_EXAMPLES
+                EXAMPLES_INSTALL BENCHMARKS ERROR_CHECKS MONITORING PROFILING DEPRECATED_WARNINGS)
+      set(SUNDIALS_ENABLE_${off} OFF)
+    endforeach()
+    set(SUNDIALS_LOGGING_LEVEL 0)  # failures reach the engine through its error handler, not stderr
+    FetchContent_Declare(SUNDIALS SYSTEM  # its headers: no warnings from them
+      URL https://github.com/LLNL/sundials/releases/download/v7.9.0/sundials-7.9.0.tar.gz
+      URL_HASH SHA256=13f898a27b48fe3449483f9e438a800ed545abf93bc2e2ceec2d1e00ae8db5ef
+      FIND_PACKAGE_ARGS 7 CONFIG COMPONENTS cvode ida)
+    FetchContent_MakeAvailable(SUNDIALS)
+    if(PAPERBOAT_INSTALL)  # its BSD-3 license travels with the binaries; a system package's path isn't portable
+      install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/sundials/LICENSE" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/sundials/NOTICE"
+              DESTINATION "${CMAKE_INSTALL_DOCDIR}/sundials" COMPONENT runtime)
+    endif()
+  endblock()
+endif()
+
 add_subdirectory(toolkit)
 add_subdirectory(core)
 

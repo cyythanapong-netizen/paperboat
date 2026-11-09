@@ -127,3 +127,8 @@ set_target_properties(paperboat_toolkit PROPERTIES EXPORT_NAME toolkit)
 target_link_libraries(paperboat_toolkit
   PUBLIC nlohmann_json::nlohmann_json  # variables.hpp takes the protocol's JSON
   PRIVATE $<BUILD_INTERFACE:tomlplusplus::tomlplusplus> paperboat_warnings)
+if(PAPERBOAT_WITH_SUNDIALS)  # solve.cpp's cvode and ida; the SDK finds SUNDIALS (PaperboatConfig.cmake)
+  target_sources(paperboat_toolkit PRIVATE src/implicit.cpp)
+  target_link_libraries(paperboat_toolkit PRIVATE SUNDIALS::cvode SUNDIALS::ida)
+  set_property(SOURCE src/solve.cpp APPEND PROPERTY COMPILE_DEFINITIONS PAPERBOAT_WITH_SUNDIALS)
+endif()

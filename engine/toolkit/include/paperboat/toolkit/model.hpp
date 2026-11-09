@@ -44,6 +44,10 @@ class Model : public StationObject {
   void set_solver(std::string_view solver);
   void set_solver(std::string_view solver, solve::Options options);
 
+  // Start the solver afresh, as after the equations change (a parameter tuned, a switch). The
+  // implicit solvers otherwise keep the history of the equations they started with.
+  void restart();
+
  protected:
   // For a model that changes its own state between steps (a bounce, a reset).
   solve::State& state() { return x_; }

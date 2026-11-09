@@ -1,18 +1,9 @@
 import { SolverSettings, type SolverInfo, type SolverOptionInfo } from "@paperboat/shared/components";
 import type { RunSettings } from "./protocol";
 import { changed } from "./project";
+import { availableSolvers, SOLVER_LABELS, type Solver } from "./solvers";
 
 type SolverOptions = NonNullable<RunSettings["solver_options"]>;
-type Solver = NonNullable<RunSettings["solver"]>;
-
-export const SOLVERS: Solver[] = ["rk4", "rk45", "rk2", "euler", "discrete"];
-export const SOLVER_LABELS: Record<Solver, string> = {
-  rk4: "RK4 (Classic)",
-  rk45: "RK45 (Adaptive)",
-  rk2: "RK2 (Heun)",
-  euler: "Euler",
-  discrete: "Discrete",
-};
 
 // The engine's own defaults (solve::Options), for a backend that doesn't announce them.
 const ENGINE: Required<SolverOptions> = { rtol: 1e-6, atol: 1e-9, min_step: 0, max_step: 0, max_steps: 100000, sub_steps: 1 };
@@ -23,6 +14,8 @@ const INFO: SolverInfo[] = [
   { id: "rk4", label: SOLVER_LABELS.rk4, family: "explicit", blurb: "Fourth order, fixed sub-steps per clock step", options: ["sub_steps"], recommended: true },
   { id: "rk2", label: SOLVER_LABELS.rk2, family: "explicit", blurb: "Second order, cheaper and rougher", options: ["sub_steps"] },
   { id: "euler", label: SOLVER_LABELS.euler, family: "explicit", blurb: "First order; gains energy on oscillators", options: ["sub_steps"] },
+  { id: "cvode", label: SOLVER_LABELS.cvode, family: "implicit", blurb: "SUNDIALS CVODE: variable-order BDF for stiff systems", options: ADAPTIVE },
+  { id: "ida", label: SOLVER_LABELS.ida, family: "implicit", blurb: "SUNDIALS IDA: BDF on the residual x' − f(x), as for DAEs", options: ADAPTIVE },
   { id: "discrete", label: SOLVER_LABELS.discrete, family: "discrete", blurb: "A difference equation per clock step", options: [] },
 ];
 
@@ -42,12 +35,15 @@ const OPTIONS: SolverOptionInfo[] = [
  * kit's SolverSettings, shared with Squero Studio.
  */
 export function SolverDialog({ defaults, value, onChange, onClose }: { defaults: RunSettings; value: RunSettings; onChange: (v: RunSettings) => void; onClose: () => void }) {
-  const solver = (value.solver ?? defaults.solver ?? "rk4") as Solver;
+  const available = availableSolvers(defaults);
+  const solvers = INFO.filter((s) => available.includes(s.id as Solver));
+  const asked = (value.solver ?? defaults.solver ?? "rk4") as Solver;
+  const solver = available.includes(asked) ? asked : (available[0] ?? "rk4");
   const set = (change: RunSettings) => onChange(changed({ ...value, ...change }, defaults));
   return (
     <SolverSettings
       intro="The run's solver: every block and station object whose own solver is auto uses it. Applies to the next run. A Modelica FMU object keeps the solver it was exported with."
-      solvers={INFO}
+      solvers={solvers}
       options={OPTIONS}
       solver={solver}
       values={(value.solver_options ?? {}) as Record<string, number | undefined>}
