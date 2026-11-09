@@ -31,6 +31,7 @@ test("lamp: the condition in the caption, with the block's defaults where a para
   assert.equal(lampView(0, { op: "<=", threshold: -2.5 }).condition, "≤ −2.5");
   assert.equal(lampView(0, { op: "!=", threshold: 0 }).condition, "≠ 0");
   assert.equal(lampView(0, { op: "==", threshold: 1 / 3 }).condition, "= 0.3333");
+  assert.equal(lampView(0, { threshold: 0.00001 }).condition, "> 1.00e−5");
   assert.equal(lampView(0, { op: "~", threshold: 1 }).condition, "> 1"); // unknown op: the default
   assert.equal(lampView(0, { threshold: { var: "limit" } }).condition, "> limit");
   assert.equal(lampView(0, { threshold: { expr: "2 * limit" } }).condition, "> ƒ 2 * limit");

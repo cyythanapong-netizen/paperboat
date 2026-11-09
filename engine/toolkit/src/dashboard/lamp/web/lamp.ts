@@ -22,7 +22,10 @@ export interface LampView {
 /** A param as text: a number trimmed, a bound one by its variable or formula. */
 function show(v: ParamValue | undefined, fallback: string): string {
   if (v === undefined || v === "") return fallback;
-  if (typeof v === "number") return String(+v.toFixed(4)).replace("-", "−");
+  if (typeof v === "number") {
+    const text = v !== 0 && Math.abs(v) < 1e-4 ? v.toExponential(2) : String(+v.toFixed(4));
+    return text.replace("-", "−");
+  }
   if (typeof v === "object") return "var" in v ? v.var : `ƒ ${v.expr}`;
   return String(v);
 }
