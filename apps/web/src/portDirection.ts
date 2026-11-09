@@ -8,7 +8,8 @@ export type Direction = "in" | "out";
 /** A handle's direction from its React Flow type: a target takes a wire in, a source sends one out. */
 export const directionOf = (handleType: "source" | "target"): Direction => (handleType === "target" ? "in" : "out");
 
-/** The port's type from a handle's or row's class list (`t-signal`, `port-numbers`), if it has one. */
+/** The port's type from a handle's or row's class list (`t-signal`, `port-numbers`), if it has one.
+ *  These prefixes are written by @paperboat/shared (Compact/PortHandle): keep them in step. */
 export function typeFromClasses(classes: Iterable<string>): string | undefined {
   for (const c of classes) {
     const m = /^(?:t|port)-([a-z][a-z0-9_]*)$/.exec(c);
