@@ -7,16 +7,19 @@ import { RunStates } from "./flowContexts";
 import { isBlock, makeWire, portsOf, resolveBlocks, syncLinked, type FlowNode, type Wire } from "./flowModel";
 import { fromGraph, toFlow, toGraph, withBlock } from "./flowGraph";
 import { absolute, isFrame, levelOf } from "./groups";
-import type { DashboardLayout, ParamValue, Project, RunSettings, Station, ToolkitStatus, Variable, Variables } from "./protocol";
+import type { DashboardLayout, Project, RunSettings, Station, ToolkitStatus } from "./protocol";
 import { addRecent, ago, buildProject, clearAutosave, loadAutosave, loadRecent, parseProject, projectFileName, projectName, saveAutosave, saveRecent, stringify, type Stored } from "./project";
 import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from "./projectFiles";
 import { Notice, ProjectLabel, type NoticeSpec } from "./ProjectUI";
-import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
-import { emptyOf, freeName, inlineRef, merged, refersTo, renameInFormula, renameRef, toToml, usesOf, type Use } from "./bindings";
+import { VariablesSheet, VarsContext } from "./Variables";
+import { toToml, type Use } from "./bindings";
 import { ConsoleWindow } from "@paperboat/shared/components";
 import { Dashboard } from "./Dashboard";
 import { instrumentMeta } from "./instruments";
-import { inlineInText, loadSaved, mapTexts, renameInText, save as saveLayout, textUsing } from "./dashboardLayout";
+import { loadSaved, save as saveLayout } from "./dashboardLayout";
+import { remembered, useDrawer } from "./remembered";
+import { PAGE_IDS, useUiLock } from "./uiLock";
+import { useVariables, varsApiFor } from "./variablesState";
 import { MODES, PAGES, Panel, Rail, StatusPill, Switch, ThemeToggle, useTheme, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
 const SceneView = lazy(() => import("./SceneView").then((m) => ({ default: m.SceneView })));
 import { StationGraph, type StationControls } from "./StationGraph";
@@ -27,7 +30,7 @@ import { ownKeys, SEARCH_CHORD, useShortcuts, type Command } from "./commands";
 import { missingRequiredToolkits, MissingToolkitsDialog, ToolkitsButton } from "./Toolkits";
 import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
-import { isArrangeLocked, isModeAllowed, isPageAllowed, type LockConfig } from "./lock";
+import { isModeAllowed, isPageAllowed } from "./lock";
 import { LockDialog } from "./LockDialog";
 import { changed } from "./project";
 import { SOLVERS, SOLVER_LABELS, SolverDialog } from "./SolverDialog";
@@ -37,56 +40,6 @@ const DEFAULT_URL =
   import.meta.env.VITE_ENGINE_URL ??
   "ws://localhost:8765";
 
-/** A per-viewer convenience, kept in this browser when it can be. */
-function remembered<T extends string>(key: string, fallback: T, allowed: readonly T[]): [T, (v: T) => void] {
-  const [value, setValue] = useState<T>(() => {
-    try {
-      const v = localStorage.getItem(key) as T | null;
-      return v && allowed.includes(v) ? v : fallback;
-    } catch {
-      return fallback;
-    }
-  });
-  const set = (v: T) => {
-    setValue(v);
-    try {
-      localStorage.setItem(key, v);
-    } catch {
-      /* private window: not kept */
-    }
-  };
-  return [value, set];
-}
-
-/** A drawer's open state and size, kept in this browser. */
-function useDrawer(key: string, open: boolean, size: number, side: Drawer["side"]): Drawer & { setOpen: (o: boolean) => void } {
-  const [isOpen, setIsOpen] = remembered<"open" | "closed">(`paperboat.${key}`, open ? "open" : "closed", ["open", "closed"]);
-  const [px, setPx] = useState(() => {
-    try {
-      return Number(localStorage.getItem(`paperboat.${key}Size`)) || size;
-    } catch {
-      return size;
-    }
-  });
-  return {
-    side,
-    open: isOpen === "open",
-    size: px,
-    setOpen: (o) => setIsOpen(o ? "open" : "closed"),
-    onChange: (o, next) => {
-      setIsOpen(o ? "open" : "closed");
-      if (!next) return;
-      setPx(next);
-      try {
-        localStorage.setItem(`paperboat.${key}Size`, String(Math.round(next)));
-      } catch {
-        /* private window: not kept */
-      }
-    },
-  };
-}
-
-const PAGE_IDS = PAGES.map((p) => p.id);
 const MODE_OPTIONS: { value: Mode; label: string; hint: string }[] = [
   { value: "navigator", label: "navigator", hint: "One page at a time (Alt+M)" },
   { value: "commander", label: "commander", hint: "Station and Flow, the Board under them (Alt+M)" },
@@ -112,33 +65,8 @@ export function App() {
   const [page, setPage] = remembered<Page>("paperboat.page", "flow", PAGE_IDS);
   const [themeChoice, setThemeChoice] = remembered<Theme>("paperboat.theme", "auto", ["auto", "light", "dark"]);
   const theme = useTheme(themeChoice);
-  // UI Lock (#104): restrict Board Arrange and available views behind an optional passcode.
-  const [projectLock, setProjectLock] = useState<LockConfig | null>(null);
-  const [unlocked, setUnlocked] = useState(true);
-  const [lockModalOpen, setLockModalOpen] = useState(false);
+  const { projectLock, setProjectLock, unlocked, setUnlocked, lockModalOpen, setLockModalOpen, locked, lockedArrange, allowedPages, allowedModes } = useUiLock(arrange, setArrange, page, setPage, mode, setMode);
   const [solverOpen, setSolverOpen] = useState(false);
-  const locked = !!projectLock && !unlocked;
-  const lockedArrange = isArrangeLocked(projectLock, unlocked);
-  const allowedPages = projectLock && !unlocked && projectLock.pages && projectLock.pages.length > 0 ? projectLock.pages : PAGE_IDS;
-  const allowedModes: Mode[] =
-    projectLock && !unlocked && projectLock.modes && projectLock.modes.length > 0
-      ? (projectLock.modes as Mode[])
-      : MODES;
-
-  useEffect(() => {
-    if (lockedArrange && arrange) setArrange(false);
-  }, [lockedArrange, arrange]);
-
-  useEffect(() => {
-    if (locked) {
-      if (allowedPages.length > 0 && !allowedPages.includes(page)) {
-        setPage(allowedPages[0] as Page);
-      }
-      if (allowedModes.length > 0 && !allowedModes.includes(mode)) {
-        setMode(allowedModes[0] as Mode);
-      }
-    }
-  }, [locked, allowedPages, allowedModes, page, mode, setPage, setMode]);
 
   const [url, setUrl] = useState(DEFAULT_URL);
   const [searchOpen, setSearchOpen] = useState(false); // the command search (Ctrl+K)
@@ -151,11 +79,9 @@ export function App() {
   const { fitView, screenToFlowPosition } = useReactFlow();
   const [station, setStation] = useState<Station | null>(null);
   const [runSettings, setRunSettings] = useState<RunSettings>({});
-  // Variables (#36): the backend's defaults, then the user's own (kept in the project, #34). The engine resolves them and says what they come to.
-  const [mine, setMine] = useState<Variables | undefined>(undefined);
+  // Variables (#36): the backend's defaults, then the user's own, kept in the project (#34).
+  const { variables, keepVars, setVariables, varsHistory, undoVars } = useVariables(state, send, subscribe);
   const engineKey = state.engine || "default";
-  useEffect(() => setMine(undefined), [engineKey]); // another backend: its defaults; a project (or the restored session) brings the user's own
-  const variables = useMemo(() => merged(state.variables, mine), [state.variables, mine]);
   // The Dashboard's layout is kept here, so renaming or deleting a variable can rewrite the labels that use it (#86).
   const [dashSaved, setDashSaved] = useState(() => loadSaved(engineKey));
   useEffect(() => setDashSaved(loadSaved(engineKey)), [engineKey]);
@@ -167,36 +93,6 @@ export function App() {
   const [varsShown, setVarsShown] = remembered<"open" | "closed">("paperboat.variables", "closed", ["open", "closed"]);
   const [openVar, setOpenVar] = useState<string | null>(null);
   const [consoleShown, setConsoleShown] = useState(false);
-  const varsHistory = useRef<{ past: Variables[]; future: Variables[] }>({ past: [], future: [] });
-  const keepVars = setMine;
-  const setVariables = useCallback(
-    (next: Variables) => {
-      varsHistory.current = { past: [...varsHistory.current.past.slice(-50), variables], future: [] };
-      keepVars(next);
-    },
-    [variables, keepVars],
-  );
-  // A block set variables during a run (#166): keep them in the project, as if the user had. Not an undo step.
-  useEffect(
-    () =>
-      subscribe((m) => {
-        if (m.type === "variables.patch")
-          setMine((was) => merged(state.variables, was).map((v) => (!v.expr && v.name in m.values ? { ...v, value: m.values[v.name] } : v)));
-      }),
-    [subscribe, state.variables],
-  );
-  // The backend keeps the variables it was last told: tell it when they change.
-  const backendVars = useRef("[]");
-  useEffect(() => {
-    backendVars.current = JSON.stringify(state.variables);
-  }, [state.variables, state.engine]);
-  useEffect(() => {
-    if (state.connection !== "open") return;
-    const now = JSON.stringify(variables);
-    if (now === backendVars.current) return;
-    backendVars.current = now;
-    send({ type: "variables.set", variables });
-  }, [variables, state.variables, state.connection, send]);
   useEffect(() => setRunSettings({}), [state.engine]); // another backend: its own defaults
 
   // What the canvas and station were loaded as, and from which backend: a backend that
@@ -336,76 +232,7 @@ export function App() {
   const view = state.stationView.view;
 
   // ---- Variables: what the sheet and every bound field use ----
-  const mapParams = (params: Record<string, ParamValue>, f: (v: ParamValue) => ParamValue) =>
-    Object.fromEntries(Object.entries(params).map(([k, v]) => [k, f(v)])) as Record<string, ParamValue>;
-  const rewrite = (uses: (v: ParamValue) => boolean, f: (v: ParamValue) => ParamValue) => {
-    setNodes((ns) => ns.map((n) => (isBlock(n) && Object.values(n.data.params).some(uses) ? { ...n, data: { ...n.data, params: mapParams(n.data.params, f) } } : n)));
-    if (station?.objects.some((o) => Object.values(o.props ?? {}).some(uses)))
-      editStation({ objects: station.objects.map((o) => ({ ...o, props: mapParams(o.props ?? {}, f) })) });
-  };
-  /** Labels and section titles: the same rewrite as in params. Rewriting the backend's default layout makes it the user's own. */
-  const rewriteLabels = (f: (text: string) => string) => {
-    if (!dashLayout) return;
-    const next = mapTexts(dashLayout, f);
-    if (next !== dashLayout) saveDash(next);
-  };
-  const varsApi: VarsApi = {
-    list: variables,
-    values: state.varValues,
-    error: state.varError,
-    defaults: state.variables,
-    locked: running,
-    setList: setVariables,
-    rename: (from, to) => {
-      setVariables(variables.map((v) => (v.name === from ? { ...v, name: to } : v.expr ? { ...v, expr: renameInFormula(v.expr, from, to) } : v)));
-      rewrite((v) => refersTo(v, from), (v) => renameRef(v, from, to));
-      rewriteLabels((t) => renameInText(t, from, to));
-      varsHistory.current = { past: [], future: [] }; // the Flow and Station changed too: not undone from here
-      setOpenVar(to);
-    },
-    remove: (name) => {
-      const gone = variables.find((v) => v.name === name);
-      const value = state.varValues[name] ?? gone?.value ?? 0;
-      rewrite((v) => refersTo(v, name), (v) => inlineRef(v, name, value));
-      rewriteLabels((t) => inlineInText(t, name, value));
-      setVariables(
-        variables
-          .filter((v) => v.name !== name)
-          .map((v) => (v.expr && refersTo({ expr: v.expr }, name) ? { ...v, expr: (inlineRef({ expr: v.expr }, name, value) as { expr: string }).expr } : v)),
-      );
-      varsHistory.current = { past: [], future: [] };
-      setOpenVar(null);
-    },
-    uses: (name) => [
-      ...usesOf(name, nodes.filter(isBlock).map((n) => ({ id: n.id, params: n.data.params })), station, variables),
-      ...textUsing(dashLayout, name).map((d): Use => ({ page: "dashboard", id: d.kind, field: d.text })),
-    ],
-    reveal: (name) => {
-      setVarsShown("open");
-      setOpenVar(name);
-    },
-    promote: (def, value) => {
-      const name = freeName(def.id, variables);
-      const type: Variable["type"] = def.type === "key" || def.type === "variable" ? "text" : def.type;
-      const v: Variable = {
-        name,
-        type,
-        value: typeof value === "object" ? emptyOf(type) : value,
-        ...(def.type === "enum" ? { options: def.options } : {}),
-        ...(def.type === "number" && def.unit ? { unit: def.unit } : {}),
-      };
-      setVariables([...variables, v]);
-      return name;
-    },
-  };
-  const undoVars = (redo: boolean) => {
-    const h = varsHistory.current;
-    const from = redo ? h.future : h.past;
-    const to = from.pop();
-    if (!to) return;
-    (redo ? h.past : h.future).push(variables);
-    keepVars(to);
-  };
+  const varsApi = varsApiFor({ state, variables, setVariables, varsHistory, running, nodes, setNodes, station, editStation, dashLayout, saveDash, setOpenVar, setVarsShown });
   const showUse = (u: Use) => {
     if (u.page === "variables") setOpenVar(u.id);
     else if (u.page === "dashboard") setPage("dashboard");
