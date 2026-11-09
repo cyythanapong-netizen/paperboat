@@ -1542,7 +1542,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
         // The domain's blocks and station objects are registered in C++ (or Python), which a
         // static load cannot see: ask the built backend what it offers.
         bool counted = false;
-        if (manifest.language == "cpp" && ensure_built(dir, false, false, nullptr) && fs::is_regular_file(dir / manifest.run)) {
+        if (!fast && manifest.language == "cpp" && ensure_built(dir, false, false, nullptr) && fs::is_regular_file(dir / manifest.run)) {
           const auto probe = ProcessRunner::run_sync({(dir / manifest.run).string(), "--catalog"}, dir);
           try {
             const auto got = nlohmann::json::parse(probe.stdout_text);
