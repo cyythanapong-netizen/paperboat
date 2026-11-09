@@ -66,6 +66,10 @@ json entity_json(const toolkit::Entity& e) {
   if (e.shape == "image") out["src"] = e.src;
   if (e.rot != std::array<double, 3>{}) out["rot"] = e.rot;
   if (e.scale != std::array<double, 3>{1, 1, 1}) out["scale"] = e.scale;
+  if (!e.vertices.empty()) out["vertices"] = e.vertices;
+  if (!e.indices.empty()) out["indices"] = e.indices;
+  if (!e.values.empty()) out["values"] = e.values;
+  if (e.range != std::array<double, 2>{}) out["range"] = e.range;
   return out;
 }
 
