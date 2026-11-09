@@ -33,7 +33,7 @@
   --black: #0d0d0d;
   --white: #ffffff;
   --screen-text: #f2f2ee;
-  --screen-dim: #5d5d58;
+  --screen-dim: #8a8a84;   /* labels on the black screen: at least 4.5:1 in both themes */
   --orange: #ff5a1f;      /* placeholder for the one colour (#48) */
   --orange-dark: #ff6a30;
   --red: #d92d20;
@@ -86,6 +86,10 @@
 
   --signal: var(--orange);        /* live or look here: running, traces, warnings */
   --danger: var(--red);           /* failed, missing, errors */
+  /* The same two roles as text, where they sit on a panel and must read at 4.5:1. Traces and
+     fills keep --signal and --danger. */
+  --signal-text: #b03d0a;
+  --danger-text: #b42318;
   --focus: var(--grey-900);
   --text-on-signal: var(--white); /* text on a --signal fill (an active key) */
 
@@ -146,6 +150,8 @@
   --dots: rgb(255 255 255 / 0.1);
   --signal: var(--orange-dark);
   --danger: var(--red-dark);
+  --signal-text: var(--orange-dark);
+  --danger-text: var(--red-dark);
   --focus: var(--night-900);
   --scene-bg: #1d1d1d;
   --scene-grid: #3c3c3c;
@@ -172,6 +178,8 @@
     --dots: rgb(255 255 255 / 0.1);
     --signal: var(--orange-dark);
     --danger: var(--red-dark);
+    --signal-text: var(--orange-dark);
+    --danger-text: var(--red-dark);
     --focus: var(--night-900);
     --scene-bg: #1d1d1d;
     --scene-grid: #3c3c3c;

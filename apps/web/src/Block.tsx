@@ -100,13 +100,15 @@ export function Block({ id, data, selected }: NodeProps<BlockNode>) {
           {missing ? def.type : def.label}
           {def.linked && <span className="linked-tag"> <PageIcon page="station" className="link-mark" />{id}</span>}
         </span>
+        {/* A glyph, shown on hover or selection; an ink one means a note is there. Not a second tag. */}
         <button
           type="button"
           className={`block-note-btn nodrag ${comment ? "has-note" : ""}`}
           title={comment ? `Note: ${comment}` : "Add note"}
+          aria-label={comment ? `Edit note: ${comment}` : "Add note"}
           onClick={() => setNoteOpen((o) => !o)}
         >
-          {comment ? "note*" : "note"}
+          ✎
         </button>
         <span className={`block-tag tag-${tag}`}>{tag}</span>
         {def.view?.compact && (

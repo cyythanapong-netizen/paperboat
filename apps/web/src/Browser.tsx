@@ -23,7 +23,7 @@ const stepPorts = (d: BlockDef) => [...d.inputs, ...d.outputs].some((p) => p.typ
 
 /** A block's kind in words, as its head on the canvas says it. */
 export function blockKind(d: BlockDef): string {
-  if (d.forms?.length) return `magic · ${d.forms.map((f) => f.name).join(" ⇄ ")}`;
+  if (d.forms?.length) return d.forms.map((f) => f.name).join(" or ");
   const step = stepPorts(d);
   if (step && !d.inputs.some((p) => p.type === "step")) return "hat";
   if (step) return "step";
@@ -175,6 +175,21 @@ export function BrowserWindow({
   const [group, setGroup] = useState("");
   const [at, setAt] = usePlace(`paperboat.browser.${place}`, { x: Math.max(16, window.innerWidth - 900), y: 120 });
   const box = useRef<HTMLDivElement>(null);
+  // The window floats over the page, but it opens inside the panel it belongs to: no covering
+  // the Variables tab or running off the edge of the Flow.
+  const clamped = useRef(false);
+  useLayoutEffect(() => {
+    if (clamped.current) return;
+    clamped.current = true;
+    const el = box.current;
+    const host = document.querySelector(place === "canvas" ? ".panel-flow" : ".panel-station");
+    if (!el || !host) return;
+    const r = el.getBoundingClientRect();
+    const h = host.getBoundingClientRect();
+    const x = Math.max(8, Math.min(at.x, h.right - r.width - 8));
+    const y = Math.max(8, Math.min(at.y, h.bottom - r.height - 8));
+    if (x !== at.x || y !== at.y) setAt({ x, y });
+  }, [at, place, setAt]);
 
   const kinds = useMemo(() => ["all", ...new Set(items.map((i) => card(i).filter))], [items]);
   const groups = useMemo(() => [...new Set(items.map((i) => card(i).group))], [items]);

@@ -15,6 +15,9 @@ export const SOLVER_LABELS: Record<Solver, string> = {
   ida: "IDA (BDF)",
 };
 
+/** A solver's short label, as a menu names it: "RK4 (Classic)" → "RK4". */
+export const solverShort = (s: Solver) => SOLVER_LABELS[s].replace(/ \(.*\)$/, "");
+
 /** The solvers the backend announced in hello.run (all of them when it said nothing). */
 export function availableSolvers(defaults: RunSettings): Solver[] {
   const listed = defaults.solvers;

@@ -332,7 +332,13 @@ export function useEngine(url: string) {
       stopped = true;
       if (frame !== undefined) cancelAnimationFrame(frame);
       window.clearTimeout(retry);
-      socket.current?.close();
+      const ws = socket.current;
+      if (ws?.readyState === WebSocket.CONNECTING) {
+        // Closing a connecting socket logs a browser warning; close it once it is open.
+        ws.addEventListener("open", () => ws.close(), { once: true });
+      } else if (ws?.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
     };
   }, [url, traces]);
 

@@ -8,7 +8,7 @@ import { ago, changed, type Stored } from "./project";
 import { PAGES, type Mode, type Page, type Theme } from "./Shell";
 import { isModeAllowed, isPageAllowed, type LockConfig } from "./lock";
 import { SEARCH_CHORD, type Command } from "./commands";
-import { availableSolvers, SOLVER_LABELS, type Solver } from "./solvers";
+import { availableSolvers, SOLVER_LABELS, solverShort, type Solver } from "./solvers";
 import { isBlock, type FlowNode } from "./flowModel";
 import type { FlowControls } from "./FlowEditor";
 import type { StationControls } from "./StationGraph";
@@ -182,7 +182,7 @@ export function menuCommands(c: CommandContext): Command[] {
     },
     {
       id: "view.camera.persp",
-      label: "Perspective Camera",
+      label: "Perspective camera",
       menu: "view",
       group: "windows",
       checked: cameraProjection === "persp",
@@ -192,7 +192,7 @@ export function menuCommands(c: CommandContext): Command[] {
     },
     {
       id: "view.camera.iso",
-      label: "Isometric Camera",
+      label: "Isometric camera",
       menu: "view",
       group: "windows",
       checked: cameraProjection === "iso",
@@ -202,7 +202,7 @@ export function menuCommands(c: CommandContext): Command[] {
     },
     {
       id: "view.arrangeBlocks",
-      label: "Arrange Blocks",
+      label: "Arrange blocks",
       menu: "view",
       group: "canvas",
       enabled: () => !running && ((flowInView && !!flow.current?.can.arrange) || (stationInView && !!stationCanvas.current?.can.arrange)),
@@ -211,7 +211,7 @@ export function menuCommands(c: CommandContext): Command[] {
     },
     {
       id: "view.arrange",
-      label: "Arrange Board",
+      label: "Arrange board",
       menu: "view",
       group: "windows",
       checked: arrange,
@@ -229,7 +229,7 @@ export function menuCommands(c: CommandContext): Command[] {
       label: "Run",
       menu: "run",
       group: "run",
-      meta: usesSolvers ? currentSolver.toUpperCase() : undefined,
+      meta: usesSolvers ? solverShort(currentSolver) : undefined,
       enabled: canRun,
       why: whyNotRun || undefined,
       run,

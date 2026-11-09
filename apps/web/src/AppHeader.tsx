@@ -48,7 +48,7 @@ export function AppHeader({ state, running, commands, solver, projectTitle, dirt
   return (
     <header className="bar">
       <Wordmark running={running} />
-      <MenuBar commands={commands} menuLabels={solver ? { run: `Run (${solver.toUpperCase()})` } : undefined} />
+      <MenuBar commands={commands} menuLabels={solver ? { run: `Run (${solver})` } : undefined} />
       <ProjectLabel name={projectTitle} dirty={dirty} />
       <span className="spacer" />
       <ToolkitsButton
