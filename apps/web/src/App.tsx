@@ -8,7 +8,8 @@ import type { DashboardLayout, ParamValue, Project, RunSettings, Station, Toolki
 import { addRecent, ago, buildProject, clearAutosave, loadAutosave, loadRecent, parseProject, projectFileName, projectName, saveAutosave, saveRecent, stringify, type Stored } from "./project";
 import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from "./projectFiles";
 import { Notice, ProjectLabel, type NoticeSpec } from "./ProjectUI";
-import { VariablesSheet, VarsContext, type VarsApi } from "./Variables";
+import { VariablesSheet } from "./Variables";
+import { VarsContext, type VarsApi } from "./VarsContext";
 import { emptyOf, freeName, inlineRef, merged, refersTo, renameInFormula, renameRef, toToml, usesOf, type Use } from "./bindings";
 import { ConsoleWindow } from "@paperboat/shared/components";
 import { Dashboard } from "./Dashboard";

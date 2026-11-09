@@ -1,30 +1,9 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { parseNumber } from "./NumberField";
-import type { ParamDef, ParamValue, Variable, Variables } from "./protocol";
+import type { ParamDef, ParamValue, Variable } from "./protocol";
+import { VarsContext } from "./VarsContext";
 import { badName, emptyOf, fits, freeName, isRef, type Ref, type Use } from "./bindings";
 
-/**
- * Variables (#36): named, typed values used by reference in block params and station
- * properties. The list lives in the App (the backend's defaults, then the user's own); the
- * engine resolves it and says what each comes to (`values`), or why it doesn't hold.
- */
-export type VarsApi = {
-  list: Variables;
-  values: Record<string, number | boolean | string>;
-  error: { text: string; at?: string } | null;
-  /** Names of the backend's defaults (Reset instead of Delete). */
-  defaults: Variables;
-  locked: boolean;
-  setList: (next: Variables) => void;
-  rename: (from: string, to: string) => void;
-  remove: (name: string) => void;
-  uses: (name: string) => Use[];
-  /** Open the sheet at `name`. */
-  reveal: (name: string) => void;
-  /** A new variable from a field's value; returns its name. */
-  promote: (def: ParamDef, value: ParamValue) => string;
-};
-export const VarsContext = createContext<VarsApi | null>(null);
 
 /** A variable being dragged from the sheet onto a field (dataTransfer can't be read on dragover). */
 const dragged = { current: null as Variable | null };
