@@ -812,14 +812,16 @@ NB_MODULE(_engine, m) {
       return state_to_py(state);
     }
   };
-  nb::class_<PySolver>(solve, "Solver", "A solver by name (paperboat.solve.names()); rk45 keeps its step size between calls.")
+  nb::class_<PySolver>(solve, "Solver", "A solver by name (paperboat.solve.names()); rk45 keeps its step size between calls, cvode and ida their history.")
       .def("__init__", [](PySolver* self, const std::string& name, double rtol, double atol, int max_steps) {
           new (self) PySolver{tk::solve::make(name, {.rtol = rtol, .atol = atol, .max_steps = max_steps})};
         }, nb::arg("name") = "rk4", nb::arg("rtol") = 1e-6, nb::arg("atol") = 1e-9, nb::arg("max_steps") = 100000)
       .def("step", &PySolver::step, nb::arg("f"), nb::arg("x"), nb::arg("t"), nb::arg("dt"),
            "x advanced from t to t + dt under f(t, x) (dx/dt, or the next x for discrete): a new list.")
+      .def("restart", [](PySolver& s) { s.solver->restart(); },
+           "Forget what it carries between steps: call it after the equations change.")
       .def_prop_ro("name", [](const PySolver& s) { return std::string(s.solver->name()); });
-  solve.def("names", [] { return tk::solve::names(); }, "The solvers, the default first: rk4, rk45, rk2, euler, discrete.");
+  solve.def("names", [] { return tk::solve::names(); }, "The solvers, the default first: rk4, rk45, rk2, euler, discrete, then cvode and ida (implicit, for stiff systems) when the engine has SUNDIALS.");
   solve.def("step", [](const std::string& name, nb::callable f, nb::handle x, double t, double dt) {
       PySolver s{tk::solve::make(name)};
       return s.step(std::move(f), x, t, dt);

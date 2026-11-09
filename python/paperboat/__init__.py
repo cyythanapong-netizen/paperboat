@@ -274,7 +274,7 @@ class Model(StationObject):
     """
 
     _paperboat = "model"
-    solver: str = "rk4"                  # rk4 | rk45 | rk2 | euler | discrete (paperboat.solve.names())
+    solver: str = "rk4"                  # rk4 | rk45 | rk2 | euler | discrete | cvode | ida (paperboat.solve.names())
     x: Vector = []                       # the state now, set by the engine
 
     def initial(self) -> Vector:
@@ -287,7 +287,7 @@ class Model(StationObject):
 
 
 class ODE:
-    """An ODE system dx/dt = f(t, x) integrated with a built-in solver (rk4, rk45, rk2, euler, discrete)."""
+    """An ODE system dx/dt = f(t, x) integrated with a built-in solver (rk4, rk45, rk2, euler, discrete, cvode, ida)."""
 
     def __init__(self, f: Callable, x0, solver: str = "rk4", **options):
         self._f = f
@@ -334,6 +334,10 @@ class ODE:
             self.x = res
         return self.x
 
+    def restart(self) -> None:
+        """Forget the solver's history: call it after the equations change."""
+        self._solver.restart()
+
 
 def ode(f: Callable, x0, solver: str = "rk4", **options) -> ODE:
     """Bootstrap an ODE system with a built-in solver. Returns an ODE object with .step(t, dt)."""
@@ -346,6 +350,8 @@ solve.rk45 = lambda f, x0, **options: ode(f, x0, solver="rk45", **options)
 solve.rk2 = lambda f, x0, **options: ode(f, x0, solver="rk2", **options)
 solve.euler = lambda f, x0, **options: ode(f, x0, solver="euler", **options)
 solve.discrete = lambda f, x0, **options: ode(f, x0, solver="discrete", **options)
+solve.cvode = lambda f, x0, **options: ode(f, x0, solver="cvode", **options)
+solve.ida = lambda f, x0, **options: ode(f, x0, solver="ida", **options)
 
 
 class DomainState:
@@ -384,7 +390,7 @@ class Backend:
     view: dict | None = None                     # the scene's camera hint, e.g. {"mode": "2d", …}
     connectors: dict | None = None               # Modelica connector definitions (§4), keyed by short name
     port: int = 8765
-    solver: str = ""                             # default solver: rk4 | rk45 | rk2 | euler | discrete ("": backend.toml's, else rk4)
+    solver: str = ""                             # default solver: rk4 | rk45 | rk2 | euler | discrete | cvode | ida ("": backend.toml's, else rk4)
 
 
 def serve(backend: Backend) -> None:

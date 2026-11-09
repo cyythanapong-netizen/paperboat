@@ -27,7 +27,8 @@ import { WebStation } from "./WebStation";
 import { isArrangeLocked, isModeAllowed, isPageAllowed, type LockConfig } from "./lock";
 import { LockDialog } from "./LockDialog";
 import { changed } from "./project";
-import { SOLVERS, SOLVER_LABELS, SolverDialog } from "./SolverDialog";
+import { availableSolvers, SOLVER_LABELS } from "./solvers";
+import { SolverDialog } from "./SolverDialog";
 
 const DEFAULT_URL =
   new URLSearchParams(location.search).get("backend") ??
@@ -90,7 +91,7 @@ const MODE_OPTIONS: { value: Mode; label: string; hint: string }[] = [
   { value: "lookout", label: "lookout", hint: "The Board, Station and Flow at its sides (Alt+M)" },
 ];
 
-type SolverOption = (typeof SOLVERS)[number];
+type SolverOption = NonNullable<RunSettings["solver"]>;
 
 /** "1 object", "2 objects". */
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -905,7 +906,10 @@ export function App() {
     state.objects.some((o) => o.props?.some((p) => p.id === "solver")) ||
     nodes.some((n) => isBlock(n) && (n.data.def.type === "integrator" || n.data.def.type === "lag" || n.data.params?.solver !== undefined)),
   );
+  const solvers = availableSolvers(state.runDefaults);
   const currentSolver = ((runSettings.solver ?? state.runDefaults.solver ?? "rk4").toLowerCase()) as SolverOption;
+  // A project saved against another engine may name a solver this one hasn't; show the first it has.
+  const shownSolver = solvers.includes(currentSolver) ? currentSolver : (solvers[0] ?? "rk4");
 
   const commands: Command[] = [
     { id: "file.open", label: "Open…", menu: "file", group: "project", shortcut: "Ctrl+O", chord: { key: "o", ctrl: true }, enabled: state.connection === "open", why: "Not connected to a backend", run: () => void openFile() },
@@ -1025,20 +1029,20 @@ export function App() {
       label: "Run",
       menu: "run",
       group: "run",
-      meta: usesSolvers ? currentSolver.toUpperCase() : undefined,
+      meta: usesSolvers ? shownSolver.toUpperCase() : undefined,
       enabled: canRun,
       why: whyNotRun || undefined,
       run,
     },
     { id: "run.cancel", label: "Cancel", menu: "run", group: "run", enabled: running, why: "No run in progress", run: () => send({ type: "run.cancel" }) },
     ...(usesSolvers
-      ? SOLVERS.map((s) => ({
+      ? solvers.map((s) => ({
           id: `run.solver.${s}`,
           label: SOLVER_LABELS[s],
           menu: "run" as const,
           group: "solver",
-          checked: currentSolver === s,
-          meta: currentSolver === s ? "active" : undefined,
+          checked: shownSolver === s,
+          meta: shownSolver === s ? "active" : undefined,
           run: () => setRunSettings((prev) => changed({ ...prev, solver: s }, state.runDefaults)),
         }))
       : []),
@@ -1052,7 +1056,7 @@ export function App() {
     <div className={`app mode-${mode}`}>
       <header className="bar">
         <Wordmark running={running} />
-        <MenuBar commands={commands} menuLabels={usesSolvers ? { run: `Run (${currentSolver.toUpperCase()})` } : undefined} />
+        <MenuBar commands={commands} menuLabels={usesSolvers ? { run: `Run (${shownSolver.toUpperCase()})` } : undefined} />
         <ProjectLabel name={projectTitle} dirty={dirty} />
         <span className="spacer" />
         <ToolkitsButton

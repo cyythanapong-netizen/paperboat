@@ -723,7 +723,7 @@ Solvers
 
 .. cpp:struct:: solve::Options
 
-   ``rk45``'s error control: ``rtol`` (``1e-6``), ``atol`` (``1e-9``) per component,
+   The error control of ``rk45``, ``cvode`` and ``ida``: ``rtol`` (``1e-6``), ``atol`` (``1e-9``) per component,
    ``min_step`` (``0``: automatic; it gives up below it), ``max_step`` (``0``: the clock step)
    and ``max_steps`` (``100000``) sub-steps in one clock step before it gives up. The fixed-step
    solvers (``rk4``, ``rk2``, ``euler``) take ``sub_steps`` (``1``) steps of ``dt / sub_steps``
@@ -744,7 +744,15 @@ Solvers
    .. cpp:function:: virtual void step(State &x, double t, double dt, const Deriv &f) = 0
 
       Advance ``x`` from ``t`` to ``t + dt``. Throws ``std::runtime_error`` when ``f``
-      returns a state of another size, or ``rk45`` can't meet its tolerances.
+      returns a state of another size, or ``rk45``, ``cvode`` or ``ida`` can't meet its
+      tolerances in ``max_steps`` sub-steps (an exception ``f`` throws comes through as it was).
+
+   .. cpp:function:: void restart()
+
+      Forget what it carries between clock steps (``rk45``'s step size, ``cvode``'s and
+      ``ida``'s history): call it after the equations change (a parameter tuned, a switch).
+      ``cvode`` and ``ida`` also start afresh on their own when a step doesn't begin where the
+      last one ended, from the state it left (a bounce, a reset, a new run).
 
    .. cpp:function:: template <std::size_t N> void step(std::array<double, N> &x, double t, double dt, const std::function<std::array<double, N>(double, const std::array<double, N>&)> &f)
 
@@ -757,8 +765,19 @@ Solvers
    solver (:cpp:struct:`solve::Defaults`); ``rk4`` (classic Runge–Kutta, the default), ``rk45`` (Dormand–Prince,
    MATLAB's ``ode45``: adaptive, it sub-steps inside the clock step to meet its tolerance, so
    signals still arrive on the clock), ``rk2`` (Heun), ``euler``, ``discrete`` (a difference
-   equation ``x[k+1] = f(t, x[k])``). Throws ``std::invalid_argument`` naming them, or for an
-   option out of range.
+   equation ``x[k+1] = f(t, x[k])``), and the implicit ``cvode`` and ``ida`` for stiff
+   systems. Throws ``std::invalid_argument`` naming them, or for an option out of range.
+
+   ``cvode`` is `SUNDIALS <https://computing.llnl.gov/projects/sundials>`_ CVODE (variable-order
+   BDF, Newton iterations on a dense Jacobian it estimates by difference quotients); ``ida`` is
+   SUNDIALS IDA, the same family of methods on the residual ``x' - f(t, x) = 0`` (the form a DAE
+   solver takes; ``x'(t0) = f(t0, x0)`` makes it consistent from the start). Both choose their
+   own step and order inside the clock step, stop exactly at its end (a stop time: the inputs
+   change there), and keep their history for the next one, so keep one solver between steps
+   (a :cpp:class:`Model` does) rather than :cpp:func:`solve::step`'s fresh one each time. They
+   take ``rtol``, ``atol``, ``min_step``, ``max_step`` and ``max_steps`` (internal steps per
+   clock step). They are there when the engine is built with SUNDIALS (CMake option
+   ``PAPERBOAT_WITH_SUNDIALS``, on by default); :cpp:func:`solve::names` lists them then.
 
 .. cpp:function:: void solve::step(std::string_view solver, State &x, double t, double dt, const Deriv &f, Options options)
 
@@ -771,6 +790,9 @@ Solvers
    Fixed-size state overload for stepping with a fresh solver of that name.
 
 .. cpp:function:: const std::vector<std::string> &solve::names()
+
+   The solvers, the default first: ``rk4``, ``rk45``, ``rk2``, ``euler``, ``discrete``, then
+   ``cvode`` and ``ida`` when the engine has SUNDIALS.
 
 .. cpp:function:: ParamDef solve::param(std::string fallback = "auto")
 
@@ -804,6 +826,11 @@ Model
    .. cpp:function:: void set_solver(std::string_view solver, solve::Options options)
 
       Configure or switch the numerical solver for the model.
+
+   .. cpp:function:: void restart()
+
+      Start the solver afresh (:cpp:func:`solve::Solver::restart`): call it after the
+      equations change (a parameter tuned, a switch).
 
    .. cpp:function:: virtual solve::State derivatives(double t, const solve::State &x, const Values &in) const = 0
 

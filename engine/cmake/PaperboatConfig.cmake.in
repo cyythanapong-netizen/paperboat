@@ -5,6 +5,9 @@ include(CMakeFindDependencyMacro)
 find_dependency(Threads)  # ixwebsocket's
 find_dependency(nlohmann_json 3.11 HINTS "${PACKAGE_PREFIX_DIR}")
 find_dependency(ixwebsocket HINTS "${PACKAGE_PREFIX_DIR}")
+if(@PAPERBOAT_WITH_SUNDIALS@)  # the toolkit's implicit solvers: static, so a backend links them too
+  find_dependency(SUNDIALS 7 CONFIG COMPONENTS cvode ida HINTS "${PACKAGE_PREFIX_DIR}")
+endif()
 include("${CMAKE_CURRENT_LIST_DIR}/PaperboatTargets.cmake")
 check_required_components(Paperboat)
 

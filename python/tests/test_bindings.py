@@ -315,7 +315,10 @@ edges = [{ from = ["m", "x"], to = ["x", "in"] }]
 
 def test_a_python_model_is_stepped_by_the_engines_solver(tmp_path: Path) -> None:
     import math
-    for solver, tolerance in (("rk4", 1e-7), ("rk45", 1e-5), ("euler", 0.1)):
+    sys.path.insert(0, str(ROOT / "python"))
+    import paperboat
+    implicit = [(name, 1e-5) for name in ("cvode", "ida") if name in paperboat.solve.names()]
+    for solver, tolerance in [("rk4", 1e-7), ("rk45", 1e-5), ("euler", 0.1), *implicit]:
         msgs = run_backend(tmp_path, MODEL_BACKEND, MODEL_DESCRIPTOR.replace("SOLVER", solver))
         assert msgs[-1]["status"] == "done", msgs
         x = [m["v"] for m in msgs if m["type"] == "signal" and m["node"] == "x"][-1]
@@ -497,6 +500,9 @@ def test_solve_helper_functions():
     assert s_euler.solver == "euler"
     s_disc = paperboat.solve.discrete(lambda t, x: [x[0] * 0.5], [1.0])
     assert s_disc.solver == "discrete"
+    if "cvode" in paperboat.solve.names():
+        assert paperboat.solve.cvode(lambda t, x: [-x[0]], [1.0]).solver == "cvode"
+        assert paperboat.solve.ida(lambda t, x: [-x[0]], [1.0]).solver == "ida"
     s_disc.step(0.1)
     assert abs(s_disc.x[0] - 0.5) < 1e-12
 
@@ -595,3 +601,28 @@ def test_view_icon_and_connectors_passthrough(tmp_path: Path) -> None:
     assert blocks["rig-load"]["view"]["icon"]["g"][0]["t"] == "ellipse"
 
 
+def test_implicit_solvers_on_a_stiff_system():
+    """#217: cvode and ida (SUNDIALS) take clock steps far past an explicit solver's stability limit."""
+    import math
+    import paperboat
+    if "cvode" not in paperboat.solve.names():
+        return  # an engine built without SUNDIALS
+    # x' = -1000 (x - cos t) - sin t: x = cos t + e^(-1000 t) from x0 = 2.
+    f = lambda t, x: [-1000 * (x[0] - math.cos(t)) - math.sin(t)]
+    for name in ("cvode", "ida"):
+        ode = paperboat.ode(f, [2.0], solver=name, rtol=1e-8, atol=1e-10)
+        for k in range(100):
+            ode.step(k * 0.1, 0.1)
+        assert abs(ode.x[0] - math.cos(10.0)) < 1e-6, (name, ode.x)
+        ode.restart()  # the equations may have changed: the solver starts afresh
+        assert abs(ode.x[0] - math.cos(10.0)) < 1e-6, (name, ode.x)
+    try:
+        paperboat.solve.Solver("cvode", max_steps=2).step(f, [2.0], 0.0, 10.0)
+    except RuntimeError as err:
+        assert "max_steps 2" in str(err)
+    else:
+        raise AssertionError("cvode must say it ran out of steps")
+    # Solver.restart() is reachable, not just an engine-internal hook.
+    solver = paperboat.solve.Solver("cvode")
+    solver.step(lambda t, x: [-x[0]], [1.0], 0.0, 0.1)
+    solver.restart()

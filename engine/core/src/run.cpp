@@ -609,6 +609,7 @@ json settings_json(const RunSettings& s) {
   if (!s.solver.empty()) {
     j["solver"] = s.solver;
   }
+  j["solvers"] = toolkit::solve::names();
   const auto& o = s.solver_options;
   j["solver_options"] = {{"rtol", o.rtol},         {"atol", o.atol},           {"min_step", o.min_step},
                          {"max_step", o.max_step}, {"max_steps", o.max_steps}, {"sub_steps", o.sub_steps}};

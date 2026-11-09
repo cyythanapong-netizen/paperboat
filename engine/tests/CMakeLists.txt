@@ -1,9 +1,12 @@
-# Windows builds only the process-layer tests; the rest of the suite uses POSIX (setenv, sh, /tmp).
+# Windows builds only the process-layer and solver tests; the rest of the suite uses POSIX (setenv, sh, /tmp).
 if(WIN32)
   add_executable(paperboat_process_tests process_test.cpp)
   target_link_libraries(paperboat_process_tests PRIVATE paperboat::core Catch2::Catch2WithMain paperboat_warnings)
+  add_executable(paperboat_solve_tests solve_test.cpp)  # MSVC with SUNDIALS' cvode and ida too
+  target_link_libraries(paperboat_solve_tests PRIVATE paperboat::toolkit Catch2::Catch2WithMain paperboat_warnings)
   include(Catch)
   catch_discover_tests(paperboat_process_tests)
+  catch_discover_tests(paperboat_solve_tests)
   return()
 endif()
 

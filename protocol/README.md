@@ -116,6 +116,9 @@ Default address: `ws://localhost:8765`.
 // changes; any but mode). A value out of range fails the run with a log, not the backend.
 // duration: 0 means run indefinitely until cancelled, a Stop block, or every path ending.
 { "mode": "clock", "duration": 10, "dt": 0.01, "speed": 1 }   // mode: clock | once; speed: times real time, 0 as fast as it can
+{ "solver": "rk45", "solvers": ["rk4", "rk45", "rk2", "euler", "discrete"] }
+// solver: hello.run's default and graph.run.settings' override; solvers: what this engine has,
+// the default first (hello.run only), so the UI offers no solver it can't run
 
 // Graph: sent by the UI with graph.run, and by the backend with graph.load
 {
