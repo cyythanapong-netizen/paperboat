@@ -145,10 +145,8 @@ block is instantiated:
    - `step` → `step`
    - `vector` → `vector` (with matching component lengths)
    - `vector` → an elementwise block's `signal` port (marked `broadcast`)
-   - `numbers` (a list of numbers) → `numbers`, `vector` or a `broadcast` port; one unit for
-     every item
-   - `points` (a list of points) → `points`, with matching coordinates per point and units
-     by position (#24)
+   - `numbers` (a list of numbers, #24) → `numbers`, `vector` or a `broadcast` port, one unit
+   - `points` (a list of points, #24) → `points`, coordinates per point and their units matching
 3. **Cycle Detection**: Direct feedthrough cycles (algebraic loops) in Signal flows are
    prohibited. A loop is permitted only if it is broken by a state-holding block (such as an
    explicit `Delay` block, a `Step` flow path boundary, or a Station object's linked block
