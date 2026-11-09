@@ -195,7 +195,7 @@ All primitive visual styles must be token names; raw colors, hex codes, or arbit
 | `font` | `"sans"` (default), `"mono"` | `--font-sans`, `--font-mono` |
 | `size` | `12` (default), `12.5`, `13`, `15`, `30` | Text font size in pixels |
 
-Defaults: stroke `ink`, weight `normal`, dash `solid`, fill `none`, corner `0`, font `sans`, size `12`. Stroke caps and joins are always round.
+Defaults: stroke `ink`, weight `normal`, dash `solid`, fill `none`, corner `0`, font `sans`, size `12`. Stroke caps and joins are always round. Stroke and fill also take a domain token (`electrical`, `translational`, `thermal`, `fluid`, `magnetic`, `rotational`), which maps to that domain's colour token (#22).
 
 **Fallback rule:** An unknown primitive kind, unrecognized token or size, a 2x2 plate (valid sizes are 1x1, 2x1, 1x2), or an off-grid coordinate causes the UI to drop the entire icon, fall back to drawing the plain plate with a glyph, and log a `console.warn` once per block type. Live execution state (selected, running, failed) is displayed exclusively by the plate container, never by the icon graphic.
 

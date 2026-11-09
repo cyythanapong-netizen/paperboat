@@ -162,7 +162,13 @@
       "enum": [
         "ink",
         "muted",
-        "signal"
+        "signal",
+        "electrical",
+        "translational",
+        "thermal",
+        "fluid",
+        "magnetic",
+        "rotational"
       ],
       "description": "ink = --text, muted = --line-strong, signal = --signal (live state only)."
     },
@@ -186,7 +192,13 @@
         "none",
         "ink",
         "raised",
-        "sunken"
+        "sunken",
+        "electrical",
+        "translational",
+        "thermal",
+        "fluid",
+        "magnetic",
+        "rotational"
       ],
       "description": "none, --text, --surface-raised or --surface-sunken."
     },
