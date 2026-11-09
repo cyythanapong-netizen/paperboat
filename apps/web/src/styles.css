@@ -292,9 +292,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* ---- Station ---------------------------------------------------------------------- */
 .station { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .scene { position: relative; width: 100%; height: 100%; overflow: hidden; }
-.key.view-cube-home { width: 26px; height: 26px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); transition: color var(--motion), border-color var(--motion), opacity var(--motion); }
-.view-cube-home svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
-.view-cube-home.at-home { color: var(--text-muted); border-color: var(--line); }
 .station.view-graph .station-panel, .station.view-web .station-panel { left: auto; right: var(--space-3); }
 .web-station { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--surface-raised); }
 .station-graph { position: absolute; inset: 0; }
@@ -776,15 +773,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 
 /* ---- Menus, the command search and the run dock (#78) ----------------------------- */
 /* The open menu title is boxed in ink like the current page on the rail; a chosen item sits in brackets. */
-
-/* The command search floats at the top centre, over the bar, like a title-bar field. */
-.cmd-search { position: fixed; z-index: 60; top: var(--gutter); left: 50%; transform: translateX(-50%); width: min(560px, calc(100vw - 32px)); padding: var(--space-2); }
-.cmd-input { width: 100%; height: 34px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-md); background: var(--surface-well); box-shadow: var(--well-shadow); color: var(--text); font: 400 var(--size-sm) var(--font-sans); }
-.cmd-list { list-style: none; margin: var(--space-2) 0 0; padding: 0; max-height: min(360px, 60vh); overflow: auto; }
-.cmd-item { display: flex; justify-content: space-between; gap: var(--space-6); padding: 5px var(--space-3); border: 1.5px solid transparent; border-radius: var(--radius-sm); font-size: var(--size-sm); cursor: pointer; }
-.cmd-item.on { border-color: var(--line-ink); font-weight: 600; }
-.cmd-item[aria-disabled="true"] { color: var(--text-muted); opacity: 0.6; cursor: default; }
-.cmd-empty { padding: var(--space-3); color: var(--text-muted); }
+/* The command search's layout lives with the component in @paperboat/shared (plates.css). */
 
 /* The run dock: glass, because it floats over live content (the pages). */
 .pages { position: relative; }

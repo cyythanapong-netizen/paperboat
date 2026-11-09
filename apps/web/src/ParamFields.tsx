@@ -1,5 +1,6 @@
 import { useContext, useId } from "react";
-import { Bindable, draggedVariable, NumberOrFormula, VAR_DRAG, VarsContext } from "./Variables";
+import { Bindable, draggedVariable, NumberOrFormula, VAR_DRAG } from "./Variables";
+import { VarsContext } from "./VarsContext";
 import { isRef } from "./bindings";
 import type { ParamDef, ParamValue } from "./protocol";
 

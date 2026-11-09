@@ -46,9 +46,9 @@ function sharedFolders(): string[] {
 
 export default defineConfig({
   plugins: [react()],
-  // @paperboat/shared is a linked sibling with its own node_modules; keep one React.
+  // @paperboat/shared is a linked sibling with its own node_modules; keep one React and Three.
   resolve: {
-    dedupe: ["react", "react-dom", "@xyflow/react"],
+    dedupe: ["react", "react-dom", "@xyflow/react", "three"],
     // What a toolkit's web code imports from the app (types only, erased at build; see src/host.ts).
     alias: { "@paperboat/host": fileURLToPath(new URL("./src/host.ts", import.meta.url)) },
   },

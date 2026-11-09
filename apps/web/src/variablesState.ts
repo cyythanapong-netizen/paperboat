@@ -7,7 +7,7 @@ import type { EngineState } from "./engine";
 import type { ClientMsg, DashboardLayout, ParamValue, ServerMsg, Station, Variable, Variables } from "./protocol";
 import { emptyOf, freeName, inlineRef, merged, refersTo, renameInFormula, renameRef, usesOf, type Use } from "./bindings";
 import { inlineInText, mapTexts, renameInText, textUsing } from "./dashboardLayout";
-import type { VarsApi } from "./Variables";
+import type { VarsApi } from "./VarsContext";
 import { isBlock, type FlowNode } from "./flowModel";
 
 export function useVariables(state: EngineState, send: (m: ClientMsg) => void, subscribe: (f: (m: ServerMsg) => void) => () => void) {
