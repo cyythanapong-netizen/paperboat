@@ -25,7 +25,7 @@ function Plot({ name, channels, idle }: { name: string; channels: readonly Chann
   const lasts = channels.map((c) => c.buf.last);
   const readout =
     lasts[0] === undefined
-      ? idle ? "graph" : "–"
+      ? "–"
       : channels.length === 1
         ? lasts[0].toFixed(3)
         : channels.map((c, i) => `${c.label} ${lasts[i]?.toFixed(2)}`).join("  ");

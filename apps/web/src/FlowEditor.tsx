@@ -1,5 +1,5 @@
-import { Background, MiniMap, ReactFlow, SelectionMode, useReactFlow, useStore, useStoreApi, useUpdateNodeInternals, type OnEdgesChange, type OnNodesChange } from "@xyflow/react";
-import { useContext, useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
+import { Background, MiniMap, ReactFlow, SelectionMode, useNodesInitialized, useReactFlow, useStore, useStoreApi, useUpdateNodeInternals, type OnEdgesChange, type OnNodesChange } from "@xyflow/react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import { QuickAdd, type Item } from "./Browser";
 import { copySelection } from "./clipboard";
 import { useCanvasHotkeys } from "@paperboat/shared";
@@ -52,6 +52,8 @@ type Props = {
   controls?: MutableRefObject<FlowControls | null>;
   /** The open sheet's flow type (#9): quick add offers the blocks that work in it. */
   sheetFlow?: FlowType;
+  /** Room to leave round the whole flow, so the glass dock and the minimap don't cover its bottom. */
+  fitPadding?: { top?: `${number}px`; right?: `${number}px`; bottom?: `${number}px`; left?: `${number}px` };
 };
 
 /**
@@ -90,7 +92,7 @@ export type FlowControls = {
 const NO_CONNECTORS: Connectors = {};
 
 /** Blocks by palette group, groups in catalog order. */
-export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls, sheetFlow }: Props) {
+export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls, sheetFlow, fitPadding }: Props) {
   const states = useContext(RunStates);
   // ---- Levels (#68): a subsystem or story opens on the canvas; the way back is the breadcrumb ----
   const { level, go, path } = useFlowLevels(wanted, setLevel, nodes, edges, setNodes, setEdges);
@@ -104,6 +106,17 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
 
   // ---- Adding: quick add at the cursor, and cards dropped from the browser (#50) ----
   const { screenToFlowPosition, deleteElements, fitView } = useReactFlow();
+  // ---- Fit once the cards have a size: an early fit measures one card and zooms to the cap ----
+  const initialized = useNodesInitialized();
+  const fitted = useRef(false);
+  useLayoutEffect(() => {
+    fitted.current = false; // another level: fit its own contents
+  }, [level]);
+  useEffect(() => {
+    if (!initialized || fitted.current) return;
+    fitted.current = true;
+    fitView({ padding: fitPadding ?? 0.1, duration: 200 });
+  }, [initialized, fitView, fitPadding, level]);
 
   const store = useStoreApi();
   const latest = useRef({ nodes, edges, level });
@@ -333,6 +346,7 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
           onSelectionEnd={() => setBusy(false)}
           zoomOnDoubleClick={false} // double-click is quick add
           fitView
+          fitViewOptions={fitPadding ? { padding: fitPadding } : undefined}
         >
           <Background />
           {level && <LevelCrumbs level={level} path={path} go={go} rename={(id, label) => actions.update(id, { label })} />}

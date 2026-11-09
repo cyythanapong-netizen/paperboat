@@ -482,7 +482,7 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
       </span>
       <span className="var-type">{formula && v.type !== "number" ? "ƒ formula" : v.type}</span>
       {formula && v.type !== "number" ? <output className="var-value out">{show(vars.values[v.name])}</output> : <ValueField v={v} onChange={onChange} disabled={vars.locked && !v.tunable} />}
-      <span className="var-unit">{v.unit ?? ""}</span>
+      <span className="var-unit" title={v.unit ?? undefined}>{v.unit ?? ""}</span>
       <button className={`var-uses${uses.length ? "" : " none"}`} onClick={onOpen} tabIndex={-1}>
         {uses.length ? count(uses.length, "use") : "unused"}
       </button>

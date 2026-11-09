@@ -1,5 +1,5 @@
 import { useEdgesState, useNodesState, useReactFlow } from "@xyflow/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "./engine";
 import { BrowserWindow, type Item } from "./Browser";
 import { FlowEditor, type FlowControls } from "./FlowEditor";
@@ -26,6 +26,7 @@ import { dockSettings, runBlocker, runClock, speedChange } from "./runStatus";
 import { useProjectSession } from "./projectSession";
 import { useToolkitInstall } from "./toolkitInstall";
 import { menuCommands, solverChoice } from "./menuCommands";
+import { solverShort } from "./solvers";
 import { count } from "./words";
 import { AppHeader } from "./AppHeader";
 import { StationView } from "./StationView";
@@ -40,6 +41,10 @@ import { MissingToolkitsDialog } from "./Toolkits";
 import { useUndo } from "./undo";
 import { LockDialog } from "./LockDialog";
 import { SolverDialog } from "./SolverDialog";
+
+/** The glass dock floats over the canvas's bottom, and the minimap over its corner: fit leaves room for both. */
+const FIT_PADDING = { top: "16px", right: "16px", bottom: "96px", left: "16px" } as const;
+const FIT_PADDING_MINIMAP = { ...FIT_PADDING, bottom: "220px" } as const;
 
 const DEFAULT_URL =
   new URLSearchParams(location.search).get("backend") ??
@@ -89,8 +94,12 @@ export function App() {
 
   // The Flow sheet's flow type, if one was chosen (#9); null: taken from its blocks.
   const [flowChoice, setFlowChoice] = useState<FlowType | null>(null);
+  // Fit the Flow leaving room for the glass dock and (on the Flow page) the minimap.
+  const fitFlow = useCallback(() => {
+    fitView({ padding: mode === "navigator" && page === "flow" ? FIT_PADDING_MINIMAP : FIT_PADDING });
+  }, [fitView, mode, page]);
   // The canvas and the station follow the backend, keeping what the user changed since it loaded them.
-  const { station, editStation } = useCanvasSync(state, send, nodes, edges, setNodes, setEdges, fitView, setFlowChoice);
+  const { station, editStation } = useCanvasSync(state, send, nodes, edges, setNodes, setEdges, fitFlow, setFlowChoice);
 
   // Ctrl+Z / Ctrl+Shift+Z on the Flow canvas; a new graph from the backend starts afresh.
   const history = useUndo(nodes, edges, setNodes, setEdges, state.loaded);
@@ -99,7 +108,7 @@ export function App() {
   useEffect(() => {
     if (mode === "navigator" && page !== "flow") return;
     // After the rail has stepped aside or the column has slid (both about half a second).
-    const t = window.setTimeout(() => fitView({ duration: 200 }), 520);
+    const t = window.setTimeout(() => fitView({ duration: 200, padding: mode === "navigator" && page === "flow" ? FIT_PADDING_MINIMAP : FIT_PADDING }), 520);
     return () => window.clearTimeout(t);
   }, [mode, page, boardDrawer.open, flowDrawer.open, fitView]);
 
@@ -131,6 +140,7 @@ export function App() {
   const showBlock = (id: string) => {
     const node = nodes.find((n) => n.id === id);
     if (!node) return;
+    if (mode === "lookout") flowDrawer.setOpen(true);
     setPage("flow");
     setFlowLevel(levelOf(id, nodes));
     // Open the frame it's in, if that's collapsed.
@@ -193,8 +203,22 @@ export function App() {
         Grid
       </button>
     ) : null;
+  // A key that can't run now stays and says why in its tooltip (DESIGN.md).
+  const addWhy = (which: "flow" | "station") =>
+    which === "flow"
+      ? "Add a block"
+      : running
+        ? "Stop the run to add station objects"
+        : state.objects.length === 0
+          ? "This backend has no station objects to add"
+          : "Add a station object";
   const addKey = (which: "flow" | "station") => (
-    <button className="key small add" disabled={which === "station" && (running || state.objects.length === 0)} onClick={() => setBrowser(browser === which ? null : which)}>
+    <button
+      className="key small add"
+      title={addWhy(which)}
+      disabled={which === "station" && (running || state.objects.length === 0)}
+      onClick={() => setBrowser(browser === which ? null : which)}
+    >
       + Add
     </button>
   );
@@ -220,6 +244,15 @@ export function App() {
     setMode("navigator");
   };
   const at = PAGES.findIndex((p) => p.id === page);
+  // The Flow is unmounted while Lookout's drawer is closed (React Flow needs a size to draw into).
+  const flowShown = mode !== "lookout" || flowDrawer.open;
+  // Its head counts the level in view, not the whole flow.
+  const flowInfo = useMemo(() => {
+    const here = nodes.filter((n) => isBlock(n) && levelOf(n.id, nodes) === flowLevel);
+    if (!flowLevel) return count(here.length, "block");
+    const group = nodes.find((n) => n.id === flowLevel);
+    return `${count(here.length, "block")} in ${group && isFrame(group) ? group.data.label : "this level"}`;
+  }, [nodes, flowLevel]);
   const panel = (p: Page) => ({ page: p, mode, current: page === p, at, onOpen: () => open(p), drawer: drawerOf(p) });
   // Closed, the Board's head still shows the latest of its first few number readouts.
   const peek = Object.keys(monitors)
@@ -287,7 +320,7 @@ export function App() {
         setMode(lock.modes[0] as Mode);
       }
     }
-    requestAnimationFrame(() => fitView());
+    requestAnimationFrame(() => fitView({ padding: FIT_PADDING }));
   };
   const { projectTitle, dirty, notice, setNotice, undoOpen, recent, lastSession, restore, openProject, openFile, saveProject } = useProjectSession(
     state,
@@ -317,7 +350,7 @@ export function App() {
         state={state}
         running={running}
         commands={commands}
-        solver={usesSolvers ? currentSolver : undefined}
+        solver={usesSolvers ? solverShort(currentSolver) : undefined}
         projectTitle={projectTitle}
         dirty={dirty}
         installToolkit={installToolkit}
@@ -368,8 +401,9 @@ export function App() {
               {addKey("flow")}
             </>
           }
-          info={count(nodes.filter(isBlock).length, "block")}
+          info={flowInfo}
         >
+          {flowShown && (
           <RunStates.Provider value={runStates}>
             <FlowEditor
               blocks={state.blocks}
@@ -386,8 +420,10 @@ export function App() {
               setLevel={setFlowLevel}
               locked={running}
               sheetFlow={sheet.flow}
+              fitPadding={mode === "navigator" && page === "flow" ? FIT_PADDING_MINIMAP : FIT_PADDING}
             />
           </RunStates.Provider>
+          )}
         </Panel>
         <Panel
           {...panel("dashboard")}
@@ -455,7 +491,7 @@ export function App() {
             blocksCount: state.blocks.length,
             objectsCount: state.objects.length,
             stationView: state.stationView.view ?? state.view.mode,
-            solver: state.runDefaults.solver,
+            solver: state.runDefaults.solver ? solverShort(state.runDefaults.solver) : undefined,
             dt: state.runDefaults.dt,
             duration: state.runDefaults.duration,
             toolkits: state.toolkits.map((t) => ({ name: t.name, installed: t.installed, version: t.version })),

@@ -374,8 +374,28 @@ export function display<N extends AnyNode, E extends Edge>(
 const boundaryCache = new Map<string, { key: string; node: AnyNode }>();
 const BLOCK_W = 190;
 const BLOCK_H = 130;
-/** An In or Out port's width: its tag and its name in small mono type. */
-const boundaryWidth = (d: BoundaryData) => Math.round(48 + 7 * d.label.length);
+/**
+ * An In or Out port's width: its tag and its name in the head's small type, measured. Counting
+ * characters under-estimates mono text, and `Out` needs more room than `In` (both clipped).
+ */
+let textMeasure: CanvasRenderingContext2D | null | undefined;
+const boundaryWidth = (d: BoundaryData) => {
+  const tag = d.dir === "in" ? "In" : "Out";
+  if (textMeasure === undefined) {
+    textMeasure =
+      typeof document === "undefined"
+        ? null
+        : document.createElement("canvas").getContext("2d");
+  }
+  if (!textMeasure) return Math.round((d.dir === "in" ? 34 : 42) + 7.5 * d.label.length);
+  const tokens = getComputedStyle(document.documentElement);
+  const mono = tokens.getPropertyValue("--font-mono").trim() || "monospace";
+  const sans = tokens.getPropertyValue("--font-sans").trim() || "sans-serif";
+  textMeasure.font = `400 12px ${mono}`;
+  const name = textMeasure.measureText(d.label).width;
+  textMeasure.font = `600 12px ${sans}`;
+  return Math.ceil(name + textMeasure.measureText(tag).width + 32); // padding 10 + 10, the gap, the border, slack
+};
 
 /**
  * A group round `children`, which become its children. They all have the same parent (or

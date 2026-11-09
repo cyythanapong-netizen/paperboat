@@ -115,13 +115,24 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .field input { font-size: var(--size-xs); padding: 0; width: 20ch; }
 .conn { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; }
 .run-status { font: 500 var(--size-2xs) var(--font-sans); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.status-running { color: var(--signal); }
-.run-delay { color: var(--signal); font-weight: 600; }
-.status-failed { color: var(--danger); }
+/* Empty between runs, the slot still holds its widest label, so Run and Cancel don't move. */
+.run-status-room { visibility: hidden; }
+.status-running { color: var(--signal-text); }
+.run-delay { color: var(--signal-text); font-weight: 600; }
+.status-failed { color: var(--danger-text); }
 .run-options { display: inline-flex; align-items: center; gap: var(--space-2); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .run-options input, .run-options select { height: 30px; background: var(--surface-well); box-shadow: var(--well-shadow); color: var(--text); border: 0; border-radius: var(--radius-md); padding: 0 var(--space-2); }
 .run-options input::-webkit-inner-spin-button, .run-options input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-.run-options input { width: 7ch; text-align: right; }
+/* The duration is one slot, so the dock keeps its width: a well for the number, or the same well
+   turned into a pressed key that says ∞ while the run is infinite (selection in brackets, not a fill). */
+.run-options .run-duration { width: 11ch; text-align: right; }
+.run-options .run-duration.on {
+  display: inline-grid; place-items: center; height: 30px; padding: 0; text-align: center;
+  background: var(--surface-well); box-shadow: var(--well-shadow); border: 0; border-radius: var(--radius-md);
+  font: 500 var(--size-xs) var(--font-mono); color: var(--text);
+}
+.run-options .run-duration.on::before { content: "["; margin-right: 3px; }
+.run-options .run-duration.on::after { content: "]"; margin-left: 3px; }
 
 /* Choice of one: the chosen option sits in brackets in bold ink; the others plain grey.
    The brackets are always there (hidden when not chosen), so nothing shifts. */
@@ -164,7 +175,7 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
   font: 500 var(--size-2xs) var(--font-mono); color: var(--text-muted);
   border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
 }
-.count { font: 500 var(--size-2xs) var(--font-mono); color: var(--danger); }
+.count { font: 500 var(--size-2xs) var(--font-mono); color: var(--danger-text); }
 
 /* Pages: one at a time (Navigator), or all as tiles (Commander). */
 .pages { min-height: 0; min-width: 0; display: grid; gap: var(--gutter); }
@@ -338,8 +349,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .block-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .block-tag { font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
-.tag-running { color: var(--signal); font-weight: 500; }
-.tag-failed, .tag-missing { color: var(--danger); font-weight: 500; }
+.tag-running { color: var(--signal-text); font-weight: 500; }
+.tag-failed, .tag-missing { color: var(--danger-text); font-weight: 500; }
 /* Waiting its turn, or reused from an earlier run: said in words, in the muted ink (no colour: not live). */
 .tag-queued, .tag-cached { color: var(--text-muted); font-weight: 500; }
 .linked-tag { font: 400 var(--size-2xs) var(--font-mono); color: var(--text-muted); text-transform: none; }
@@ -355,7 +366,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .react-flow__node.selected > .frame { outline: var(--select-outline); outline-offset: var(--select-offset); }
 .block.failed { border-color: var(--danger); }
 .block.missing { border: 1.5px dashed var(--danger); }
-.block.missing .block-title { color: var(--danger); }
+.block.missing .block-title { color: var(--danger-text); }
 .block.commented { opacity: 0.45; border-style: dashed; }
 .compact-block.commented .plate { opacity: 0.45; border-style: dashed; }
 .block.comment-through { position: relative; }
@@ -413,9 +424,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
 .block-note-btn {
   background: transparent; border: 0; color: var(--text-muted); cursor: pointer;
-  padding: 0 4px; display: inline-flex; align-items: center; justify-content: center;
-  font: 500 var(--size-2xs) var(--font-mono); line-height: 1; border-radius: var(--radius-sm);
+  width: 16px; height: 16px; padding: 0; display: inline-grid; place-items: center;
+  font: 400 var(--size-2xs) var(--font-sans); line-height: 1; border-radius: var(--radius-sm);
+  visibility: hidden;
 }
+.block:hover .block-note-btn, .block.selected .block-note-btn, .block-note-btn.has-note, .block-note-btn:focus-visible { visibility: visible; }
 .block-note-btn:hover { color: var(--text); background: var(--surface-sunken); }
 .block-note-btn.has-note { color: var(--text); }
 .block-note-well {
@@ -435,7 +448,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   background: var(--surface-raised); color: var(--text);
   pointer-events: all; position: relative;
 }
-.remove:hover { border-color: var(--danger); color: var(--danger); }
+.remove:hover { border-color: var(--danger); color: var(--danger-text); }
 .remove-icon { width: 8px; height: 8px; display: block; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; }
 .block-title .remove { width: 16px; height: 16px; }
 .react-flow__edgelabel-renderer .remove { position: absolute; }
@@ -444,7 +457,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .frame { width: 100%; height: 100%; border: 1px dashed var(--line-strong); border-radius: var(--radius-lg); background: transparent; }
 .frame.collapsed { min-width: 190px; height: auto; background: var(--surface-raised); border-style: solid; }
 .frame-story { border: 1.5px solid var(--line-ink); }
-.frame.active .frame-kind { color: var(--signal); }
+.frame.active .frame-kind { color: var(--signal-text); }
 .frame-head { position: relative; display: flex; align-items: center; gap: var(--space-1); padding: 0 var(--space-2); font-size: var(--size-2xs); border-bottom: 1px solid var(--line); }
 .frame-label { flex: 1; min-width: 50px; border: 0; background: transparent; color: inherit; font: 600 var(--size-xs) var(--font-sans); padding: 0; }
 .frame-kind { font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
@@ -507,7 +520,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .dash-tab .opt:hover { color: var(--text); }
 .dash-tab.drop { outline: 1.5px dashed var(--line-ink); outline-offset: 2px; }
 .tab-remove { border: 0; background: none; padding: 0 3px; color: var(--text-muted); font: 400 var(--size-md) / 1 var(--font-sans); cursor: pointer; }
-.tab-remove:hover { color: var(--danger); }
+.tab-remove:hover { color: var(--danger-text); }
 .deco-edit { width: 100%; min-width: 8ch; height: 24px; padding: 0 var(--space-2); background: var(--surface-well); box-shadow: var(--well-shadow); border: 0; border-radius: var(--radius-sm); color: var(--text); font: inherit; }
 .dash-tab .tab-edit { width: 14ch; height: 22px; font: 400 var(--size-xs) var(--font-mono); }
 .dash-tab .tab-edit[aria-invalid="true"] { outline: 1.5px solid var(--danger); outline-offset: 1px; }
@@ -564,7 +577,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .instrument figcaption output { color: var(--text); }
 /* Before a run sends anything: the same frame, greyed and dashed. */
 .instrument.idle .screen { background: transparent; border: 1px dashed var(--line-strong); color: var(--text-muted); }
-.instrument.idle .screen output { color: var(--text-muted); }
+.instrument.idle .screen output, .instrument.idle figcaption output { color: var(--text-muted); }
 
 
 /* ---- Adding things (#50): the Flow's tools, the collection window, quick add, drops ---- */
@@ -693,16 +706,16 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .vars-glyph { font-weight: 600; color: var(--text); }
 .vars-sheet .panel-head { cursor: default; }
 .vars-sheet .panel-head.side-tab { cursor: pointer; }
-.vars-sheet .panel-head .x { width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); font-size: 11px; }
+.vars-sheet .panel-head .x { width: 20px; height: 20px; padding: 0; display: grid; place-items: center; border-radius: var(--radius-round); font-size: var(--size-2xs); }
 .vars-tools { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); }
 .vars-tools .well { display: flex; height: 28px; padding: 0 var(--space-2); }
 .vars-tools input { flex: 1; min-width: 0; font: var(--size-2xs) var(--font-sans); }
-.vars-error { margin: 0; padding: var(--space-2) var(--space-3); color: var(--danger); font: var(--size-2xs) var(--font-mono); border-bottom: 1px solid var(--line); }
+.vars-error { margin: 0; padding: var(--space-2) var(--space-3); color: var(--danger-text); font: var(--size-2xs) var(--font-mono); border-bottom: 1px solid var(--line); }
 .vars-list { flex: 1; overflow: auto; padding-bottom: var(--space-2); }
 .vars-list .empty code { font-family: var(--font-mono); }
 .vars-group { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-3) var(--space-1); font: 600 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .vars-group::after { content: ""; flex: 1; height: 1px; background: var(--line); }
-.var-row { display: grid; grid-template-columns: minmax(0, 1fr) 52px 64px 42px 46px; align-items: center; gap: 6px; padding: 5px var(--space-3); margin: 0 var(--space-1); border-radius: var(--radius-md); font-size: var(--size-xs); }
+.var-row { display: grid; grid-template-columns: minmax(0, 1fr) 52px 64px 64px 46px; align-items: center; gap: 6px; padding: 5px var(--space-3); margin: 0 var(--space-1); border-radius: var(--radius-md); font-size: var(--size-xs); }
 .var-row.open { outline: var(--select-outline); outline-offset: -2px; margin: var(--space-1); background: var(--surface-raised); }
 .var-name { font: 500 var(--size-xs) var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: grab; }
 .var-name:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -716,7 +729,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .var-uses { border: 0; background: none; padding: 0; height: auto; font: var(--size-2xs) var(--font-sans); color: var(--text-muted); text-align: right; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
 .var-uses.none { text-decoration: none; }
 .var-expr { grid-column: 1 / -1; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); overflow-wrap: anywhere; }
-.var-row.bad .var-name, .bad-text { color: var(--danger); }
+.var-row.bad .var-name, .bad-text { color: var(--danger-text); }
 .small { font-size: var(--size-2xs); }
 .grey { color: var(--text-muted); }
 .var-detail { grid-column: 1 / -1; display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 7px 8px; align-items: center; margin-top: 4px; padding: var(--space-2) 0 var(--space-1); border-top: 1px solid var(--line); font-size: var(--size-2xs); }
@@ -742,7 +755,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .var-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: flex-end; align-items: center; padding-top: var(--space-1); }
 .vars-foot { display: flex; justify-content: space-between; align-items: center; padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 button.link { border: 0; background: none; height: auto; padding: 0; font: inherit; color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
-.mode-commander .var-row, .mode-lookout .var-row { grid-template-columns: minmax(0, 1fr) 64px 44px 50px; }
+.mode-commander .var-row, .mode-lookout .var-row { grid-template-columns: minmax(0, 1fr) 64px 64px 50px; }
 .mode-commander .var-row .var-type, .mode-lookout .var-row .var-type { display: none; }
 
 /* A field bound to a variable: the variable in an ink outline, its value after it. */
@@ -754,7 +767,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .bound .ref.f::before { content: "ƒ "; color: var(--text-muted); }
 .bound .val { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); min-width: 18px; text-align: right; }
 .bound.hot .ref { outline: 2px solid var(--line-ink); outline-offset: 2px; }
-.bound.bad .ref { border-color: var(--danger); color: var(--danger); }
+.bound.bad .ref { border-color: var(--danger); color: var(--danger-text); }
 .formula-box { position: relative; display: inline-flex; }
 .param input.formula { width: 110px; text-align: left; font-family: var(--font-mono); border-bottom: 2px solid var(--line-ink); }
 .pop { position: absolute; z-index: 50; top: calc(100% + 6px); right: 0; width: 280px; padding: var(--space-1) 0; background: var(--surface-raised); border: 1.5px solid var(--line-ink); border-radius: var(--radius-lg); box-shadow: var(--shadow-1); font-size: var(--size-xs); color: var(--text); text-align: left; white-space: normal; cursor: default; }
@@ -812,7 +825,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .backend-card-head { font-weight: 600; font-family: var(--font-mono); color: var(--text); margin-bottom: var(--space-2); display: flex; align-items: center; justify-content: space-between; }
 .backend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px var(--space-3); }
 .backend-grid-item { display: flex; flex-direction: column; gap: 2px; }
-.backend-grid-item .lbl { color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+.backend-grid-item .lbl { color: var(--text-muted); font-size: var(--size-2xs); }
 .backend-grid-item .val { color: var(--text); font-family: var(--font-mono); word-break: break-all; }
 .backend-note { margin: 0; padding: 0 var(--panel-pad) var(--panel-pad); }
 
@@ -846,7 +859,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .toolkit-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
 .toolkit-status { display: inline-flex; align-items: center; gap: 6px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
 .toolkit-status.on { color: var(--text); font-weight: 500; }
-.toolkit-status.req { color: var(--signal); font-weight: 500; }
+.toolkit-status.req { color: var(--signal-text); font-weight: 500; }
 .toolkit-desc { margin: 0; font-size: var(--size-2xs); color: var(--text-muted); line-height: 1.4; }
 .toolkit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); margin-top: var(--space-1); }
 .toolkit-version-select { height: 24px; padding: 0 6px; font: 400 var(--size-2xs) var(--font-mono); color: var(--text); background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
@@ -872,8 +885,10 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .var-controls-group { display: contents; }
 .var-control { display: flex; align-items: center; gap: var(--space-3); font: 500 var(--size-2xs) var(--font-sans); white-space: nowrap; }
 .var-control-name { min-width: 4ch; color: var(--text-muted); }
-.var-control input[type="range"] { flex: 1 1 6rem; min-width: 4rem; max-width: 10rem; }
-.var-control .var-value { width: 6ch; }
+.var-control input[type="range"] { flex: 1 1 6rem; min-width: 4rem; max-width: 10rem; accent-color: var(--line-ink); }
+.var-control .var-check { accent-color: var(--text); }
+/* One field look in the dock: the same well as the run length. */
+.var-control .var-value { width: 6ch; border: 0; background: var(--surface-well); box-shadow: var(--well-shadow); border-radius: var(--radius-md); height: 24px; }
 .var-control select.var-value { width: auto; }
 .dock .var-controls-group { display: contents; }
 

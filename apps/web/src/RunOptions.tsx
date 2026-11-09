@@ -4,6 +4,9 @@ import { changed } from "./project";
 
 const SPEEDS = [0.25, 0.5, 1, 2, 4, 0];
 
+/** The duration the ∞ key restores when clicked. */
+const finite = (defaults: RunSettings) => (defaults.duration && defaults.duration > 0 ? defaults.duration : 10);
+
 /**
  * How long and how fast the next run goes, beside Run. Starts at the backend's defaults
  * (hello.run); only what the user changed is sent with graph.run. The speed also changes a
@@ -18,41 +21,23 @@ export function RunOptions({ defaults, value, onChange }: { defaults: RunSetting
   const isInfinite = duration === 0;
 
   return (
-    <span className="run-options" title="The next run's length and speed (the backend's defaults until changed)">
+    <span className="run-options" title="The next run's length and speed (the backend's defaults until changed; 0 s runs forever)">
       for
+      {/* One slot, one width: a well for the number, or the same well as a pressed key saying ∞. */}
       {isInfinite ? (
-        <span
-          className="num infinity-tag"
+        <button
+          type="button"
+          className="key small run-duration on"
+          aria-pressed="true"
           title="Infinite run (0 s): click to set a finite duration"
-          onClick={() => set({ duration: defaults.duration && defaults.duration > 0 ? defaults.duration : 10 })}
-          style={{ cursor: "pointer", padding: "0 4px", userSelect: "none" }}
+          onClick={() => set({ duration: finite(defaults) })}
         >
           ∞
-        </span>
+        </button>
       ) : (
-        <NumberField className="num" value={duration} valid={(v) => v >= 0} onChange={(duration) => set({ duration })} />
+        <NumberField className="run-duration" value={duration} valid={(v) => v >= 0} onChange={(duration) => set({ duration })} />
       )}
       s
-      <button
-        type="button"
-        className={`infinity-btn ${isInfinite ? "active" : ""}`}
-        title={isInfinite ? "Infinite run active (0 s); click to restore finite duration" : "Set infinite run duration (0 s)"}
-        style={{
-          border: "none",
-          background: isInfinite ? "var(--signal)" : "transparent",
-          color: isInfinite ? "var(--text-on-signal)" : "inherit",
-          borderRadius: 3,
-          cursor: "pointer",
-          padding: "1px 5px",
-          marginLeft: 2,
-          fontWeight: "bold",
-          fontSize: 13,
-          lineHeight: 1,
-        }}
-        onClick={() => set({ duration: isInfinite ? (defaults.duration && defaults.duration > 0 ? defaults.duration : 10) : 0 })}
-      >
-        ∞
-      </button>
       <select value={speed} title="Times real time; during a run, it changes the run at once" onChange={(e) => set({ speed: Number(e.target.value) })}>
         {SPEEDS.map((x) => (
           <option key={x} value={x}>

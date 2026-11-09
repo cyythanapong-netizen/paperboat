@@ -151,7 +151,7 @@ export function ToolkitsButton({
       <button
         className={`key small${open ? " on" : ""}`}
         aria-expanded={open}
-        title="Optional toolkits: install, update, or uninstall"
+        title="Toolkits: install, update, or uninstall"
         onClick={() => setOpen(!open)}
       >
         {anyBusy && <Spinner label="Toolkit operation in progress" />}
@@ -159,7 +159,7 @@ export function ToolkitsButton({
       </button>
       {open && (
         <section className="pop toolkits-pop" role="dialog" aria-label="Toolkits">
-          <div className="head">Optional toolkits</div>
+          <div className="head">Toolkits</div>
           {items.length === 0 ? (
             <p className="toolkit-desc" style={{ padding: "8px 12px", margin: 0 }}>
               No optional toolkits registered.
@@ -248,8 +248,14 @@ export function ToolkitsButton({
                       </button>
                       <button
                         className="key small"
-                        disabled={!connected || !!busy}
-                        title={`Remove ${t.name} and rebuild`}
+                        disabled={!connected || !!busy || !!t.builtin || !!t.required}
+                        title={
+                          t.builtin
+                            ? "Builtin: it ships with the engine"
+                            : t.required
+                              ? "Required by this backend: it can't be removed"
+                              : `Remove ${t.name} and rebuild`
+                        }
                         onClick={() => onUninstall(t.name)}
                       >
                         {busy === "uninstalling" ? (
