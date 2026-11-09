@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Check all three repos (paperboat, ../paperboat-shared, ../squero-studio-om) and print one table.
+# Check paperboat and ../paperboat-shared (and ../squero-studio-om when it is checked out) and print one table.
 #   scripts/verify.sh            everything: builds, engine tests, sdk-backend check, docs
 #   scripts/verify.sh --quick    typecheck + unit tests + generator checks only (seconds)
 # Exit 1 if any step fails; a failed step's log is in $LOG/<n>.log (default /tmp/paperboat-verify).
@@ -17,12 +17,16 @@ step() { # name dir cmd...
   else rows+=("FAIL  $name  -> $LOG/$n.log"); fail=1; fi
 }
 
-for d in "$SHARED" "$STUDIO"; do [ -d "$d" ] || { echo "missing $d (clone it next to this repo)"; exit 1; }; done
+[ -d "$SHARED" ] || { echo "missing $SHARED (clone paperboat-shared next to this repo)"; exit 1; }
 
 step "shared: typecheck"          "$SHARED" npm run -s typecheck
 step "shared: tests"              "$SHARED" npm test
-step "studio: typecheck"          "$STUDIO" npm run -s typecheck
-step "studio: tests"              "$STUDIO" npm test
+if [ -d "$STUDIO" ]; then
+  step "studio: typecheck"        "$STUDIO" npm run -s typecheck
+  step "studio: tests"            "$STUDIO" npm test
+else
+  rows+=("skip  studio (not checked out)")
+fi
 step "paperboat: protocol.ts current" "$ROOT" python3 protocol/gen_ts.py --check
 step "paperboat: tokens current"  "$ROOT" python3 docs/gen_tokens.py --check
 step "paperboat: typecheck"       "$ROOT" npm run -s typecheck
@@ -30,7 +34,7 @@ step "paperboat: web+cli tests"   "$ROOT" npm test -w @paperboat/web -w @paperbo
 if [ $QUICK = 0 ]; then
   step "studio: build"            "$STUDIO" npm run -s build
   step "paperboat: web build"     "$ROOT"   npm run -s build
-  step "engine: build"            "$ROOT"   cmake --build engine/build -j"$(nproc)"
+  step "engine: build"            "$ROOT"   cmake --build engine/build -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
   step "engine: unit tests"       "$ROOT"   engine/build/tests/paperboat_tests
   step "engine: check sdk-backend" "$ROOT" "$PB" check engine/tests/sdk-backend
   step "docs: build (-W)"         "$ROOT"   ./scripts/build_docs.sh

@@ -818,10 +818,17 @@ bool BackendManager::fetch_examples() {
     std::cerr << "Updating examples in " << dir.string() << '\n';
     return toolkit::run_command({"git", "-C", dir.string(), "pull", "--ff-only"}, {}, log) == 0;
   }
-  std::cerr << "Fetching examples into " << dir.string() << '\n';
+  // PAPERBOAT_EXAMPLES_REPO points the clone somewhere else (a fork, a private mirror)
+  const char* env_repo = std::getenv("PAPERBOAT_EXAMPLES_REPO");
+  const std::string repo = env_repo && *env_repo ? env_repo : std::string(kExamplesRepo);
+  std::cerr << "Fetching examples from " << repo << " into " << dir.string() << '\n';
   std::error_code ec;
   fs::create_directories(dir.parent_path(), ec);
-  return toolkit::run_command({"git", "clone", "--depth", "1", std::string(kExamplesRepo), dir.string()}, {}, log) == 0;
+  if (toolkit::run_command({"git", "clone", "--depth", "1", repo, dir.string()}, {}, log) == 0) return true;
+  std::cerr << "error: could not clone " << repo << " (it may be private, or not reachable from here).\n"
+            << "  Clone the examples yourself next to this checkout (../paperboat-examples), or set\n"
+            << "  PAPERBOAT_EXAMPLES_DIR to a checkout, or PAPERBOAT_EXAMPLES_REPO to another git URL.\n";
+  return false;
 }
 
 int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRunOptions& opts) {

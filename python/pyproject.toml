@@ -3,6 +3,8 @@ name = "paperboat"
 dynamic = ["version"]
 description = "Python bindings for Paperboat's C++ engine: write a backend's domain code in Python"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 
 [build-system]
 requires = ["scikit-build-core>=0.10"]

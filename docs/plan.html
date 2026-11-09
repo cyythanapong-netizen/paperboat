@@ -146,13 +146,13 @@ td code { white-space: nowrap; }
         <tbody>
           <tr><td><b>Web app</b></td><td>Station (2D/3D), Flow (React Flow), Dashboard plots and Console in one screen; backend switching and auto-reconnect. Wires are typed (signal or step) and deletable (Delete, ×, drag off); a Step flow lights up the block it is at.</td></tr>
           <tr><td><b>Protocol v0</b></td><td>JSON over one WebSocket, with <code>graph.load</code>, a 2D/3D <code>view</code> and keyboard <code>input</code>. A domain-neutral smoke test checks any backend.</td></tr>
-          <tr><td><b>Toolkit (C++)</b></td><td>Packages <code>base</code> (constant, key), <code>signal</code> (waves), <code>math</code> (arithmetic), <code>dashboard</code> (graph, display), <code>control</code> (dynamics) and <code>step</code> (start, when, wait, if, repeat, stop); station templates next to blocks (the <code>control/cart-pole</code> station object, with a linked block); TOML descriptors that <code>import</code> whole packages into the palette; <code>paperboat-catalog</code>; 23 Catch2 tests. Python backends run on the same engine through nanobind bindings and load the same descriptors.</td></tr>
-          <tr><td><b>Example backends</b></td><td>Signal flow: mass-spring, parametric geometry and a runner game (jump and duck) in Python; cart-pole in C++ with no domain code (blocks and the Cart-pole station object from the toolkit; spawn several on the Station page). Step flow: a 3D animation (move, rotate, scale) in Python. All pass the smoke test.</td></tr>
+          <tr><td><b>Toolkit (C++)</b></td><td>Packages <code>base</code> (constant, key), <code>signal</code> (waves), <code>math</code> (arithmetic), <code>dashboard</code> (graph, scope, display, switch), <code>control</code> (dynamics) and <code>step</code> (start, when, wait, if, repeat, stop); station templates next to blocks (the <code>control/cart-pole</code> station object, with a linked block); TOML descriptors that <code>import</code> whole packages into the palette; <code>paperboat-catalog</code>; 157 Catch2 tests. Python backends run on the same engine through nanobind bindings and load the same descriptors.</td></tr>
+          <tr><td><b>Example backends</b></td><td>Nine backends, in the separate <code>paperboat-examples</code> repository. Signal flow: mass-spring, parametric geometry, a runner game, a chain of masses and springs and a supply network in Python; cart-pole, double pendulum (RLS, swing-up, LQR) and an OpenCV parts counter in C++. Step flow: a 3D animation (move, rotate, scale) in Python. All pass the smoke test and their golden runs.</td></tr>
           <tr><td><b>Engine core</b></td><td><code>engine/core</code>: protocol session, WebSocket server, station and graph checking, Signal and Step flow runs, node events, and a cache that lets a run that evaluates once reuse the blocks nothing changed for. The cart-pole backend is a few lines on it.</td></tr>
         </tbody>
       </table>
     </div>
-    <p>Day-to-day work is tracked as GitHub issues (priorities P0–P3); rules, names and lessons live in <code>GUIDELINES.md</code>.</p>
+    <p>Day-to-day work is tracked as GitHub issues (priorities P0–P3); setup, build and conventions are in <code>CONTRIBUTING.md</code>.</p>
   </div>
 </section>
 
@@ -554,7 +554,7 @@ void register_structural(Domain&amp; d) {
 │  │                     runner-python, animation-python (Step flow); later structural, cfd
 │  └─ projects/          truss bridge, cart-pole LQR, cylinder wake (planned)
 ├─ docs/                 this plan
-├─ GUIDELINES.md         rules, names (glossary), lessons learned
+├─ CONTRIBUTING.md      setup, build, tests, conventions
 └─ CLAUDE.md             instructions for Claude (commit rules)</pre>
   </div>
 </section>
@@ -573,7 +573,7 @@ void register_structural(Domain&amp; d) {
       <div class="ms">
         <span class="id">M1 · Flow page · partly done</span>
         <h3>Flow and Dashboard</h3>
-        <p class="done"><b>Done when:</b> the web app lists block types from the backend, builds a flow, edits params through generated forms, runs it and shows progress and logs live. Scope, Lamp and Readout instruments work, and dragging a port onto a scope adds a tap. <b>So far:</b> the palette, typed wiring, delete, number params, live plots, progress and Console work against five backends, and the Lamp instrument (<code>dashboard/lamp</code>: a threshold, a comparison, an optional latch, an output <code>y</code> that can stop a run) is done; Readout and taps are open.</p>
+        <p class="done"><b>Done when:</b> the web app lists block types from the backend, builds a flow, edits params through generated forms, runs it and shows progress and logs live. Scope, Lamp and Readout instruments work, and dragging a port onto a scope adds a tap. <b>So far:</b> the palette, typed wiring, delete, number params, live plots, progress and Console work against the example backends; the Scope, Graph, Display (a readout), Switch and Lamp instruments and taps are done.</p>
       </div>
       <div class="ms">
         <span class="id">M2 · Structural</span>
@@ -581,9 +581,9 @@ void register_structural(Domain&amp; d) {
         <p class="done"><b>Done when:</b> you can draw a truss bridge in 3D, put a force source on one joint and a probe at midspan, drive the source with a 5 kN sine, graph force against displacement, and see a lamp trip above 10 mm. Saved as <code>examples/truss-bridge</code>.</p>
       </div>
       <div class="ms">
-        <span class="id">M3 · Control</span>
+        <span class="id">M3 · Control · partly done</span>
         <h3>Closed loop, live streaming and fan-out</h3>
-        <p class="done"><b>Done when:</b> the LQR block closes the loop from the angle probes to the motor source with fixed-step execution, and a sweep of 10 Q weights runs in parallel, each case animates live, and a Pareto plot compares settling time against peak force. The double pendulum swaps in with no framework change.</p>
+        <p class="done"><b>Done when:</b> the LQR block closes the loop from the angle probes to the motor source with fixed-step execution, and a sweep of 10 Q weights runs in parallel, each case animates live, and a Pareto plot compares settling time against peak force. The double pendulum swaps in with no framework change. <b>So far:</b> the examples close a PID loop (cart-pole) and an LQR loop (double pendulum) on the same framework; the parallel sweep and the Pareto plot are open.</p>
       </div>
       <div class="ms">
         <span class="id">M4 · CFD</span>
