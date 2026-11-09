@@ -10,10 +10,7 @@ watch the results live. Backends are written in C++ or Python; the web UI builds
 what they send.<br><br>
 📖 <strong>Documentation website: <a href="https://paperboatlab.github.io/paperboat/">https://paperboatlab.github.io/paperboat/</a></strong></p>
 
-<p align="center"><img src=".github/readme/demo.gif" width="100%" alt="Paperboat demo: on the Flow page a PID loop (square-wave setpoint, sum, PID, two lags) feeds two scopes and a display; kp is changed from 4 to 6, Run is pressed, and the Board plots the setpoint, the response and the control effort live as the 10 s run advances"></p>
-
-<p align="center"><img src=".github/readme/flow-run.gif" width="100%" alt="A Step flow running on the Flow canvas: Start, Repeat ×4, Move and Rotate walk a square, the Spin story turns for 2 s, then Stop; each block's tag reads running while the path is in it, and the dock shows the run's time"><br>
-<sub>A Step flow running on the Flow canvas: the path walks a square (Repeat ×4 of Move, Rotate), spins for 2 s, then stops.</sub></p>
+<p align="center"><img src=".github/readme/demo.gif" width="100%" alt="Paperboat demo in two parts. A 3D cart-pole: on the Station its initial angle theta0 is raised from 0.15 to 0.5 rad, the Flow page shows the two PIDs that balance it, Run is pressed on the Station, the cart swings back under the pole and centres, and the Board plots x and theta with their readouts. Then a 2D runner: on the Flow page the Jump strength goes from 10 to 12, Run is pressed on its Station, the runner jumps the crates, and the Board plots its jumps (y) and its height"></p>
 
 | Check | What it runs | `dev` |
 | --- | --- | --- |
