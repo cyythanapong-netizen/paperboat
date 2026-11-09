@@ -12,7 +12,7 @@
     "dev": "npm run dev -w @paperboat/web --",
     "build": "npm run build -w @paperboat/web && npm run build:cli",
     "build:cli": "npm run build -w @paperboat/cli",
-    "build:release": "npm run build -w @paperboat/web && npm run bundle -w @paperboat/cli",
+    "build:release": "npm exec -w @paperboat/web -- vite build && npm run bundle -w @paperboat/cli",
     "cli": "./bin/paperboat",
     "typecheck": "npm run typecheck -w @paperboat/web && npm run typecheck -w @paperboat/cli",
     "backend:thermostat": "./bin/paperboat run 01",
