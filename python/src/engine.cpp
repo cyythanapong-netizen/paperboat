@@ -517,6 +517,28 @@ tk::View view_from_py(nb::handle cls, const std::string& at) {
   return view;
 }
 
+// A block class's `flows`: the flow types it works in (#9), a list or tuple of names
+// ("signal", "step", "state", "model"); empty or absent: every one.
+std::vector<std::string> flows_from_py(nb::handle cls, const std::string& at) {
+  if (!nb::hasattr(cls, "flows")) return {};
+  nb::object v = cls.attr("flows");
+  if (v.is_none()) return {};
+  if (nb::isinstance<nb::str>(v) || (!nb::isinstance<nb::list>(v) && !nb::isinstance<nb::tuple>(v)))
+    throw std::runtime_error(at + ": flows must be a list of flow types, such as [\"signal\", \"step\"]");
+  std::vector<std::string> flows;
+  for (nb::handle f : v) {
+    if (!nb::isinstance<nb::str>(f)) throw std::runtime_error(at + ": flows must be a list of flow types, such as [\"signal\", \"step\"]");
+    flows.push_back(nb::cast<std::string>(f));
+  }
+  if (flows.empty()) return {};
+  try {
+    tk::check_flows(flows, at);
+  } catch (const std::invalid_argument& err) {
+    throw std::runtime_error(err.what());
+  }
+  return flows;
+}
+
 tk::BlockDef block_def(nb::handle cls) {
   const std::string at = class_name(cls);
   tk::BlockDef def;
@@ -536,6 +558,7 @@ tk::BlockDef block_def(nb::handle cls) {
   def.outputs_from = text_attr(cls, "outputs_from", "");
   if (nb::hasattr(cls, "elementwise")) def.elementwise = nb::cast<bool>(cls.attr("elementwise"));
   if (nb::hasattr(cls, "cacheable") && !cls.attr("cacheable").is_none()) def.cacheable = nb::cast<bool>(cls.attr("cacheable"));
+  def.flows = flows_from_py(cls, at);
   return def;
 }
 

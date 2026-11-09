@@ -240,6 +240,11 @@ initializers may leave any out.
 
       Unique within a catalog (``"pid"``, ``"pid-theta"``).
 
+   .. cpp:member:: std::vector<std::string> flows
+
+      The flow types it works in (``signal``, ``step``, ``state``, ``model``): the palette
+      offers it on those sheets only, and a run refuses it on another (#9). Empty: every type.
+
    .. cpp:member:: std::string label
 
    .. cpp:member:: Kind kind = Kind::Function

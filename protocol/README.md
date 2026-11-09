@@ -12,10 +12,10 @@ Default address: `ws://localhost:8765`.
 
 | `type`         | Fields                                      | Sent                         |
 | -------------- | ------------------------------------------- | ---------------------------- |
-| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults), `toolkits?: ToolkitStatus[]` | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
+| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults), `toolkits?: ToolkitStatus[]`, `flows?: FlowType[]` (the flow types a sheet may be, #9) | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
 | `catalog`      | `blocks: BlockDef[]`, `connectors?: Connectors` (see below), `objects?`, `dashboard?` | on connect                   |
 | `scene`        | `entities: Entity[]`, `view?: View`         | on connect, and on reset     |
-| `graph.load`   | `graph: { nodes, edges }`                   | on connect (starter graph)   |
+| `graph.load`   | `graph: { flow?, nodes, edges }`            | on connect (starter graph)   |
 | `station.load` | `station: Station`                          | on connect, after `graph.load`, if the catalog has `objects` |
 | `variables.load` | `variables: Variable[]`                   | on connect, before `graph.load`, if the backend has default variables (its descriptor's `[[variables]]`) |
 | `variables.values` | `values: { name: value }`, `error?: string`, `at?: string` | on connect and after each `variables.set`: what every variable comes to (a formula's result), or why they don't hold (`at`: the variable or block at fault) |
@@ -71,6 +71,9 @@ Default address: `ws://localhost:8765`.
   // view.icon (optional, additive): a custom look, drawn instead of the glyph; see "Custom block look"
   "feedthrough": false,            // optional: its outputs don't depend on this step's inputs
                                    // (an integrator, a delay), so a feedback loop may pass through it
+  "flows": ["signal"],             // optional (#9): the flow types it works in (signal, step, state,
+                                   // model); absent: every one. The palette offers it only on a sheet
+                                   // of one of these, and the engine refuses it on another
   // optional, a magic block: one form per way to use it, each with its own ports. Its enum
   // param "form" picks one (the first by default); inputs/outputs are the first form's.
   // A node takes the ports of its form, and the engine makes the block that form needs.
@@ -130,6 +133,9 @@ Default address: `ws://localhost:8765`.
 ```
 
 `pos` is the node's place on the flow canvas; it is optional and backends ignore it.
+An optional `"flow": "step"` is the sheet's flow type (#9): each block must work in it (a
+story's blocks in a Signal flow), or the run fails naming the block. Absent: not chosen, and
+nothing is checked (graphs from before sheets had a type).
 Missing `params` take their defaults. A param's value is a number, or for a `key` param a
 `KeyboardEvent.code` string (`"ArrowDown"`), which the UI sets by the user pressing it.
 A param (or a station object's prop) may instead **refer to a variable**:

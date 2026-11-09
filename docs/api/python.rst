@@ -145,6 +145,11 @@ Blocks
 
       One line in plain words: what it does. Shown on its card in the block browser.
 
+   .. py:attribute:: flows
+      :type: list[str]
+
+      The flow types it works in; empty: every type (#9).
+
    .. py:attribute:: view
       :type: dict
 

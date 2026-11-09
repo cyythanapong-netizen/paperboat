@@ -160,6 +160,9 @@ class Block:
     # run while none of those changed (its node.state is then "done" with no "running"). None or
     # False: called every run.
     cacheable: bool | None = None
+    # The flow types it works in (#9): "signal", "step", "state", "model". Empty: every one. The
+    # palette offers it only on a sheet of one of these types, and the engine refuses it on another.
+    flows: tuple[str, ...] | list[str] = ()
 
     def __init__(self, params: dict) -> None:
         self.params = params
@@ -204,6 +207,8 @@ class Step:
     inputs: list[str | Port] = [Port("in", "step")]
     outputs: list[str | Port] = [Port("next", "step")]
     params: dict[str, float | Param] = {}
+    # The flow types it works in (#9): a step is on a Step flow's path.
+    flows: tuple[str, ...] | list[str] = ("step",)
 
     def __init__(self, params: dict) -> None:
         self.params = params

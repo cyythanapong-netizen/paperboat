@@ -95,7 +95,8 @@ Session::Session(const Backend& backend, Send send)
                 {"protocol", "paperboat/0"},
                 {"engine", backend.engine},
                 {"station", station_view},
-                {"run", settings_json(backend.run)}};
+                {"run", settings_json(backend.run)},
+                {"flows", catalog.flows}};  // the flow types a sheet may be (#9)
   const json toolkits = s.current_toolkits(/*busy_name=*/{}, /*busy_state=*/{}, /*fetch_versions=*/true);
   if (!toolkits.empty()) hello["toolkits"] = toolkits;
   s.emit(hello);

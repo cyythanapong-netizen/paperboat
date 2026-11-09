@@ -65,6 +65,9 @@ class Registry {
   // The templates of one package ("base"), in the order they were added.
   std::vector<const Template*> package(std::string_view name) const;
   std::vector<std::string> packages() const;  // names, sorted
+  // A package's flow types (#9): every template of `package` that names none of its own
+  // gets `flows` (its toolkit.toml's `flows`). Throws std::invalid_argument on an unknown one.
+  void default_flows(std::string_view package, const std::vector<std::string>& flows);
 
  private:
   std::vector<Template> templates_;
@@ -94,8 +97,12 @@ Template define_block(const std::string& package, BlockDef def, Config config = 
   t.name = package + "/" + def.type;
   t.def = std::move(def);
   t.config = std::move(config);
-  if constexpr (std::is_base_of_v<Step, B>) t.make_step = &construct<B, Step>;
-  else t.make = &construct<B, Block>;
+  if constexpr (std::is_base_of_v<Step, B>) {
+    t.make_step = &construct<B, Step>;
+    if (t.def.flows.empty()) t.def.flows = {"step"};  // a step on a path: a Step flow's, unless it says
+  } else {
+    t.make = &construct<B, Block>;
+  }
   return t;
 }
 

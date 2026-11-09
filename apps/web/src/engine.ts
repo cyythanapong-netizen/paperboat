@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { TraceStore } from "./traces.ts";
-import type { BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
+import type { BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, FlowType, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
 
 /** The run the backend is on, or last ran. */
 export type RunState = {
@@ -24,6 +24,8 @@ export type EngineState = {
   runDefaults: RunSettings;
   /** Available optional toolkits and their installation status (from hello and toolkits.status). */
   toolkits: ToolkitStatus[];
+  /** The flow types a sheet may be (from hello, #9); absent: an older backend that doesn't say. */
+  flows?: FlowType[];
   blocks: BlockDef[];
   /** The catalog's connector classes, for blocks' icon ports (§4). */
   connectors: Connectors;
@@ -136,6 +138,7 @@ export function reduce(s: EngineState, m: Action): EngineState {
         stationView: m.station ?? { view: "scene" },
         runDefaults: m.run ?? {},
         toolkits: m.toolkits ?? s.toolkits,
+        flows: m.flows,
         logs,
       };
     }

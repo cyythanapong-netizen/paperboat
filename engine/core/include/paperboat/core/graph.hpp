@@ -94,6 +94,8 @@ struct Graph {
 // becomes one step node (same id as the group, step ports in → next and a signal input
 // `until`, params `seconds` and `reset`) whose blocks run only while a path is at it;
 // its `release` lists outputs ([node, port]) that drop when the path leaves.
+// The graph's `flow`, if given, is its sheet's flow type: each block must work in it (a story's
+// blocks in a Signal flow; toolkit::flow_mismatch).
 // Wires must join ports of one type (step, signal, image…); a step output leads to one block;
 // signal wires may not loop (linked blocks have no feedthrough, so wires into them don't
 // count). Throws GraphError.

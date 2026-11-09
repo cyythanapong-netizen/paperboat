@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { EngineState } from "./engine";
-import type { DashboardLayout, Project, RunSettings, ServerMsg, Station, Variables } from "./protocol";
+import type { DashboardLayout, FlowType, Project, RunSettings, ServerMsg, Station, Variables } from "./protocol";
 import { addRecent, ago, buildProject, clearAutosave, loadAutosave, loadRecent, parseProject, projectFileName, projectName, saveAutosave, saveRecent, stringify, type Stored } from "./project";
 import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from "./projectFiles";
 import type { NoticeSpec } from "./ProjectUI";
@@ -21,13 +21,15 @@ export type ProjectParts = {
   dashSaved: DashboardLayout | undefined;
   runSettings: RunSettings;
   projectLock: LockConfig | null;
+  /** The Flow sheet's flow type, if one was chosen (#9). */
+  flowChoice: FlowType | null;
 };
 
 export function useProjectSession(
   state: EngineState,
   subscribe: (f: (m: ServerMsg) => void) => () => void,
   log: (level: "info" | "warn" | "error", text: string) => void,
-  { nodes, edges, station, variables, dashSaved, runSettings, projectLock }: ProjectParts,
+  { nodes, edges, station, variables, dashSaved, runSettings, projectLock, flowChoice }: ProjectParts,
   load: (p: Project) => void,
 ) {
   // A project is the Flow, the Station, the variables, the Dashboard layout and the run settings. `projectKey` is
@@ -45,7 +47,7 @@ export function useProjectSession(
   const snapshot = (): Project =>
     buildProject({
       backend: state.engine,
-      flow: toFlow(nodes, edges),
+      flow: toFlow(nodes, edges, flowChoice),
       station,
       variables,
       dashboard: dashSaved,
@@ -65,7 +67,7 @@ export function useProjectSession(
       setProjectKey(JSON.stringify(p));
     }, 250);
     return () => window.clearTimeout(t);
-  }, [nodes, edges, station, variables, dashSaved, runSettings, projectLock, state.engine]); // eslint-disable-line react-hooks/exhaustive-deps -- `snapshot` reads exactly these
+  }, [nodes, edges, station, variables, dashSaved, runSettings, projectLock, flowChoice, state.engine]); // eslint-disable-line react-hooks/exhaustive-deps -- `snapshot` reads exactly these
   // Another backend: a new, unnamed project.
   useEffect(() => {
     setProjectTitle("Untitled");

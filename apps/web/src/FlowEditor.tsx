@@ -8,7 +8,7 @@ import { SNAP, WireDragContext } from "./wireSnap";
 import { arrangeFlowNodes, canArrangeFlow } from "./flowLayout";
 import type { WirePoint } from "./wireRouting.ts";
 import { Boundary, display, GroupActions, GroupBox, isFrame, type GroupData, type GroupNode } from "./groups";
-import type { BlockDef, Connectors } from "./protocol";
+import type { BlockDef, Connectors, FlowType } from "./protocol";
 import { isBlock, portType, type FlowNode, type Wire } from "./flowModel";
 import { withBlock } from "./flowGraph";
 import { CommentedOutContext, ConnectorsContext, HotWire, IconWires, Lit, RunStates, SetBends, WireRoutes } from "./flowContexts";
@@ -50,6 +50,8 @@ type Props = {
   locked: boolean;
   /** Filled with what the menus call: the same actions as the keys and the selection dialog. */
   controls?: MutableRefObject<FlowControls | null>;
+  /** The open sheet's flow type (#9): quick add offers the blocks that work in it. */
+  sheetFlow?: FlowType;
 };
 
 /**
@@ -88,7 +90,7 @@ export type FlowControls = {
 const NO_CONNECTORS: Connectors = {};
 
 /** Blocks by palette group, groups in catalog order. */
-export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls }: Props) {
+export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls, sheetFlow }: Props) {
   const states = useContext(RunStates);
   // ---- Levels (#68): a subsystem or story opens on the canvas; the way back is the breadcrumb ----
   const { level, go, path } = useFlowLevels(wanted, setLevel, nodes, edges, setNodes, setEdges);
@@ -385,6 +387,7 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
       {quick && (
         <QuickAdd
           items={addable}
+          flow={sheetFlow}
           at={quick}
           onClose={() => setQuick(null)}
           onPick={(it) => {

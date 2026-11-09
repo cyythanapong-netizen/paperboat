@@ -13,6 +13,8 @@ test("connects to a backend, runs its starter graph and shows the results", asyn
 
   // The starter graph from backend.toml is on the Flow page.
   await expect(page.getByText("2 blocks", { exact: true })).toBeVisible();
+  // Its sheet is a Signal flow (#9): the only flow type this backend offers (hello.flows).
+  await expect(page.getByText("Signal flow", { exact: true })).toBeVisible();
 
   // Run it as fast as it goes (the backend's default is real time for 10 s), and wait for the end.
   const dock = page.getByRole("group", { name: "Run" });

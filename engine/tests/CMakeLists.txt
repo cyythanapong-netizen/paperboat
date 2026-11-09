@@ -25,6 +25,7 @@ add_executable(paperboat_tests
   toolkit_phase1_test.cpp
   vector_test.cpp
   list_test.cpp
+  flow_type_test.cpp
   cli_test.cpp
   apps_test.cpp
   process_test.cpp

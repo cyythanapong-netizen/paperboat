@@ -181,6 +181,11 @@ struct BlockDef {
   // its "file" params, or other side effects). False: it is always called (Random, Key).
   // Unset: as its instance says, Block::stateless(). Runs on a clock never reuse outputs.
   std::optional<bool> cacheable = {};
+  // The flow types it works in (#9): "signal", "step", "state", "model" (flow_types()). Empty:
+  // every one. A package sets its default in its toolkit.toml (`flows = ["signal"]`), a block
+  // may set its own, and a descriptor entry overrides it (`flows = [...]`). The palette offers
+  // a block only on a sheet of a type it works in, and the engine refuses it on another.
+  std::vector<std::string> flows = {};
 };
 
 // The definition in form `form` (that form's ports); `def` itself if it has no forms, or
@@ -210,6 +215,20 @@ BlockDef with_inputs(const BlockDef& def, std::string_view text);
 
 // True for a block on a Step flow's path: one with a step port.
 bool has_step_ports(const BlockDef& def);
+
+// Flow types (#9): what a sheet is, and which ones a block works in (BlockDef::flows).
+// The known flow types, in order: signal, step, state, model.
+const std::vector<std::string>& flow_types();
+bool is_flow_type(std::string_view flow);
+// "Signal flow", "Step flow"…
+std::string flow_label(std::string_view flow);
+// `flows` in words: "Signal flow", "Signal flow or Step flow"; empty: "every flow type".
+std::string flows_label(const std::vector<std::string>& flows);
+// Throws std::invalid_argument naming `at` for an unknown flow type, one listed twice, or an
+// empty list (leave the list out for every flow type).
+void check_flows(const std::vector<std::string>& flows, const std::string& at);
+// True if the block works on a sheet of type `flow` (a block with no flows works in every one).
+bool works_in(const BlockDef& def, std::string_view flow);
 
 // A station object type: a thing on the Station page (a body, a joint) whose properties
 // are edited only there. A toolkit package can offer these as well as blocks. An object
