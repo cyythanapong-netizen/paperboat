@@ -287,6 +287,7 @@ jobs:
         run: |
           if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::notice::NPM_TOKEN is not set; skipping npm"; exit 0; fi
           case "$GITHUB_REF_NAME" in *-*) tag=--tag=${GITHUB_REF_NAME#*-}; tag=${tag%%.*};; esac   # alpha.1 -> --tag alpha, never "latest"
-          for f in dist/npm/paperboatlabs-cli-*-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz; do
+          for f in dist/npm/paperboatlabs-cli-linux-x64-*.tgz dist/npm/paperboatlabs-cli-darwin-arm64-*.tgz \
+                   dist/npm/paperboatlabs-cli-win32-x64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz; do
             npm publish "$f" --access public --provenance $tag
           done
