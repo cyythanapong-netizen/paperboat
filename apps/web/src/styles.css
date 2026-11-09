@@ -57,7 +57,7 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
   height: 100%;
   display: grid;
   grid-template-columns: var(--rail-width) minmax(0, 1fr);
-  grid-template-rows: var(--bar-height) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr); /* the bar: one line (--bar-height), or two when it wraps */
   gap: var(--gutter);
   padding: var(--gutter);
   transition: grid-template-columns var(--slide), column-gap var(--slide);
@@ -67,7 +67,7 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .mode-commander .rail, .mode-lookout .rail { opacity: 0; pointer-events: none; padding-inline: 0; border-width: 0; }
 .bar, .rail, .panel { background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 
-.bar { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--space-4); padding: 0 var(--space-4); min-width: 0; }
+.bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); min-height: var(--bar-height); padding: var(--space-2) var(--space-4); min-width: 0; }
 .bar > * { flex: none; }
 .bar > .spacer { flex: 1 1 auto; }
 .wordmark { display: inline-flex; align-items: center; gap: var(--space-2); font: 600 var(--size-md) var(--font-sans); letter-spacing: -0.01em; }
@@ -256,6 +256,14 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 }
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+/* A narrower bar: tighter keys, and the logo without its name while the bar is still one line, so that
+   line holds the project's name in full at 1024 px. When the keys don't fit even with the name cut
+   short, the bar wraps onto a second line (see .bar and .bar > .proj). */
+@media (max-width: 1100px) {
+  .bar { gap: var(--space-3) var(--space-2); }
+  .bar .menu-title { padding: 0 var(--space-2); }
+}
+@media (max-width: 1100px) and (min-width: 861px) { .bar .wordmark { font-size: 0; gap: 0; } }
 @media (max-width: 860px) {
   .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; --gutter: 8px; }
   .bar { flex-wrap: wrap; gap: var(--space-3); padding: var(--space-2) var(--space-3); }
@@ -799,16 +807,17 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .backend-note { margin: 0; padding: 0 var(--panel-pad) var(--panel-pad); }
 
 /* ---- Projects (#82): the name and the unsaved dot, notices, the undo toast ---------- */
-/* The project's name is the window's title, not a menu: centred on the bar, in muted monospace,
-   with no key-like weight; the unsaved dot rides after it. */
-.bar { position: relative; }
+/* The project's name is the window's title, not a menu: in muted monospace, with no key-like weight;
+   the unsaved dot rides after it. It sits in the bar's flow after the menus, and ProjectLabel moves it
+   toward the bar's centre only as far as the room before the next key: centred on a wide bar, it slides
+   toward the menus as the bar narrows, then the name truncates (down to about ten characters), and then
+   the bar wraps. It never slides under a key. It takes the room it needs before the spacer gets any. */
 .bar > .proj {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  display: inline-flex; align-items: center; gap: var(--space-2); max-width: min(320px, 26vw);
-  font: 400 var(--size-xs) var(--font-mono); color: var(--text-muted); pointer-events: auto; cursor: default;
+  flex: 1000 1 10ch; min-width: 0; max-width: max-content;
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  font: 400 var(--size-xs) var(--font-mono); color: var(--text-muted); cursor: default;
 }
-@media (max-width: 1100px) { .bar > .proj { position: static; transform: none; } } /* no room to centre: after the menus */
-.proj-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-name { min-width: 0; max-width: min(300px, 24vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .proj .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); }
 .notice { height: auto; width: min(480px, calc(100vw - 32px)); }
 .notice-body { padding: var(--panel-pad) var(--panel-pad) var(--space-2); }
