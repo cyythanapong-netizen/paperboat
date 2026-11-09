@@ -17,10 +17,14 @@ namespace paperboat::core {
 
 // One connection's protocol state. Thread-safe: messages arrive on the socket's thread,
 // runs execute on their own. `send` must be safe to call from any thread.
+// `send_binary`, for a client that asked for binary frames (?binary=1, protocol/README.md
+// "Binary frames"): where a message's typed arrays go, each as one binary frame sent right
+// before the message. Empty: the client gets JSON only, every array as numbers.
 class Session {
  public:
   using Send = std::function<void(const std::string& text)>;
-  Session(const Backend& backend, Send send);  // sends the handshake
+  using SendBinary = std::function<void(const std::string& bytes)>;
+  Session(const Backend& backend, Send send, SendBinary send_binary = {});  // sends the handshake
   ~Session();
   Session(const Session&) = delete;
   Session& operator=(const Session&) = delete;
@@ -72,6 +76,10 @@ bool restart_process();
 
 // `--port N` from the command line, or `fallback` (parse_options reads every option).
 int port_arg(int argc, char** argv, int fallback);
+
+// Whether a WebSocket request's URI (`/?binary=1`) asks for binary frames of a version this
+// engine sends (protocol/README.md "Binary frames").
+bool wants_binary(const std::string& uri);
 
 // Serve the protocol on ws://127.0.0.1:port until the process ends. Returns non-zero if
 // it can't listen.

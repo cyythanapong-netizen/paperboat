@@ -17,6 +17,7 @@
 
 #include "paperboat/toolkit/platform.hpp"
 #include "paperboat/core/backend.hpp"
+#include "paperboat/core/binary.hpp"
 #include "paperboat/core/backend_manager.hpp"
 
 namespace paperboat::core {
@@ -80,6 +81,29 @@ ix::HttpResponsePtr http(const Backend& backend, const ix::HttpRequestPtr& reque
 
 }  // namespace
 
+bool wants_binary(const std::string& uri) {
+  const auto q = uri.find('?');
+  if (q == std::string::npos) return false;
+  std::string_view query = std::string_view(uri).substr(q + 1);
+  while (!query.empty()) {
+    const auto amp = query.find('&');
+    const auto pair = query.substr(0, amp);
+    if (pair.starts_with("binary=")) {
+      // The highest frame version the client reads; this engine sends version 1.
+      int version = 0;
+      for (char c : pair.substr(7)) {
+        if (c < '0' || c > '9') return false;
+        version = version * 10 + (c - '0');
+        if (version > 1000) break;
+      }
+      return version >= kFrameVersion;
+    }
+    if (amp == std::string_view::npos) break;
+    query.remove_prefix(amp + 1);
+  }
+  return false;
+}
+
 int serve_files(const fs::path& dir, int port, const std::string& host) {
   ix::initNetSystem();
   std::error_code ec;
@@ -127,7 +151,11 @@ Server::Server(const Backend& backend, int port) : state_(std::make_unique<State
         const std::string& id = conn->getId();
         if (msg->type == ix::WebSocketMessageType::Open) {
           // sendText is thread-safe in IXWebSocket, so runs can send from their own thread.
-          auto session = std::make_unique<Session>(s.backend, [&ws](const std::string& text) { ws.sendText(text); });
+          // A client that connects with ?binary=1 gets typed arrays as binary frames.
+          Session::SendBinary binary;
+          if (wants_binary(msg->openInfo.uri)) binary = [&ws](const std::string& bytes) { ws.sendBinary(bytes); };
+          auto session = std::make_unique<Session>(s.backend, [&ws](const std::string& text) { ws.sendText(text); },
+                                                   std::move(binary));
           std::lock_guard lock(s.mutex);
           s.sessions[id] = std::move(session);
         } else if (msg->type == ix::WebSocketMessageType::Close) {

@@ -12,7 +12,7 @@ Default address: `ws://localhost:8765`.
 
 | `type`         | Fields                                      | Sent                         |
 | -------------- | ------------------------------------------- | ---------------------------- |
-| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults), `toolkits?: ToolkitStatus[]`, `flows?: FlowType[]` (the flow types a sheet may be, #9) | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP |
+| `hello`        | `protocol: "paperboat/0"`, `engine: string`, `station?: { view: "scene" \| "graph" \| "web", page?: string }`, `run?: RunSettings` (its defaults), `toolkits?: ToolkitStatus[]`, `flows?: FlowType[]` (the flow types a sheet may be, #9), `binary?: 1` | on connect. `station.page` (web view only) is a path on the backend's own port, over HTTP. `binary`: this connection gets typed arrays as binary frames (it asked with `?binary=1`, see [Binary frames](#binary-frames)) |
 | `catalog`      | `blocks: BlockDef[]`, `connectors?: Connectors` (see below), `objects?`, `dashboard?` | on connect                   |
 | `scene`        | `entities: Entity[]`, `view?: View`         | on connect, and on reset     |
 | `graph.load`   | `graph: { flow?, nodes, edges }`            | on connect (starter graph)   |
@@ -107,7 +107,13 @@ Default address: `ws://localhost:8765`.
 { "id": "mass", "shape": "box", "pos": [0, 0, 0], "size": [1, 1, 1], "color": "#2f5d62" }
 { "id": "spring", "shape": "line", "pos": [-2.9, 0, 0], "to": [-0.5, 0, 0] }
 { "id": "body", "shape": "box", "pos": [0, 0.25, 0], "size": [1, 0.5, 0.6], "rot": [0, 1.57, 0], "scale": [2, 2, 2] }
+{ "id": "plate", "shape": "mesh", "pos": [0, 0.5, 0], "color": "#2f5d62",
+  "vertices": [0, 0, 0, 1, 0, 0, 0, 1, 0], "indices": [0, 1, 2],   // or {"binary": "3"}: see Binary frames
+  "values": [0, 0.5, 1], "range": [0, 1] }
 // shape: box | sphere (size[0] = radius) | cylinder (size[0] = radius, size[1] = length along y) | line (pos → to)
+// | mesh: triangles in the entity's own frame (pos, rot, scale place it). vertices: x, y, z per vertex
+//   ([n, 3], f32); indices: three per triangle ([m, 3], u32); values (optional): a field, one per
+//   vertex, coloured low to high over range (absent: its min and max). Typed arrays (NumberArray).
 // rot: optional, radians, applied in x, y, z order; scale: optional factors on top of size
 
 // View: camera hint sent with a scene (default 3d)
@@ -479,6 +485,61 @@ With `hello.station.view == "web"`, the Station page shows the backend's own pag
 and `station.load` when the page posts `station.ready`. The page may post back only
 `station.set` and `input`, which the UI forwards like its own. See GUIDELINES §6.4.
 
+## Binary frames
+
+Bulk numbers (a mesh's vertices and triangles, a field over it; #18) don't go through JSON
+for a client that can take them. They go as **binary WebSocket messages** on the same
+socket, each carrying one typed array, sent **right before** the JSON message that uses
+it; in that message the array's place holds a reference, `{"binary": "<id>"}`
+(`BinaryRef`). A client that didn't ask gets the same message with each array as a flat,
+row-major JSON array of numbers (`NumberArray` is either). `--run` prints JSON only.
+
+**Asking.** The client connects to `ws://host:port/?binary=1` (the highest frame layout it
+reads). A backend that sends frames to that connection says so in its `hello`
+(`binary: 1`); one that doesn't know them ignores the query and sends JSON, so a client
+must take both. Nothing else changes: the UI → backend direction stays JSON.
+
+**Frame layout (version 1).** Every integer is little-endian.
+
+| Offset | Size | Field |
+| ------ | ---- | ----- |
+| 0 | 4 | magic `PBIN` (`50 42 49 4e`) |
+| 4 | 1 | version: `1` |
+| 5 | 1 | flags: `0` (a decoder refuses any other) |
+| 6 | 2 | reserved: `0` |
+| 8 | 4 | `H`: the descriptor's length in bytes (u32) |
+| 12 | `H` | descriptor: UTF-8 JSON, `BinaryFrameDescriptor` (below) |
+| 12 + `H` | 0–7 | zero padding: the payload starts at `P`, the next multiple of 8 |
+| `P` | to the end | payload: product(`shape`) elements of `dtype`, little-endian, row-major |
+
+```jsonc
+// BinaryFrameDescriptor
+{ "id": "3",                       // what the {"binary": "3"} in the next text message names
+  "dtype": "f32",                  // f32 | f64 | i32 | u32 | u8
+  "shape": [3721, 3],              // the payload is 3721 × 3 × 4 bytes
+  "path": "/entities/0/vertices",  // optional: where the reference sits (a JSON pointer), for logs
+  "compression": "none" }          // optional; layout 1 has none. A decoder refuses one it doesn't know
+```
+
+Rules: ids are strings, unique on the connection. A message's frames come, in order, before
+it and after the previous text message, so a client keeps the frames since the last text
+message and resolves the next one's references from them (and drops any left over). The
+payload starts at a multiple of 8, so a client can view it in place (a `Float32Array` over
+the message's own `ArrayBuffer`, no copy). A message's text never changes shape because of
+frames: the reference stands exactly where the numbers would.
+
+Where arrays are used today: a `mesh` entity's `vertices`, `indices` and `values`, in `scene`
+and `scene.patch`. During a run a patch carries a mesh's arrays only when they changed (a
+field each frame, the mesh once), whatever the client. The spec vectors in
+[vectors/binary-frames-v1.json](vectors/binary-frames-v1.json) are the C++ encoder's output
+(`engine/tests/binary_test.cpp`); the web decoder's tests read them.
+
+Making them: C++ `paperboat::Array` (`toolkit/array.hpp`) holds one, `scene::mesh(id,
+vertices, indices, color, pos, values, range)` draws one; Python `paperboat.scene.mesh` takes
+numpy arrays (or lists), and a mesh entity's `values` can be set each frame. Compression is a
+follow-up: the engine builds IXWebSocket without zlib (no permessage-deflate) and the
+descriptor reserves `compression` for a per-frame codec.
+
 ## Conformance
 
 `protocol/smoke_test.py --port <port>` checks any backend against this spec without
@@ -490,8 +551,9 @@ runs each example's starter headless (`--run`) and compares the results with its
 
 - **Wire format: JSON text.** Every language has it, it is readable in the browser
   devtools, and it maps directly to TypeScript types and `nlohmann::json` in C++.
-- **Bulk data (CFD fields, meshes): binary WebSocket frames** with a small JSON header
-  message announcing them. Not needed in v0.
+- **Bulk data (CFD fields, meshes): binary WebSocket frames**, each with a small JSON
+  descriptor, referenced from the JSON message that uses them; opt-in per connection, so
+  JSON-only clients keep working. See [Binary frames](#binary-frames).
 - **Source of truth for types: JSON Schema** (`schema/`). The TypeScript types are
   generated from it (`gen_ts.py`); C++ structs could be next.
 - **Authoring block definitions:** in code, next to what the block does (C++

@@ -9,6 +9,7 @@
 # A manifest's `flows = ["signal"]` is the flow types its blocks work in (#9), for each block
 # that names none of its own; without it, they work in every flow type.
 set(PAPERBOAT_TOOLKIT_CORE_SOURCES
+  src/array.cpp
   src/block.cpp
   src/bases.cpp
   src/expression.cpp

@@ -21,6 +21,7 @@
 #include <utility>
 
 #include <nanobind/nanobind.h>
+#include <nanobind/ndarray.h>
 #include <nanobind/stl/array.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
@@ -136,6 +137,104 @@ std::array<double, 3> vec3(nb::handle h, std::array<double, 3> fallback) {
   return out;
 }
 
+// A typed array (a mesh's vertices, a field) from Python: a numpy array (or anything with the
+// buffer protocol or __dlpack__) is read as it is, without a Python loop; a list (of rows) is
+// read number by number. Either becomes `dtype` (f32 for vertices and fields, u32 for
+// indices), the shape kept.
+template <class T>
+tk::Array array_as(const void* data, nb::dlpack::dtype from, std::size_t count, std::vector<std::size_t> shape) {
+  if (from == nb::dtype<T>()) return tk::Array(tk::dtype_of<T>(), std::move(shape), data, count);
+  std::vector<T> out(count);
+  auto copy = [&]<class S>(const S* in) {
+    for (std::size_t i = 0; i < count; ++i) out[i] = static_cast<T>(in[i]);
+  };
+  if (from == nb::dtype<float>()) copy(static_cast<const float*>(data));
+  else if (from == nb::dtype<double>()) copy(static_cast<const double*>(data));
+  else if (from == nb::dtype<std::int64_t>()) copy(static_cast<const std::int64_t*>(data));
+  else if (from == nb::dtype<std::int32_t>()) copy(static_cast<const std::int32_t*>(data));
+  else if (from == nb::dtype<std::uint32_t>()) copy(static_cast<const std::uint32_t*>(data));
+  else if (from == nb::dtype<std::uint64_t>()) copy(static_cast<const std::uint64_t*>(data));
+  else if (from == nb::dtype<std::int16_t>()) copy(static_cast<const std::int16_t*>(data));
+  else if (from == nb::dtype<std::uint16_t>()) copy(static_cast<const std::uint16_t*>(data));
+  else if (from == nb::dtype<std::uint8_t>()) copy(static_cast<const std::uint8_t*>(data));
+  else if (from == nb::dtype<std::int8_t>()) copy(static_cast<const std::int8_t*>(data));
+  else throw std::runtime_error("an array of this dtype can't go to the UI: use float32, float64 or an integer type");
+  return tk::Array(out, std::move(shape));
+}
+
+tk::Array array_from_py(nb::handle h, tk::DType dtype, const char* what) {
+  if (h.is_none()) return {};
+  nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd;
+  const void* data = nullptr;
+  nb::dlpack::dtype from{};
+  std::size_t count = 0;
+  std::vector<std::size_t> shape;
+  std::vector<double> listed;
+  if (nb::try_cast(h, nd, /*convert=*/true)) {
+    data = nd.data();
+    from = nd.dtype();
+    count = nd.size();
+    for (std::size_t i = 0; i < nd.ndim(); ++i) shape.push_back(nd.shape(i));
+  } else {
+    try {
+      std::size_t rows = 0, width = 0;
+      for (nb::handle row : h) {
+        ++rows;
+        if (is_number(row)) {
+          listed.push_back(number(row));
+          continue;
+        }
+        std::size_t n = 0;
+        for (nb::handle v : row) listed.push_back(number(v)), ++n;
+        if (rows > 1 && n != width) throw std::runtime_error("rows of different lengths");
+        width = n;
+      }
+      shape = width && listed.size() == rows * width ? std::vector<std::size_t>{rows, width} : std::vector<std::size_t>{};
+    } catch (const std::exception&) {
+      throw std::runtime_error(std::string(what) + " must be a numpy array or a list of numbers (or of rows), not " +
+                               nb::cast<std::string>(nb::repr(h)));
+    }
+    data = listed.data();
+    from = nb::dtype<double>();
+    count = listed.size();
+  }
+  try {
+    switch (dtype) {
+      case tk::DType::F32: return array_as<float>(data, from, count, std::move(shape));
+      case tk::DType::F64: return array_as<double>(data, from, count, std::move(shape));
+      case tk::DType::I32: return array_as<std::int32_t>(data, from, count, std::move(shape));
+      case tk::DType::U32: return array_as<std::uint32_t>(data, from, count, std::move(shape));
+      case tk::DType::U8: return array_as<std::uint8_t>(data, from, count, std::move(shape));
+    }
+  } catch (const std::exception& err) {
+    throw std::runtime_error(std::string(what) + ": " + err.what());
+  }
+  return {};
+}
+
+// A typed array as a read-only numpy array over the engine's own bytes (kept alive by it),
+// or None when empty.
+nb::object array_to_py(const tk::Array& array) {
+  if (array.empty()) return nb::none();
+  static const nb::dlpack::dtype types[] = {nb::dtype<float>(), nb::dtype<double>(), nb::dtype<std::int32_t>(),
+                                             nb::dtype<std::uint32_t>(), nb::dtype<std::uint8_t>()};
+  auto* keep = new tk::Array(array);
+  nb::capsule owner(keep, [](void* p) noexcept { delete static_cast<tk::Array*>(p); });
+  const auto& shape = array.shape();
+  nb::ndarray<nb::numpy, nb::ro> out(array.bytes().data(), shape.size(), shape.data(), owner, nullptr,
+                                     types[static_cast<int>(array.dtype())]);
+  return nb::cast(out, nb::rv_policy::reference);
+}
+
+std::array<double, 2> range_from_py(nb::handle h) {
+  if (h.is_none()) return {};
+  std::array<double, 2> out{};
+  std::size_t i = 0;
+  for (nb::handle v : h)
+    if (i < 2) out[i++] = number(v);
+  return out;
+}
+
 tk::Entity entity_from_py(nb::handle h) {
   if (nb::isinstance<tk::Entity>(h)) return nb::cast<tk::Entity>(h);  // from paperboat.scene
   if (!nb::isinstance<nb::dict>(h))
@@ -159,7 +258,11 @@ tk::Entity entity_from_py(nb::handle h) {
           .color = text("color", "#888888"),
           .scale = vec3(get("scale"), {1, 1, 1}),
           .to = vec3(get("to"), {0, 0, 0}),
-          .src = text("src", "")};
+          .src = text("src", ""),
+          .vertices = array_from_py(get("vertices"), tk::DType::F32, "vertices"),
+          .indices = array_from_py(get("indices"), tk::DType::U32, "indices"),
+          .values = array_from_py(get("values"), tk::DType::F32, "values"),
+          .range = range_from_py(get("range"))};
 }
 
 // A list of entities; lists in it are flattened, so scene.spring(…) (a list) goes in as is.
@@ -792,6 +895,23 @@ NB_MODULE(_engine, m) {
       .def_rw("scale", &tk::Entity::scale)
       .def_rw("to", &tk::Entity::to)
       .def_rw("src", &tk::Entity::src)
+      // A mesh's arrays: numpy arrays (read-only) out; numpy arrays or lists in.
+      .def_prop_rw("vertices", [](const tk::Entity& e) { return array_to_py(e.vertices); },
+                   [](tk::Entity& e, nb::handle h) { e.vertices = array_from_py(h, tk::DType::F32, "vertices"); },
+                   nb::arg("vertices").none(), "a mesh's vertices (n × 3, float32)")
+      .def_prop_rw("indices", [](const tk::Entity& e) { return array_to_py(e.indices); },
+                   [](tk::Entity& e, nb::handle h) { e.indices = array_from_py(h, tk::DType::U32, "indices"); },
+                   nb::arg("indices").none(), "a mesh's triangles (m × 3, uint32)")
+      .def_prop_rw("values", [](const tk::Entity& e) { return array_to_py(e.values); },
+                   [](tk::Entity& e, nb::handle h) {
+                     auto values = array_from_py(h, tk::DType::F32, "values");
+                     if (!values.empty() && values.size() * 3 != e.vertices.size())
+                       throw std::invalid_argument("values: one per vertex, " + std::to_string(e.vertices.size() / 3) + ", not " +
+                                                   std::to_string(values.size()));
+                     e.values = std::move(values);
+                   },
+                   nb::arg("values").none(), "a field over a mesh, one per vertex (float32): set it each frame, the mesh stays")
+      .def_rw("range", &tk::Entity::range, "the field's low and high ends of the colour scale; (0, 0): its min and max")
       .def("__repr__", [](const tk::Entity& e) {
         return "Entity(" + e.shape + " " + e.id + " at " + std::to_string(e.pos[0]) + ", " + std::to_string(e.pos[1]) +
                ", " + std::to_string(e.pos[2]) + ")";
@@ -823,6 +943,17 @@ NB_MODULE(_engine, m) {
       return tk::scene::rod(std::move(id), point(a), point(b), thickness, std::move(color));
     }, nb::arg("id"), nb::arg("a"), nb::arg("b"), nb::arg("thickness"), nb::arg("color") = "#888888",
     "A bar of square section from a to b (a link, a pole, a strut).");
+  scene.def("mesh", [point](std::string id, nb::handle vertices, nb::handle indices, std::string color, nb::handle pos,
+                            nb::handle values, nb::handle range) {
+      return tk::scene::mesh(std::move(id), array_from_py(vertices, tk::DType::F32, "vertices"),
+                             array_from_py(indices, tk::DType::U32, "indices"), std::move(color), point(pos),
+                             array_from_py(values, tk::DType::F32, "values"), range_from_py(range));
+    }, nb::arg("id"), nb::arg("vertices"), nb::arg("indices"), nb::arg("color") = "#888888", nb::arg("pos") = nb::none(),
+    nb::arg("values") = nb::none(), nb::arg("range") = nb::none(),
+    "A triangle mesh at pos: vertices (n × 3: x, y, z) and indices (m × 3, a triangle each), numpy arrays or lists, in "
+    "its own frame; values (n, optional) is a field over it the UI colours over range (low, high; default: its min and "
+    "max). A client that asked for them gets the arrays as binary frames (vertices and values as float32, indices as "
+    "uint32). Keep the entity and return the same one each frame: only arrays that change are sent again.");
   scene.def("spring", [point](const std::string& id, nb::handle a, nb::handle b, int coils, double width, const std::string& color) {
       return tk::scene::spring(id, point(a), point(b), coils, width, color);
     }, nb::arg("id"), nb::arg("a"), nb::arg("b"), nb::arg("coils") = 8, nb::arg("width") = 0.2, nb::arg("color") = "#888888",

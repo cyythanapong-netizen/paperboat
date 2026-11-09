@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "paperboat/core/backend.hpp"
+#include "paperboat/core/binary.hpp"
 #include "paperboat/core/backend_manager.hpp"
 #include "paperboat/core/cache.hpp"
 
@@ -16,9 +17,10 @@
 namespace paperboat::core {
 
 struct Session::State {
-  State(const Backend& b, Send s)
+  State(const Backend& b, Send s, SendBinary sb)
       : backend(b),
         send(std::move(s)),
+        send_binary(std::move(sb)),
         station(!b.initial_project.is_null() && b.initial_project.contains("station")
                     ? b.initial_project["station"]
                     : (b.catalog->station.empty() ? json() : json::parse(b.catalog->station))),
@@ -28,6 +30,10 @@ struct Session::State {
 
   const Backend& backend;
   Send send;
+  SendBinary send_binary;  // empty: a JSON-only client
+  // Serialises sends: a message's binary frames, then the message, go out with nothing between.
+  std::mutex send_mutex;
+  std::uint64_t next_frame = 1;  // binary frame ids, per connection
   std::mutex mutex;  // guards keys, station and variables: the socket thread writes, the run thread reads
   toolkit::KeySet keys;
   toolkit::KeySet pressed;  // pressed since the run last read the keys: a short tap still shows for one pass
@@ -44,7 +50,21 @@ struct Session::State {
   std::jthread toolkit_task;
   std::jthread run;  // declared last: destroyed (stopped and joined) before the rest
 
-  void emit(const json& msg) { send(msg.dump()); }
+  // A message with typed arrays (a mesh) goes out as binary frames plus references, or with
+  // the arrays as JSON numbers for a client without binary frames (binary.hpp).
+  void emit(const json& msg) {
+    if (!has_arrays(msg)) {
+      const std::string text = msg.dump();
+      std::lock_guard lock(send_mutex);
+      send(text);
+      return;
+    }
+    std::vector<std::string> frames;
+    std::lock_guard lock(send_mutex);
+    const json lowered = lower_arrays(msg, send_binary ? &frames : nullptr, &next_frame);
+    for (const auto& frame : frames) send_binary(frame);
+    send(lowered.dump());
+  }
   void log(const std::string& level, const std::string& text) {
     emit({{"type", "log"}, {"level", level}, {"text", text}});
   }
@@ -85,8 +105,8 @@ struct Session::State {
   }
 };
 
-Session::Session(const Backend& backend, Send send)
-    : state_(std::make_unique<State>(backend, std::move(send))) {
+Session::Session(const Backend& backend, Send send, SendBinary send_binary)
+    : state_(std::make_unique<State>(backend, std::move(send), std::move(send_binary))) {
   auto& s = *state_;
   const auto& catalog = *backend.catalog;
   json station_view = {{"view", catalog.station_view}};
@@ -97,6 +117,7 @@ Session::Session(const Backend& backend, Send send)
                 {"station", station_view},
                 {"run", settings_json(backend.run)},
                 {"flows", catalog.flows}};  // the flow types a sheet may be (#9)
+  if (s.send_binary) hello["binary"] = kFrameVersion;  // the client asked: its arrays come as binary frames
   const json toolkits = s.current_toolkits(/*busy_name=*/{}, /*busy_state=*/{}, /*fetch_versions=*/true);
   if (!toolkits.empty()) hello["toolkits"] = toolkits;
   s.emit(hello);
@@ -187,7 +208,12 @@ void Session::on_message(const std::string& text) {
       core::run(id, graph, station, s.backend, emit, keys_now, stop, settings, variables, tune_now, speed_now, &s.cache);
     });
   } else if (type == "station.set") {
-    // An edit on the Station page: check it, keep it, and show it.
+    // An edit on the Station page: check it, keep it, and show it. Locked during a run: the run
+    // owns the scene, and its patches may leave out arrays (binary frames) the UI still holds.
+    if (s.live_run != 0) {
+      s.log("error", "station: edits are locked during a run");
+      return;
+    }
     try {
       const json station = msg.at("station");
       json variables;

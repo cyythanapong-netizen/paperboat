@@ -729,3 +729,87 @@ def test_a_python_block_says_which_flow_types_it_works_in(tmp_path: Path) -> Non
     proc = catalog(FLOWS_BACKEND.replace('flows = ("model",)', 'flows = "model"'))
     assert proc.returncode != 0
     assert "Resistor: flows must be a list of flow types" in proc.stderr
+
+
+MESH_BACKEND = '''
+import numpy as np
+import paperboat
+from paperboat import Linked, scene
+
+class Plate(paperboat.StationObject):
+    """A plate meshed once, with a field over it that changes as the run goes (#18)."""
+    type, label = "plate", "Plate"
+    block = Linked(inputs=["heat"])
+
+    def __init__(self, props):
+        super().__init__(props)
+        xy = np.array([[0, 0], [1, 0], [0, 1], [1, 1]], dtype=np.float64)
+        vertices = np.asfortranarray(np.column_stack([xy, np.full(4, 0.1)]))  # not C-ordered: still read right
+        self.mesh = scene.mesh("plate", vertices, np.array([[0, 1, 2], [2, 1, 3]]), "#2f5d62", pos=(0, 0.5, 0),
+                               values=np.zeros(4), range=(0, 1))
+        self.steps = 0
+
+    def read(self):
+        return {}
+
+    def step(self, ctx, inputs):
+        self.steps += 1
+        if self.steps % 25 == 0:
+            self.mesh.values = np.linspace(0, self.steps / 100, 4)  # a new field; the mesh stays
+
+    def entities(self, id, z):
+        return [self.mesh, {"id": f"{id}/dict", "shape": "mesh", "pos": [0, 0, z],
+                            "vertices": [[0, 0, 0], [1, 0, 0], [0, 1, 0]], "indices": [0, 1, 2]}]
+
+paperboat.serve(paperboat.Backend(engine="plates", descriptor="descriptor.toml", objects=[Plate],
+                                  dt=0.01, duration=1.0, emit_every=5))
+'''
+
+MESH_DESCRIPTOR = '''
+domain = "plates"
+import = ["base", "dashboard"]
+
+[station]
+objects = [{ id = "p", type = "plate" }]
+
+[graph]
+nodes = [{ id = "p", type = "plate" }, { id = "one", type = "constant", params = { value = 1 } }]
+edges = [{ from = ["one", "y"], to = ["p", "heat"] }]
+'''
+
+
+def test_a_mesh_from_numpy_goes_out_whole_once_then_only_its_changed_field(tmp_path: Path) -> None:
+    import numpy as np
+    msgs = run_backend(tmp_path, MESH_BACKEND, MESH_DESCRIPTOR)
+    assert msgs[-1]["status"] == "done", msgs
+    # --run speaks JSON only, so the arrays come as flat numbers (a client may ask for binary frames).
+    scene_msg = next(m for m in msgs if m["type"] == "scene")
+    plate = next(e for e in scene_msg["entities"] if e["id"] == "plate")
+    assert plate["shape"] == "mesh" and plate["pos"] == [0, 0.5, 0]
+    assert plate["vertices"] == [0, 0, 0.1, 1, 0, 0.1, 0, 1, 0.1, 1, 1, 0.1]  # float32, as its shortest decimals
+    assert plate["indices"] == [0, 1, 2, 2, 1, 3]
+    assert plate["values"] == [0, 0, 0, 0] and plate["range"] == [0, 1]
+    from_dict = next(e for e in scene_msg["entities"] if e["id"] == "p/dict")
+    assert from_dict["vertices"] == [0, 0, 0, 1, 0, 0, 0, 1, 0] and from_dict["indices"] == [0, 1, 2]
+    patches = [e for m in msgs if m["type"] == "scene.patch" for e in m["entities"] if e["id"] == "plate"]
+    assert len(patches) >= 20  # every 5 steps, and the last
+    assert not any("vertices" in e or "indices" in e for e in patches)  # the mesh: once, in the scene
+    fields = [e["values"] for e in patches if "values" in e]
+    assert len(fields) == 4  # only when the field changed (every 25 steps)
+    assert np.allclose(fields[-1], np.linspace(0, 1, 4))
+
+    sys.path.insert(0, str(ROOT / "python"))
+    import paperboat
+    mesh = paperboat.scene.mesh("m", np.eye(3), [0, 1, 2], values=[1, 2, 3])
+    assert mesh.vertices.dtype == np.float32 and mesh.vertices.shape == (3, 3) and not mesh.vertices.flags.writeable
+    assert mesh.indices.dtype == np.uint32 and list(mesh.values) == [1, 2, 3]
+    try:
+        mesh.values = [1, 2]
+        raise AssertionError("a field of the wrong length was taken")
+    except ValueError as err:
+        assert "one per vertex" in str(err)
+
+    jsonschema = __import__("pytest").importorskip("jsonschema")
+    schema = json.loads((ROOT / "protocol" / "schema" / "paperboat-0.schema.json").read_text())
+    for m in [scene_msg] + [m for m in msgs if m["type"] == "scene.patch"][:3]:
+        jsonschema.validate(m, schema)

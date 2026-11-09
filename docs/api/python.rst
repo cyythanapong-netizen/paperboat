@@ -67,7 +67,7 @@ API Quick Reference
      - :py:class:`Entity`
      - 3D/2D visual scene shape rendered on the Station page.
    * -
-     - :py:func:`scene.box`, :py:func:`scene.sphere`, :py:func:`scene.line`, :py:func:`scene.rect`, :py:func:`scene.circle`, :py:func:`scene.image`, :py:func:`scene.rod`, :py:func:`scene.spring`
+     - :py:func:`scene.box`, :py:func:`scene.sphere`, :py:func:`scene.line`, :py:func:`scene.rect`, :py:func:`scene.circle`, :py:func:`scene.image`, :py:func:`scene.rod`, :py:func:`scene.spring`, :py:func:`scene.mesh`
      - 3D and 2D visual geometry entity factory functions.
    * - **Models & Solvers**
      - :py:class:`Model`
@@ -469,10 +469,27 @@ dicts, or lists of them (a spring), mixed. Points are ``(x, y)`` or ``(x, y, z)`
 
 .. py:function:: scene.spring(id, a, b, coils=8, width=0.2, color="#888888") -> list[Entity]
 
+.. py:function:: scene.mesh(id, vertices, indices, color="#888888", pos=None, values=None, range=None)
+
+   A triangle mesh at ``pos``: ``vertices`` (n × 3) and ``indices`` (m × 3, a triangle each),
+   numpy arrays (read without a Python loop) or lists, and optionally ``values``, a field of
+   one number per vertex coloured over ``range`` (low, high; default its min and max). A UI
+   that asked for them gets the arrays as binary frames (vertices and values as float32,
+   indices as uint32). Keep the entity and set its ``values`` each frame: only the arrays that
+   change are sent again.
+
+   .. code-block:: python
+
+      self.mesh = scene.mesh("plate", vertices, triangles, values=np.zeros(len(vertices)))
+      ...
+      def step(self, ctx, inputs):
+          self.mesh.values = self.pressure()   # a new field; the mesh stays
+
 .. py:class:: Entity
 
    One shape: ``id``, ``shape``, ``pos``, ``size``, ``rot``, ``color``, ``scale``, ``to``,
-   ``src``, each settable.
+   ``src``, each settable; a mesh's ``vertices``, ``indices`` and ``values`` (read-only numpy
+   arrays out; numpy arrays or lists in) and ``range``. A dict entity may carry them too.
 
 Domain state
 ------------

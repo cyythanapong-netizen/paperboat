@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace paperboat::toolkit::scene {
@@ -20,6 +22,23 @@ Entity line(std::string id, Vec from, Vec to, std::string color) {
 
 Entity image(std::string id, Vec pos, double width, double height, std::string src) {
   return {.id = std::move(id), .shape = "image", .pos = pos, .size = {width, height, 1}, .src = std::move(src)};
+}
+
+Entity mesh(std::string id, Array vertices, Array indices, std::string color, Vec pos, Array values,
+            std::array<double, 2> range) {
+  const std::size_t n = vertices.size() / 3;
+  if (vertices.size() % 3 != 0 || indices.size() % 3 != 0 || (!values.empty() && values.size() != n))
+    throw std::invalid_argument("mesh " + id + ": needs 3 numbers per vertex, 3 indices per triangle and one value per vertex, not " +
+                                std::to_string(vertices.size()) + ", " + std::to_string(indices.size()) + " and " +
+                                std::to_string(values.size()));
+  return {.id = std::move(id),
+          .shape = "mesh",
+          .pos = pos,
+          .color = std::move(color),
+          .vertices = std::move(vertices),
+          .indices = std::move(indices),
+          .values = std::move(values),
+          .range = range};
 }
 
 Entity rect(std::string id, double x, double y, double width, double height, std::string color, double angle, double z) {

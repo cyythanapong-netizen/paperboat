@@ -14,6 +14,7 @@
 #endif
 
 #include "paperboat/core/backend.hpp"
+#include "paperboat/core/binary.hpp"
 
 namespace paperboat::core {
 namespace {
@@ -157,7 +158,7 @@ std::string run_starter(const Backend& backend, std::ostream& out, const std::ve
     if (p.contains("variables") && p["variables"].is_array()) variables = p["variables"];
     if (p.contains("run") && p["run"].is_object()) headless.run = with_overrides(headless.run, p["run"]);
   }
-  const auto emit = [&out](const json& msg) { out << msg.dump() << '\n'; };
+  const auto emit = [&out](const json& msg) { out << (has_arrays(msg) ? lower_arrays(msg) : msg).dump() << '\n'; };  // arrays as numbers
   const auto status = run("run-1", graph, station, headless, emit, nullptr, {}, nullptr, variables);
   out.flush();  // a host may end the process right after (the Python bindings do)
   return status;
