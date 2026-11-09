@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { floorUnder } from "./sceneFloor";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { Entity, View } from "./protocol";
@@ -62,6 +63,9 @@ export function SceneView({ entities, view, grid, projection = "persp" }: { enti
   // The floor grid (3D only) shows or hides without rebuilding the view.
   const floorGrid = useRef<THREE.GridHelper | null>(null);
   const showGrid = useRef(grid);
+  // The entities the grid was placed under (their ids): a new set (a scene, another backend) places
+  // it again; a patch moving them doesn't, so the floor stays put during a run.
+  const floorFor = useRef<string | null>(null);
   const switchProjection = useRef<((proj: "persp" | "iso") => void) | null>(null);
   useEffect(() => {
     showGrid.current = grid;
@@ -215,6 +219,11 @@ export function SceneView({ entities, view, grid, projection = "persp" }: { enti
         w.scene.add(entry.obj);
       }
       applyEntity(entry.obj, e);
+    }
+    const ids = [...w.objects.keys()].sort().join("\n");
+    if (floorGrid.current && view.mode === "3d" && view.floor === undefined && ids !== floorFor.current) {
+      floorFor.current = ids;
+      floorGrid.current.position.y = floorUnder([...w.objects.values()].map((o) => o.obj));
     }
   }, [entities]);
 

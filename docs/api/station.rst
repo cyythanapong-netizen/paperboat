@@ -28,7 +28,8 @@ Views
    ``pos``, ``size``, ``rot`` (radians, x, y, z order), ``scale``, ``color``. Station objects,
    the domain state and blocks draw them; ``scene.patch`` updates them during a run. The
    backend's ``view`` hint picks the camera (``{"mode": "2d", "center": [x, y], "height": h}``; in 3D,
-   ``camera`` and ``floor``, the height of the floor grid).
+   ``camera`` and ``floor``, the height of the floor grid; without it the grid sits under the
+   lowest entity of the first scene, never above 0, so it doesn't cut through the model).
 
 ``graph``
    Station objects as nodes and their links as wires: drag from an object's right handle
