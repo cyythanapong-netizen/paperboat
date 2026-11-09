@@ -1,7 +1,5 @@
 import {
   Background,
-  BaseEdge,
-  EdgeLabelRenderer,
   MiniMap,
   NodeToolbar,
   Panel,
@@ -12,29 +10,22 @@ import {
   useReactFlow,
   useStoreApi,
   type Connection,
-  type EdgeProps,
   type IsValidConnection,
-  type NodeProps,
   type OnEdgesChange,
   type OnNodesChange,
   type Viewport,
   useUpdateNodeInternals,
 } from "@xyflow/react";
-import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type Dispatch, type DragEvent, type MutableRefObject, type SetStateAction } from "react";
+import { useContext, useEffect, useMemo, useRef, useState, type Dispatch, type DragEvent, type MutableRefObject, type SetStateAction } from "react";
 import { DRAG_TYPE, dragging, QuickAdd, type Item } from "./Browser";
 import { ownKeys } from "./commands";
-import { CompactBlock } from "./Compact";
 import { copySelection, pasteClip, type Clip } from "./clipboard";
-import { connectError, netWireType, placePorts, SIDES, signOf, wireMismatch, type PortSides } from "./ports";
-import { flipPlacement, flipSideX, flipSideY, iconValid, placeIconPorts, rotateIcon, rotatePlacement, rotateSideCCW, rotateSideCW, useCanvasHotkeys, type RotationDeg } from "@paperboat/shared";
-import { usePortLayout } from "./portLayout";
-import { Bindable, draggedVariable, NumberOrFormula, VAR_DRAG, VarsContext } from "./Variables";
-import { isRef } from "./bindings";
-import { RemoveIcon } from "./RemoveIcon";
+import { connectError, netWireType, placePorts, SIDES, wireMismatch, type PortSides } from "./ports";
+import { flipPlacement, flipSideX, flipSideY, iconValid, placeIconPorts, rotatePlacement, rotateSideCCW, rotateSideCW, useCanvasHotkeys, type RotationDeg } from "@paperboat/shared";
 import { connectionOf, nearestAccepting, SNAP, WireDragContext, type Anchor } from "./wireSnap";
 import { arrangeFlowNodes, canArrangeFlow } from "./flowLayout";
-import { middleOfWire, orthoPoints, roundedPolyline, routeWires, squareUp, type Obstacle, type RouteInput, type WireRoute, type WirePoint } from "./wireRouting.ts";
-import { CanvasHelp, useWireBends } from "@paperboat/shared/components";
+import { routeWires, type Obstacle, type RouteInput, type WirePoint } from "./wireRouting.ts";
+import { CanvasHelp } from "@paperboat/shared/components";
 import {
   Boundary,
   descendants,
@@ -53,343 +44,12 @@ import {
   type GroupData,
   type GroupNode,
 } from "./groups";
-import type { BlockDef, Connectors, ParamDef, ParamValue, PortDef } from "./protocol";
-import { PageIcon } from "./Shell";
+import type { BlockDef, Connectors, PortDef } from "./protocol";
 import { connect, freeId, hasStepPorts, inForm, isBlock, makeNode, portDef, portsOf, portType, wireEnd, type BlockNode, type FlowNode, type Wire } from "./flowModel";
 import { inLevel, withBlock } from "./flowGraph";
-
-/** What the last run said about blocks (`node.state`): where a Step flow is, which failed. */
-export const RunStates = createContext<{
-  active: ReadonlySet<string>;
-  failed: ReadonlySet<string>;
-  /** How far a block's long step has got (node.progress). */
-  progress: Readonly<Record<string, number>>;
-}>({
-  active: new Set(),
-  failed: new Set(),
-  progress: {},
-});
-
-/** What the canvas knows of icon ports: the catalog's connectors, wires per port, ports whose wires dangle (`if` false). */
-const ConnectorsContext = createContext<Connectors>({});
-const IconWires = createContext<{ count: ReadonlyMap<string, Record<string, number>>; missing: ReadonlySet<string> }>({ count: new Map(), missing: new Set() });
-
-/** Generic node: everything it shows comes from the backend's BlockDef. */
-function Block({ id, data, selected }: NodeProps<BlockNode>) {
-  const { updateNodeData } = useReactFlow<BlockNode, Wire>();
-  const states = useContext(RunStates);
-  const active = states.active.has(id);
-  const progress = states.progress[id];
-  const { params, missing, commented, commentMode, comment } = data;
-  const def = inForm(data.def, params);
-  const failed = states.failed.has(id);
-  const connectors = useContext(ConnectorsContext);
-  const iconWires = useContext(IconWires);
-  const [noteOpen, setNoteOpen] = useState(false);
-  // Ports that follow a param come and go: have the canvas measure the handles again.
-  const updateInternals = useUpdateNodeInternals();
-  const portKey = [...def.inputs, ...def.outputs].map((p) => p.id).join(",");
-  useEffect(() => updateInternals(id), [portKey, id, updateInternals, data.rotation, data.mirror, data.ports]);
-  // A simple block draws as a small plate (#70) until double-clicked open; fold puts it back.
-  const [expanded, setExpanded] = useState(false);
-  const ports = usePortLayout({
-    id,
-    def,
-    sides: data.ports,
-    save: (ports) => updateNodeData(id, { ports }),
-    disabled: missing,
-    sign: (p, dir) => (dir === "in" ? signOf(def, params, def.inputs.indexOf(p)) : ""),
-  });
-  const placedIcon = (data.rotation || data.mirror) && def.view?.icon ? rotateIcon(def.view.icon, { rotation: data.rotation, mirror: data.mirror }) : def.view?.icon;
-  const viewDef = placedIcon ? { ...def, view: { ...def.view, icon: placedIcon } } : def;
-  if ((def.view?.compact || iconValid(def.view?.icon)) && !expanded && !missing && !hasStepPorts(def)) {
-    return (
-      <CompactBlock
-        id={id}
-        def={viewDef}
-        sides={data.ports}
-        params={params}
-        selected={!!selected}
-        commented={commented}
-        word={failed ? "failed" : active ? "running" : undefined}
-        progress={progress}
-        onExpand={() => setExpanded(true)}
-        connectors={connectors}
-        wires={iconWires.count.get(id)}
-        popover={def.params.map((p) => (
-          <ParamRow key={p.id} def={p} value={params[p.id]} set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })} />
-        ))}
-      />
-    );
-  }
-  const step = hasStepPorts(def);
-  const mode = commentMode ?? "out";
-  const classes = [
-    "block",
-    `kind-${def.kind}`,
-    step && "step",
-    selected && "selected",
-    active && "active",
-    def.linked && "linked",
-    missing && "missing",
-    failed && "failed",
-    commented && "commented",
-    commented && mode === "through" && "comment-through",
-  ];
-  // The head's tag says what is happening to the block, else what it is: words, not colours.
-  const tag = commented
-    ? mode === "through"
-      ? "// bypass"
-      : "// commented"
-    : missing
-      ? "missing"
-      : failed
-        ? "failed"
-        : active
-          ? "running"
-          : def.linked
-            ? "linked"
-            : step
-              ? "step"
-              : def.kind === "function"
-                ? "fn"
-                : def.kind;
-  return (
-    <div
-      className={classes.filter(Boolean).join(" ")}
-      title={missing ? `This backend has no "${def.type}" block: its params and wires are kept. Replace or delete it.` : undefined}
-    >
-      {ports.top}
-      <div className="block-title">
-        <span className="block-name" title={def.linked ? `Linked to station object ${id}: set its properties, or remove it, on the Station` : undefined}>
-          {missing ? def.type : def.label}
-          {def.linked && <span className="linked-tag"> <PageIcon page="station" className="link-mark" />{id}</span>}
-        </span>
-        <button
-          type="button"
-          className={`block-note-btn nodrag ${comment ? "has-note" : ""}`}
-          title={comment ? `Note: ${comment}` : "Add note"}
-          onClick={() => setNoteOpen((o) => !o)}
-        >
-          {comment ? "note*" : "note"}
-        </button>
-        <span className={`block-tag tag-${tag}`}>{tag}</span>
-        {def.view?.compact && (
-          <button className="fold nodrag" title="Fold back to a plate" onClick={() => setExpanded(false)}>
-            fold
-          </button>
-        )}
-      </div>
-      {noteOpen && (
-        <div className="block-note-well nodrag nowheel nopan">
-          <textarea
-            className="block-note-input"
-            placeholder="Notes or formulas..."
-            value={comment ?? ""}
-            onChange={(e) => updateNodeData(id, { comment: e.target.value })}
-          />
-        </div>
-      )}
-      {active && progress !== undefined && progress < 1 && (
-        <div className="block-progress" title={`${Math.round(progress * 100)} %`}>
-          <div style={{ width: `${progress * 100}%` }} />
-        </div>
-      )}
-      {ports.rows}
-      {def.params.map((p) => (
-        <ParamRow
-          key={p.id}
-          def={p}
-          value={params[p.id]}
-          disabled={missing}
-          set={(v) => updateNodeData(id, { params: { ...params, [p.id]: v } })}
-        />
-      ))}
-      {ports.bottom}
-    </div>
-  );
-}
-
-/**
- * A param's (or a station property's) field. It can be bound to a variable (#36): drop one
- * on it from the Variables sheet, or type = in a number field; a bound one shows as a chip.
- */
-export function ParamInput(props: { def: ParamDef; value: ParamValue; set: (v: ParamValue) => void; disabled?: boolean }) {
-  return (
-    <Bindable def={props.def} value={props.value} set={props.set} disabled={props.disabled}>
-      {isRef(props.value) ? null : <Field {...props} />}
-    </Bindable>
-  );
-}
-
-/** A param (or station property) as a row: its id and unit, then its field. */
-export function ParamRow(props: Parameters<typeof ParamInput>[0]) {
-  const { def } = props;
-  return (
-    <label className="param">
-      <span>
-        {def.id}
-        {"unit" in def && def.unit && <span className="unit"> {def.unit}</span>}
-      </span>
-      <ParamInput {...props} />
-    </label>
-  );
-}
-
-/** A number field, or for a `key` param a field that takes the next key you press. */
-function Field({
-  def,
-  value,
-  set,
-  disabled,
-}: {
-  def: ParamDef;
-  value: ParamValue;
-  set: (v: ParamValue) => void;
-  disabled?: boolean;
-}) {
-  if (def.type === "boolean") {
-    return (
-      <input
-        className="nodrag bool-param"
-        type="checkbox"
-        disabled={disabled}
-        checked={value === true || value === 1}
-        onChange={(e) => set(e.target.checked)}
-      />
-    );
-  }
-  if (def.type === "enum") {
-    return (
-      <select className="nodrag enum-param" disabled={disabled} value={String(value)} onChange={(e) => set(e.target.value)}>
-        {def.options.map((o) => (
-          <option key={o}>{o}</option>
-        ))}
-      </select>
-    );
-  }
-  if (def.type === "file" || def.type === "text") {
-    return (
-      <input
-        className="nodrag text-param"
-        disabled={disabled}
-        value={String(value)}
-        title={def.type === "file" ? "A file, relative to the backend's descriptor" : undefined}
-        onChange={(e) => set(e.target.value)}
-      />
-    );
-  }
-  if (def.type === "variable") return <VariableName value={String(value)} set={set} disabled={disabled} />;
-  if (def.type === "key") {
-    return (
-      <input
-        className="nodrag key-param"
-        disabled={disabled}
-        readOnly
-        value={String(value)}
-        title="Click, then press a key (Esc to keep)"
-        onKeyDown={(e) => {
-          e.preventDefault();
-          if (e.code !== "Escape") set(e.code);
-          e.currentTarget.blur();
-        }}
-      />
-    );
-  }
-  return (
-    <NumberOrFormula def={def} value={Number(value)} set={set} disabled={disabled} />
-  );
-}
-
-/** A `variable` param: the name of a project variable, typed or picked from the list. A variable dragged from the sheet can be dropped on it. */
-function VariableName({ value, set, disabled }: { value: string; set: (v: ParamValue) => void; disabled?: boolean }) {
-  const vars = useContext(VarsContext);
-  const list = useId();
-  const unknown = !!value && !!vars && !vars.list.some((v) => v.name === value);
-  return (
-    <>
-      <input
-        className="nodrag text-param"
-        list={list}
-        disabled={disabled}
-        value={value}
-        title={unknown ? `No variable called "${value}"` : "A project variable"}
-        aria-invalid={unknown}
-        onChange={(e) => set(e.target.value)}
-        onDragOver={(e) => e.dataTransfer.types.includes(VAR_DRAG) && !disabled && e.preventDefault()}
-        onDrop={(e) => {
-          const name = draggedVariable();
-          if (!name || disabled) return;
-          e.preventDefault();
-          set(name);
-        }}
-      />
-      <datalist id={list}>
-        {vars?.list.map((v) => (
-          <option key={v.name} value={v.name} />
-        ))}
-      </datalist>
-    </>
-  );
-}
-
-/** The wire a dragged card would be inserted into, if any (drawn thicker). */
-const HotWire = createContext<string | null>(null);
-/** The wires to follow (#55): those of the hovered wire, port or block. null: nothing is hovered. */
-const Lit = createContext<ReadonlySet<string> | null>(null);
-/** Whole-canvas routed wire geometries computed in one pass. */
-const WireRoutes = createContext<Map<string, WireRoute> | null>(null);
-const CommentedOutContext = createContext<ReadonlySet<string>>(new Set());
-/** Save a wire's dragged bends; null when the canvas is locked (wires don't move). */
-const SetBends = createContext<((id: string, bends: WirePoint[]) => void) | null>(null);
-
-const sideOf = (p: Position): "left" | "right" | "top" | "bottom" => (p === Position.Left ? "left" : p === Position.Top ? "top" : p === Position.Bottom ? "bottom" : "right");
-
-function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgeProps<Wire>) {
-  const { deleteElements } = useReactFlow();
-  const hot = useContext(HotWire) === id;
-  const lit = useContext(Lit);
-  const follow = lit ? (lit.has(id) ? " lit" : " dim") : "";
-  const routes = useContext(WireRoutes);
-  const route = routes?.get(id);
-  const commentedOut = useContext(CommentedOutContext);
-  const wireCommented = commentedOut.has(geometry.source) || commentedOut.has(geometry.target);
-  const missing = useContext(IconWires).missing;
-  const commentedClass = (wireCommented ? " wire-commented" : "") + (missing.has(`${geometry.source}:${geometry.sourceHandleId}`) || missing.has(`${geometry.target}:${geometry.targetHandleId}`) ? " wire-missing" : "");
-
-  const setBends = useContext(SetBends);
-  // The ports as the router saw them, else as React Flow does.
-  const from: WirePoint = route ? route.points[0] : [geometry.sourceX, geometry.sourceY];
-  const to: WirePoint = route ? route.points[route.points.length - 1] : [geometry.targetX, geometry.targetY];
-  const routed = data?.points
-    ? squareUp(from, data.points, to)
-    : (route?.points ?? orthoPoints(from, sideOf(geometry.sourcePosition), to, sideOf(geometry.targetPosition)));
-  const { points, handles } = useWireBends(routed, !!selected && !!setBends, (bends) => setBends?.(id, bends));
-  const path = roundedPolyline(points, 8);
-  const [x, y] = route && !data?.points && points === routed ? [route.labelX, route.labelY] : middleOfWire(points);
-  return (
-    <>
-      {/* Casing: a wider stroke in the canvas colour, so where wires cross, one is seen to pass over the other. */}
-      <path d={path} className={`wire-casing${follow}${commentedClass}`} />
-      <BaseEdge id={id} path={path} markerEnd={markerEnd} className={`wire-${data?.type ?? "signal"}${hot ? " drop-target" : ""}${follow}${commentedClass}`} />
-      {/* What a dropped card finds under the pointer: a wide, invisible stroke tagged with the wire. */}
-      <path d={path} className="wire-hit" data-wire={id} />
-      {selected && (
-        <EdgeLabelRenderer>
-          <button
-            className="remove nodrag nopan"
-            title="Delete wire"
-            style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y - 16}px)` }}
-            onClick={() => deleteElements({ edges: [{ id }] })}
-          >
-            <RemoveIcon />
-          </button>
-        </EdgeLabelRenderer>
-      )}
-      {handles}
-    </>
-  );
-}
+import { CommentedOutContext, ConnectorsContext, HotWire, IconWires, Lit, RunStates, SetBends, WireRoutes } from "./flowContexts";
+import { Block } from "./Block";
+import { WireEdge } from "./WireEdge";
 
 const nodeTypes = { block: Block, frame: GroupBox, boundary: Boundary };
 const edgeTypes = { wire: WireEdge };
