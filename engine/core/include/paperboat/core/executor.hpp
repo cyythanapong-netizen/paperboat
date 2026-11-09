@@ -20,6 +20,7 @@
 
 #include <paperboat/toolkit/variables.hpp>
 
+#include "paperboat/core/cache.hpp"
 #include "paperboat/core/run.hpp"
 
 namespace paperboat::core {
@@ -42,8 +43,10 @@ class Calling {
 
 class Run {
  public:
+  // `cache`: where a run that evaluates once finds the outputs of earlier runs and keeps its
+  // own (see evaluate); null: every block is called.
   Run(std::string id, const Backend& backend, RunSettings settings, Emit emit, KeysNow keys, std::stop_token stop,
-      VariablesNow tune = nullptr);
+      VariablesNow tune = nullptr, RunCache* cache = nullptr);
 
   // Makes the station and graph (references to `variables` resolved first, #36), runs them
   // with the backend's executor (or the default) and reports the end. Returns "done",
@@ -62,6 +65,13 @@ class Run {
   // (signal messages, sent by frame()).
   json pass();
   json pass_over(const std::vector<std::string>& order);
+  // One block of a run that evaluates once: its outputs from the run's cache when nothing it
+  // depends on changed since a run computed them (node.state "done" alone, the logs it wrote
+  // shown again), else called like pass_over({id}) (node.state "running", then "done") and, if
+  // it may be reused, kept in the cache for the next run. Returns its samples.
+  json evaluate(const std::string& id);
+  // How many blocks evaluate() took from the cache so far.
+  int reused() const { return reused_; }
   // What step blocks report (a progress, a lap), for the next pass; or what one step block
   // reports now, for the blocks after it on the path.
   void store_step_outputs();
@@ -99,6 +109,17 @@ class Run {
   // The end of a pass: applies what blocks set, and tells the UI (variables.patch).
   void commit_variables();
   bool change_param(Node& node, const toolkit::ParamDef& def, double value);
+  // What a block whose outputs may be reused is, for the cache: type, ports, params, text,
+  // lanes, the run's dt and solver, its files. None for a block that is always called.
+  std::optional<std::string> cache_signature(const Node& node) const;
+
+  // What the block evaluate() is calling depends on and does besides its outputs.
+  struct Recording {
+    std::string node;
+    std::map<std::string, std::optional<toolkit::Value>, std::less<>> variables;  // read
+    std::vector<std::pair<std::string, std::string>> logs;                        // written
+    bool set_variable = false;  // a side effect: not reused
+  };
 
   std::string id_;
   const Backend& backend_;
@@ -112,6 +133,11 @@ class Run {
   toolkit::LogFn log_;
   toolkit::ProgressFn progress_;
   toolkit::SetVariableFn set_variable_;
+  toolkit::VariableReadFn variable_read_;
+  RunCache* cache_ = nullptr;
+  std::optional<Recording> recording_;
+  int reused_ = 0;
+  bool evaluated_ = false;  // evaluate() ran: a run that ends done drops other nodes' entries
   json pending_;  // the variables list with this pass's set_variable writes; null when none
   std::map<std::string, std::chrono::steady_clock::time_point, std::less<>> progress_sent_;  // node → last node.progress
   std::chrono::steady_clock::time_point run_start_time_{};

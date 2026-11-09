@@ -27,13 +27,17 @@ class VariableValue final : public Block {
 }  // namespace
 
 void add_variable(Registry& registry) {
-  registry.add(make_template(
+  auto t = make_template(
       "base", "variable", "Variable", {}, {"y"}, {{.id = "name", .type = "variable"}},
       [](const Values&, const Config& text) {
         const auto it = text.find("name");
         return std::make_unique<VariableValue>(it == text.end() ? "" : it->second);
       },
-      "A variable's value: constant for the run, or live if the variable is tunable.", {.compact = true, .glyph = "const", .value = "{name}", .icon = constant_icon()}));
+      "A variable's value: constant for the run, or live if the variable is tunable.", {.compact = true, .glyph = "const", .value = "{name}", .icon = constant_icon()});
+  // Reads a variable through Context::variable, which the run records: a run-once reuses it
+  // while that variable holds the same value.
+  t.def.cacheable = true;
+  registry.add(std::move(t));
 }
 
 }  // namespace paperboat::toolkit::base

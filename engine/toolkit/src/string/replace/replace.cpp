@@ -77,6 +77,7 @@ void add_replace(Registry& registry) {
     bool all = get_or(p, "all", 1.0) != 0.0;
     return std::make_unique<Replace>(std::move(find), std::move(replace), all);
   };
+  rep.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(rep));
 }
 

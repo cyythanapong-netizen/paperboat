@@ -148,7 +148,7 @@ td code { white-space: nowrap; }
           <tr><td><b>Protocol v0</b></td><td>JSON over one WebSocket, with <code>graph.load</code>, a 2D/3D <code>view</code> and keyboard <code>input</code>. A domain-neutral smoke test checks any backend.</td></tr>
           <tr><td><b>Toolkit (C++)</b></td><td>Packages <code>base</code> (constant, key), <code>signal</code> (waves), <code>math</code> (arithmetic), <code>dashboard</code> (graph, display), <code>control</code> (dynamics) and <code>step</code> (start, when, wait, if, repeat, stop); station templates next to blocks (the <code>control/cart-pole</code> station object, with a linked block); TOML descriptors that <code>import</code> whole packages into the palette; <code>paperboat-catalog</code>; 23 Catch2 tests. Python backends run on the same engine through nanobind bindings and load the same descriptors.</td></tr>
           <tr><td><b>Example backends</b></td><td>Signal flow: mass-spring, parametric geometry and a runner game (jump and duck) in Python; cart-pole in C++ with no domain code (blocks and the Cart-pole station object from the toolkit; spawn several on the Station page). Step flow: a 3D animation (move, rotate, scale) in Python. All pass the smoke test.</td></tr>
-          <tr><td><b>Engine core</b></td><td><code>engine/core</code>: protocol session, WebSocket server, station and graph checking, Signal flow runs. The cart-pole backend is a few lines on it. Next: caching, node events, Step flow in C++.</td></tr>
+          <tr><td><b>Engine core</b></td><td><code>engine/core</code>: protocol session, WebSocket server, station and graph checking, Signal and Step flow runs, node events, and a cache that lets a run that evaluates once reuse the blocks nothing changed for. The cart-pole backend is a few lines on it.</td></tr>
         </tbody>
       </table>
     </div>
@@ -566,9 +566,9 @@ void register_structural(Domain&amp; d) {
     <p>Each milestone ends with something runnable. The core API is allowed to change until M3; after that it is frozen for the first release.</p>
     <div class="track">
       <div class="ms">
-        <span class="id">M0 · Skeleton · in progress</span>
+        <span class="id">M0 · Skeleton · done</span>
         <h3>Core with no UI</h3>
-        <p class="done"><b>Done when:</b> a graph loaded from JSON validates in the C++ engine, runs with caching and cancellation, and serves protocol events. Catch2 tests cover type checking, cache hits and cancel. <b>So far:</b> the toolkit, TOML descriptors and <code>engine/core</code> (validation, Signal flow runs with cancellation, the protocol over WebSocket) are done and tested, with a golden cart-pole run; next is caching and node events.</p>
+        <p class="done"><b>Done when:</b> a graph loaded from JSON validates in the C++ engine, runs with caching and cancellation, and serves protocol events. Catch2 tests cover type checking, cache hits and cancel. <b>So far:</b> the toolkit, TOML descriptors and <code>engine/core</code> (validation, Signal flow runs with cancellation, the protocol over WebSocket, node events: <code>node.state</code>, <code>node.progress</code>) are done and tested, with a golden cart-pole run. Caching is in: a session keeps each block's last result, and a run that evaluates once reuses the outputs of every pure block (one that declares <code>cacheable</code>, or is stateless) whose type, params, text, wired input values, the variables it read and its files are unchanged, so a changed param, wire, variable or station object recomputes only the blocks it reaches. Runs on a clock, Step flows and blocks that read keys or draw at random always compute; a cancelled run never keeps a block it cut short. Catch2 tests cover hits, invalidation, opt-outs and cancel. Later: a <code>cached</code> <code>node.state</code> (a reused block reports <code>done</code> for now) and caching for runs on a clock.</p>
       </div>
       <div class="ms">
         <span class="id">M1 · Flow page · partly done</span>
@@ -606,7 +606,7 @@ void register_structural(Domain&amp; d) {
     <ul>
       <li><b>3D editor scope.</b> A full CAD tool is out of reach. Start with grid snapping, point and link entities, and a property panel, and add import (STEP, STL) later.</li>
       <li><b>Sweep semantics.</b> Grasshopper data trees are powerful but confusing. Start with plain list fan-out (one run per item) and a <code>Collect</code> block.</li>
-      <li><b>Station ↔ flow link.</b> When the station changes, which blocks are stale? Hash the station per entity so only the affected model blocks invalidate.</li>
+      <li><b>Station ↔ flow link.</b> When the station changes, which blocks are stale? Hash the station per entity so only the affected model blocks invalidate. For a run that evaluates once this holds: the cache compares the values a block gets on its wires, so a changed station object invalidates only the blocks its linked block feeds.</li>
       <li><b>Clock alignment.</b> Probes from different solvers sample at different rates. Graphs resample onto the run clock, and diff mode needs matching units (otherwise it falls back to two axes).</li>
       <li><b>Probe placement on meshes.</b> A probe at a point that isn't a mesh node has to interpolate. Snap probes to joints first and allow free points later.</li>
       <li><b>Large results.</b> CFD fields don't belong in JSON. Send them as compressed binary frames and keep full results on disk with a reference in the cache.</li>

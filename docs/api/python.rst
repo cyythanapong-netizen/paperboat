@@ -174,6 +174,15 @@ Blocks
       ``step`` still sees floats. With only numbers in, nothing changes. A block that needs
       the whole vector declares :py:func:`vector_port` ports instead and gets a list.
 
+   .. py:attribute:: cacheable
+      :type: bool | None
+
+      ``True`` for a block whose outputs depend on nothing but its params, its inputs and the
+      variables it reads through ``ctx.variable()`` (no clock, keys, ``ctx.state``,
+      randomness, files or side effects). A backend with ``mode="once"`` then reuses its
+      outputs from the last run while none of those changed. Default ``None``: called every
+      run.
+
    .. py:attribute:: feedthrough
       :type: bool
 

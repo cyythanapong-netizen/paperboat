@@ -54,14 +54,16 @@ class RandomNumber final : public Block {
 
 void add_random_number(Registry& registry) {
   // math/random_number
-  registry.add(make_template(
+  auto t = make_template(
       "math", "random_number", "Random Number", {"min", "max"}, {"y"},
       {{.id = "min", .default_value = 0.0, .type = "number"},
        {.id = "max", .default_value = 1.0, .type = "number"},
        {.id = "integer", .default_value = 0.0, .type = "boolean"},
        {.id = "seed", .default_value = 0.0, .type = "number"}},
       [](const Values& p, const Config&) { return std::make_unique<RandomNumber>(p); },
-      "Generates random numbers between min and max.", {.compact = true, .glyph = "~U", .value = "{min}…{max}"}));
+      "Generates random numbers between min and max.", {.compact = true, .glyph = "~U", .value = "{min}…{max}"});
+  t.def.cacheable = false;  // a fresh draw each run: never reused from an earlier run
+  registry.add(std::move(t));
 }
 
 }  // namespace paperboat::toolkit::math

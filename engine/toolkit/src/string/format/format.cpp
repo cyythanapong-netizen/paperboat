@@ -82,6 +82,7 @@ void add_format(Registry& registry) {
     std::string tmpl = c.contains("template") ? c.at("template") : "Hello {name}";
     return std::make_unique<Format>(std::move(tmpl));
   };
+  fmt.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
   registry.add(std::move(fmt));
 }
 

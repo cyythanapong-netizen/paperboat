@@ -237,6 +237,12 @@ graph and station).
    goes in `<block>/icon.hpp`) and register it from `void add_<block>(Registry&)` in the
    package namespace. The folder name is the registration: no manifest, registry or list to
    edit. A helper two blocks share goes in a `<topic>_shared.hpp` in the package folder.
-3. Add C++ tests in `engine/tests/`. If it is a new built-in package, create
+3. Say whether a run that evaluates once may reuse its outputs from an earlier run
+   (`BlockDef::cacheable`): `true` for a pure function of its params, text, inputs and the
+   variables it reads through `Context::variable` (text, format, conversions); `false` for a
+   block that reads keys or the clock, draws at random, or acts on anything else (key,
+   random_number, now). Unset, it follows `Block::stateless()` (the `Stateless` math blocks are
+   reused). The core keeps the results (`engine/core/include/paperboat/core/cache.hpp`).
+4. Add C++ tests in `engine/tests/`. If it is a new built-in package, create
    `src/<package>/toolkit.toml` with its `name`; the built-in registry and build discover it
    without edits to `registry.cpp` or the top-level toolkit source list.

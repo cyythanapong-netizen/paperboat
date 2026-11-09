@@ -160,6 +160,13 @@ struct BlockDef {
   // How the UI draws it (a hint; see View). A TOML definition may set `view` and keeps its
   // parent's other keys; package defaults live with the block definition.
   View view = {};
+  // Whether a run that evaluates once may reuse this block's outputs from an earlier run
+  // instead of calling it again, when nothing it depends on changed: its type, params,
+  // text, the values on its wires and the variables it read (Context::variable). True: it
+  // is a pure function of those (no clock, keys, domain state, randomness, files outside
+  // its "file" params, or other side effects). False: it is always called (Random, Key).
+  // Unset: as its instance says, Block::stateless(). Runs on a clock never reuse outputs.
+  std::optional<bool> cacheable = {};
 };
 
 // The definition in form `form` (that form's ports); `def` itself if it has no forms, or
@@ -261,6 +268,9 @@ using ProgressFn = std::function<void(std::string_view node, double fraction)>;
 // Where Context::set_variable writes (#166): the run checks the write and applies it at the
 // end of the pass. False when it refuses (unknown, not tunable, a formula, out of range).
 using SetVariableFn = std::function<bool(std::string_view name, const Value& value)>;
+// Told of every read through Context::variable (the value, or null for no such variable):
+// how a run-once knows which variables a block's result depends on.
+using VariableReadFn = std::function<void(std::string_view name, const Value* value)>;
 
 // What a block sees on each step.
 struct Context {
@@ -276,12 +286,15 @@ struct Context {
   // (#75) may change between steps.
   const Values* variables = nullptr;
   const SetVariableFn* set_variable_fn = nullptr;  // set by the run; null in tests
+  const VariableReadFn* variable_read_fn = nullptr;  // set by the run; null in tests
 
   // The variable called `name` now, or null.
   const Value* variable(std::string_view name) const {
-    if (!variables) return nullptr;
-    const auto it = variables->find(name);
-    return it == variables->end() ? nullptr : &it->second;
+    const Value* value = nullptr;
+    if (variables)
+      if (const auto it = variables->find(name); it != variables->end()) value = &it->second;
+    if (variable_read_fn) (*variable_read_fn)(name, value);
+    return value;
   }
 
   // Set the tunable variable `name` (#166), as an autotuner or a calibration does. A number
@@ -321,7 +334,8 @@ class Block {
   // when made, and the change waits for the next run (unless the block is stateless).
   virtual bool set_param(std::string_view /*id*/, double /*value*/) { return false; }
   // True for a block with no state of its own: its outputs depend on its inputs and the
-  // clock alone. The run then takes a param change by making it again with the new params.
+  // clock alone. The run then takes a param change by making it again with the new params,
+  // and a run-once may reuse its outputs (unless its BlockDef::cacheable says otherwise).
   virtual bool stateless() const { return false; }
 };
 
