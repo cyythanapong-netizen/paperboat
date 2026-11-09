@@ -66,9 +66,9 @@ class Run {
   json pass();
   json pass_over(const std::vector<std::string>& order);
   // One block of a run that evaluates once: its outputs from the run's cache when nothing it
-  // depends on changed since a run computed them (node.state "done" alone, the logs it wrote
-  // shown again), else called like pass_over({id}) (node.state "running", then "done") and, if
-  // it may be reused, kept in the cache for the next run. Returns its samples.
+  // depends on changed since a run computed them (node.state "cached", the logs, metrics and
+  // frame it sent shown again), else called like pass_over({id}) (node.state "running", then
+  // "done") and, if it may be reused, kept in the cache for the next run. Returns its samples.
   json evaluate(const std::string& id);
   // How many blocks evaluate() took from the cache so far.
   int reused() const { return reused_; }
@@ -92,6 +92,7 @@ class Run {
   bool cancelled();
   void emit(const json& message) { emit_(message); }
   void log(std::string_view level, std::string_view text);
+  // node.state: queued (waits its turn in this run), running, done, cached (reused), failed.
   void node_state(std::string_view node, std::string_view state);
 
  private:
@@ -109,6 +110,18 @@ class Run {
   // The end of a pass: applies what blocks set, and tells the UI (variables.patch).
   void commit_variables();
   bool change_param(Node& node, const toolkit::ParamDef& def, double value);
+  // Context::metric, monitor_state and frame (#17): checked, then sent (a frame at most ~20 a
+  // second per block; the rest waits in `frames_` for flush_frames).
+  void metric(std::string_view node, std::string_view series, std::optional<double> x, double y, std::string_view unit);
+  void monitor_state(std::string_view node, toolkit::MonitorState state, double value, std::string_view port);
+  void frame_of(std::string_view node, const toolkit::Frame& frame);
+  // Sends the latest frame of each block that has one waiting: those whose last was ~50 ms ago
+  // (a clock frame's end), or `all` (the end of a block in a run-once, of the run).
+  void flush_frames(bool all);
+  // Sends a metric, monitor.state or frame message; a block evaluate() records keeps it.
+  void send_event(json message);
+  // Warns once per `key` in the Console, tagged with the block.
+  void warn_once(std::string_view node, const std::string& key, const std::string& text);
   // What a block whose outputs may be reused is, for the cache: type, ports, params, text,
   // lanes, the run's dt and solver, its files. None for a block that is always called.
   std::optional<std::string> cache_signature(const Node& node) const;
@@ -118,6 +131,7 @@ class Run {
     std::string node;
     std::map<std::string, std::optional<toolkit::Value>, std::less<>> variables;  // read
     std::vector<std::pair<std::string, std::string>> logs;                        // written
+    std::vector<json> events;  // metric and monitor.state messages it sent, then its last frame
     bool set_variable = false;  // a side effect: not reused
   };
 
@@ -134,6 +148,13 @@ class Run {
   toolkit::ProgressFn progress_;
   toolkit::SetVariableFn set_variable_;
   toolkit::VariableReadFn variable_read_;
+  toolkit::MetricFn metric_;
+  toolkit::MonitorStateFn monitor_state_;
+  toolkit::FrameFn frame_;
+  std::map<std::string, int, std::less<>> metric_next_;           // "node\nseries" → its next index
+  std::map<std::string, std::string, std::less<>> monitor_said_;  // "node\nport" → its last monitor.state
+  std::map<std::string, json, std::less<>> frames_;               // node → its latest frame, not yet sent
+  std::map<std::string, std::chrono::steady_clock::time_point, std::less<>> frame_sent_;  // node → last frame
   RunCache* cache_ = nullptr;
   std::optional<Recording> recording_;
   int reused_ = 0;

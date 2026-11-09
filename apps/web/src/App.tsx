@@ -308,8 +308,8 @@ export function App() {
 
   const running = state.run?.status === "running";
   const runStates = useMemo(
-    () => ({ active: new Set(state.active), failed: new Set(state.failed), progress: state.progress }),
-    [state.active, state.failed, state.progress],
+    () => ({ active: new Set(state.active), failed: new Set(state.failed), queued: new Set(state.queued), cached: new Set(state.cached), progress: state.progress }),
+    [state.active, state.failed, state.queued, state.cached, state.progress],
   );
 
   // The subsystem or story open on the Flow canvas (#68); null: the top level.

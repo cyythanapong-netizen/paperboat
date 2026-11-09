@@ -48,6 +48,8 @@ def ts(s: dict, defs: dict, indent: str = "") -> str:
         return "number"
     if t == "boolean":
         return "boolean"
+    if t == "null":
+        return "null"
     if t == "array":
         item = ts(s.get("items", {}), defs, indent)
         n = s.get("minItems")

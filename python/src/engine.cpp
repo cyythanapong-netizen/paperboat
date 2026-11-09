@@ -11,6 +11,7 @@
 // Threads: the engine runs on its own threads; every call into Python takes the GIL, and
 // Python errors become C++ errors (which fail the run, never the backend).
 
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -205,6 +206,9 @@ struct BlockContext {
   const tk::Values* variables = nullptr;
   const tk::SetVariableFn* set_variable_fn = nullptr;
   const tk::VariableReadFn* variable_read_fn = nullptr;  // the run records the read (what a run-once's cache checks)
+  const tk::MetricFn* metric_fn = nullptr;
+  const tk::MonitorStateFn* monitor_state_fn = nullptr;
+  const tk::FrameFn* frame_fn = nullptr;
 
   nb::object variable(const std::string& name) const {
     const tk::Value* v = variables ? [&] { const auto it = variables->find(name); return it == variables->end() ? nullptr : &it->second; }() : nullptr;
@@ -220,6 +224,59 @@ struct BlockContext {
   void progress(double fraction) const {
     if (progress_fn) (*progress_fn)(node, fraction);
   }
+  void metric(const std::string& series, double y, std::optional<double> x, const std::string& unit) const {
+    if (metric_fn) (*metric_fn)(node, series, x, y, unit);
+  }
+  void monitor_state(const std::string& state, double value, const std::string& port) const {
+    tk::MonitorState level;
+    if (state == "ok") level = tk::MonitorState::Ok;
+    else if (state == "warn") level = tk::MonitorState::Warn;
+    else if (state == "trip") level = tk::MonitorState::Trip;
+    else throw nb::value_error(("monitor_state: \"" + state + "\" is not ok, warn or trip").c_str());
+    if (monitor_state_fn) (*monitor_state_fn)(node, level, value, port);
+  }
+  // shapes: dicts as the protocol's FrameShape ({"t": "line", "p": [[x, y], …], "stroke": "signal"});
+  // field: a dict {"w", "h", "v", "min"?, "max"?}; view: [xmin, ymin, xmax, ymax].
+  void frame(nb::handle shapes, nb::handle field, nb::handle view) const {
+    tk::Frame f;
+    const auto text = [](const nb::dict& d, const char* key) {
+      return d.contains(key) ? nb::cast<std::string>(d[key]) : std::string{};
+    };
+    if (!view.is_none()) {
+      const auto v = nb::cast<std::vector<double>>(view);
+      if (v.size() != 4) throw nb::value_error("frame: view is [xmin, ymin, xmax, ymax]");
+      f.view = std::array<double, 4>{v[0], v[1], v[2], v[3]};
+    }
+    if (!shapes.is_none()) {
+      for (nb::handle item : shapes) {
+        nb::dict d = nb::cast<nb::dict>(item);
+        tk::FrameShape shape;
+        if (d.contains("t")) shape.t = nb::cast<std::string>(d["t"]);
+        if (d.contains("p"))
+          for (nb::handle point : d["p"]) {
+            const auto xy = nb::cast<std::vector<double>>(point);
+            if (xy.size() != 2) throw nb::value_error("frame: a point is [x, y]");
+            shape.p.push_back({xy[0], xy[1]});
+          }
+        if (d.contains("r")) shape.r = nb::cast<double>(d["r"]);
+        shape.s = text(d, "s");
+        shape.stroke = text(d, "stroke");
+        shape.fill = text(d, "fill");
+        f.shapes.push_back(std::move(shape));
+      }
+    }
+    if (!field.is_none()) {
+      nb::dict d = nb::cast<nb::dict>(field);
+      tk::FrameField out;
+      out.w = nb::cast<int>(d["w"]);
+      out.h = nb::cast<int>(d["h"]);
+      for (nb::handle x : d["v"]) out.v.push_back(x.is_none() ? std::nan("") : nb::cast<double>(x));
+      if (d.contains("min") && !d["min"].is_none()) out.min = nb::cast<double>(d["min"]);
+      if (d.contains("max") && !d["max"].is_none()) out.max = nb::cast<double>(d["max"]);
+      f.field = std::move(out);
+    }
+    if (frame_fn) (*frame_fn)(node, f);
+  }
 };
 
 struct StateAdapter;
@@ -229,7 +286,8 @@ nb::object context(const tk::Context& ctx) {
   nb::set keys;
   if (ctx.keys_down)
     for (const auto& k : *ctx.keys_down) keys.add(nb::str(k.c_str()));
-  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn, ctx.progress_fn, ctx.variables, ctx.set_variable_fn, ctx.variable_read_fn});
+  return nb::cast(BlockContext{ctx.t, ctx.dt, std::move(keys), state_object(ctx), std::string(ctx.node), ctx.log_fn, ctx.progress_fn, ctx.variables, ctx.set_variable_fn, ctx.variable_read_fn,
+                                 ctx.metric_fn, ctx.monitor_state_fn, ctx.frame_fn});
 }
 
 // Runs `fn` with the GIL held; a Python error becomes a C++ error the run reports.
@@ -738,7 +796,17 @@ NB_MODULE(_engine, m) {
            "Set a tunable variable (a number, or text for enum / text / file ones); it takes effect at the end "
            "of the pass and is kept in the project. False, with a Console warning, if refused.")
       .def("progress", &BlockContext::progress, nb::arg("fraction"),
-           "How far a long step has got, 0 to 1: the UI shows it on the block.");
+           "How far a long step has got, 0 to 1: the UI shows it on the block.")
+      .def("metric", &BlockContext::metric, nb::arg("series"), nb::arg("y"), nb::arg("x").none() = nb::none(), nb::arg("unit") = "",
+           "A point of a series off the run clock (a residual against its iteration): y against x, or against "
+           "the series' next index without x. unit is y's.")
+      .def("monitor_state", &BlockContext::monitor_state, nb::arg("state"), nb::arg("value"), nb::arg("port") = "",
+           "What this monitor says now: \"ok\", \"warn\" or \"trip\", and the value that put it there. Call it "
+           "every step; the UI hears of a change only.")
+      .def("frame", &BlockContext::frame, nb::arg("shapes").none() = nb::none(), nb::arg("field").none() = nb::none(),
+           nb::arg("view").none() = nb::none(),
+           "A live picture: shapes ([{\"t\": \"line\", \"p\": [[x, y], ...]}, ...]: line, poly, circle with r, text "
+           "with s) and/or a field ({\"w\", \"h\", \"v\": row by row from the top}), in view [xmin, ymin, xmax, ymax].");
 
   nb::class_<Hosted>(m, "Hosted", "A backend: the domain's package, its catalog and (once listening) a server.")
       .def("listen", &Hosted::listen, nb::arg("port"), "Serve the protocol (and a web station) on the port.")

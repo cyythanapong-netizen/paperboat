@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { TraceStore } from "./traces.ts";
-import type { BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, Graph, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
+import type { BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, Graph, MonitorState, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
 
 export type EngineState = {
   connection: "connecting" | "open" | "closed";
@@ -41,8 +41,18 @@ export type EngineState = {
   active: string[];
   /** Blocks the last run named as failing it. */
   failed: string[];
+  /** Blocks waiting their turn in the run (node.state queued); none once it has finished. */
+  queued: string[];
+  /** Blocks the last run reused from an earlier one (node.state cached). */
+  cached: string[];
   /** How far each block's long step has got (node.progress), 0 to 1. */
   progress: Record<string, number>;
+  /** Each block's metric series (#17): points [x, y] in arrival order, at most MAX_METRIC_POINTS. */
+  metrics: Record<string, Record<string, MetricSeries>>;
+  /** What each monitor says (monitor.state), by its input (`in` when it has one): what a Lamp shows. */
+  monitorStates: Record<string, Record<string, MonitorReading>>;
+  /** The latest live picture each block drew (frame). */
+  frames: Record<string, FrameMsg>;
   /** Console lines; `node` is the block (or station object) that wrote it or failed. */
   logs: { level: string; text: string; node?: string }[];
 };
@@ -70,11 +80,22 @@ export const initial: EngineState = {
   vectorComponents: {},
   active: [],
   failed: [],
+  queued: [],
+  cached: [],
   progress: {},
+  metrics: {},
+  monitorStates: {},
+  frames: {},
   logs: [],
 };
 
 export type SignalMsg = Extract<ServerMsg, { type: "signal" }>;
+export type FrameMsg = Extract<ServerMsg, { type: "frame" }>;
+export type MetricSeries = { points: [number, number][]; unit?: string };
+export type MonitorReading = { state: MonitorState; t: number; v?: number };
+
+/** Max points kept per metric series (the oldest go first). */
+export const MAX_METRIC_POINTS = 2000;
 export type Action = ServerMsg | { type: "signals"; list: SignalMsg[] } | { type: "reset" } | { type: "connection"; value: EngineState["connection"] };
 
 /** Max Console lines kept in memory. */
@@ -90,6 +111,18 @@ export function missingRequiredToolkits(
 ): ToolkitStatus[] {
   const missingTypes = new Set(missingBlockTypes);
   return toolkits.filter((t) => !t.installed && (t.required || !!t.blocks?.some((type) => missingTypes.has(type))));
+}
+
+/** The word for what the last run says of a block, if anything: failed, running, queued, cached (done says nothing). */
+export function runWord(
+  states: { active: ReadonlySet<string>; failed: ReadonlySet<string>; queued: ReadonlySet<string>; cached: ReadonlySet<string> },
+  id: string,
+): "failed" | "running" | "queued" | "cached" | undefined {
+  if (states.failed.has(id)) return "failed";
+  if (states.active.has(id)) return "running";
+  if (states.queued.has(id)) return "queued";
+  if (states.cached.has(id)) return "cached";
+  return undefined;
 }
 
 function pushLog(logs: EngineState["logs"], entry: EngineState["logs"][number]): EngineState["logs"] {
@@ -150,18 +183,49 @@ export function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, entities };
     }
     case "run.started":
-      return { ...s, run: { id: m.run, progress: 0, status: "running", startedAt: Date.now(), simTime: 0 }, traceVersion: s.traceVersion + 1, latest: {}, vectorComponents: {}, active: [], failed: [], progress: {} };
+      return {
+        ...s,
+        run: { id: m.run, progress: 0, status: "running", startedAt: Date.now(), simTime: 0 },
+        traceVersion: s.traceVersion + 1,
+        latest: {},
+        vectorComponents: {},
+        active: [],
+        failed: [],
+        queued: [],
+        cached: [],
+        progress: {},
+        metrics: {},
+        monitorStates: {},
+        frames: {},
+      };
     case "run.progress":
       return s.run?.id === m.run ? { ...s, run: { ...s.run, progress: m.fraction } } : s;
     case "run.finished":
-      return s.run?.id === m.run ? { ...s, run: { ...s.run, status: m.status }, active: [] } : s;
+      // What never got its turn (the run failed or was cancelled first) is no longer waiting.
+      return s.run?.id === m.run ? { ...s, run: { ...s.run, status: m.status }, active: [], queued: [] } : s;
     case "node.state": {
-      const active = s.active.filter((id) => id !== m.node);
-      const failed = m.state === "failed" ? [...s.failed.filter((id) => id !== m.node), m.node] : s.failed;
-      return { ...s, active: m.state === "running" ? [...active, m.node] : active, failed };
+      // A block is in one of active, queued and cached at a time (done: none); failed stays.
+      const without = (list: string[]) => list.filter((id) => id !== m.node);
+      const add = (list: string[], state: string) => (m.state === state ? [...without(list), m.node] : without(list));
+      const failed = m.state === "failed" ? add(s.failed, "failed") : s.failed;
+      return { ...s, active: add(s.active, "running"), queued: add(s.queued, "queued"), cached: add(s.cached, "cached"), failed };
     }
     case "node.progress":
       return { ...s, progress: { ...s.progress, [m.node]: m.fraction } };
+    case "metric": {
+      const series = s.metrics[m.node] ?? {};
+      const before = series[m.series]?.points ?? [];
+      const points: [number, number][] = [...before.slice(-(MAX_METRIC_POINTS - 1)), [m.x, m.y]];
+      const one: MetricSeries = m.unit ? { points, unit: m.unit } : { points };
+      return { ...s, metrics: { ...s.metrics, [m.node]: { ...series, [m.series]: one } } };
+    }
+    case "monitor.state": {
+      const reading: MonitorReading = m.v === undefined ? { state: m.state, t: m.t } : { state: m.state, t: m.t, v: m.v };
+      const ports = { ...s.monitorStates[m.node], [m.port ?? "in"]: reading };
+      return { ...s, monitorStates: { ...s.monitorStates, [m.node]: ports } };
+    }
+    case "frame":
+      return { ...s, frames: { ...s.frames, [m.node]: m } };
     case "signal": {
       // Its history is in `traces` already (useEngine adds it as it arrives); here only the
       // latest value, for readouts.

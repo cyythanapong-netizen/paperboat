@@ -463,14 +463,14 @@ edges = [{ from = ["l", "y"], to = ["t", "u"] }, { from = ["l", "y"], to = ["g",
   for (const auto& m : out.messages)
     if (m["type"] == "signal") plotted.push_back(m["v"]);
   CHECK(plotted == std::vector<double>{4, 6, 5});  // the list, by index
-  // Block by block, each running then done; a block's progress, throttled but always ending at 1.
+  // Every block queued, then block by block, each running then done; a block's progress, throttled but always ending at 1.
   std::vector<std::string> states;
   std::vector<double> progress;
   for (const auto& m : out.messages) {
     if (m["type"] == "node.state") states.push_back(m["node"].get<std::string>() + ":" + m["state"].get<std::string>());
     if (m["type"] == "node.progress" && m["node"] == "l") progress.push_back(m["fraction"]);
   }
-  CHECK(states == std::vector<std::string>{"l:running", "l:done", "t:running", "t:done", "g:running", "g:done"});
+  CHECK(states == std::vector<std::string>{"l:queued", "t:queued", "g:queued", "l:running", "l:done", "t:running", "t:done", "g:running", "g:done"});
   REQUIRE(progress.size() >= 2);
   CHECK_THAT(progress.front(), WithinAbs(1.0 / 3, 1e-9));
   CHECK(progress.back() == 1.0);

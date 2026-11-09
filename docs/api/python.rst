@@ -518,6 +518,25 @@ What a block sees
 
       How far a long step has got, 0 to 1: the UI shows it on the block.
 
+   .. py:method:: metric(series, y, x=None, unit="")
+
+      A point of a series that isn't on the run clock (a solver's residual against its
+      iteration): ``y`` against ``x``, or against the series' next index (0, 1, 2…) without
+      it. ``unit`` is y's. Sent as a ``metric`` event.
+
+   .. py:method:: monitor_state(state, value, port="")
+
+      What this monitor says now: ``"ok"``, ``"warn"`` or ``"trip"``, and the value that put
+      it there. Call it every step; the UI hears of a change only (``monitor.state``).
+
+   .. py:method:: frame(shapes=None, field=None, view=None)
+
+      A live picture (``frame``): ``shapes`` as the protocol's ``FrameShape`` dicts
+      (``{"t": "circle", "p": [[x, y]], "r": 0.1, "fill": "signal"}``), ``field`` a dict
+      ``{"w", "h", "v", "min"?, "max"?}`` (``v`` row by row from the top, ``None`` for no
+      value), ``view`` ``[xmin, ymin, xmax, ymax]`` (y up). At most ~20 a second per block
+      are sent, always the last.
+
 .. py:class:: Handle
 
    Opaque data on a wire (an image…): pass it along as is. ``kind`` names what it holds.

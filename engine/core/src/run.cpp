@@ -12,8 +12,10 @@
 #include <exception>
 #include <filesystem>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <thread>
+#include <variant>
 
 namespace paperboat::core {
 
@@ -120,6 +122,60 @@ void validate_vector_outputs(const Node& node, const toolkit::Values& values) {
   }
 }
 
+// A frame (Context::frame) as its message's fields, or why it can't be sent.
+bool is_finite_point(const std::array<double, 2>& p) { return std::isfinite(p[0]) && std::isfinite(p[1]); }
+
+std::variant<json, std::string> frame_fields(const toolkit::Frame& frame) {
+  static const std::set<std::string, std::less<>> kinds = {"line", "poly", "circle", "text"};
+  static const std::set<std::string, std::less<>> strokes = {"", "ink", "muted", "signal", "danger"};
+  static const std::set<std::string, std::less<>> fills = {"", "none", "ink", "raised", "sunken", "signal"};
+  json out = json::object();
+  if (frame.view) {
+    const auto& v = *frame.view;
+    if (!std::ranges::all_of(v, [](double x) { return std::isfinite(x); }) || v[2] <= v[0] || v[3] <= v[1])
+      return std::string("its view isn't [xmin, ymin, xmax, ymax]");
+    out["view"] = v;
+  }
+  if (frame.shapes.size() > static_cast<std::size_t>(toolkit::kFrameMaxShapes))
+    return "more than " + std::to_string(toolkit::kFrameMaxShapes) + " shapes";
+  if (!frame.shapes.empty()) {
+    json shapes = json::array();
+    for (const auto& shape : frame.shapes) {
+      if (!kinds.contains(shape.t)) return "no shape \"" + shape.t + "\" (line, poly, circle, text)";
+      if (!strokes.contains(shape.stroke)) return "no stroke \"" + shape.stroke + "\" (ink, muted, signal, danger)";
+      if (!fills.contains(shape.fill)) return "no fill \"" + shape.fill + "\" (none, ink, raised, sunken, signal)";
+      const std::size_t least = shape.t == "line" || shape.t == "poly" ? 2 : 1;
+      if (shape.p.size() < least) return "a " + shape.t + " needs " + std::to_string(least) + (least == 1 ? " point" : " points");
+      if (!std::ranges::all_of(shape.p, is_finite_point)) return "a " + shape.t + "'s point isn't finite";
+      json item = {{"t", shape.t}, {"p", shape.p}};
+      if (shape.t == "circle") {
+        if (!std::isfinite(shape.r) || shape.r < 0) return std::string("a circle's radius isn't 0 or more");
+        item["r"] = shape.r;
+      }
+      if (shape.t == "text") item["s"] = shape.s;
+      if (!shape.stroke.empty()) item["stroke"] = shape.stroke;
+      if (!shape.fill.empty()) item["fill"] = shape.fill;
+      shapes.push_back(std::move(item));
+    }
+    out["shapes"] = std::move(shapes);
+  }
+  if (frame.field) {
+    const auto& f = *frame.field;
+    if (f.w <= 0 || f.h <= 0 || static_cast<long long>(f.w) * f.h > toolkit::kFrameMaxCells)
+      return "its field isn't 1 to " + std::to_string(toolkit::kFrameMaxCells) + " cells";
+    if (f.v.size() != static_cast<std::size_t>(f.w) * static_cast<std::size_t>(f.h))
+      return "its field has " + std::to_string(f.v.size()) + " values for " + std::to_string(f.w) + " × " + std::to_string(f.h) + " cells";
+    json values = json::array();
+    for (double x : f.v) values.push_back(std::isfinite(x) ? json(x) : json());  // no value: null
+    json field = {{"w", f.w}, {"h", f.h}, {"v", std::move(values)}};
+    if (f.min && std::isfinite(*f.min)) field["min"] = *f.min;
+    if (f.max && std::isfinite(*f.max)) field["max"] = *f.max;
+    out["field"] = std::move(field);
+  }
+  if (!out.contains("shapes") && !out.contains("field")) return std::string("it has neither shapes nor a field");
+  return out;
+}
+
 }  // namespace
 
 Calling::Calling(toolkit::Context& ctx, std::string_view node, std::string& failed)
@@ -172,6 +228,16 @@ Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit
       recording_->variables.try_emplace(std::string(name), value ? std::optional(*value) : std::nullopt);
   };
   ctx_.variable_read_fn = &variable_read_;
+  metric_ = [this](std::string_view node, std::string_view series, std::optional<double> x, double y, std::string_view unit) {
+    metric(node, series, x, y, unit);
+  };
+  ctx_.metric_fn = &metric_;
+  monitor_state_ = [this](std::string_view node, toolkit::MonitorState state, double value, std::string_view port) {
+    monitor_state(node, state, value, port);
+  };
+  ctx_.monitor_state_fn = &monitor_state_;
+  frame_ = [this](std::string_view node, const toolkit::Frame& frame) { frame_of(node, frame); };
+  ctx_.frame_fn = &frame_;
 }
 
 std::string Run::go(const json& graph_given, const json& station_given, const json& variables) {
@@ -257,6 +323,7 @@ void Run::fail(const std::string& node, const std::string& text) {
 }
 
 std::string Run::finish(const std::string& status) {
+  flush_frames(true);  // a block's last picture, sent before the run ends
   if (status == "done" && cache_ && evaluated_) {  // what the graph no longer has needn't be kept
     std::set<std::string, std::less<>> ids;
     for (const auto& [id, node] : g_.nodes) ids.insert(id);
@@ -283,6 +350,79 @@ void Run::log(std::string_view level, std::string_view text) { emit_(log_msg(std
 
 void Run::node_state(std::string_view node, std::string_view state) {
   emit_({{"type", "node.state"}, {"node", node}, {"state", state}});
+}
+
+void Run::warn_once(std::string_view node, const std::string& key, const std::string& text) {
+  if (told_.insert(std::string(node) + "\n" + key).second) log_(node, "warn", text);
+}
+
+void Run::send_event(json message) {
+  if (recording_ && message.value("node", std::string{}) == recording_->node) recording_->events.push_back(message);
+  emit_(message);
+}
+
+// A sample's x: the run clock to 0.1 ms, as signals have it.
+static double sample_time(double t) { return std::round(t * 1e4) / 1e4; }
+
+void Run::metric(std::string_view node, std::string_view series, std::optional<double> x, double y, std::string_view unit) {
+  if (node.empty()) return;
+  if (series.empty()) return warn_once(node, "metric:name", "metric: a series needs a name");
+  auto& next = metric_next_[std::string(node) + "\n" + std::string(series)];
+  const double at = x.value_or(next);
+  if (!x) ++next;  // the index moves on even past a point dropped, so the next keeps its place
+  if (!std::isfinite(at) || !std::isfinite(y)) return;
+  json msg = {{"type", "metric"}, {"node", node}, {"series", series}, {"x", at}, {"y", y}};
+  if (!unit.empty()) msg["unit"] = unit;
+  send_event(std::move(msg));
+}
+
+void Run::monitor_state(std::string_view node, toolkit::MonitorState state, double value, std::string_view port) {
+  if (node.empty()) return;
+  const std::string name(toolkit::monitor_state_name(state));
+  const std::string key = std::string(node) + "\n" + std::string(port);
+  const auto said = monitor_said_.find(key);
+  // Every monitor starts at ok: only a change is news.
+  if (said == monitor_said_.end() ? state == toolkit::MonitorState::Ok : said->second == name) return;
+  monitor_said_.insert_or_assign(key, name);
+  json msg = {{"type", "monitor.state"}, {"node", node}, {"state", name}, {"t", sample_time(ctx_.t)}};
+  if (std::isfinite(value)) msg["v"] = value;
+  if (!port.empty()) msg["port"] = port;
+  send_event(std::move(msg));
+}
+
+void Run::frame_of(std::string_view node, const toolkit::Frame& frame) {
+  if (node.empty()) return;
+  auto fields = frame_fields(frame);
+  if (const auto* why = std::get_if<std::string>(&fields)) return warn_once(node, "frame:" + *why, "frame not shown: " + *why);
+  json msg = {{"type", "frame"}, {"node", node}, {"t", sample_time(ctx_.t)}};
+  msg.update(std::get<json>(fields));
+  if (recording_ && node == recording_->node) {  // what a reused block shows again: its last picture
+    std::erase_if(recording_->events, [](const json& m) { return m["type"] == "frame"; });
+    recording_->events.push_back(msg);
+  }
+  const auto now = std::chrono::steady_clock::now();
+  const auto last = frame_sent_.find(node);
+  if (last != frame_sent_.end() && now - last->second < std::chrono::milliseconds(50)) {
+    frames_.insert_or_assign(std::string(node), std::move(msg));  // the latest waits for the next flush
+    return;
+  }
+  frame_sent_.insert_or_assign(std::string(node), now);
+  frames_.erase(std::string(node));
+  emit_(msg);
+}
+
+void Run::flush_frames(bool all) {
+  const auto now = std::chrono::steady_clock::now();
+  for (auto it = frames_.begin(); it != frames_.end();) {
+    auto& sent = frame_sent_[it->first];
+    if (!all && now - sent < std::chrono::milliseconds(50)) {
+      ++it;
+      continue;
+    }
+    sent = now;
+    emit_(it->second);
+    it = frames_.erase(it);
+  }
 }
 
 void Run::at_time(double t) {
@@ -598,10 +738,13 @@ json Run::evaluate(const std::string& id) {
   }
   if (hit) {  // what it gave last time, through the pass like any block (its instrument shows it)
     node.block = std::make_unique<Reused>(hit);
-    // Done, with no running before it: the protocol's NodeState has no "cached" yet (adding it
-    // means changing the shared TypeScript types, @paperboat/shared, in step with the schema).
-    node_state(id, "done");
+    node_state(id, "cached");  // with no running before it: it isn't called
     for (const auto& [level, text] : hit->logs) log_(id, level, text);
+    for (const auto& event : hit->events) {  // its metrics, monitor states and picture, as when it ran
+      if (event["type"] == "monitor.state")
+        monitor_said_.insert_or_assign(id + "\n" + event.value("port", std::string{}), event["state"].get<std::string>());
+      emit_(event);
+    }
     ++reused_;
     return pass_over({id});
   }
@@ -625,8 +768,10 @@ json Run::evaluate(const std::string& id) {
                        .variables = recorded->variables,
                        .outputs = outputs_[id],
                        .entities = node.block->entities(),
-                       .logs = recorded->logs});
+                       .logs = recorded->logs,
+                       .events = recorded->events});
   }
+  flush_frames(true);  // its last picture before it is done
   node_state(id, "done");
   return samples;
 }
@@ -659,6 +804,7 @@ void Run::frame(const json& samples, std::optional<double> progress) {
   for (const auto& [node, list] : story_samples_)
     for (const auto& sample : list) emit_(sample);
   story_samples_.clear();
+  flush_frames(false);
   json patch = scene_of(station_);
   if (state_)
     for (const auto& e : entities_json(state_->patch())) patch.push_back(e);

@@ -127,15 +127,23 @@ struct Result {
   std::vector<std::string> logs;
   std::vector<json> messages;
 
-  // A reused block is reported done with no running before it; a called one, running then done.
-  Ids done(bool called) const {
+  // A reused block is reported cached with no running before it; a called one, running then done.
+  Ids last(const std::string& st) const {
     Ids out;
-    for (const auto& [n, st] : state)
-      if (st == "done" && ran.contains(n) == called) out.insert(n);
+    for (const auto& [n, s] : state)
+      if (s == st) out.insert(n);
     return out;
   }
-  Ids cached() const { return done(false); }
-  Ids computed() const { return done(true); }
+  Ids cached() const {
+    Ids out = last("cached");
+    for (const auto& n : out) REQUIRE(!ran.contains(n));
+    return out;
+  }
+  Ids computed() const {
+    Ids out = last("done");
+    for (const auto& n : out) REQUIRE(ran.contains(n));
+    return out;
+  }
 };
 
 Result run(const json& graph, core::RunCache* cache, const json& variables = nullptr, const json& station = nullptr,
@@ -192,11 +200,23 @@ TEST_CASE("cache: a second identical run reuses every block's outputs") {
   CHECK(std::ranges::any_of(second.messages, [](const json& m) {
     return m["type"] == "log" && m.value("node", "") == "f" && m["text"] == "scaled by 3";
   }));
-  // A reused block is reported once, done, never running.
-  std::vector<std::string> f_states;
-  for (const auto& m : second.messages)
-    if (m["type"] == "node.state" && m["node"] == "f") f_states.push_back(m["state"]);
-  CHECK(f_states == std::vector<std::string>{"done"});
+  // A reused block is reported queued, then cached, never running; a called one queued, running, done.
+  const auto states_of = [](const Result& r, const std::string& id) {
+    std::vector<std::string> out;
+    for (const auto& m : r.messages)
+      if (m["type"] == "node.state" && m["node"] == id) out.push_back(m["state"]);
+    return out;
+  };
+  CHECK(states_of(first, "f") == std::vector<std::string>{"queued", "running", "done"});
+  CHECK(states_of(second, "f") == std::vector<std::string>{"queued", "cached"});
+  CHECK(states_of(second, "show-g") == std::vector<std::string>{"queued", "running", "done"});
+  // Every block is queued before the first one runs.
+  const auto first_running = std::ranges::find_if(second.messages, [](const json& m) {
+    return m["type"] == "node.state" && m["state"] != "queued";
+  });
+  CHECK(std::count_if(second.messages.begin(), first_running, [](const json& m) {
+          return m["type"] == "node.state" && m["state"] == "queued";
+        }) == 7);
 }
 
 TEST_CASE("cache: a changed param, wire or variable recomputes exactly the blocks after it") {
@@ -425,7 +445,7 @@ TEST_CASE("cache: runs on a clock, and runs given no cache, call every block") {
   }
 }
 
-TEST_CASE("cache: a session's run-once reuses its previous run (node.state done, never running)") {
+TEST_CASE("cache: a session's run-once reuses its previous run (node.state cached, never running)") {
   calls().clear();
   std::vector<json> sent;
   std::mutex mutex;
@@ -451,7 +471,7 @@ TEST_CASE("cache: a session's run-once reuses its previous run (node.state done,
     if (m["type"] == "run.started") in_second = m["run"] == "run-2";
     if (in_second && m["type"] == "node.state" && m["node"] == "f") second.push_back(m["state"]);
   }
-  CHECK(second == std::vector<std::string>{"done"});
+  CHECK(second == std::vector<std::string>{"queued", "cached"});
   CHECK(calls().at("f") == 1);
 }
 

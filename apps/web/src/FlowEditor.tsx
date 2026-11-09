@@ -35,6 +35,7 @@ import { usePortLayout } from "./portLayout";
 import { Bindable, draggedVariable, NumberOrFormula, VAR_DRAG, VarsContext } from "./Variables";
 import { isRef } from "./bindings";
 import { RemoveIcon } from "./RemoveIcon";
+import { runWord } from "./engine";
 import { connectionOf, nearestAccepting, SNAP, WireDragContext, type Anchor } from "./wireSnap";
 import { arrangeFlowNodes, canArrangeFlow } from "./flowLayout";
 import { middleOfWire, orthoPoints, roundedPolyline, routeWires, squareUp, type Obstacle, type RouteInput, type WireRoute, type WirePoint } from "./wireRouting.ts";
@@ -93,13 +94,20 @@ export type Wire = Edge<{ type: string; points?: WirePoint[] }, "wire">;
 export const RunStates = createContext<{
   active: ReadonlySet<string>;
   failed: ReadonlySet<string>;
+  /** Waiting their turn in the run (queued). */
+  queued: ReadonlySet<string>;
+  /** Reused from an earlier run (cached). */
+  cached: ReadonlySet<string>;
   /** How far a block's long step has got (node.progress). */
   progress: Readonly<Record<string, number>>;
 }>({
   active: new Set(),
   failed: new Set(),
+  queued: new Set(),
+  cached: new Set(),
   progress: {},
 });
+
 
 export { inForm };
 
@@ -135,6 +143,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
   const { params, missing, commented, commentMode, comment } = data;
   const def = inForm(data.def, params);
   const failed = states.failed.has(id);
+  const word = runWord(states, id);
   const connectors = useContext(ConnectorsContext);
   const iconWires = useContext(IconWires);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -163,7 +172,7 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
         params={params}
         selected={!!selected}
         commented={commented}
-        word={failed ? "failed" : active ? "running" : undefined}
+        word={word}
         progress={progress}
         onExpand={() => setExpanded(true)}
         connectors={connectors}
@@ -195,17 +204,15 @@ function Block({ id, data, selected }: NodeProps<BlockNode>) {
       : "// commented"
     : missing
       ? "missing"
-      : failed
-        ? "failed"
-        : active
-          ? "running"
-          : def.linked
-            ? "linked"
-            : step
-              ? "step"
-              : def.kind === "function"
-                ? "fn"
-                : def.kind;
+      : word
+        ? word
+        : def.linked
+          ? "linked"
+          : step
+            ? "step"
+            : def.kind === "function"
+              ? "fn"
+              : def.kind;
   return (
     <div
       className={classes.filter(Boolean).join(" ")}

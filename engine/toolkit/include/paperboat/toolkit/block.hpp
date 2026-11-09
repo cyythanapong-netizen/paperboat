@@ -3,6 +3,7 @@
 // The runtime face of a toolkit block: its definition (what the UI shows) and an
 // instance (what runs in a graph). No domain code lives in the toolkit.
 
+#include <array>
 #include <functional>
 #include <map>
 #include <memory>
@@ -272,6 +273,48 @@ using SetVariableFn = std::function<bool(std::string_view name, const Value& val
 // how a run-once knows which variables a block's result depends on.
 using VariableReadFn = std::function<void(std::string_view name, const Value* value)>;
 
+// What a monitor says about what it watches (a Lamp: below its threshold, near it, past it):
+// the protocol's `monitor.state` (#17).
+enum class MonitorState { Ok, Warn, Trip };
+std::string_view monitor_state_name(MonitorState state);  // "ok", "warn", "trip"
+
+// A live picture a block draws (#17), the protocol's `frame`: a few 2D shapes and/or a small
+// field image, in the block's own coordinates (y up), shown as a live view. Styles are the
+// view.icon tokens, never colours.
+struct FrameShape {
+  std::string t = "line";                     // line (open), poly (closed), circle (at p[0], radius r), text (at p[0])
+  std::vector<std::array<double, 2>> p = {};  // points [x, y]
+  double r = 0;                               // a circle's radius
+  std::string s = {};                         // a text's text
+  std::string stroke = {};                    // ink (default), muted, signal or danger
+  std::string fill = {};                      // none (default), ink, raised, sunken or signal
+};
+// w × h values row by row from the top, drawn over the view on a sequential scale from `min`
+// to `max` (absent: the values' own range). A NaN is a cell with no value (a wall, outside).
+struct FrameField {
+  int w = 0;
+  int h = 0;
+  std::vector<double> v = {};
+  std::optional<double> min = {};
+  std::optional<double> max = {};
+};
+struct Frame {
+  std::optional<std::array<double, 4>> view = {};  // [xmin, ymin, xmax, ymax]; absent: fit the shapes
+  std::vector<FrameShape> shapes = {};
+  std::optional<FrameField> field = {};
+};
+// At most this many field cells (256 × 256) and shapes in one frame: a live view, not a result.
+inline constexpr int kFrameMaxCells = 65536;
+inline constexpr int kFrameMaxShapes = 2000;
+
+// Where Context::metric writes: the run sends a `metric` event. `x` absent: the series' next index.
+using MetricFn = std::function<void(std::string_view node, std::string_view series, std::optional<double> x, double y,
+                                    std::string_view unit)>;
+// Where Context::monitor_state writes: the run sends `monitor.state` when it changes.
+using MonitorStateFn = std::function<void(std::string_view node, MonitorState state, double value, std::string_view port)>;
+// Where Context::frame writes: the run sends a `frame` event, at most ~20 a second per block.
+using FrameFn = std::function<void(std::string_view node, const Frame& frame)>;
+
 // What a block sees on each step.
 struct Context {
   double t = 0.0;   // run clock, s (0 in a run that evaluates once)
@@ -287,6 +330,9 @@ struct Context {
   const Values* variables = nullptr;
   const SetVariableFn* set_variable_fn = nullptr;  // set by the run; null in tests
   const VariableReadFn* variable_read_fn = nullptr;  // set by the run; null in tests
+  const MetricFn* metric_fn = nullptr;               // set by the run; null in tests
+  const MonitorStateFn* monitor_state_fn = nullptr;  // set by the run; null in tests
+  const FrameFn* frame_fn = nullptr;                 // set by the run; null in tests
 
   // The variable called `name` now, or null.
   const Value* variable(std::string_view name) const {
@@ -312,6 +358,27 @@ struct Context {
   // it on the block. Optional; call it as often as is useful, the run sends at most ~20 a second.
   void progress(double fraction) const {
     if (progress_fn) (*progress_fn)(node, fraction);
+  }
+  // A point of a series that isn't on the run clock (a solver's residual against its iteration,
+  // a sweep's cost against its case): the UI plots `y` against `x`. Without `x`, the point is
+  // the series' next index (0, 1, 2…). `unit` is y's. A NaN or infinite point is dropped.
+  void metric(std::string_view series, double y, std::string_view unit = {}) const {
+    if (metric_fn) (*metric_fn)(node, series, std::nullopt, y, unit);
+  }
+  void metric(std::string_view series, double x, double y, std::string_view unit = {}) const {
+    if (metric_fn) (*metric_fn)(node, series, x, y, unit);
+  }
+  // What this monitor says about its input now (a Lamp: ok, warn or trip) and the value that
+  // put it there. Call it every step: the run sends `monitor.state` only when it changes (per
+  // `port`, for a monitor of several inputs; "" is `in`). Every monitor starts a run at ok.
+  void monitor_state(MonitorState now, double value, std::string_view port = {}) const {
+    if (monitor_state_fn) (*monitor_state_fn)(node, now, value, port);
+  }
+  // A live picture (see Frame). Call it as often as is useful: the run sends at most ~20 a
+  // second per block, and always the latest at the end of a frame and of the run. A frame it
+  // can't send (too big, an unknown token, a point that isn't finite) warns once, and is dropped.
+  void frame(const Frame& picture) const {
+    if (frame_fn) (*frame_fn)(node, picture);
   }
 };
 

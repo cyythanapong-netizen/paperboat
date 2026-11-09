@@ -512,6 +512,39 @@ What runs
       it on the block. Optional; call it as often as is useful, the run sends at most ~20 a
       second.
 
+   .. cpp:function:: void metric(std::string_view series, double y, std::string_view unit = {}) const
+                     void metric(std::string_view series, double x, double y, std::string_view unit = {}) const
+
+      A point of a series that isn't on the run clock (#17): a solver's residual against its
+      iteration, a sweep's cost against its case. The run sends a ``metric`` event. Without
+      ``x`` the point is the series' next index (0, 1, 2…); ``unit`` is y's. A NaN or
+      infinite point is dropped.
+
+   .. cpp:function:: void monitor_state(MonitorState now, double value, std::string_view port = {}) const
+
+      What a monitor says about its input now (``MonitorState::Ok``, ``Warn`` or ``Trip``; a
+      Lamp) and the value that put it there. Call it every step: the run sends
+      ``monitor.state`` only when it changes (per ``port``, for a monitor of several inputs),
+      and every monitor starts a run at ``Ok``.
+
+   .. cpp:function:: void frame(const Frame &picture) const
+
+      A live picture (#17): ``Frame`` holds an optional ``view`` (``[xmin, ymin, xmax,
+      ymax]``, y up), ``shapes`` (``FrameShape``: ``t`` ``line``, ``poly``, ``circle`` or
+      ``text``; points ``p``; ``r``; ``s``; token ``stroke`` and ``fill``) and an optional
+      ``field`` (``FrameField``: ``w`` × ``h`` values ``v`` row by row from the top, NaN for no
+      value, ``min`` / ``max``). The run sends at most ~20 a second per block and always the
+      latest at the end of a block in a run-once and of the run; one it can't send (an
+      unknown token, a point that isn't finite, more than 65536 cells or 2000 shapes) warns
+      once in the Console and is dropped.
+
+      .. code-block:: cpp
+
+         tk::Frame f{.view = std::array<double, 4>{-1.2, -1.2, 1.2, 1.2}};
+         f.shapes.push_back({.t = "line", .p = {{0, 0}, {std::sin(a), -std::cos(a)}}});
+         f.shapes.push_back({.t = "circle", .p = {{std::sin(a), -std::cos(a)}}, .r = 0.08, .fill = "signal"});
+         ctx.frame(f);
+
 .. cpp:class:: Block
 
    One instance of a block in a running graph. It owns its state; two instances never
@@ -1146,10 +1179,11 @@ always.
    .. cpp:function:: json evaluate(const std::string &id)
 
       One block of a run that evaluates once: its outputs from the run's
-      :cpp:class:`RunCache` when nothing it depends on changed (``node.state`` ``done`` with
-      no ``running`` before it; the logs it wrote are shown again), else called (``running``,
-      then ``done``) and, if it may be reused, kept for the next run. Returns its samples.
-      What the once executor calls for each block in order.
+      :cpp:class:`RunCache` when nothing it depends on changed (``node.state`` ``cached``,
+      with no ``running`` before it; the logs, metrics, monitor states and last frame it sent
+      are sent again), else called (``running``, then ``done``) and, if it may be reused,
+      kept for the next run. Returns its samples. What the once executor calls for each
+      block in order, after it has reported every block ``queued``.
 
    .. cpp:function:: std::optional<std::string> advance()
 
