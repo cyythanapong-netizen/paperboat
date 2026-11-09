@@ -20,4 +20,6 @@ test("a long list shows its first values and how many there are", () => {
   assert.equal(count, 100);
   assert.equal(text, "[0, 0.1, 0.2, 0.3, 0.4, 0.5, …]");
   assert.equal(text.split(",").length, SHOWN + 1);
+  const labelled = readout(Array.from({ length: 8 }, (_, i) => i), "x: 0, y: 1, z: 2, vx: 3, vy: 4, vz: 5, w: 6, q: 7");
+  assert.equal(labelled.text, "[x: 0, y: 1, z: 2, vx: 3, vy: 4, vz: 5, …]");
 });

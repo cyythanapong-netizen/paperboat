@@ -4,8 +4,8 @@ import type { Channel, InstrumentProps } from "@paperboat/host";
 function Plot({ name, channels, idle }: { name: string; channels: readonly Channel[]; idle: boolean }) {
   const W = 300;
   const H = 100;
-  // x runs from 0 (time, or a list's index) or from the least x of a list of points (#24).
-  let tMin = 0, tMax = 1e-9, vMin = 0, vMax = 0;
+  // x runs from the least x of the samples: time, a list's index, or a point's x (#24).
+  let tMin = Infinity, tMax = -Infinity, vMin = 0, vMax = 0;
   for (const c of channels)
     for (let i = 0; i < c.buf.n; i++) {
       tMin = Math.min(tMin, c.buf.t[i]);
@@ -13,6 +13,8 @@ function Plot({ name, channels, idle }: { name: string; channels: readonly Chann
       vMin = Math.min(vMin, c.buf.v[i]);
       vMax = Math.max(vMax, c.buf.v[i]);
     }
+  if (!Number.isFinite(tMin)) tMin = 0;
+  if (!Number.isFinite(tMax)) tMax = 0;
   const span = vMax - vMin || 1;
   const width = tMax - tMin || 1;
   const points = (c: Channel) => {

@@ -391,7 +391,8 @@ namespace {
 class Lanes final : public Block {
  public:
   using Make = std::function<std::unique_ptr<Block>(const Values& params)>;
-  Lanes(Make make, Values params, std::size_t lanes) : make_(std::move(make)), params_(std::move(params)), n_(lanes) {
+  Lanes(Make make, Values params, std::size_t lanes, std::vector<std::string> number_outputs)
+      : make_(std::move(make)), params_(std::move(params)), n_(lanes), number_outputs_(std::move(number_outputs)) {
     if (n_ > 0) made(n_);
   }
 
@@ -480,10 +481,15 @@ class Lanes final : public Block {
     for (std::size_t i = 0; i < n; ++i) lanes_.push_back(make_(params_));
   }
 
-  // An empty list in: every number output is an empty list. Which outputs those are, a
-  // lane made for the purpose says (fed zeros for the lists), so the block's own lanes keep
-  // their state.
+  // An empty list in: every number output is an empty list. The def says which outputs those
+  // are; without it, a lane made for the purpose says (fed zeros for the lists), so the
+  // block's own lanes keep their state.
   Values empty(const Context& ctx, const Values& in) const {
+    if (!number_outputs_.empty()) {
+      Values out;
+      for (const auto& port : number_outputs_) out.emplace(port, Vector{});
+      return out;
+    }
     Values probe;
     for (const auto& [port, value] : in) probe.emplace(port, std::holds_alternative<Vector>(value) ? Value{0.0} : value);
     Values out = make_(params_)->step(ctx, probe);
@@ -512,14 +518,15 @@ class Lanes final : public Block {
   Make make_;
   Values params_;
   std::size_t n_;  // 0: from the first step's vectors
+  std::vector<std::string> number_outputs_;  // the def's number outputs, whose empty list is `[]`
   std::vector<std::unique_ptr<Block>> lanes_;
 };
 
 }  // namespace
 
 std::unique_ptr<Block> make_lanes(std::function<std::unique_ptr<Block>(const Values& params)> make, Values params,
-                                  std::size_t lanes) {
-  return std::make_unique<Lanes>(std::move(make), std::move(params), lanes);
+                                  std::size_t lanes, std::vector<std::string> number_outputs) {
+  return std::make_unique<Lanes>(std::move(make), std::move(params), lanes, std::move(number_outputs));
 }
 
 BlockDef lifted(const BlockDef& def, std::size_t lanes, const std::vector<VectorComponent>& components) {

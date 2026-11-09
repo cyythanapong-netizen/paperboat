@@ -394,7 +394,7 @@ class Step {
 // naming the port. A param change goes to every lane. (The engine makes these; a block never
 // needs to.)
 std::unique_ptr<Block> make_lanes(std::function<std::unique_ptr<Block>(const Values& params)> make, Values params,
-                                  std::size_t lanes);
+                                  std::size_t lanes, std::vector<std::string> number_outputs = {});
 
 // The element-wise def as it runs on vectors of `lanes` (0: a length known only at run time):
 // its outputs become vector ports of that length, labelled with `components` (a vector

@@ -13,7 +13,10 @@ export function readout(latest: unknown, vector?: string): { text: string; count
   if (Array.isArray(latest)) {
     const values = latest.filter((v): v is number => typeof v === "number");
     if (values.length <= SHOWN) return { text: `[${vector ?? values.map(number).join(", ")}]`, count: values.length };
-    return { text: `[${values.slice(0, SHOWN).map(number).join(", ")}, …]`, count: values.length };
+    // A labelled vector's parts are one per value: keep the labels of the values shown.
+    const labels = vector?.split(", ");
+    const head = labels?.length === values.length ? labels.slice(0, SHOWN).join(", ") : values.slice(0, SHOWN).map(number).join(", ");
+    return { text: `[${head}, …]`, count: values.length };
   }
   return { text: String(latest ?? "–") };
 }

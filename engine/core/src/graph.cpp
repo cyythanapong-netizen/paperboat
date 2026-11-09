@@ -318,8 +318,11 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
 
 std::unique_ptr<toolkit::Block> make_block(const Node& node) {
   if (!node.lanes) return node.entry->make(node.params, node.text);
+  std::vector<std::string> numbers;
+  for (const auto& port : node.def.outputs)
+    if (port.type == "signal" || port.type == "vector" || port.type == "numbers") numbers.push_back(port.id);
   return toolkit::make_lanes([entry = node.entry, text = node.text](const toolkit::Values& params) { return entry->make(params, text); },
-                             node.params, *node.lanes);
+                             node.params, *node.lanes, std::move(numbers));
 }
 
 }  // namespace paperboat::core
