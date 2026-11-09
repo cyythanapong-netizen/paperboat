@@ -194,7 +194,12 @@ void Session::on_message(const std::string& text) {
       core::run(id, graph, station, s.backend, emit, keys_now, stop, settings, variables, tune_now);
     });
   } else if (type == "station.set") {
-    // An edit on the Station page: check it, keep it, and show it.
+    // An edit on the Station page: check it, keep it, and show it. Locked during a run: the run
+    // owns the scene, and its patches may leave out arrays (binary frames) the UI still holds.
+    if (s.live_run != 0) {
+      s.log("error", "station: edits are locked during a run");
+      return;
+    }
     try {
       const json station = msg.at("station");
       json variables;

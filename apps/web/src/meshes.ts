@@ -71,10 +71,11 @@ export function meshGeometry(e: Entity): THREE.BufferGeometry {
   return geometry;
 }
 
-/** Colours the mesh by its field, when the field is new (a patch brought other values). */
+/** Colours the mesh by its field, when the field or its colour range is new. */
 export function paintField(geometry: THREE.BufferGeometry, e: Entity) {
-  if (e.values === undefined || geometry.userData.values === e.values) return;
-  geometry.userData.values = e.values;
+  const last = geometry.userData.field as { values?: Entity["values"]; lo?: number; hi?: number } | undefined;
+  if (e.values === undefined || (last && last.values === e.values && last.lo === e.range?.[0] && last.hi === e.range?.[1])) return;
+  geometry.userData.field = { values: e.values, lo: e.range?.[0], hi: e.range?.[1] };
   const values = asTyped(e.values, Float32Array);
   const n = geometry.getAttribute("position")?.count ?? 0;
   if (!values || values.length !== n) return;
