@@ -43,10 +43,10 @@ jobs:
       - name: Test
         run: ctest --test-dir engine/build --output-on-failure
 
-  # Windows builds the whole engine but runs only the process-layer tests (engine/tests/process_test.cpp):
-  # the rest of the suite uses POSIX (setenv, sh, /tmp).
+  # Windows builds the whole engine and runs the whole suite (paperboat_tests), as Linux and macOS do:
+  # engine/tests/test_platform.hpp spells the environment, the shell and paths for both.
   engine-windows:
-    name: Engine on Windows x64 (C++ build, process tests)
+    name: Engine on Windows x64 (C++ build and tests)
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4

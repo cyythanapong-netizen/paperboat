@@ -11,37 +11,16 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "paperboat/core/process.hpp"
+#include "test_platform.hpp"
 
 using paperboat::core::ProcessRunner;
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
+using test_platform::sh;
+using test_platform::sleeper;
+using test_platform::wait_for;
 
 namespace {
-
-// A command line for the platform's shell.
-std::vector<std::string> sh(const std::string& posix, const std::string& windows) {
-#ifdef _WIN32
-  (void)posix;
-  return {"cmd", "/c", windows};
-#else
-  (void)windows;
-  return {"sh", "-c", posix};
-#endif
-}
-
-// A process that stays alive for about `seconds`.
-std::vector<std::string> sleeper(int seconds) {
-  return sh("sleep " + std::to_string(seconds), "ping -n " + std::to_string(seconds + 1) + " 127.0.0.1 >nul");
-}
-
-bool wait_for(const std::function<bool()>& done, std::chrono::milliseconds limit = 5s) {
-  const auto start = std::chrono::steady_clock::now();
-  while (!done()) {
-    if (std::chrono::steady_clock::now() - start > limit) return false;
-    std::this_thread::sleep_for(20ms);
-  }
-  return true;
-}
 
 // A long-lived process that is not our child, as a backend is not the child of the `paperboat stop` that ends it
 // (a zombie child would still look alive). `own_group`: it leads a process group of its own. Returns its pid.
