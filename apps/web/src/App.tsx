@@ -1,16 +1,15 @@
 import { useEdgesState, useNodesState, useReactFlow } from "@xyflow/react";
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useEngine } from "./engine";
 import { BrowserWindow, DRAG_TYPE, dragging, type Item } from "./Browser";
 import { FlowEditor, type FlowControls } from "./FlowEditor";
 import { RunStates } from "./flowContexts";
 import { isBlock, type FlowNode, type Wire } from "./flowModel";
-import { fromGraph, toFlow, toGraph, withBlock } from "./flowGraph";
+import { fromGraph, toGraph, withBlock } from "./flowGraph";
 import { isFrame, levelOf } from "./groups";
-import type { DashboardLayout, Project, RunSettings, ToolkitStatus } from "./protocol";
-import { addRecent, ago, buildProject, clearAutosave, loadAutosave, loadRecent, parseProject, projectFileName, projectName, saveAutosave, saveRecent, stringify, type Stored } from "./project";
-import { draggingFiles, droppedText, pickText, saveText, type FileHandle } from "./projectFiles";
-import { Notice, ProjectLabel, type NoticeSpec } from "./ProjectUI";
+import type { DashboardLayout, Project, RunSettings } from "./protocol";
+import { ago } from "./project";
+import { Notice, ProjectLabel } from "./ProjectUI";
 import { VariablesSheet, VarsContext } from "./Variables";
 import { toToml, type Use } from "./bindings";
 import { ConsoleWindow } from "@paperboat/shared/components";
@@ -22,6 +21,8 @@ import { useVariables, varsApiFor } from "./variablesState";
 import { useCanvasSync } from "./canvasSync";
 import { useBoardWiring } from "./boardWiring";
 import { runBlocker, runClock } from "./runStatus";
+import { useProjectSession } from "./projectSession";
+import { useToolkitInstall } from "./toolkitInstall";
 import { MODES, PAGES, Panel, Rail, StatusPill, Switch, ThemeToggle, useTheme, Wordmark, type Drawer, type Mode, type Page, type Theme } from "./Shell";
 const SceneView = lazy(() => import("./SceneView").then((m) => ({ default: m.SceneView })));
 import { StationGraph, type StationControls } from "./StationGraph";
@@ -29,7 +30,7 @@ import { StationPanel, withObject } from "./StationPanel";
 import { BackendWindow, Dock } from "./Dock";
 import { CommandSearch, MenuBar } from "./Menus";
 import { ownKeys, SEARCH_CHORD, useShortcuts, type Command } from "./commands";
-import { missingRequiredToolkits, MissingToolkitsDialog, ToolkitsButton } from "./Toolkits";
+import { MissingToolkitsDialog, ToolkitsButton } from "./Toolkits";
 import { useUndo } from "./undo";
 import { WebStation } from "./WebStation";
 import { isModeAllowed, isPageAllowed } from "./lock";
@@ -288,65 +289,8 @@ export function App() {
   const delayNotice = isDelayed ? <span className="run-delay" title="Real-time pacing is falling behind the wall clock"> ⚠ delay +{delaySeconds.toFixed(1)}s</span> : null;
 
   // ---- Projects (#82): the whole session as one file ----
-  // A project is the Flow, the Station, the variables, the Dashboard layout and the run settings. `projectKey` is
-  // that, as text, a moment after the last change; it is "unsaved" while it differs from `baseline`, which is
-  // what the backend started with, or what was last saved or opened.
-  const [projectTitle, setProjectTitle] = useState("Untitled");
-  const fileHandle = useRef<FileHandle | null>(null); // where Save writes, once the user chose a file (Chromium)
-  const [notice, setNotice] = useState<NoticeSpec | null>(null);
-  const [undoOpen, setUndoOpen] = useState<(() => void) | null>(null); // Edit ▸ Undo open project
-  const [recent, setRecent] = useState<Stored[]>(loadRecent);
-  const [lastSession, setLastSession] = useState<Stored | undefined>(undefined); // unsaved work found at load
-  const [restoreChecked, setRestoreChecked] = useState(false);
-  const [baseline, setBaseline] = useState<string | null>(null);
-  const [projectKey, setProjectKey] = useState("");
-  const snapshot = (): Project =>
-    buildProject({
-      backend: state.engine,
-      flow: toFlow(nodes, edges),
-      station,
-      variables,
-      dashboard: dashSaved,
-      run: runSettings,
-      ui: projectLock ? { lock: projectLock } : undefined,
-    });
-  const latestProject = useRef<Project | null>(null);
-  const dirty = baseline !== null && projectKey !== "" && projectKey !== baseline;
-  const live = useRef({ snapshot, projectTitle, baseline, dirty, state });
-  live.current = { snapshot, projectTitle, baseline, dirty, state };
-
-  useEffect(() => {
-    if (!state.engine) return;
-    const t = window.setTimeout(() => {
-      const p = snapshot();
-      latestProject.current = p;
-      setProjectKey(JSON.stringify(p));
-    }, 250);
-    return () => window.clearTimeout(t);
-  }, [nodes, edges, station, variables, dashSaved, runSettings, projectLock, state.engine]); // eslint-disable-line react-hooks/exhaustive-deps -- `snapshot` reads exactly these
-  // Another backend: a new, unnamed project.
-  useEffect(() => {
-    setProjectTitle("Untitled");
-    fileHandle.current = null;
-    setBaseline(null);
-    setRestoreChecked(false);
-    setLastSession(undefined);
-  }, [state.engine]);
-  // The backend loaded its starter again: with nothing changed, clean is whatever that settles to.
-  useEffect(() => {
-    if (!live.current.dirty) setBaseline(null);
-  }, [state.loaded]);
-  useEffect(() => {
-    if (baseline !== null || projectKey === "") return;
-    const t = window.setTimeout(() => setBaseline(projectKey), 500);
-    return () => window.clearTimeout(t);
-  }, [projectKey, baseline]);
-  useEffect(() => {
-    document.title = `${dirty ? "● " : ""}${projectTitle} · Paperboat`;
-  }, [projectTitle, dirty]);
-
-  /** Put a project in place of what is open. `rebase`: what counts as unsaved against (null: what is loaded). */
-  const applyProject = (p: Project, name: string, rebase: string | null = null) => {
+  /** Put what a project holds in place of what is open: the Flow, the Station, variables, Board, run settings and lock. */
+  const loadProject = (p: Project) => {
     const g = fromGraph(p.flow, state.blocks);
     setNodes(g.nodes);
     setEdges(g.edges);
@@ -356,8 +300,6 @@ export function App() {
     keepVars(p.variables);
     saveDash(p.dashboard);
     setRunSettings(p.run ?? {});
-    setProjectTitle(name);
-    setBaseline(rebase);
     const lock = p.ui?.lock ?? null;
     setProjectLock(lock);
     setUnlocked(!lock);
@@ -372,216 +314,16 @@ export function App() {
     }
     requestAnimationFrame(() => fitView());
   };
-  // The backend can send an initial project on connect (#126).
-  useEffect(
-    () =>
-      subscribe((m) => {
-        if (m.type === "project.load") {
-          const name = m.name || projectName(m.project.backend || "project");
-          applyProject(m.project, name);
-        }
-      }),
-    [subscribe, state.blocks, state.station],
+  const { projectTitle, dirty, notice, setNotice, undoOpen, recent, lastSession, restore, openProject, openFile, saveProject } = useProjectSession(
+    state,
+    subscribe,
+    log,
+    { nodes, edges, station, variables, dashSaved, runSettings, projectLock },
+    loadProject,
   );
-  const remember = (p: Project, name: string) =>
-    setRecent((prev) => {
-      const next = addRecent(prev, { name, savedAt: Date.now(), project: p });
-      saveRecent(next);
-      return next;
-    });
-  const fail = (title: string, e: unknown) => {
-    const msg = e instanceof Error ? e.message : String(e);
-    log("error", `${title}: ${msg}`);
-  };
-
-  /** Open a project, after a word if it comes from another backend or replaces unsaved changes; one Undo brings back what was open. */
-  const openProject = (p: Project, name: string) => {
-    const warnings: string[] = [];
-    if (p.backend !== state.engine) warnings.push(`This project was made on “${p.backend}” and you are connected to “${state.engine}”. Blocks this backend lacks stay as lost blocks, with their params and wires.`);
-    if (live.current.dirty) warnings.push("The open project has unsaved changes. Opening replaces them; Undo brings them back.");
-    const go = () => {
-      const { snapshot: before, projectTitle: beforeTitle, baseline: beforeBase } = live.current;
-      const was = before();
-      const handle = fileHandle.current;
-      applyProject(p, name);
-      fileHandle.current = null;
-      remember(p, name);
-      log("info", `Opened “${name}” (Edit ▸ Undo open project brings back what was open)`);
-      setUndoOpen(() => () => {
-        applyProject(was, beforeTitle, beforeBase);
-        fileHandle.current = handle;
-        setUndoOpen(null);
-      });
-    };
-    if (warnings.length === 0) go();
-    else setNotice({ title: "Open this project?", text: warnings, actions: [{ label: "Open", primary: true, run: go }, { label: "Cancel" }] });
-  };
-  const openText = (text: string, file: string) => {
-    const r = parseProject(text);
-    if ("error" in r) {
-      log("error", `Can't open ${file}: ${r.error}. Nothing was changed.`);
-    } else openProject(r.project, projectName(file));
-  };
-  const openFile = async () => {
-    try {
-      const f = await pickText();
-      if (f) openText(f.text, f.name);
-    } catch (e) {
-      fail("Can't open the file", e);
-    }
-  };
-  const saveProject = async (as: boolean) => {
-    const { snapshot: take, projectTitle: title } = live.current;
-    const p = take();
-    try {
-      const r = await saveText(stringify(p), projectFileName(title === "Untitled" ? state.engine || "project" : title), as ? null : fileHandle.current);
-      if (!r) return; // cancelled
-      fileHandle.current = r.handle ?? null;
-      const name = projectName(r.name);
-      setProjectTitle(name);
-      setBaseline(JSON.stringify(p));
-      remember(p, name);
-      clearAutosave(state.engine);
-      setLastSession(undefined);
-    } catch (e) {
-      fail("Can't save", e);
-    }
-  };
-  // Dropping a project file on the window opens it (the app's own cards are not files).
-  const openTextNow = useRef(openText);
-  openTextNow.current = openText;
-  useEffect(() => {
-    const over = (e: DragEvent) => draggingFiles(e) && e.preventDefault();
-    const drop = (e: DragEvent) => {
-      if (!draggingFiles(e)) return;
-      e.preventDefault();
-      droppedText(e).then((f) => f && openTextNow.current(f.text, f.name), (err) => fail("Can't open the file", err));
-    };
-    window.addEventListener("dragover", over);
-    window.addEventListener("drop", drop);
-    return () => {
-      window.removeEventListener("dragover", over);
-      window.removeEventListener("drop", drop);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- `fail` only sets state
-  // Unsaved work is kept as it happens, and offered back after a reload.
-  const restore = (s: Stored) => {
-    applyProject(s.project, s.name, live.current.baseline);
-    fileHandle.current = null;
-    setLastSession(undefined);
-  };
-  useEffect(() => {
-    if (baseline === null || restoreChecked || !state.engine) return;
-    setRestoreChecked(true);
-    const s = loadAutosave(state.engine);
-    if (!s || JSON.stringify(s.project) === baseline) return clearAutosave(state.engine);
-    setLastSession(s);
-    setNotice({
-      title: "Restore your last session?",
-      text: [`“${s.name}”, ${ago(s.savedAt, Date.now())}, had changes that weren't saved.`],
-      actions: [
-        { label: "Restore", primary: true, run: () => restore(s) },
-        { label: "Discard", run: () => (clearAutosave(s.project.backend), setLastSession(undefined)) },
-        { label: "Not now" },
-      ],
-    });
-  }, [baseline, restoreChecked, state.engine]); // eslint-disable-line react-hooks/exhaustive-deps -- once per backend
-  useEffect(() => {
-    if (!restoreChecked || !state.engine || baseline === null || !latestProject.current) return;
-    if (dirty) saveAutosave(state.engine, { name: projectTitle, savedAt: Date.now(), project: latestProject.current });
-    else if (!lastSession) clearAutosave(state.engine);
-  }, [projectKey, dirty, restoreChecked]); // eslint-disable-line react-hooks/exhaustive-deps -- when the project changes
 
   // ---- Missing toolkit prompt and post-install restart prompt (#118) ----
-  const promptedToolkits = useRef<string>("");
-  const prevBusyToolkits = useRef<Map<string, string>>(new Map());
-  const [missingDialog, setMissingDialog] = useState<ToolkitStatus[] | null>(null);
-  const installQueue = useRef<{ name: string; version: string }[]>([]);
-  const autoRestart = useRef(false);
-
-  const restartBackend = useCallback(() => {
-    log("info", "restarting backend…");
-    send({ type: "backend.restart" });
-  }, [log, send]);
-  const installToolkit = useCallback(
-    (name: string, version?: string) => {
-      log("info", `requesting install of toolkit "${name}"${version ? ` (${version})` : ""}…`);
-      send({ type: "toolkit.install", name, version });
-    },
-    [log, send],
-  );
-  const toolkitVersions = useCallback(
-    (name: string) => {
-      send({ type: "toolkit.versions", name });
-    },
-    [send],
-  );
-  const uninstallToolkit = useCallback(
-    (name: string) => {
-      log("info", `requesting uninstall of toolkit "${name}"…`);
-      send({ type: "toolkit.uninstall", name });
-    },
-    [log, send],
-  );
-  useEffect(() => {
-    if (state.connection !== "open") return;
-    const missingTypes = nodes.filter(isBlock).filter((n) => n.data.missing).map((n) => n.data.def.type);
-    const missing = missingRequiredToolkits(state.toolkits, missingTypes);
-    if (missing.length === 0) {
-      if (missingDialog) setMissingDialog(null);
-      return;
-    }
-    const key = `${state.engine}:${missing.map((t) => t.name).sort().join(",")}`;
-    if (promptedToolkits.current === key) return;
-    promptedToolkits.current = key;
-    for (const t of missing) {
-      if (!t.versions || t.versions.length === 0) {
-        toolkitVersions(t.name);
-      }
-    }
-    setMissingDialog(missing);
-  }, [state.connection, state.engine, state.toolkits, nodes, toolkitVersions, missingDialog]);
-
-  useEffect(() => {
-    const prev = prevBusyToolkits.current;
-    const finished: string[] = [];
-    const failed: string[] = [];
-    for (const t of state.toolkits) {
-      const was = prev.get(t.name);
-      if ((was === "installing" || was === "updating") && !t.busy) {
-        if (t.installed) {
-          finished.push(t.name);
-        } else {
-          failed.push(t.name);
-        }
-      }
-    }
-    const next = new Map<string, string>();
-    for (const t of state.toolkits) if (t.busy) next.set(t.name, t.busy);
-    prevBusyToolkits.current = next;
-
-    if (failed.length > 0) {
-      installQueue.current = [];
-      autoRestart.current = false;
-      log("error", `Installing ${failed.join(", ")} failed. See the lines above for details.`);
-      return;
-    }
-
-    if (finished.length > 0) {
-      if (installQueue.current.length > 0) {
-        const nextItem = installQueue.current.shift()!;
-        installToolkit(nextItem.name, nextItem.version);
-        return;
-      }
-      if (autoRestart.current) {
-        autoRestart.current = false;
-        restartBackend();
-      } else {
-        const names = finished.join(", ");
-        log("warn", `Toolkit ${names} ready: restart the backend so it loads the update.`);
-      }
-    }
-  }, [state.toolkits, restartBackend, installToolkit]);
+  const { missingDialog, setMissingDialog, restartBackend, installToolkit, toolkitVersions, uninstallToolkit, installAll } = useToolkitInstall(state, send, log, nodes);
 
   // ---- The commands (#78): what the menus, the command search and the shortcuts all run ----
   // Only what the app already does; backends' commands come with their issue (#85).
@@ -903,12 +645,7 @@ export function App() {
           onInstall={(selections) => {
             setMissingDialog(null);
             setConsoleShown(true);
-            autoRestart.current = true;
-            if (selections.length > 0) {
-              const [first, ...rest] = selections;
-              installQueue.current = rest;
-              installToolkit(first.name, first.version);
-            }
+            installAll(selections);
           }}
           onCancel={() => setMissingDialog(null)}
         />
