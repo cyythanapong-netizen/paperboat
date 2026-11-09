@@ -12,6 +12,9 @@ what they send.<br><br>
 
 <p align="center"><img src=".github/readme/demo.gif" width="100%" alt="Paperboat demo: on the Flow page a PID loop (square-wave setpoint, sum, PID, two lags) feeds two scopes and a display; kp is changed from 4 to 6, Run is pressed, and the Board plots the setpoint, the response and the control effort live as the 10 s run advances"></p>
 
+<p align="center"><img src=".github/readme/flow-run.gif" width="100%" alt="A Step flow running on the Flow canvas: Start, Repeat ×4, Move and Rotate walk a square, the Spin story turns for 2 s, then Stop; each block's tag reads running while the path is in it, and the dock shows the run's time"><br>
+<sub>A Step flow running on the Flow canvas: the path walks a square (Repeat ×4 of Move, Rotate), spins for 2 s, then stops.</sub></p>
+
 | Check | What it runs | `dev` |
 | --- | --- | --- |
 | Engine | C++ build and the engine tests | [![engine](https://github.com/paperboatlab/paperboat/actions/workflows/engine.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/engine.yml?query=branch%3Adev) |
