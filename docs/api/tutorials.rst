@@ -36,7 +36,7 @@ Create :file:`reservoir/descriptor.toml`:
    domain = "reservoir"
 
    # Import standard blocks from the built-in toolkit
-   import = ["signal", "math", "control", "dashboard"]
+   import = ["base", "control", "dashboard", "math", "signal", "step", "string"]
 
    # Default run settings (10 seconds duration, 100 Hz step rate)
    [run]
@@ -543,3 +543,214 @@ it has six ops of its own, written in C++ and confined to the opened model, each
 - ``simulate`` ``{model, stop, vars?}`` runs the model for 500 intervals and answers
   ``{t, series, names}``: ``series`` holds the ``vars`` asked for (every variable when omitted) and
   ``names`` every variable in the result.
+
+The numbered example tutorials (01–10)
+=======================================
+
+The ten folders in `paperboat-examples <https://github.com/paperboatlab/paperboat-examples>`_
+are a complete curriculum. Each level is a self-contained backend with a ``backend.toml``,
+a starter descriptor, domain code, a README and a golden result. Run any of them with
+``./bin/paperboat run <number>`` (for example ``run 04``), or check all of them with
+``./bin/paperboat check <folder>``.
+
+.. list-table:: Curriculum at a glance
+   :header-rows: 1
+   :widths: 8 30 8 10 44
+
+   * - Level
+     - Folder
+     - Port
+     - Language
+     - Platform feature
+   * - 01
+     - ``01-smart-thermostat-python``
+     - 8765
+     - Python
+     - Clocked Signal flow, bang-bang hysteresis, Board wave plots
+   * - 02
+     - ``02-cart-pole-cpp``
+     - 8766
+     - C++
+     - ``StationObject`` in code, PID, Variables formulas
+   * - 03
+     - ``03-low-poly-island-python``
+     - 8767
+     - Python
+     - One-shot evaluation, list/array wires, block commenting
+   * - 04
+     - ``04-cocktail-barista-python``
+     - 8768
+     - Python
+     - Step-flow tokens, visual groups, subsystems, E-stop key
+   * - 05
+     - ``05-rover-lander-python``
+     - 8769
+     - Python
+     - Custom HTML5 web station, manual pilot vs GNC autopilot
+   * - 06
+     - ``06-robot-pick-place-python``
+     - 8770
+     - Python
+     - ABB-style palletizer, analytical IK, quintic trajectories, fork
+   * - 07
+     - ``07-airfoil-cfd-python``
+     - 8771
+     - Python
+     - D2Q9 lattice-Boltzmann wind tunnel, lift/drag polars
+   * - 08
+     - ``08-air-hockey-tracker-cpp``
+     - 8772
+     - C++
+     - OpenCV toolkit image wires, HSV→centroid, air-hockey tracking
+   * - 09
+     - ``09-modular-synth-cpp``
+     - 8773
+     - C++
+     - Vector wires ``[6]``, per-voice synth modules, Scope and PCM Speaker
+   * - 10
+     - ``10-train-pantograph-cpp``
+     - 8774
+     - C++/Modelica
+     - Active pantograph regulator, compliant catenary, bypass and arcing
+
+Every tutorial also opens the backend's README next to its code. The Station mockups below
+are SVGs in ``paperboat-examples/assets/mockups``.
+
+Tutorial 01: Smart Thermostat
+-----------------------------
+
+.. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/01-smart-thermostat-station.svg
+   :width: 520px
+   :alt: Smart thermostat station mockup
+
+A room loses heat to a cold winter ambient; a baseboard heater is switched by a threshold
+block. The starter graph computes ``T_target − T_room``, compares it with zero, and feeds the
+heater. Try the ``open_window`` dock variable: the loss coefficient jumps and the heater
+runs at full power. The Station is a cutaway of the room with a glowing heater, rising heat
+plume, thermostat dial and an operable 3D window.
+
+Tutorial 02: Modernized Cart-Pole
+---------------------------------
+
+.. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/02-cart-pole-station.svg
+   :width: 520px
+   :alt: Cart-pole station mockup
+
+The benchmark is retained and rebuilt as a precision instrument: ground rail, rubber end
+stops, bearing hub, protractor and a force vector. The C++ domain defines a
+``paperboat::StationObject``; two PID blocks (angle and cart position) sum into the cart's
+force. In the Variables sheet (``Alt+V``) change ``kp_theta`` and watch ``kd_theta`` follow
+the formula ``kp_theta / 5``.
+
+Tutorial 03: Low-Poly Island
+----------------------------
+
+.. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/03-low-poly-island-station.svg
+   :width: 520px
+   :alt: Low-poly island station mockup
+
+A one-shot pipeline generates an archipelago: grid → octave noise → radial falloff →
+erosion → tree placement → 3D scene. Wires carry lists and tables, not clocked numbers. Use
+``Ctrl+/`` to comment out the vegetation block and ``Ctrl+Shift+Y`` to bypass erosion; the
+Station rebuilds immediately. The variables change the seed, octaves, scale and sea level.
+
+Tutorial 04: Cocktail Barista
+-----------------------------
+
+.. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/04-cocktail-barista-station.svg
+   :width: 520px
+   :alt: Cocktail barista station mockup
+
+A Step flow runs a recipe from the bar manager's Excel workbook, ``data/recipes.xlsx``:
+``Start → Detect Cup → Pour 1/2/3 → Shake & Chill → Strain & Serve → Stop``. A **Choice**
+control on the Board picks Negroni, Spritz or Americano; the pour and shake times come from
+the sheet. The ``Shake & Chill`` subsystem opens on its own level, and a second hat lets
+**Space** trigger an emergency stop and clean-in-place rinse at any time. The Console records
+every pour and the Station shows the multi-valve gantry, shaker and rising glass.
+
+Tutorial 05: Lunar Rover Lander
+-------------------------------
+
+.. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/05-rover-lander-station.svg
+   :width: 520px
+   :alt: Lunar lander station mockup
+
+The Station is a custom HTML5/Canvas CRT cockpit (``[station] view = "web"``), not the
+built-in scene. The Flow page is the GNC autopilot: a descent-speed profile, terminal
+deceleration and horizontal steering to LZ-1. Turn the dashboard switch off (or press
+**P**) and fly it with **W/A/D**; the cockpit forwards keys through the web-station bridge.
+The cockpit fills the viewport, its controls sit above Paperboat's floating run dock, and the
+**⛶** button opens it fullscreen. Drag the dock's **landing_x** slider to move LZ-1 laterally
+while the autopilot is flying; the GNC law steers to the new pad. Touchdown must be below
+1.5 m/s vertical and 0.5 m/s horizontal with fuel left.
+
+Tutorial 06: ABB-Style Palletizer
+---------------------------------
+
+.. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/06-robot-pick-place-station.svg
+   :width: 520px
+   :alt: Robot pick-and-place station mockup
+
+An ABB IRB 460-style palletizer sorts three workpieces. Each move is a quintic S-curve in
+Cartesian space; an analytical IK block turns the waypoints into joint angles, and the wide
+fork attaches and releases parts onto two pallets. A Repeat block runs the cycle three times,
+while a Scope plots the joint rates against their motor limits. Tune ``transfer_seconds`` and
+``transfer_lift`` in the Variables sheet. The arm is built from Station primitives; a CAD
+mesh import is not part of the Station API yet.
+
+Tutorial 07: Airfoil CFD
+------------------------
+
+.. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/07-airfoil-cfd-station.svg
+   :width: 520px
+   :alt: Airfoil CFD station mockup
+
+A D2Q9 lattice-Boltzmann solver runs around a rotating NACA 0012 profile. The Flow pipeline
+builds the mask, sets the inflow, advances the lattice and computes the lift/drag polars.
+The Station draws velocity arrows coloured by speed, streamlines around the profile, and
+lift/drag vectors. Move ``alpha`` from 0° to 25° in the Variables sheet to see the linear
+lift curve and the stall break past 14°.
+
+Tutorial 08: Air-Hockey Puck Tracker
+------------------------------------
+
+.. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/08-air-hockey-station.svg
+   :width: 520px
+   :alt: Air-hockey puck tracker station mockup
+
+The optional OpenCV toolkit supplies the vision stages over image wires: HSV range, open,
+close and the new Centroid block. A camera block produces a synthetic 320×240 frame of an
+air-hockey rink, two mallets and a red puck; the tracker estimates image velocity and the
+puck point, and detects rail/mallet direction changes. Three Board Image views show the raw
+frame, the mask and the centroid-marked result. The CMake project builds without OpenCV too,
+loading a degraded descriptor with a synthetic vision stage.
+
+Tutorial 09: Modular Synthesizer
+--------------------------------
+
+.. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/09-modular-synth-station.svg
+   :width: 520px
+   :alt: Modular synth station mockup
+
+Six voices travel together on vector wires ``[6]``: chord CV and gate → VCO → VCA → VCF →
+mixer. Each module runs elementwise over the vector, and the Scope receives the filter output
+as one channel per component plus the master mix. An Audio Out block renders the same
+voices into a PCM vector; press **Click for sound** on the Speaker instrument once to hear
+it. Open Lookout mode (``Alt+L``) for the
+full-screen Board, and use ``root_note``, ``cutoff`` and ``resonance`` in the Variables sheet
+to jam. The Station is a walnut-and-aluminium Eurorack case with VU bars driven by the voice
+levels.
+
+Tutorial 10: High-Speed Train Pantograph
+----------------------------------------
+
+.. image:: https://raw.githubusercontent.com/paperboatlab/paperboat-examples/main/assets/mockups/10-train-pantograph-station.svg
+   :width: 520px
+   :alt: Train pantograph station mockup
+
+The capstone couples multibody dynamics with active control. The train accelerates 0→320 km/h
+in 25 s; the pantograph head rides a suspension spring/damper against a compliant contact
+wire, with aerodynamic uplift growing as v². A PI pneumatic regulator holds the contact force
+in the 90–140 N window. Bypass the regulator (Board switch or **B**) to watch the pantograph
+sag, the force leave its window and the Console report arcing. ``modelica/
+PantographCatenary.mo`` is the acausal Squero Studio OM reference for the same equations.

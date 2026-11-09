@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include <utility>
 
 namespace paperboat::toolkit::scene {
@@ -40,6 +41,21 @@ Entity rod(std::string id, Vec a, Vec b, double thickness, std::string color) {
   const double up = length > 0 ? std::asin(std::clamp(d[1] / length, -1.0, 1.0)) : 0;
   const double round = std::atan2(-d[2], d[0]);
   return box(std::move(id), mid, {length, thickness, thickness}, std::move(color), {0, round, up});
+}
+
+Entity mesh(std::string id, std::vector<double> vertices, std::vector<double> indices, std::string color,
+            Vec pos, std::vector<double> values, std::array<double, 2> range) {
+  if (vertices.size() % 3 != 0 || indices.size() % 3 != 0 ||
+      (!values.empty() && values.size() != vertices.size() / 3))
+    throw std::invalid_argument("mesh " + id + ": needs 3 numbers per vertex, 3 indices per triangle and one value per vertex");
+  return {.id = std::move(id),
+          .shape = "mesh",
+          .pos = pos,
+          .color = std::move(color),
+          .vertices = std::move(vertices),
+          .indices = std::move(indices),
+          .values = std::move(values),
+          .range = range};
 }
 
 std::vector<Entity> spring(const std::string& id, Vec a, Vec b, int coils, double width, const std::string& color) {

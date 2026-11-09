@@ -136,6 +136,11 @@ add_library(paperboat::toolkit ALIAS paperboat_toolkit)
 target_include_directories(paperboat_toolkit
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE src)
+# Third-party headers the built-in blocks compile in. SYSTEM: their warnings are not ours.
+target_include_directories(paperboat_toolkit SYSTEM PRIVATE
+  $<BUILD_INTERFACE:${boost_math_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${pocketfft_include}>)
+target_compile_definitions(paperboat_toolkit PRIVATE BOOST_MATH_STANDALONE=1)
 set_target_properties(paperboat_toolkit PROPERTIES EXPORT_NAME toolkit)
 target_link_libraries(paperboat_toolkit
   PUBLIC nlohmann_json::nlohmann_json  # variables.hpp takes the protocol's JSON

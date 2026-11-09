@@ -46,18 +46,23 @@ struct Twice final : tk::Block {
 const tk::Catalog& mixed() {
   static const tk::Catalog catalog = tk::load_descriptor(R"(domain = "mixed"
 import = ["step", "base", "signal", "math", "control", "dashboard"]
+[[blocks]]
+use = "math/gain"
+type = "signal-only"
+label = "Signal only"
+flows = ["signal"]
 )");
   return catalog;
 }
 
-// Start → Wait, and a PID beside them: the PID works only in a Signal flow.
+// Start → Wait, and a Signal-only block beside them.
 json step_graph() {
   return {{"nodes",
            {{{"id", "start"}, {"type", "start"}},
             {{"id", "wait"}, {"type", "wait"}},
             {{"id", "one"}, {"type", "constant"}},
-            {{"id", "pid"}, {"type", "pid"}}}},
-          {"edges", {{{"from", {"start", "next"}}, {"to", {"wait", "in"}}}, {{"from", {"one", "y"}}, {"to", {"pid", "e"}}}}}};
+            {{"id", "pid"}, {"type", "signal-only"}}}},
+          {"edges", {{{"from", {"start", "next"}}, {"to", {"wait", "in"}}}, {{"from", {"one", "y"}}, {"to", {"pid", "u"}}}}}};
 }
 
 std::string refusal(const json& graph, const tk::Catalog& catalog, std::string* node = nullptr) {
@@ -169,12 +174,12 @@ TEST_CASE("the engine refuses a block on a sheet of a flow type it doesn't work 
   // Not chosen (a graph from before sheets had a type): nothing is refused.
   CHECK_NOTHROW(core::prepare_graph(step_graph(), catalog, none));
 
-  // A Step flow sheet: the PID (control: Signal flow only) is refused, naming it.
+  // A Step flow sheet: the Signal-only block is refused, naming it.
   json g = step_graph();
   g["flow"] = "step";
   std::string node;
   CHECK(refusal(g, catalog, &node) ==
-        "block pid (PID) works only in a Signal flow, not on this Step flow sheet: remove it, or make the sheet a Signal flow");
+        "block pid (Signal only) works only in a Signal flow, not on this Step flow sheet: remove it, or make the sheet a Signal flow");
   CHECK(node == "pid");
   // …commented out, it isn't run, so it may stay.
   g["nodes"][3]["commented"] = true;

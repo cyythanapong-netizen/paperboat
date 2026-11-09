@@ -24,6 +24,7 @@ add_executable(paperboat_tests
   variables_test.cpp
   connection_test.cpp
   toolkit_phase1_test.cpp
+  math_signal_test.cpp
   vector_test.cpp
   list_test.cpp
   flow_type_test.cpp
@@ -33,6 +34,11 @@ add_executable(paperboat_tests
 )
 target_link_libraries(paperboat_tests
   PRIVATE paperboat::toolkit paperboat::core nlohmann_json::nlohmann_json Catch2::Catch2WithMain paperboat_warnings)
+if(TARGET paperboat_toolkit_optimization)
+  target_sources(paperboat_tests PRIVATE optimization_test.cpp)
+  target_link_libraries(paperboat_tests PRIVATE paperboat::toolkit_optimization)
+  target_compile_definitions(paperboat_tests PRIVATE PAPERBOAT_HAS_OPTIMIZATION)
+endif()
 if(TARGET paperboat_toolkit_opencv)
   target_link_libraries(paperboat_tests PRIVATE paperboat::toolkit_opencv)
   target_compile_definitions(paperboat_tests PRIVATE PAPERBOAT_HAS_OPENCV)

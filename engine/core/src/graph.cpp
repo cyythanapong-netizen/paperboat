@@ -1,6 +1,7 @@
 #include "paperboat/core/graph.hpp"
 
 #include <algorithm>
+#include <filesystem>
 #include <set>
 
 namespace paperboat::core {
@@ -164,8 +165,15 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     toolkit::Config text;
     const json given = n.value("params", json::object());
     for (const auto& p : node.entry->def.params) {
-      if (p.is_number()) params[p.id] = number_param(given, p.id, p.default_value);  // a boolean reads as 1 or 0
-      else text[p.id] = given.value(p.id, p.default_text);
+      if (p.is_number()) {
+        params[p.id] = number_param(given, p.id, p.default_value);  // a boolean reads as 1 or 0
+      } else {
+        text[p.id] = given.value(p.id, p.default_text);
+        // A block reads a file param from wherever the process runs; make it absolute against
+        // the descriptor's folder here, as station properties already are.
+        if (p.type == "file" && !text[p.id].empty() && std::filesystem::path(text[p.id]).is_relative())
+          text[p.id] = (catalog.dir / text[p.id]).lexically_normal().string();
+      }
     }
     // A magic block's ports are those of its form.
     node.def = toolkit::in_form(node.entry->def, text.contains("form") ? text.at("form") : "");

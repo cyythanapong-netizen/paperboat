@@ -50,7 +50,8 @@ line (see :ref:`elementwise`).
 Definitions live in **code**, next to what the block does: C++ ``define_block``, Python
 class attributes. The **toolkit** offers built-in packages of them (``base``, ``signal``, ``math``,
 ``dashboard``, ``control``, ``step``) and optional external toolkits such as ``opencv``
-(``paperboat-toolkit-opencv``); a domain registers its own in a package
+(``paperboat-toolkit-opencv``) and ``optimization`` (``paperboat-toolkit-optimization``);
+a domain registers its own in a package
 named after the domain. A **descriptor** (:doc:`descriptor`) picks which packages and
 templates an app offers, customises them and holds the starters. It never defines a block.
 

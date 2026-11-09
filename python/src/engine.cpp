@@ -152,6 +152,19 @@ tk::Entity entity_from_py(nb::handle h) {
     auto v = get(key);
     return v.is_none() ? std::string(fallback) : nb::cast<std::string>(v);
   };
+  auto numbers = [&](const char* key) {
+    std::vector<double> out;
+    auto v = get(key);
+    if (!v.is_none())
+      for (nb::handle item : v) out.push_back(nb::cast<double>(item));
+    return out;
+  };
+  std::array<double, 2> range{};
+  if (auto v = get("range"); !v.is_none()) {
+    std::size_t i = 0;
+    for (nb::handle item : v)
+      if (i < 2) range[i++] = nb::cast<double>(item);
+  }
   return {.id = text("id", ""),
           .shape = text("shape", "box"),
           .pos = vec3(get("pos"), {0, 0, 0}),
@@ -160,7 +173,11 @@ tk::Entity entity_from_py(nb::handle h) {
           .color = text("color", "#888888"),
           .scale = vec3(get("scale"), {1, 1, 1}),
           .to = vec3(get("to"), {0, 0, 0}),
-          .src = text("src", "")};
+          .src = text("src", ""),
+          .vertices = numbers("vertices"),
+          .indices = numbers("indices"),
+          .values = numbers("values"),
+          .range = range};
 }
 
 // A list of entities; lists in it are flattened, so scene.spring(…) (a list) goes in as is.

@@ -871,7 +871,8 @@
             "sphere",
             "cylinder",
             "line",
-            "image"
+            "image",
+            "mesh"
           ]
         },
         "pos": {
@@ -897,6 +898,36 @@
         "src": {
           "type": "string",
           "description": "An image's picture: a URL or a data: URL."
+        },
+        "vertices": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "A mesh's vertices: x, y, z each, in the entity's own frame (pos, rot and scale place it)."
+        },
+        "indices": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "A mesh's triangles: three vertex indices each, counter-clockwise seen from the front."
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "A field over a mesh, one number per vertex, that the UI colours over range."
+        },
+        "range": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "The values that take the low and high ends of the colour scale."
         }
       },
       "required": [
@@ -905,7 +936,7 @@
         "pos"
       ],
       "additionalProperties": false,
-      "description": "One shape on the Station's scene. shape: box, sphere (size[0] = radius), line (pos to `to`), image (a size[0] x size[1] picture facing +z, from src)."
+      "description": "One shape on the Station's scene. shape: box, sphere (size[0] = radius), cylinder (size[0] = radius, size[1] = length along y), line (pos to `to`), image (a size[0] x size[1] picture facing +z, from src) or mesh (triangles from vertices and indices, coloured by an optional field: values)."
     },
     "View": {
       "description": "Camera hint sent with a scene. 2d: orthographic, looking down -z at center, height units tall.",
@@ -2734,8 +2765,10 @@
           "enum": [
             "box",
             "sphere",
+            "cylinder",
             "line",
-            "image"
+            "image",
+            "mesh"
           ]
         },
         "pos": {
@@ -2761,6 +2794,36 @@
         "src": {
           "type": "string",
           "description": "An image's picture: a URL or a data: URL."
+        },
+        "vertices": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "A mesh's vertices: x, y, z each, in the entity's own frame (pos, rot and scale place it)."
+        },
+        "indices": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "A mesh's triangles: three vertex indices each, counter-clockwise seen from the front."
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "A field over a mesh, one number per vertex, that the UI colours over range."
+        },
+        "range": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "The values that take the low and high ends of the colour scale."
         }
       }
     },
