@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -393,6 +394,10 @@ struct Context {
   void progress(double fraction) const {
     if (progress_fn) (*progress_fn)(node, fraction);
   }
+  // The run's cancellation token. A long block checks it between iterations/evaluations and
+  // returns early; the run then finishes as "cancelled".
+  std::stop_token stop = {};
+  bool stop_requested() const { return stop.stop_requested(); }
   // A point of a series that isn't on the run clock (a solver's residual against its iteration,
   // a sweep's cost against its case): the UI plots `y` against `x`. Without `x`, the point is
   // the series' next index (0, 1, 2…). `unit` is y's. A NaN or infinite point is dropped.

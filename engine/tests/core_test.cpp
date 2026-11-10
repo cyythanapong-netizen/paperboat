@@ -72,6 +72,36 @@ edges = []
   return catalog;
 }
 
+// A long block: it keeps working until the run's token says stop.
+class Waiter final : public tk::Block {
+ public:
+  tk::Values step(const tk::Context& ctx, const tk::Values&) override {
+    while (!ctx.stop_requested()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    return {{"y", 1.0}};
+  }
+};
+
+const tk::Registry& stop_registry() {
+  static const tk::Registry registry = [] {
+    tk::Registry r = tk::builtins();
+    r.add(tk::define_block<Waiter>("stop", {.type = "wait-for-stop",
+                                             .label = "Wait for stop",
+                                             .outputs = {{"y", "signal"}}}));
+    return r;
+  }();
+  return registry;
+}
+
+const tk::Catalog& stop_catalog() {
+  static const tk::Catalog catalog = tk::load_descriptor(R"(
+domain = "stop"
+[graph]
+nodes = [{ id = "wait", type = "wait-for-stop" }]
+edges = []
+)", stop_registry());
+  return catalog;
+}
+
 }  // namespace
 
 TEST_CASE("the starter run matches the reference result") {
@@ -85,6 +115,19 @@ TEST_CASE("the starter run matches the reference result") {
   // within e^-15 ≈ 3e-7 of rest.
   CHECK_THAT(out.last_signal("graph-x"), WithinAbs(3.597e-07, 1e-10));
   CHECK_THAT(out.last_signal("graph-v"), WithinAbs(-4.420e-07, 1e-10));
+}
+
+TEST_CASE("a block sees the run's stop token") {
+  Collected out;
+  const core::Backend backend{.engine = "test", .catalog = &stop_catalog(), .run = {.real_time = false}};
+  std::stop_source stop;
+  std::jthread cancel([&] {
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    stop.request_stop();
+  });
+  const auto status = core::run("stop", json::parse(stop_catalog().graph), nullptr, backend, out.emit(), nullptr,
+                                stop.get_token(), json{{"duration", 0}});
+  CHECK(status == "cancelled");
 }
 
 TEST_CASE("a vector output must match its declared dimension") {
