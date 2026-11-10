@@ -33,3 +33,11 @@ blocks = ["gray", "blur", "median", "threshold", "adaptive_threshold", "hsv_rang
           "sobel", "laplacian", "bitwise", "blend", "absdiff",
           "stats", "centroid", "contours", "hough_lines", "hough_circles", "template_match",
           "draw", "save", "background", "view", "image"]
+
+[[toolkits]]
+name = "meshop"
+repo = "https://github.com/paperboatlab/paperboat-toolkit-meshop.git"
+description = "Triangle mesh blocks on VCGlib (GPL-3.0): load, save, stats and a print check."
+optional = true
+engine = ">=0.1"
+blocks = ["load", "save", "stats", "check", "mesh"]
