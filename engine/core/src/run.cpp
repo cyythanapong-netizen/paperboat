@@ -220,6 +220,7 @@ Run::Run(std::string id, const Backend& backend, RunSettings settings, Emit emit
       stop_(std::move(stop)),
       cache_(cache) {
   ctx_.dt = settings_.dt;
+  ctx_.stop = stop_;
   ctx_.keys_down = &keys_;
   ctx_.variables = &live_variables_;
   log_ = [this](std::string_view node, std::string_view level, std::string_view text) {
