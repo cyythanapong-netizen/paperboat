@@ -126,51 +126,6 @@ endif()
 
 add_subdirectory(toolkit)
 add_subdirectory(core)
-# The workbench backend (base, math, signal, control and dashboard, no domain). Only a
-# standalone engine build serves it; a backend that pulls the engine in has its own.
-if(PROJECT_IS_TOP_LEVEL)
-  add_subdirectory(workbench)
-endif()
-
-# Apple's libc++ up to the macOS 15 SDK (Xcode 16) still ships <stop_token> and std::jthread as
-# experimental, off unless _LIBCPP_ENABLE_EXPERIMENTAL is defined; from the macOS 26 SDK they are on.
-# Both are header-only there. PUBLIC: core's and the toolkit's own headers use std::stop_token
-# (toolkit's block.hpp is in the run's face), so everything that includes them (tests, the Python
-# module, SDK backends through the exported targets) needs it too.
-if(APPLE)
-  include(CheckCXXSourceCompiles)
-  set(_pb_jthread_src "#include <stop_token>\n#include <thread>\nint main() { std::jthread t([](std::stop_token) {}); }")
-  check_cxx_source_compiles("${_pb_jthread_src}" PAPERBOAT_HAS_JTHREAD)
-  if(NOT PAPERBOAT_HAS_JTHREAD)
-    set(CMAKE_REQUIRED_DEFINITIONS -D_LIBCPP_ENABLE_EXPERIMENTAL)
-    check_cxx_source_compiles("${_pb_jthread_src}" PAPERBOAT_HAS_JTHREAD_EXPERIMENTAL)
-    unset(CMAKE_REQUIRED_DEFINITIONS)
-    if(NOT PAPERBOAT_HAS_JTHREAD_EXPERIMENTAL)
-      message(FATAL_ERROR "This C++ standard library has no std::jthread / <stop_token> (C++20); use Xcode 16 or later")
-    endif()
-    # The toolkit is not linked against core, so it needs the definition on its own target too.
-    target_compile_definitions(paperboat_toolkit PUBLIC _LIBCPP_ENABLE_EXPERIMENTAL)
-    target_compile_definitions(paperboat_core PUBLIC _LIBCPP_ENABLE_EXPERIMENTAL)
-  endif()
-endif()
-
-if(PAPERBOAT_INSTALL)
-  include(CMakePackageConfigHelpers)
-  set(PAPERBOAT_CMAKE_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/Paperboat)
-  install(TARGETS paperboat_core paperboat_toolkit paperboat_warnings EXPORT PaperboatTargets COMPONENT dev
-          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-  install(DIRECTORY core/include/ toolkit/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT dev)
-  install(EXPORT PaperboatTargets NAMESPACE paperboat:: DESTINATION ${PAPERBOAT_CMAKE_DIR} COMPONENT dev)
-  configure_package_config_file(cmake/PaperboatConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfig.cmake
-                                INSTALL_DESTINATION ${PAPERBOAT_CMAKE_DIR})
-  # 0.x: a backend built against 0.1 needs a 0.1 engine (SameMinorVersion).
-  write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfigVersion.cmake COMPATIBILITY SameMinorVersion)
-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfigVersion.cmake
-          DESTINATION ${PAPERBOAT_CMAKE_DIR} COMPONENT dev)
-  # Apache-2.0: the notice travels with every runtime package (deb, rpm, tar.gz, zip).
-  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT runtime)
-endif()
-
 # Optional toolkit packages are self-contained folders with a toolkit.toml and a
 # CMakeLists.txt. The folder decides whether its dependency is available/enabled.
 file(GLOB optional_toolkit_manifests CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/toolkit/*/toolkit.toml")
@@ -183,6 +138,12 @@ foreach(manifest IN LISTS optional_toolkit_manifests)
     endif()
   endif()
 endforeach()
+
+# The workbench backend (base, math, signal, and installed optional toolkits, no domain).
+# Only a standalone engine build serves it; a backend that pulls the engine in has its own.
+if(PROJECT_IS_TOP_LEVEL)
+  add_subdirectory(workbench)
+endif()
 if(PAPERBOAT_BUILD_TOOLS)
   add_subdirectory(tools)
 endif()

@@ -35,11 +35,22 @@ TEST_CASE("the workbench has the standard toolkits and no station objects") {
   std::set<std::string> groups;
   for (const auto& entry : catalog.entries) groups.insert(entry.group);
   for (const char* package : {"base", "math", "signal", "dashboard"}) CHECK(groups.contains(package));
-  // control is an optional toolkit: in the catalog when installed, left out when not.
-  const bool has_control = !paperboat::toolkit::builtins().package("control").empty();
-  CHECK(groups.contains("control") == has_control);
+#ifdef PAPERBOAT_HAS_CONTROL
+  CHECK(groups.contains("control"));
+#endif
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+  CHECK(groups.contains("optimization"));
+#endif
+#ifdef PAPERBOAT_HAS_OPENCV
+  CHECK(groups.contains("opencv"));
+#endif
   CHECK(catalog.missing_imports.empty());
+#ifdef PAPERBOAT_HAS_OPENCV
+  CHECK(catalog.objects.size() == 1);
+  CHECK(catalog.objects[0].def.type == "image");
+#else
   CHECK(catalog.objects.empty());
+#endif
   CHECK(catalog.station_view == "graph");  // no domain scene to draw
   CHECK_FALSE(catalog.station_visible);    // and nothing to show there
 }

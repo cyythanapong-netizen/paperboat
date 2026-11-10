@@ -2,17 +2,32 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
+
+#ifdef PAPERBOAT_HAS_OPENCV
+#include "paperboat/toolkit/opencv.hpp"
+#endif
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+#include "paperboat/toolkit/optimization.hpp"
+#endif
+#ifdef PAPERBOAT_HAS_CONTROL
+#include "paperboat/toolkit/control.hpp"
+#endif
+#ifdef PAPERBOAT_HAS_MESHOP
+#include "paperboat/toolkit/meshop.hpp"
+#endif
 
 namespace paperboat::workbench {
 namespace {
 
 // A starter of Sine into a Graph: the workbench runs as soon as it opens. The Station page
-// is hidden by default (the workbench has no objects), and control is optional: it comes
-// from the external control toolkit, so %CONTROL% below becomes its import only when that
-// is installed.
-constexpr std::string_view kDescriptor = R"(# The workbench: Flow and Dashboard with the standard toolkits, no domain.
+// is hidden by default (the workbench has no objects), and installed toolkits are loaded into
+// its catalog so their blocks appear on the palette.
+constexpr std::string_view kDescriptorPrefix = R"(# The workbench: Flow and Dashboard with the standard and installed toolkits, no domain.
 domain = "workbench"
-import = ["base", "math", "signal", "dashboard"%CONTROL%]
+import = [)";
+
+constexpr std::string_view kDescriptorSuffix = R"(]
 
 [station]
 view = "graph"
@@ -26,19 +41,35 @@ nodes = [
 edges = [{ from = ["sine", "y"], to = ["graph", "in"] }]
 )";
 
-// The marker in kDescriptor, replaced with the control import when that toolkit is built in.
-constexpr std::string_view kControlMarker = "%CONTROL%";
-constexpr std::string_view kControlImport = ", \"control\"";
+toolkit::Registry make_registry() {
+  toolkit::Registry reg = toolkit::builtins();
+#ifdef PAPERBOAT_HAS_OPENCV
+  toolkit::opencv::register_opencv(reg);
+#endif
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+  toolkit::optimization::register_optimization(reg);
+#endif
+#ifdef PAPERBOAT_HAS_CONTROL
+  toolkit::control::register_control(reg);
+#endif
+#ifdef PAPERBOAT_HAS_MESHOP
+  toolkit::meshop::register_meshop(reg);
+#endif
+  return reg;
+}
 
 }  // namespace
 
 const toolkit::Catalog& catalog() {
   static const toolkit::Catalog catalog = [] {
-    std::string descriptor(kDescriptor);
-    const auto at = descriptor.find(kControlMarker);
-    descriptor.replace(at, kControlMarker.size(),
-                       toolkit::builtins().package("control").empty() ? "" : kControlImport);
-    return toolkit::load_descriptor(descriptor);
+    const auto registry = make_registry();
+    std::string imports;
+    for (const auto& pkg : registry.packages()) {
+      if (!imports.empty()) imports += ", ";
+      imports += "\"" + pkg + "\"";
+    }
+    std::string descriptor = std::string(kDescriptorPrefix) + imports + std::string(kDescriptorSuffix);
+    return toolkit::load_descriptor(descriptor, registry);
   }();
   return catalog;
 }
