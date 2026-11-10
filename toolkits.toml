@@ -1,11 +1,14 @@
 # Optional toolkits that live in their own repositories and install into engine/toolkit/<name>.
 # `repo` is a suggested source only: it is never required and never used at launch. Install from
 # any repository or local folder with `paperboat toolkit install <name> --repo <url>` (or `--path`).
+# `prefix` names the toolkit's example folders (`opt-01-…`, `ocv-01-…`); an installed toolkit's
+# examples live in engine/toolkit/<name>/examples and are listed by `paperboat backends`.
 [[toolkits]]
 name = "optimization"
 repo = "https://github.com/paperboatlab/paperboat-toolkit-optimization.git"
 description = "Quadratic and linear programming blocks on OSQP."
 optional = true
+prefix = "opt"
 engine = ">=0.1"
 blocks = ["qp", "lp"]
 
@@ -14,6 +17,7 @@ name = "opencv"
 repo = "https://github.com/paperboatlab/paperboat-toolkit-opencv.git"
 description = "Image processing blocks, view monitor, and image station object (OpenCV)."
 optional = true
+prefix = "ocv"
 engine = ">=0.1"
 blocks = ["gray", "blur", "median", "threshold", "adaptive_threshold", "hsv_range", "canny",
           "erode", "dilate", "open", "close", "invert", "distance", "centroid", "view", "image"]

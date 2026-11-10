@@ -183,6 +183,11 @@ ToolkitResult materialize_toolkit(const fs::path& clone_dir, std::string_view na
     }
   } else {
     fs::copy(src_dir, target_dir, fs::copy_options::recursive, ec);
+    // A toolkit repository may keep its examples at the root; install them next to the
+    // toolkit so the CLI finds them under engine/toolkit/<name>/examples.
+    if (!ec && fs::is_directory(clone_dir / "examples", ec)) {
+      fs::copy(clone_dir / "examples", target_dir / "examples", fs::copy_options::recursive, ec);
+    }
     fs::remove_all(clone_dir);
   }
   if (ec || !fs::is_regular_file(target_dir / "toolkit.toml")) {
@@ -366,6 +371,7 @@ std::vector<ToolkitEntry> parse_toolkits_manifest(std::string_view toml_text) {
     e.description = (*tbl)["description"].value_or(std::string{});
     e.optional = (*tbl)["optional"].value_or(true);
     e.engine = (*tbl)["engine"].value_or(std::string{});
+    e.prefix = (*tbl)["prefix"].value_or(std::string{});
     if (const auto* blocks = (*tbl)["blocks"].as_array()) {
       for (const auto& b : *blocks) {
         if (auto v = b.value<std::string>()) e.blocks.push_back(*v);
@@ -496,6 +502,7 @@ std::string toolkits_json(const std::vector<ToolkitEntry>& list,
   json arr = json::array();
   for (const auto& e : list) {
     json item = {{"name", e.name}, {"repo", e.repo}, {"installed", e.installed}, {"builtin", e.builtin}};
+    if (!e.prefix.empty()) item["prefix"] = e.prefix;
     if (!e.description.empty()) item["description"] = e.description;
     if (e.required) item["required"] = true;
     if (!e.version.empty()) item["version"] = e.version;

@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -5,10 +6,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "paperboat/core/backend_manager.hpp"
 #include "paperboat/toolkit/apps.hpp"
 #include "paperboat/toolkit/update.hpp"
 
 namespace fs = std::filesystem;
+namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
 
 TEST_CASE("apps.toml parses, and an app's name and repo are required") {
@@ -249,5 +252,31 @@ TEST_CASE("pkg pairing: a dep resolves in its range, and an installed one outsid
   }
 
   unsetenv("PAPERBOAT_HOME");
+  fs::remove_all(tmp, ec);
+}
+
+TEST_CASE("get_examples finds the examples an installed toolkit ships") {
+  unsetenv("PAPERBOAT_ROOT");
+  unsetenv("PAPERBOAT_EXAMPLES_DIR");
+  const fs::path tmp = fs::temp_directory_path() / "paperboat_toolkit_examples_test";
+  std::error_code ec;
+  fs::remove_all(tmp, ec);
+  const fs::path root = tmp / "repo";
+  const fs::path examples = root / "paperboat-examples";
+  fs::create_directories(root / "engine" / "toolkit" / "foo" / "examples" / "foo-01-demo");
+  fs::create_directories(examples);
+  std::ofstream(root / "toolkits.toml") << "[[toolkits]]\nname = \"foo\"\nrepo = \"https://example.com/foo.git\"\n";
+  std::ofstream(root / "engine" / "toolkit" / "foo" / "examples" / "foo-01-demo" / "backend.toml")
+      << "[backend]\nformat = 0\nname = \"foo-01-demo\"\nversion = \"0.1.0\"\nengine = \">=0.1\"\n"
+         "language = \"cpp\"\nrun = \"build/foo\"\nport = 8791\ndescriptor = \"descriptor.toml\"\n";
+  std::ofstream(root / "engine" / "toolkit" / "foo" / "examples" / "foo-01-demo" / "descriptor.toml")
+      << "domain = \"foo\"\n[graph]\nnodes = []\nedges = []\n";
+
+  const auto list = core::BackendManager::get_examples(examples);
+  const core::ExampleBackend* found = nullptr;
+  for (const auto& e : list)
+    if (e.name == "foo-01-demo") found = &e;
+  REQUIRE(found != nullptr);
+  CHECK(found->port == 8791);
   fs::remove_all(tmp, ec);
 }
