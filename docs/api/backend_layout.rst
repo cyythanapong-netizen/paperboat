@@ -89,7 +89,7 @@ Field Reference
   *Optional table*. The run's solver options: ``rtol``, ``atol``, ``min_step``, ``max_step``, ``max_steps`` (``rk45``, ``cvode``, ``ida``) and ``sub_steps`` (``rk4``, ``rk2``, ``euler``); see :cpp:struct:`paperboat::toolkit::solve::Options`. ``paperboat`` passes ``[run]`` to the backend it starts (``PAPERBOAT_RUN``), which announces it in ``hello.run``; Run > Solver settings… overrides it per run.
 
 ``[backend].toolkits``
-  *Optional list of strings*. Required optional toolkits that must be installed in the engine (e.g. ``["opencv"]``), or ``["__all__"]`` to import and require all toolkits and built-in packages available in the Paperboat repository.
+  *Optional list of strings*. Optional toolkits this backend requires (e.g. ``["opencv"]``), or ``["__all__"]`` to import and require all toolkits and built-in packages available in the Paperboat repository. ``paperboat check`` verifies that each is installed locally and reports what is missing; it never downloads. Install one from any repository or local folder with ``paperboat toolkit install <name> --repo <url>`` (or ``--path <dir>``); ``toolkits.toml`` only suggests a source.
 
 ``[test].golden``
   *Optional string*. Path to the golden test expectations file (e.g. ``"expected.json"``) for headless verification.

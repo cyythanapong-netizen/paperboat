@@ -23,8 +23,9 @@ Either way the targets are ``paperboat::core`` (links ``paperboat::toolkit``) an
 needs a 0.1.x SDK. On Windows the SDK uses the static runtime (``/MT``); its config sets
 ``CMAKE_MSVC_RUNTIME_LIBRARY`` to match unless you set it.
 
-Optional toolkits (``opencv``, ``optimization``) stay source-only: ``paperboat toolkit install`` compiles
-one into the engine, so it needs a checkout. The SDK holds the built-in packages only.
+Optional toolkits (``opencv``, ``optimization``) stay source-only: ``paperboat toolkit install <name> --repo <url>``
+(or ``--path <dir>``) compiles one into the engine, so it needs a checkout. The SDK holds the built-in
+packages only. The manifest's ``repo`` is a suggested source, not an automatic download.
 
 .. cpp:namespace:: paperboat::toolkit
 

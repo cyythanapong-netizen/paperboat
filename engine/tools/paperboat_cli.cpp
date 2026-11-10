@@ -106,7 +106,8 @@ Examples Orchestration:
 Toolkits:
   toolkit list [name] [--json]
                              List all toolkits, or inspect blocks/instruments of <name>
-  toolkit install <name>     Install an optional toolkit (e.g. opencv)
+  toolkit install <name> [--repo <url> | --path <dir>] [--version <ver>]
+                             Install an optional toolkit from any repo or local folder
   toolkit update <name|--all>
                              Update an installed toolkit, or every installed one
   toolkit uninstall <name>   Remove an optional toolkit
@@ -754,6 +755,7 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
   bool all = false;
   std::string name;
   std::string version;
+  std::string source;  // --repo <url> or --path <dir>
 
   for (std::size_t i = 1; i < args.size(); ++i) {
     auto a = args[i];
@@ -762,6 +764,9 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
     else if (a == "--no-build") rebuild = false;
     else if ((a == "--version" || a == "-v") && i + 1 < args.size()) {
       version = std::string(args[++i]);
+    }
+    else if ((a == "--repo" || a == "--path") && i + 1 < args.size()) {
+      source = std::string(args[++i]);
     }
     else if (!a.starts_with("-") && name.empty()) name = std::string(a);
   }
@@ -833,7 +838,7 @@ int cmd_toolkit(const std::vector<std::string_view>& args) {
   tk::HostBuild host{.source_dir = {}, .build_dir = {}, .skip_rebuild = !rebuild};
   tk::ToolkitResult res;
   if (sub == "install" || sub == "add" || sub == "update") {
-    res = tk::install_toolkit(name, version, {}, host, log);
+    res = tk::install_toolkit(name, version, {}, host, log, source);
   } else if (sub == "uninstall" || sub == "remove") {
     res = tk::uninstall_toolkit(name, {}, host, log);
   } else {

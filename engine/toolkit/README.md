@@ -67,6 +67,11 @@ discovers that folder; its CMake file decides whether the dependency is availabl
 target to build. A backend opts into an optional package by linking its target and adding
 its registrar to the `Registry`.
 
+The root `toolkits.toml` is a catalog, not an installer: its `repo` is a suggested source.
+A backend's `toolkits = [...]` declares what it needs; `paperboat check` verifies the local
+install and never downloads. Install a toolkit from any repository or local folder with
+`paperboat toolkit install <name> --repo <url>` (or `--path <dir>`).
+
 Step templates make a `Step` (`enter`, then `tick` once per clock step until it names the
 step output to leave by; a hat is ticked while idle and has `may_start()`) instead of a `Block`: use `CatalogEntry::make_step()` for them
 and `make()` for the rest. A domain's own step blocks declare step ports in its
