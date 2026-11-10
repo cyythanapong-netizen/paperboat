@@ -9,105 +9,93 @@ export { missingRequiredToolkits };
 
 export function MissingToolkitsDialog({
   missing,
-  onInstall,
   onCancel,
 }: {
   missing: ToolkitStatus[];
-  onInstall: (selections: { name: string; version: string }[]) => void;
   onCancel: () => void;
 }) {
   const root = useRef<HTMLElement>(null);
-  const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    for (const t of missing) {
-      init[t.name] = t.default ?? (t.versions && t.versions.length > 0 ? t.versions[0] : "dev");
-    }
-    return init;
-  });
+  const [copied, setCopied] = useState(false);
 
   useFocusReturn(root);
   useDismiss(root, onCancel, { outside: false });
+
+  const commands = missing.map((t) => {
+    const source = t.repo ? `--repo ${t.repo}` : "--repo <url>";
+    return `paperboat toolkit install ${t.name} ${source}`;
+  });
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(commands.join("\n"));
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <section
       className="console-window notice missing-toolkits-dialog"
       role="alertdialog"
-      aria-label="Install missing toolkits"
+      aria-label="Missing toolkits"
       data-own-keys
       ref={root}
     >
       <header className="console-head">
-        <h2>{missing.length === 1 ? `Install missing toolkit “${missing[0].name}”?` : "Install missing toolkits?"}</h2>
+        <h2>{missing.length === 1 ? `Missing toolkit “${missing[0].name}”` : "Missing toolkits"}</h2>
       </header>
       <div className="notice-body">
         <p>
           This backend or project requires {missing.length === 1 ? "a toolkit" : "toolkits"} that{" "}
-          {missing.length === 1 ? "is" : "are"} not installed.
+          {missing.length === 1 ? "is" : "are"} not installed. Install from the repository or folder you trust;
+          the manifest only suggests a source.
         </p>
         <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-2, 8px)", margin: "var(--space-2, 8px) 0" }}>
-          {missing.map((t) => {
-            const versions = t.versions ?? [];
-            const cur = selectedVersions[t.name] ?? t.default ?? (versions.length > 0 ? versions[0] : "dev");
-            return (
+          {missing.map((t, i) => (
+            <div
+              key={t.name}
+              className="toolkit-item"
+              style={{
+                border: "1px solid var(--line)",
+                borderRadius: "var(--radius-md, 6px)",
+                padding: "var(--space-2, 8px)",
+              }}
+            >
               <div
-                key={t.name}
-                className="toolkit-item"
+                className="toolkit-head"
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-2, 8px)" }}
+              >
+                <code>{t.name}</code>
+                {t.repo && (
+                  <a className="toolkit-repo" href={t.repo.replace(/\.git$/, "")} target="_blank" rel="noreferrer">
+                    Suggested repository
+                  </a>
+                )}
+              </div>
+              {t.description && <p className="toolkit-desc">{t.description}</p>}
+              <pre
                 style={{
-                  border: "1px solid var(--line)",
-                  borderRadius: "var(--radius-md, 6px)",
-                  padding: "var(--space-2, 8px)",
+                  margin: "6px 0 0",
+                  padding: "6px 8px",
+                  background: "var(--surface-well)",
+                  borderRadius: "var(--radius-sm, 3px)",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                  fontSize: "var(--size-2xs, 11px)",
                 }}
               >
-                <div
-                  className="toolkit-head"
-                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "var(--space-2, 8px)" }}
-                >
-                  <code>{t.name}</code>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    <label htmlFor={`ver-${t.name}`} style={{ fontSize: "var(--size-2xs, 11px)", color: "var(--text-muted)" }}>
-                      Version:
-                    </label>
-                    <select
-                      id={`ver-${t.name}`}
-                      className="toolkit-version-select"
-                      value={cur}
-                      onChange={(e) => setSelectedVersions((prev) => ({ ...prev, [t.name]: e.target.value }))}
-                    >
-                      {versions.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                      <option value="dev">dev (main)</option>
-                    </select>
-                  </div>
-                </div>
-                {t.description && <p className="toolkit-desc">{t.description}</p>}
-                <div style={{ marginTop: "4px" }}>
-                  <a className="toolkit-repo" href={t.repo.replace(/\.git$/, "")} target="_blank" rel="noreferrer">
-                    Repository
-                  </a>
-                </div>
-              </div>
-            );
-          })}
+                <code>{commands[i]}</code>
+              </pre>
+            </div>
+          ))}
         </div>
       </div>
       <footer className="notice-actions">
-        <button
-          className="key run"
-          onClick={() => {
-            const list = missing.map((t) => ({
-              name: t.name,
-              version: selectedVersions[t.name] ?? t.default ?? (t.versions && t.versions.length > 0 ? t.versions[0] : "dev"),
-            }));
-            onInstall(list);
-          }}
-        >
-          {missing.length === 1 ? `Install ${missing[0].name}` : "Install all"}
+        <button className="key run" onClick={copy}>
+          {copied ? "Copied" : "Copy commands"}
         </button>
         <button className="key" onClick={onCancel}>
-          Not now
+          Close
         </button>
       </footer>
     </section>
@@ -273,7 +261,10 @@ export function ToolkitsButton({
             );
           }))}
           <div className="foot toolkits-foot">
-            <span>Restart the backend after installing or updating.</span>
+            <span>
+              Restart the backend after installing or updating. Another source:{" "}
+              <code>paperboat toolkit install &lt;name&gt; --repo &lt;url&gt;</code>.
+            </span>
             <button
               className="key small"
               disabled={!connected || anyBusy}

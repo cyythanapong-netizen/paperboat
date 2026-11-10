@@ -330,8 +330,8 @@ export function App() {
     loadProject,
   );
 
-  // ---- Missing toolkit prompt and post-install restart prompt (#118) ----
-  const { missingDialog, setMissingDialog, restartBackend, installToolkit, toolkitVersions, uninstallToolkit, installAll } = useToolkitInstall(state, send, log, nodes);
+  // ---- Missing toolkit notice and post-install restart prompt (#118) ----
+  const { missingDialog, setMissingDialog, restartBackend, installToolkit, toolkitVersions, uninstallToolkit } = useToolkitInstall(state, send, log, nodes);
 
   // ---- The commands (#78): what the menus, the command search and the shortcuts all run ----
   const { usesSolvers, currentSolver, solvers } = solverChoice(state, nodes, runSettings);
@@ -471,11 +471,6 @@ export function App() {
       {missingDialog && (
         <MissingToolkitsDialog
           missing={missingDialog.map((m) => state.toolkits.find((t) => t.name === m.name) ?? m)}
-          onInstall={(selections) => {
-            setMissingDialog(null);
-            setConsoleShown(true);
-            installAll(selections);
-          }}
           onCancel={() => setMissingDialog(null)}
         />
       )}

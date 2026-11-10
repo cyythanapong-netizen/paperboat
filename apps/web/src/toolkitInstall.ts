@@ -1,5 +1,6 @@
-// Toolkits (#118): asking for the ones a project needs and this backend lacks, installing them one
-// after another, and restarting the backend once they are in.
+// Toolkits (#118): asking for the ones a project needs and this backend lacks, and telling the
+// user how to install them from the repository or folder they trust. Installation is never
+// triggered from the manifest: it is an explicit CLI action.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EngineState } from "./engine";
@@ -16,8 +17,6 @@ export function useToolkitInstall(
   const promptedToolkits = useRef<string>("");
   const prevBusyToolkits = useRef<Map<string, string>>(new Map());
   const [missingDialog, setMissingDialog] = useState<ToolkitStatus[] | null>(null);
-  const installQueue = useRef<{ name: string; version: string }[]>([]);
-  const autoRestart = useRef(false);
 
   const restartBackend = useCallback(() => {
     log("info", "restarting backend…");
@@ -54,13 +53,8 @@ export function useToolkitInstall(
     const key = `${state.engine}:${missing.map((t) => t.name).sort().join(",")}`;
     if (promptedToolkits.current === key) return;
     promptedToolkits.current = key;
-    for (const t of missing) {
-      if (!t.versions || t.versions.length === 0) {
-        toolkitVersions(t.name);
-      }
-    }
     setMissingDialog(missing);
-  }, [state.connection, state.engine, state.toolkits, nodes, toolkitVersions, missingDialog]);
+  }, [state.connection, state.engine, state.toolkits, nodes, missingDialog]);
 
   useEffect(() => {
     const prev = prevBusyToolkits.current;
@@ -81,36 +75,15 @@ export function useToolkitInstall(
     prevBusyToolkits.current = next;
 
     if (failed.length > 0) {
-      installQueue.current = [];
-      autoRestart.current = false;
       log("error", `Installing ${failed.join(", ")} failed. See the lines above for details.`);
       return;
     }
 
     if (finished.length > 0) {
-      if (installQueue.current.length > 0) {
-        const nextItem = installQueue.current.shift()!;
-        installToolkit(nextItem.name, nextItem.version);
-        return;
-      }
-      if (autoRestart.current) {
-        autoRestart.current = false;
-        restartBackend();
-      } else {
-        const names = finished.join(", ");
-        log("warn", `Toolkit ${names} ready: restart the backend so it loads the update.`);
-      }
+      const names = finished.join(", ");
+      log("warn", `Toolkit ${names} ready: restart the backend so it loads the update.`);
     }
-  }, [state.toolkits, restartBackend, installToolkit]);
+  }, [state.toolkits, log]);
 
-  /** Install what the missing-toolkits dialog picked, one at a time, then restart the backend. */
-  const installAll = (selections: { name: string; version: string }[]) => {
-    autoRestart.current = true;
-    if (selections.length > 0) {
-      const [first, ...rest] = selections;
-      installQueue.current = rest;
-      installToolkit(first.name, first.version);
-    }
-  };
-  return { missingDialog, setMissingDialog, restartBackend, installToolkit, toolkitVersions, uninstallToolkit, installAll };
+  return { missingDialog, setMissingDialog, restartBackend, installToolkit, toolkitVersions, uninstallToolkit };
 }

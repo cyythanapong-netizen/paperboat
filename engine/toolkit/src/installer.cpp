@@ -114,7 +114,11 @@ int run_cmd(const std::vector<std::string>& args,
   return status;
 }
 
-std::string resolve_repo_url(const ToolkitEntry& entry) {
+// An explicit `source` wins. Otherwise the per-toolkit env override, then the general override,
+// then the manifest's suggested repo. The last is only a convenience for an explicit install;
+// check/launch never call this.
+std::string resolve_repo_url(const ToolkitEntry& entry, std::string_view source) {
+  if (!source.empty()) return std::string(source);
   std::string upper = entry.name;
   std::ranges::transform(upper, upper.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
   const std::string env_key = "PAPERBOAT_TOOLKIT_REPO_" + upper;
@@ -310,7 +314,7 @@ std::vector<std::string> parse_release_tags(std::string_view ls_remote_output, b
 }
 
 std::vector<std::string> list_releases(const ToolkitEntry& entry, const ToolkitLog& log) {
-  const std::string url = resolve_repo_url(entry);
+  const std::string url = resolve_repo_url(entry, {});
   std::string out;
   std::string last;
   if (run_cmd({"git", "ls-remote", "--tags", "--refs", url}, {}, log, &last, &out) != 0) {
@@ -367,8 +371,10 @@ std::vector<ToolkitEntry> parse_toolkits_manifest(std::string_view toml_text) {
         if (auto v = b.value<std::string>()) e.blocks.push_back(*v);
       }
     }
-    if (e.name.empty() || e.repo.empty()) {
-      throw DescriptorError("toolkits[" + std::to_string(i) + "]: needs name and repo");
+    // `repo` is a suggested source only: a user may install the toolkit from any repository
+    // or local folder. The manifest is a catalog, not an installer.
+    if (e.name.empty()) {
+      throw DescriptorError("toolkits[" + std::to_string(i) + "]: needs name");
     }
     out.push_back(std::move(e));
   }
@@ -506,7 +512,8 @@ ToolkitResult install_toolkit(std::string_view name,
                               std::string_view requested_version,
                               const fs::path& repo_root,
                               const HostBuild& host,
-                              const ToolkitLog& log) {
+                              const ToolkitLog& log,
+                              std::string_view source) {
   if (name == "builtin") {
     return {false, "cannot install built-in toolkit"};
   }
@@ -521,14 +528,29 @@ ToolkitResult install_toolkit(std::string_view name,
   if (!host.skip_rebuild && host.source_dir.empty() && !fs::is_regular_file(root / "engine" / "CMakeLists.txt"))
     return {false, "toolkits are compiled into the engine: build paperboat from source to install one"};
 
-  const std::string url = resolve_repo_url(*entry);
+  // The source is explicit (--repo/--path), an env override, or the manifest's suggestion.
+  const std::string source_text = resolve_repo_url(*entry, source);
+  if (source_text.empty()) {
+    std::string upper = entry->name;
+    std::ranges::transform(upper, upper.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return {false, "no source for toolkit \"" + entry->name +
+                       "\": pass --repo <url> or --path <dir>, or set PAPERBOAT_TOOLKIT_REPO_" + upper};
+  }
+  const fs::path source_path(source_text);
+  const bool local = fs::is_directory(source_path);
+  const fs::path local_source = local ? fs::weakly_canonical(source_path) : fs::path{};
 
   // Resolve target version and git ref
   std::string version = std::string(requested_version);
   std::string git_ref;
 
-  if (version.empty()) {
-    const auto available = list_releases(*entry, log);
+  if (local) {
+    version = version.empty() ? "local" : version;
+    git_ref = "local";
+  } else if (version.empty()) {
+    ToolkitEntry probe = *entry;
+    probe.repo = source_text;
+    const auto available = list_releases(probe, log);
     if (!available.empty()) {
       version = available.front();
       git_ref = "v" + version;
@@ -545,7 +567,7 @@ ToolkitResult install_toolkit(std::string_view name,
     version = version.starts_with('v') ? version.substr(1) : version;
   }
 
-  if (log) log("info", "installing toolkit \"" + entry->name + "\" version " + version + " (" + git_ref + ") from " + url + "…");
+  if (log) log("info", "installing toolkit \"" + entry->name + "\" version " + version + " (" + git_ref + ") from " + source_text + "…");
 
   const fs::path target_dir = root / "engine" / "toolkit" / entry->name;
   const fs::path stage_dir = root / ".toolkit-cache" / ("stage-" + entry->name);
@@ -553,35 +575,41 @@ ToolkitResult install_toolkit(std::string_view name,
   fs::remove_all(stage_dir, ec);
   fs::create_directories(stage_dir.parent_path(), ec);
 
-  std::string last;
-  std::vector<std::string> clone_cmd = {"git", "clone", "--depth", "1"};
-  if (!git_ref.empty() && git_ref != "HEAD") {
-    clone_cmd.push_back("--branch");
-    clone_cmd.push_back(git_ref);
-  }
-  clone_cmd.push_back(url);
-  clone_cmd.push_back(stage_dir.string());
-
-  int clone_rc = run_cmd(clone_cmd, root, log, &last);
-  if (clone_rc != 0 && (git_ref == "main" || git_ref == "dev")) {
-    // Try master or default clone
-    fs::remove_all(stage_dir, ec);
-    clone_rc = run_cmd({"git", "clone", "--depth", "1", url, stage_dir.string()}, root, log, &last);
-  } else if (clone_rc != 0 && git_ref.starts_with('v')) {
-    // Try without 'v' prefix
-    std::string fallback_ref = git_ref.substr(1);
-    fs::remove_all(stage_dir, ec);
-    clone_rc = run_cmd({"git", "clone", "--depth", "1", "--branch", fallback_ref, url, stage_dir.string()}, root, log, &last);
-    if (clone_rc == 0) git_ref = fallback_ref;
-  }
-  if (clone_rc != 0) {
-    fs::remove_all(stage_dir, ec);
-    return {false, "failed to clone " + url + " at ref " + git_ref + (last.empty() ? "" : ": " + last)};
-  }
-
   std::string commit;
-  run_cmd({"git", "-C", stage_dir.string(), "rev-parse", "HEAD"}, root, {}, nullptr, &commit);
-  commit = trim_line(commit);
+  if (local) {
+    fs::copy(local_source, stage_dir, fs::copy_options::recursive, ec);
+    if (ec) return {false, "cannot copy " + local_source.string() + ": " + ec.message()};
+    commit = "local";
+  } else {
+    std::string last;
+    std::vector<std::string> clone_cmd = {"git", "clone", "--depth", "1"};
+    if (!git_ref.empty() && git_ref != "HEAD") {
+      clone_cmd.push_back("--branch");
+      clone_cmd.push_back(git_ref);
+    }
+    clone_cmd.push_back(source_text);
+    clone_cmd.push_back(stage_dir.string());
+
+    int clone_rc = run_cmd(clone_cmd, root, log, &last);
+    if (clone_rc != 0 && (git_ref == "main" || git_ref == "dev")) {
+      // Try master or default clone
+      fs::remove_all(stage_dir, ec);
+      clone_rc = run_cmd({"git", "clone", "--depth", "1", source_text, stage_dir.string()}, root, log, &last);
+    } else if (clone_rc != 0 && git_ref.starts_with('v')) {
+      // Try without 'v' prefix
+      std::string fallback_ref = git_ref.substr(1);
+      fs::remove_all(stage_dir, ec);
+      clone_rc = run_cmd({"git", "clone", "--depth", "1", "--branch", fallback_ref, source_text, stage_dir.string()}, root, log, &last);
+      if (clone_rc == 0) git_ref = fallback_ref;
+    }
+    if (clone_rc != 0) {
+      fs::remove_all(stage_dir, ec);
+      return {false, "failed to clone " + source_text + " at ref " + git_ref + (last.empty() ? "" : ": " + last)};
+    }
+
+    run_cmd({"git", "-C", stage_dir.string(), "rev-parse", "HEAD"}, root, {}, nullptr, &commit);
+    commit = trim_line(commit);
+  }
 
   // Backup existing install if present
   const fs::path prev_backup = root / ".toolkit-cache" / ("prev-" + entry->name);
@@ -652,7 +680,7 @@ std::vector<std::string> list_toolkit_versions(std::string_view name,
   const ToolkitEntry* entry = find_entry(entries, name);
   if (!entry) return {};
 
-  const std::string repo_url = resolve_repo_url(*entry);
+  const std::string repo_url = resolve_repo_url(*entry, {});
   if (repo_url.empty()) return {};
 
   std::vector<std::string> versions;

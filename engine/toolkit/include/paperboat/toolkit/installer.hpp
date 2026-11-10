@@ -18,7 +18,7 @@ namespace paperboat::toolkit {
 
 struct ToolkitEntry {
   std::string name;
-  std::string repo;
+  std::string repo;  // a suggested source; never required, never used at launch
   std::string description;
   bool optional = true;
   bool builtin = false;
@@ -123,11 +123,15 @@ std::string toolkits_json(const std::vector<ToolkitEntry>& list,
                           std::string_view busy_state = {});
 
 // Install or switch version of an optional toolkit in engine/toolkit/<name>.
+// `source` is a git URL or a local folder; when empty, PAPERBOAT_TOOLKIT_REPO_<NAME> /
+// PAPERBOAT_TOOLKIT_REPO, then the manifest's suggested `repo`, are tried. A local folder is
+// copied; a URL is cloned. The manifest is never used at launch.
 ToolkitResult install_toolkit(std::string_view name,
                               std::string_view version = {},
                               const std::filesystem::path& repo_root = {},
                               const HostBuild& host = {},
-                              const ToolkitLog& log = {});
+                              const ToolkitLog& log = {},
+                              std::string_view source = {});
 
 ToolkitResult uninstall_toolkit(std::string_view name,
                                 const std::filesystem::path& repo_root = {},

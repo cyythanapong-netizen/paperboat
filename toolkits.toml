@@ -1,4 +1,6 @@
 # Optional toolkits that live in their own repositories and install into engine/toolkit/<name>.
+# `repo` is a suggested source only: it is never required and never used at launch. Install from
+# any repository or local folder with `paperboat toolkit install <name> --repo <url>` (or `--path`).
 [[toolkits]]
 name = "optimization"
 repo = "https://github.com/paperboatlab/paperboat-toolkit-optimization.git"

@@ -537,6 +537,16 @@ blocks = ["gray", "canny"]
   CHECK(parsed[0].blocks == std::vector<std::string>{"gray", "canny"});
   CHECK(nlohmann::json::parse(tk::toolkits_json(parsed))[0]["blocks"] == nlohmann::json{"gray", "canny"});
 
+  // `repo` is a suggested source, not a required field: the manifest is a catalog.
+  const auto no_repo = tk::parse_toolkits_manifest(R"(
+[[toolkits]]
+name = "optimization"
+description = "Quadratic and linear programs."
+)");
+  REQUIRE(no_repo.size() == 1);
+  CHECK(no_repo[0].name == "optimization");
+  CHECK(no_repo[0].repo.empty());
+
   const fs::path tmp = fs::temp_directory_path() / "paperboat_toolkit_installer_test";
   std::error_code ec;
   fs::remove_all(tmp, ec);
@@ -589,6 +599,30 @@ blocks = ["gray", "canny"]
   CHECK_FALSE(fs::exists(root / "engine" / "toolkit" / "opencv"));
   CHECK_FALSE(tk::list_toolkits(root, backend_dir)[1].installed);
   CHECK_FALSE(logs.empty());
+
+  // An explicit local folder installs without git or the manifest's suggested repo.
+  const fs::path local = tmp / "local-opencv";
+  fs::create_directories(local / "engine" / "toolkit" / "opencv");
+  {
+    std::ofstream out(local / "engine" / "toolkit" / "opencv" / "toolkit.toml");
+    out << "name = \"opencv\"\n";
+  }
+  const auto local_installed = tk::install_toolkit(
+      "opencv", "local", root, {.source_dir = {}, .build_dir = {}, .skip_rebuild = true}, logger, local.string());
+  CHECK(local_installed.ok);
+  CHECK(fs::is_regular_file(root / "engine" / "toolkit" / "opencv" / "toolkit.toml"));
+
+  // A catalog entry without a source cannot install by itself: the user must pass one.
+  const fs::path no_repo_root = tmp / "no-repo";
+  fs::create_directories(no_repo_root / "engine" / "toolkit");
+  {
+    std::ofstream out(no_repo_root / "toolkits.toml");
+    out << "[[toolkits]]\nname = \"optimization\"\n";
+  }
+  const auto no_source = tk::install_toolkit(
+      "optimization", "dev", no_repo_root, {.source_dir = {}, .build_dir = {}, .skip_rebuild = true}, logger);
+  CHECK_FALSE(no_source.ok);
+  CHECK(no_source.message.find("no source") != std::string::npos);
 
   fs::remove_all(tmp, ec);
 }

@@ -105,6 +105,11 @@ layout plus a ``toolkit.toml`` and a package-local ``CMakeLists.txt``. The engin
 folder; the package's CMake file decides whether its dependency is available. The backend links and
 registers an optional package explicitly.
 
+The root ``toolkits.toml`` is a catalog, not an installer: its ``repo`` is a suggested source.
+A backend's ``toolkits = [...]`` declares what it needs; ``paperboat check`` verifies the local
+install and never downloads. Install from any repository or local folder with
+``paperboat toolkit install <name> --repo <url>`` (or ``--path <dir>``).
+
 Toolkit packages
 ================
 
@@ -176,7 +181,8 @@ with no edit elsewhere.
 Optional toolkits with external dependencies live in ``engine/toolkit/<package>/`` with a
 ``toolkit.toml`` and a package-local ``CMakeLists.txt``. The engine discovers the folder;
 the package's CMake file decides whether its dependency is available. The backend links and
-registers an optional package explicitly.
+registers an optional package explicitly. Install one from any repository or local folder with
+``paperboat toolkit install <name> --repo <url>``; the manifest's ``repo`` is only a suggestion.
 
 A package that needs its own UI keeps it in a ``web/`` folder next to its C++
 (``engine/toolkit/<package>/web/index.tsx`` or ``engine/toolkit/src/<package>/web/index.tsx``). The
