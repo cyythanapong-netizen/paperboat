@@ -14,6 +14,9 @@
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
 #endif
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+#include "paperboat/toolkit/optimization.hpp"
+#endif
 
 namespace tk = paperboat::toolkit;
 
@@ -25,6 +28,9 @@ const tk::Registry& registry() {
     tk::Registry all = tk::builtins();
 #ifdef PAPERBOAT_HAS_OPENCV
     tk::opencv::register_opencv(all);
+#endif
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+    tk::optimization::register_optimization(all);
 #endif
     return all;
   }();

@@ -8,6 +8,10 @@
 #include <utility>
 #include <vector>
 
+namespace paperboat::toolkit {
+class Registry;
+}
+
 namespace paperboat::core {
 
 struct RunningBackend {
@@ -191,6 +195,9 @@ class BackendManager {
   // Verification & checking
   static BackendManifest load_manifest(const std::filesystem::path& backend_dir, std::string* error_msg = nullptr);
   static int find_free_port(int start_port = 18765, int end_port = 18999);
+  // Optional toolkit packages compiled into this binary (opencv, optimization): the CLI sets
+  // this before check_backend, so a descriptor that imports one is validated statically.
+  static void set_registry_extension(std::function<void(toolkit::Registry&)> extension);
   static CheckResult check_backend(const std::filesystem::path& path = {}, bool fast = false,
                                    const CheckProgress& progress = {});
 

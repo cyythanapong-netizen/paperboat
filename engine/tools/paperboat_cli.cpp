@@ -31,6 +31,9 @@
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
 #endif
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+#include "paperboat/toolkit/optimization.hpp"
+#endif
 #include "paperboat_new.hpp"
 #include "paperboat_tui.hpp"
 
@@ -45,12 +48,21 @@ namespace platform = paperboat::platform;
 using Command = int (*)(const std::vector<std::string_view>&);
 namespace fs = std::filesystem;
 
+// The optional packages this build has (opencv, optimization): they are linked into the CLI
+// and registered for `toolkit list` and for `check` (which cannot link them itself).
+void add_optional_packages(tk::Registry& all) {
+#ifdef PAPERBOAT_HAS_OPENCV
+  tk::opencv::register_opencv(all);
+#endif
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+  tk::optimization::register_optimization(all);
+#endif
+}
+
 const tk::Registry& full_registry() {
   static const tk::Registry r = [] {
     tk::Registry all = tk::builtins();
-#ifdef PAPERBOAT_HAS_OPENCV
-    tk::opencv::register_opencv(all);
-#endif
+    add_optional_packages(all);
     return all;
   }();
   return r;
@@ -1495,6 +1507,7 @@ int run_interactive_prompt() {
 }  // namespace
 
 int main(int argc, char** argv) {
+  core::BackendManager::set_registry_extension(add_optional_packages);
   if (argc < 2) {
     launch_console({});
     return run_interactive_prompt();

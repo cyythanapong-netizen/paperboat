@@ -77,6 +77,13 @@ bool connect_pending() { return errno == EINPROGRESS; }
 using nlohmann::json;
 namespace fs = std::filesystem;
 
+// Optional packages compiled into this binary (opencv, optimization). core cannot link them
+// (they are optional), so the CLI installs this hook before check_backend.
+std::function<void(toolkit::Registry&)>& registry_extension() {
+  static std::function<void(toolkit::Registry&)> extension;
+  return extension;
+}
+
 // backend.toml's [run] for the backend process (core main reads PAPERBOAT_RUN).
 std::vector<std::pair<std::string, std::string>> run_env(const BackendManifest& m) {
   if (m.run_settings.empty()) return {};
@@ -156,6 +163,10 @@ const std::string& output_of(const ProcessResult& r) {
 }
 
 }  // namespace
+
+void BackendManager::set_registry_extension(std::function<void(toolkit::Registry&)> extension) {
+  registry_extension() = std::move(extension);
+}
 
 bool BackendManager::is_port_listening(int port) {
   if (port <= 0 || port > 65535) return false;
@@ -430,8 +441,8 @@ std::vector<RunningBackend> BackendManager::list_running_backends() {
     }
   }
 
-  // Fallback probe for known example ports 8765..8773 (and any from 8765 to 8780)
-  for (int p = 8765; p <= 8780; ++p) {
+  // Fallback probe for known example ports 8765..8773 and the toolkit examples (ocv/opt)
+  for (int p = 8765; p <= 8799; ++p) {
     if (std::ranges::find(found_ports, p) != found_ports.end()) continue;
     if (is_port_listening(p)) {
       int pid = find_pid_by_port(p);
@@ -799,6 +810,29 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
     }
   }
 
+  // An installed toolkit's examples: engine/toolkit/<toolkit>/examples/<ocv|opt>-NN-name.
+  // `ocv-01`, `ocv-1` and the full name all find the same folder.
+  if (!root.empty()) {
+    std::string prefix = name;
+    const auto dash = prefix.rfind('-');
+    if (dash != std::string::npos && dash + 2 == prefix.size() &&
+        std::isdigit(static_cast<unsigned char>(prefix.back()))) {
+      prefix.insert(dash + 1, "0");
+    }
+    const fs::path toolkits = root / "engine" / "toolkit";
+    if (fs::is_directory(toolkits, ec)) {
+      for (const auto& toolkit : fs::directory_iterator(toolkits, ec)) {
+        const fs::path examples = toolkit.path() / "examples";
+        if (!fs::is_directory(examples, ec)) continue;
+        for (const auto& entry : fs::directory_iterator(examples, ec)) {
+          if (!entry.is_directory(ec)) continue;
+          const std::string fn = entry.path().filename().string();
+          if ((fn == prefix || fn.starts_with(prefix + "-")) && is_valid_backend_dir(entry.path())) return entry.path();
+        }
+      }
+    }
+  }
+
   // A bare name with no examples checkout anywhere: fetch the examples repository, then look again.
   if (edir.empty() && !p_check.has_parent_path() && !fs::exists(p_check) && fetch_examples() &&
       !find_examples_dir().empty()) {
@@ -1084,29 +1118,48 @@ std::vector<ExampleBackend> BackendManager::get_examples(const fs::path& example
   const fs::path edir = find_examples_dir(examples_dir);
   std::vector<ExampleBackend> list;
 
+  // The tutorial curriculum (paperboat-examples) plus the examples an installed optional
+  // toolkit ships under engine/toolkit/<name>/examples (ocv-01-…, opt-01-…).
+  std::vector<fs::path> dirs;
+  const auto add_dir = [&dirs](const fs::path& dir) {
+    if (std::ranges::find(dirs, dir) == dirs.end()) dirs.push_back(dir);
+  };
+  std::error_code ec;
   if (!edir.empty() && fs::is_directory(edir)) {
-    std::vector<fs::path> subdirs;
-    std::error_code ec;
     for (const auto& entry : fs::directory_iterator(edir, ec)) {
       if (entry.is_directory(ec) && (fs::is_regular_file(entry.path() / "backend.toml", ec) ||
                                      fs::is_regular_file(entry.path() / "descriptor.toml", ec))) {
-        subdirs.push_back(entry.path());
+        add_dir(entry.path());
       }
     }
-    std::sort(subdirs.begin(), subdirs.end());
+  }
+  if (const fs::path root = toolkit::find_repo_root(edir); !root.empty()) {
+    const fs::path toolkits = root / "engine" / "toolkit";
+    for (const auto& toolkit : fs::directory_iterator(toolkits, ec)) {
+      if (!toolkit.is_directory(ec)) continue;
+      const fs::path examples = toolkit.path() / "examples";
+      if (!fs::is_directory(examples, ec)) continue;
+      for (const auto& entry : fs::directory_iterator(examples, ec)) {
+        if (entry.is_directory(ec) && (fs::is_regular_file(entry.path() / "backend.toml", ec) ||
+                                       fs::is_regular_file(entry.path() / "descriptor.toml", ec))) {
+          add_dir(entry.path());
+        }
+      }
+    }
+  }
+  std::sort(dirs.begin(), dirs.end());
 
-    for (const auto& sdir : subdirs) {
-      BackendManifest m = load_manifest(sdir);
-      int port = m.port > 0 ? m.port : 8765;
-      std::string name = sdir.filename().string();
-      std::string type = m.language.empty() ? (fs::is_regular_file(sdir / "CMakeLists.txt") ? "cpp" : "python") : m.language;
-      ExampleBackend item{port, name, type, sdir, false, 0, ws_url(port)};
-      if (is_port_listening(item.port)) {
-        item.running = true;
-        item.pid = find_pid_by_port(item.port);
-      }
-      list.push_back(std::move(item));
+  for (const auto& sdir : dirs) {
+    BackendManifest m = load_manifest(sdir);
+    int port = m.port > 0 ? m.port : 8765;
+    std::string name = sdir.filename().string();
+    std::string type = m.language.empty() ? (fs::is_regular_file(sdir / "CMakeLists.txt") ? "cpp" : "python") : m.language;
+    ExampleBackend item{port, name, type, sdir, false, 0, ws_url(port)};
+    if (is_port_listening(item.port)) {
+      item.running = true;
+      item.pid = find_pid_by_port(item.port);
     }
+    list.push_back(std::move(item));
   }
 
   if (list.empty()) {
@@ -1137,20 +1190,22 @@ std::vector<ExampleBackend> BackendManager::get_examples(const fs::path& example
 
 bool BackendManager::start_examples(const fs::path& examples_dir) {
   const fs::path edir = find_examples_dir(examples_dir);
-  if (edir.empty() || !fs::is_directory(edir)) {
-    std::cerr << "error: paperboat-examples directory not found. Please set PAPERBOAT_EXAMPLES_DIR.\n";
+  auto examples = get_examples(edir);
+  if (examples.empty()) {
+    std::cerr << "error: no example backends found (paperboat-examples, or an installed toolkit's examples/).\n";
     return false;
   }
 
-  std::cout << "Using examples directory: " << edir.string() << '\n';
+  if (!edir.empty()) std::cout << "Using examples directory: " << edir.string() << '\n';
   stop_examples();
 
   const fs::path root = toolkit::find_repo_root();
+  const fs::path cwd = root.empty() ? fs::current_path() : root;
   auto py_env = prepare_python_env(root);
 
   // Record a launched example so `paperboat list` and `stop` find it.
   const auto launched = [](const ExampleBackend& ex, int pid, const std::string& engine, const std::string& domain,
-                           const fs::path& cwd, const std::string& executable) {
+                           const fs::path& workdir, const std::string& executable) {
     if (pid <= 0) return;
     std::cout << "Started " << ex.name << " on port " << ex.port << " (PID " << pid << ")\n";
     RunningBackend rb;
@@ -1158,7 +1213,7 @@ bool BackendManager::start_examples(const fs::path& examples_dir) {
     rb.pid = pid;
     rb.engine = engine;
     rb.domain = domain;
-    rb.cwd = cwd;
+    rb.cwd = workdir;
     rb.backend_dir = ex.dir;
     rb.executable = executable;
     rb.ws_url = ws_url(ex.port);
@@ -1166,7 +1221,17 @@ bool BackendManager::start_examples(const fs::path& examples_dir) {
     register_running_backend(rb);
   };
 
-  auto examples = get_examples(edir);
+  const auto domain_of = [](const std::string& name) {
+    std::string domain = name;
+    for (std::string_view suffix : {"-cpp", "-python"}) {
+      if (domain.ends_with(suffix)) {
+        domain.resize(domain.size() - suffix.size());
+        break;
+      }
+    }
+    return domain;
+  };
+
   for (const auto& ex : examples) {
     if (!fs::is_directory(ex.dir)) {
       std::cout << "[skip] " << ex.name << " (directory not found: " << ex.dir << ")\n";
@@ -1188,24 +1253,28 @@ bool BackendManager::start_examples(const fs::path& examples_dir) {
         continue;
       }
 
-      int pid = ProcessRunner::run_detached({bin.string(), "--port", std::to_string(ex.port)}, root, {}, log_path);
-      launched(ex, pid, "paperboat/" + ex.name, ex.name.substr(0, ex.name.find("-cpp")), root, bin.string());
+      int pid = ProcessRunner::run_detached({bin.string(), "--port", std::to_string(ex.port)}, cwd, {}, log_path);
+      launched(ex, pid, "paperboat/" + ex.name, domain_of(ex.name), cwd, bin.string());
     } else {
       // Python
       int pid = ProcessRunner::run_detached({py_env.python_bin.string(), "server.py", "--port", std::to_string(ex.port)},
                                             ex.dir, py_env.env, log_path);
-      launched(ex, pid, "python", ex.name.substr(0, ex.name.find("-python")), ex.dir,
-               py_env.python_bin.string() + " server.py");
+      launched(ex, pid, "python", domain_of(ex.name), ex.dir, py_env.python_bin.string() + " server.py");
     }
   }
 
-  std::cout << "==> All example backends launched (ports 8765-8773).\n";
+  std::cout << "==> All example backends launched.\n";
   return true;
 }
 
 bool BackendManager::stop_examples() {
-  std::cout << "==> Stopping all example backends (ports 8765-8773)…\n";
-  for (int p = 8765; p <= 8773; ++p) {
+  std::vector<int> ports;
+  for (int p = 8765; p <= 8773; ++p) ports.push_back(p);
+  for (const auto& ex : get_examples()) {
+    if (std::ranges::find(ports, ex.port) == ports.end()) ports.push_back(ex.port);
+  }
+  std::cout << "==> Stopping all example backends…\n";
+  for (const int p : ports) {
     stop_user_service("paperboat-backend-" + std::to_string(p) + ".service");
     free_port(p, 1000);
     unregister_running_backend(p);
@@ -1480,6 +1549,8 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   }
 
   const fs::path repo_root = toolkit::find_repo_root(dir);
+  toolkit::Registry registry = toolkit::builtins();
+  if (registry_extension()) registry_extension()(registry);
 
   // Each stage reports when it starts and when it ends (`paperboat check --json-stream`).
   const auto begin = [&progress](const CheckStep& step) {
@@ -1608,7 +1679,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   try {
     toolkit::DescriptorOptions desc_opts;
     desc_opts.optional_imports = available_toolkits;
-    const auto catalog = toolkit::load_descriptor_file(desc_file, toolkit::builtins(), desc_opts);
+    const auto catalog = toolkit::load_descriptor_file(desc_file, registry, desc_opts);
     res.domain = catalog.domain.empty() ? res.domain : catalog.domain;
     res.block_count = static_cast<int>(catalog.entries.size());
     res.object_count = static_cast<int>(catalog.objects.size());
@@ -1698,7 +1769,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
     try {
       toolkit::DescriptorOptions desc_opts;
       desc_opts.optional_imports = available_toolkits;
-      const auto cat = toolkit::load_descriptor_file(desc_file, toolkit::builtins(), desc_opts);
+      const auto cat = toolkit::load_descriptor_file(desc_file, registry, desc_opts);
       for (const auto& entry : cat.entries) {
         if (entry.def.type == "integrator" || entry.def.type == "lag") { uses_solvers = true; break; }
         for (const auto& p : entry.def.params) {

@@ -1,7 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_string.hpp>
 
+#include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -430,6 +432,35 @@ TEST_CASE("check_backend reports each stage as it starts and ends") {
   CHECK(events == std::vector<std::string>{"manifest:start", "manifest:done", "catalog:start", "catalog:done",
                                            "smoke:skipped", "golden:skipped"});
   fs::remove_all(dir);
+}
+
+TEST_CASE("resolve_backend_dir finds an installed toolkit example by prefix and number") {
+  const fs::path root = fs::temp_directory_path() / "pb_toolkit_examples_root";
+  const fs::path example = root / "engine" / "toolkit" / "opencv" / "examples" / "ocv-01-parts-counter";
+  std::error_code ec;
+  fs::remove_all(root, ec);
+  fs::create_directories(example, ec);
+  std::ofstream(root / "toolkits.toml") << "[[toolkits]]\nname = \"opencv\"\nrepo = \"x\"\n";
+  std::ofstream(example / "backend.toml")
+      << "[backend]\nformat = 0\nname = \"ocv-01-parts-counter\"\nversion = \"0.1.0\"\n"
+         "engine = \">=0.1\"\nlanguage = \"cpp\"\nrun = \"build/x\"\nport = 8781\n";
+  std::ofstream(example / "descriptor.toml") << "domain = \"parts\"\n";
+
+  setenv("PAPERBOAT_ROOT", root.c_str(), 1);
+  setenv("PAPERBOAT_EXAMPLES_DIR", (root / "no-examples").c_str(), 1);
+
+  CHECK(fs::equivalent(core::BackendManager::resolve_backend_dir("ocv-01"), example));
+  CHECK(fs::equivalent(core::BackendManager::resolve_backend_dir("ocv-1"), example));
+  CHECK(fs::equivalent(core::BackendManager::resolve_backend_dir("ocv-01-parts-counter"), example));
+
+  const auto list = core::BackendManager::get_examples();
+  CHECK(std::ranges::any_of(list, [](const core::ExampleBackend& e) {
+    return e.name == "ocv-01-parts-counter" && e.port == 8781 && e.type == "cpp";
+  }));
+
+  unsetenv("PAPERBOAT_ROOT");
+  unsetenv("PAPERBOAT_EXAMPLES_DIR");
+  fs::remove_all(root, ec);
 }
 
 TEST_CASE("resolve_backend_dir makes a relative backend path absolute") {

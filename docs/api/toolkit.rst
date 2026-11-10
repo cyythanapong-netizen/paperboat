@@ -28,6 +28,9 @@ Package Quick Reference
    * - optimization (external)
      - ``qp``, ``lp``
      - Quadratic and linear programs on OSQP, from a JSON problem file.
+   * - opencv (external)
+     - ``gray``, ``convert``, ``blur``, ``median``, ``threshold``, ``adaptive_threshold``, ``hsv_range``, ``canny``, ``sobel``, ``laplacian``, ``erode``, ``dilate``, ``open``, ``close``, ``invert``, ``distance``, ``resize``, ``crop``, ``flip``, ``rotate``, ``normalize``, ``equalize``, ``clahe``, ``bitwise``, ``blend``, ``absdiff``, ``background``, ``stats``, ``centroid``, ``contours``, ``hough_lines``, ``hough_circles``, ``template_match``, ``draw``, ``save``, ``view``
+     - Image processing on ``image`` wires: geometry, colour, filters, analysis, annotation and output, plus an image instrument and station object.
    * - :ref:`pkg-string`
      - ``string/format``, ``string/concat``, ``string/split``, ``string/replace``, ``string/length``
      - Text formatting, templating, and string manipulation operations.
@@ -105,6 +108,12 @@ layout plus a ``toolkit.toml`` and a package-local ``CMakeLists.txt``. The engin
 folder; the package's CMake file decides whether its dependency is available. The backend links and
 registers an optional package explicitly.
 
+An optional toolkit can ship 1–3 examples at its repository root. ``toolkits.toml`` gives it a
+``prefix`` (``ocv``, ``opt``) and ``paperboat toolkit install <name>`` copies the examples to
+``engine/toolkit/<name>/examples/``; ``paperboat backends`` lists them and ``paperboat run ocv-01``
+starts the first one. The prefix keeps them distinct from the numbered ``paperboat-examples``
+curriculum.
+
 The root ``toolkits.toml`` is a catalog, not an installer: its ``repo`` is a suggested source.
 A backend's ``toolkits = [...]`` declares what it needs; ``paperboat check`` verifies the local
 install and never downloads. Install from any repository or local folder with
@@ -140,6 +149,9 @@ Package Quick Reference
    * - optimization (external)
      - ``qp``, ``lp``
      - Quadratic and linear programs on OSQP, from a JSON problem file.
+   * - opencv (external)
+     - ``gray``, ``convert``, ``blur``, ``median``, ``threshold``, ``adaptive_threshold``, ``hsv_range``, ``canny``, ``sobel``, ``laplacian``, ``erode``, ``dilate``, ``open``, ``close``, ``invert``, ``distance``, ``resize``, ``crop``, ``flip``, ``rotate``, ``normalize``, ``equalize``, ``clahe``, ``bitwise``, ``blend``, ``absdiff``, ``background``, ``stats``, ``centroid``, ``contours``, ``hough_lines``, ``hough_circles``, ``template_match``, ``draw``, ``save``, ``view``
+     - Image processing on ``image`` wires: geometry, colour, filters, analysis, annotation and output, plus an image instrument and station object.
    * - :ref:`pkg-string`
      - ``string/format``, ``string/concat``, ``string/split``, ``string/replace``, ``string/length``
      - Text formatting, templating, and string manipulation operations.
@@ -183,6 +195,12 @@ Optional toolkits with external dependencies live in ``engine/toolkit/<package>/
 the package's CMake file decides whether its dependency is available. The backend links and
 registers an optional package explicitly. Install one from any repository or local folder with
 ``paperboat toolkit install <name> --repo <url>``; the manifest's ``repo`` is only a suggestion.
+
+An optional toolkit can ship 1–3 examples at its repository root. ``toolkits.toml`` gives it a
+``prefix`` (``ocv``, ``opt``) and ``paperboat toolkit install <name>`` copies the examples to
+``engine/toolkit/<name>/examples/``; ``paperboat backends`` lists them and ``paperboat run ocv-01``
+starts the first one. The prefix keeps them distinct from the numbered ``paperboat-examples``
+curriculum.
 
 A package that needs its own UI keeps it in a ``web/`` folder next to its C++
 (``engine/toolkit/<package>/web/index.tsx`` or ``engine/toolkit/src/<package>/web/index.tsx``). The
@@ -460,11 +478,31 @@ opencv (external toolkit)
 -------------------------
 
 Optional external toolkit from ``paperboat-toolkit-opencv`` (installed into ``engine/toolkit/opencv``;
-``paperboat::toolkit_opencv``, ``register_opencv``). Image filters, ``image`` → ``image``: ``gray``, ``blur`` (``size``),
-``median`` (``size``), ``threshold`` (``level``, ``otsu``, ``invert``), ``adaptive_threshold``
-(``size``, ``c``, ``invert``), ``hsv_range``, ``canny`` (``low``, ``high``), ``erode``, ``dilate``,
-``open``, ``close`` (``size``, ``iterations``), ``invert``, ``distance``. Monitor ``view`` (an image
-instrument, from the toolkit's ``web/index.tsx``). Station object ``image`` (props ``file``, ``width``; linked block out ``image``).
+``paperboat::toolkit_opencv``, ``register_opencv``). Everything takes ``image`` in and gives ``image``
+out unless it says otherwise:
+
+- **Geometry**: ``resize`` (``width``, ``height``, ``scale``, ``interpolation``), ``crop`` (``x``,
+  ``y``, ``width``, ``height``), ``flip`` (``mode``), ``rotate`` (``angle``, ``scale``, ``expand``).
+- **Colour and tone**: ``gray``, ``convert`` (``space``: gray, bgr, rgb, hsv, hls, lab),
+  ``normalize`` (``alpha``, ``beta``, ``mode``), ``equalize``, ``clahe`` (``clip``, ``tiles``).
+- **Filters and edges**: ``blur`` (``size``), ``median`` (``size``), ``threshold`` (``level``,
+  ``otsu``, ``invert``), ``adaptive_threshold`` (``size``, ``c``, ``invert``), ``hsv_range``,
+  ``canny`` (``low``, ``high``), ``sobel`` (``dx``, ``dy``, ``size``), ``laplacian`` (``size``),
+  ``erode``, ``dilate``, ``open``, ``close`` (``size``, ``iterations``), ``invert``, ``distance``.
+- **Image algebra**: ``bitwise`` (``op``; a grey ``image2`` is a mask), ``blend`` (``alpha``),
+  ``absdiff``, ``background`` (``rate``, ``threshold``, ``open``; a motion mask and the learned
+  background).
+- **Analysis**: ``stats`` (mean, std, min, max, nonzero, pixels), ``centroid`` (the largest white
+  blob), ``contours`` (count, largest centre/area/box, marked image), ``hough_lines``,
+  ``hough_circles``, ``template_match`` (a ``template`` file).
+- **Annotation and output**: ``draw`` (box, circle, cross or text), ``save`` (a ``file``, ``format``,
+  ``quality``, ``once``).
+
+Monitor ``view`` (an image instrument, from the toolkit's ``web/index.tsx``). Station object
+``image`` (props ``file``, ``width``; linked block out ``image``). The toolkit also ships
+``ocv-01``…``ocv-03`` examples under ``examples/``; ``paperboat toolkit install opencv`` copies them
+to ``engine/toolkit/opencv/examples`` and the CLI lists them with ``paperboat backends``.
+
 Its ``toolkits.toml`` entry lists these block types in ``blocks = [...]``; the engine sends them in
 ``ToolkitStatus.blocks`` so the UI can name the toolkit when a flow uses a block that is not installed.
 A new optional toolkit does the same, with no change to the web app.

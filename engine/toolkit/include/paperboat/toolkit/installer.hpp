@@ -23,6 +23,7 @@ struct ToolkitEntry {
   bool optional = true;
   bool builtin = false;
   std::string engine;
+  std::string prefix;  // example folder prefix ("ocv" → ocv-01-…), from toolkits.toml
   bool installed = false;
   bool required = false;
   std::string version;

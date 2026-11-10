@@ -14,6 +14,9 @@
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
 #endif
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+#include "paperboat/toolkit/optimization.hpp"
+#endif
 
 namespace {
 
@@ -22,6 +25,9 @@ const paperboat::toolkit::Registry& full_registry() {
     paperboat::toolkit::Registry all = paperboat::toolkit::builtins();
 #ifdef PAPERBOAT_HAS_OPENCV
     paperboat::toolkit::opencv::register_opencv(all);
+#endif
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+    paperboat::toolkit::optimization::register_optimization(all);
 #endif
     return all;
   }();
