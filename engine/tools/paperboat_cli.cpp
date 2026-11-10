@@ -388,10 +388,14 @@ int cmd_backends(const std::vector<std::string_view>& args) {
         {"language", kind == core::BackendKind::Cpp ? "cpp" : "python"},
         {"port", manifest.has_manifest && manifest.port > 0 ? manifest.port : fallback_port},
         {"dir", dir.string()},
-        {"description", describe(dir)},
+        {"description", name == "workbench" ? "Standard toolkits with no domain (Flow & Dashboard)" : describe(dir)},
         {"source", std::move(source)},
     };
   };
+  const fs::path root = tk::find_repo_root();
+  if (!root.empty() && fs::is_directory(root / "engine" / "workbench")) {
+    add(root / "engine" / "workbench", "builtin", 8765);
+  }
   for (const auto& ex : core::BackendManager::get_examples()) add(ex.dir, "example", ex.port);
   std::error_code ec;
   for (const auto& entry : fs::directory_iterator(core::BackendManager::user_backends_dir(), ec)) {
@@ -1477,6 +1481,31 @@ void print_interactive_help() {
 
 int run_interactive_prompt() {
   tui::render_banner(true);
+  const fs::path root = tk::find_repo_root();
+  if (!core::BackendManager::is_port_listening(8765) && !root.empty() && fs::is_directory(root / "engine" / "workbench")) {
+    std::string err;
+    if (core::BackendManager::ensure_built(root / "engine" / "workbench", false, false, &err)) {
+      const fs::path bin = root / "engine" / "build" / "workbench" / "paperboat-workbench";
+      if (fs::is_regular_file(bin)) {
+        const fs::path log_path = platform::shared_tmp_dir() / "backend-8765.log";
+        int pid = core::ProcessRunner::run_detached({bin.string(), "--port", "8765"}, root / "engine" / "workbench", {}, log_path);
+        if (pid > 0) {
+          core::RunningBackend rb;
+          rb.port = 8765;
+          rb.pid = pid;
+          rb.engine = "workbench";
+          rb.domain = "workbench";
+          rb.cwd = root / "engine" / "workbench";
+          rb.executable = bin.string();
+          rb.ws_url = "ws://localhost:8765";
+          rb.started_at = std::chrono::duration_cast<std::chrono::seconds>(
+              std::chrono::system_clock::now().time_since_epoch()).count();
+          core::BackendManager::register_running_backend(rb);
+          std::cout << "  \033[32m●\033[0m workbench running on ws://localhost:8765 (PID " << pid << ")\n\n";
+        }
+      }
+    }
+  }
   std::cout << "Interactive prompt. Type 'help' for commands, or 'exit' to quit.\n\n";
 
   std::string line;

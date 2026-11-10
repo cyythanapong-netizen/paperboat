@@ -546,6 +546,37 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
                                   std::string* error_msg,
                                   double* elapsed_seconds) {
   auto start_time = std::chrono::steady_clock::now();
+  const fs::path root = toolkit::find_repo_root(backend_dir);
+
+  if (backend_dir.filename() == "workbench" && !root.empty() && fs::is_regular_file(root / "engine" / "CMakeLists.txt")) {
+    const fs::path engine_build = root / "engine" / "build";
+    const fs::path bin = engine_build / "workbench" / "paperboat-workbench";
+    std::error_code ec;
+    bool needs_build = clean || !fs::is_regular_file(bin);
+    if (!needs_build) {
+      const auto bin_time = fs::last_write_time(bin, ec);
+      for (const auto& entry : fs::recursive_directory_iterator(backend_dir, ec)) {
+        if (entry.is_regular_file() && fs::last_write_time(entry.path(), ec) > bin_time) {
+          needs_build = true;
+          break;
+        }
+      }
+    }
+    if (!needs_build) {
+      if (verbose) std::cout << "[build] workbench up to date (skipped)" << std::endl;
+      if (elapsed_seconds) *elapsed_seconds = seconds_since(start_time);
+      return true;
+    }
+    if (verbose) std::cout << "[build] building paperboat-workbench…" << std::endl;
+    auto res = ProcessRunner::run_sync({"cmake", "--build", engine_build.string(), "--target", "paperboat-workbench"});
+    if (!res.ok()) {
+      if (error_msg) *error_msg = res.stderr_text.empty() ? res.stdout_text : res.stderr_text;
+      return false;
+    }
+    if (elapsed_seconds) *elapsed_seconds = seconds_since(start_time);
+    return true;
+  }
+
   const fs::path build_dir = backend_dir / "build";
   std::error_code ec;
 
@@ -561,7 +592,6 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
 
   if (!fs::exists(build_dir / "CMakeCache.txt")) {
     if (verbose) std::cout << "[build] configuring with cmake…" << std::endl;
-    const fs::path root = toolkit::find_repo_root(backend_dir);
     std::vector<std::string> config_cmd = {"cmake", "-S", backend_dir.string(), "-B", build_dir.string()};
     if (!root.empty() && fs::is_regular_file(root / "engine" / "CMakeLists.txt")) {
       config_cmd.push_back("-DPAPERBOAT_ENGINE_DIR=" + (root / "engine").string());
@@ -782,6 +812,10 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
   const std::string name = p_check.string();
   const fs::path ub_dir = user_backends_dir();
 
+  if (name == "workbench" && !root.empty() && fs::is_directory(root / "engine" / "workbench")) {
+    return root / "engine" / "workbench";
+  }
+
   std::vector<fs::path> candidates = {
       edir / name,
       edir / (name + "-cpp"),
@@ -980,9 +1014,16 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     }
 
     // Locate binary in build/
-    const fs::path bin = manifest.has_manifest && !manifest.run.empty() && fs::is_regular_file(dir / manifest.run)
+    fs::path bin = manifest.has_manifest && !manifest.run.empty() && fs::is_regular_file(dir / manifest.run)
                              ? dir / manifest.run
                              : built_binary(dir / "build");
+    if (bin.empty() && dir.filename() == "workbench") {
+      const fs::path root = toolkit::find_repo_root(dir);
+      if (!root.empty()) {
+        const fs::path candidate = root / "engine" / "build" / "workbench" / "paperboat-workbench";
+        if (fs::is_regular_file(candidate)) bin = candidate;
+      }
+    }
     if (bin.empty()) {
       std::cerr << "error: compiled binary not found in " << (dir / "build") << '\n';
       return 1;

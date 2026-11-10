@@ -358,14 +358,21 @@ export async function init(): Promise<void> {
     say([dg(`could not run ${pb.BIN} commands --json`), mu(' · set PAPERBOAT_BIN to the paperboat binary')]);
   }
   void poll();
-  const [branch, hash, ver] = await Promise.all([
+  const [branch, hash, ver, runningList] = await Promise.all([
     git(['rev-parse', '--abbrev-ref', 'HEAD']),
     git(['rev-parse', '--short', 'HEAD']),
     pb.run(['--version']),
+    pb.json<Running[]>(['list', '--json']),
   ]);
   S.git = branch && hash ? `${branch} @ ${hash}` : hash;
   S.version = ver.out[0]?.replace(/^paperboat\s+/, '') ?? '';
   await Promise.all([refreshBackends(), refreshToolkits(), refreshPrograms()]);
+
+  // When running paperboat, ensure the workbench backend is running on default port 8765
+  const port8765Active = runningList?.some(r => r.port === 8765) || S.external.some(e => e.port === 8765);
+  if (!port8765Active && !S.jobs.some(j => alive(j) && j.port === 8765)) {
+    startJob('workbench', 'backend', ['run', 'workbench', '--port', '8765'], 8765);
+  }
 }
 
 /* ---------- banner ---------- */
