@@ -60,6 +60,8 @@ export function App() {
   const [arrange, setArrange] = useState(false);
   // The floor grid of a 3D Station: the user's switch wins, else the backend's `view.grid`, else shown.
   const [gridChoice, setGridChoice] = remembered<"auto" | "on" | "off">("paperboat.grid", "auto", ["auto", "on", "off"]);
+  // The Station page's visibility: the user's switch wins, else the backend's `station.visible`, else shown.
+  const [stationChoice, setStationChoice] = remembered<"auto" | "shown" | "hidden">("paperboat.station", "auto", ["auto", "shown", "hidden"]);
   const [page, setPage] = remembered<Page>("paperboat.page", "flow", PAGE_IDS);
   const [themeChoice, setThemeChoice] = remembered<Theme>("paperboat.theme", "auto", ["auto", "light", "dark"]);
   const theme = useTheme(themeChoice);
@@ -72,6 +74,9 @@ export function App() {
   const flow = useRef<FlowControls | null>(null); // the canvas's actions, for the menus
   const stationCanvas = useRef<StationControls | null>(null);
   const { state, send, subscribe, log } = useEngine(url);
+  const stationShown = stationChoice === "auto" ? state.stationView.visible !== false : stationChoice === "shown";
+  const setStationShown = (shown: boolean) => setStationChoice(shown ? "shown" : "hidden");
+  const pages = useMemo(() => (stationShown ? PAGES : PAGES.filter((p) => p.id !== "station")), [stationShown]);
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Wire>([]);
   const { fitView, screenToFlowPosition } = useReactFlow();
@@ -121,6 +126,14 @@ export function App() {
     setEdges((es) => (es.some((e) => e.selected) ? es.map((e) => (e.selected ? { ...e, selected: false } : e)) : es));
   }, [openVar, setNodes, setEdges]);
 
+  // A hidden Station page can't stay the page in view: move to the first page still offered. A
+  // project locked to the Station alone keeps it (the View menu can show it again).
+  useEffect(() => {
+    if (stationShown || page !== "station") return;
+    const next = pages.find((p) => allowedPages.includes(p.id));
+    if (next) setPage(next.id);
+  }, [stationShown, page, pages, allowedPages, setPage]);
+
   // Forward the keyboard to the backend (e.g. a Key block). Typing in a field is not input.
   useBackendKeys(send);
 
@@ -160,7 +173,10 @@ export function App() {
     if (u.page === "variables") setOpenVar(u.id);
     else if (u.page === "dashboard") setPage("dashboard");
     else if (u.page === "flow") showBlock(u.id);
-    else setPage("station");
+    else {
+      setStationShown(true);
+      setPage("station");
+    }
   };
 
   // Adding (#50): the page's Add key opens the collection as a floating window.
@@ -243,7 +259,7 @@ export function App() {
     setPage(p);
     setMode("navigator");
   };
-  const at = PAGES.findIndex((p) => p.id === page);
+  const at = Math.max(0, pages.findIndex((p) => p.id === page));
   // The Flow is unmounted while Lookout's drawer is closed (React Flow needs a size to draw into).
   const flowShown = mode !== "lookout" || flowDrawer.open;
   // Its head counts the level in view, not the whole flow.
@@ -264,9 +280,9 @@ export function App() {
       </span>
     ));
   const drawerOf = (p: Page): Drawer | undefined =>
-    mode === "commander" && p === "dashboard"
+    mode === "commander" && p === "dashboard" && stationShown
       ? { ...boardDrawer, peek: peek.length ? peek : undefined }
-      : mode === "lookout" && p === "station"
+      : mode === "lookout" && p === "station" && stationShown
         ? stationDrawer
         : mode === "lookout" && p === "flow"
           ? flowDrawer
@@ -338,14 +354,14 @@ export function App() {
   const commands = menuCommands({
     state, send, openFile, saveProject, lastSession, restore, recent, openProject, projectLock, unlocked, locked, lockedArrange, setLockModalOpen, setBackendOpen, restartBackend,
     history, undoOpen, flow, stationCanvas, setBrowser, running, variables, varsShown, setVarsShown,
-    setSearchOpen, mode, setMode, allowedModes, page, setPage, open, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, errors,
+    setSearchOpen, mode, setMode, allowedModes, pages, page, setPage, open, stationShown, setStationShown, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, errors,
     gridOn, setGridChoice, cameraProjection, setCameraProjection, arrangeCanvas, arrange, setArrange,
     canRun, whyNotRun, run, usesSolvers, currentSolver, solvers, setRunSettings, setSolverOpen,
   });
   useShortcuts(commands);
 
   return (
-    <div className={`app mode-${mode}`}>
+    <div className={`app mode-${mode}${stationShown ? "" : " no-station"}`}>
       <AppHeader
         state={state}
         running={running}
@@ -370,10 +386,11 @@ export function App() {
         themeChoice={themeChoice}
         setThemeChoice={setThemeChoice}
       />
-      <Rail page={page} onPage={setPage} hidden={mode !== "navigator"} allowedPages={allowedPages} />
+      <Rail page={page} onPage={setPage} hidden={mode !== "navigator"} allowedPages={allowedPages} pages={pages} />
       <VarsContext.Provider value={varsApi}>
       <main className="pages">
         <div className="page-stack">
+        {stationShown && (
         <Panel {...panel("station")} actions={<>{projectionKey}{gridKey}{arrangeKey("station")}{addKey("station")}</>} info={station ? `${count(station.objects.length, "object")} · ${view === "scene" ? state.view.mode : view}` : view}>
           <StationView
             view={view}
@@ -392,6 +409,7 @@ export function App() {
             addObject={addObject}
           />
         </Panel>
+        )}
         <Panel
           {...panel("flow")}
           actions={

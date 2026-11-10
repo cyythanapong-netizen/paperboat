@@ -1046,8 +1046,8 @@ Loading
    A descriptor loaded against a registry: the app's blocks and station objects, its
    top-level ``connectors`` table (passed unchanged into ``catalog``), its starters
    (``graph``, ``station``, as protocol JSON text) and its Station view
-   (``station_view``, ``station_page``). Its entries point into the registry, which must
-   outlive it.
+   (``station_view``, ``station_page``, ``station_visible``). Its entries point into the
+   registry, which must outlive it.
 
 .. cpp:function:: Catalog load_descriptor_file(const std::filesystem::path &path, const Registry &registry = builtins())
 

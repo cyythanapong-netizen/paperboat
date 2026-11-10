@@ -71,6 +71,9 @@ struct Catalog {
   // `station_page`, relative to `dir`, served by the engine).
   std::string station_view = "scene";
   std::string station_page;
+  // Whether the Station page is offered (the descriptor's [station] visible, default true).
+  // False hides it in the UI: the backend's default, which the user can change in View.
+  bool station_visible = true;
   std::vector<std::string> missing_imports;
   // The flow types the domain offers (#9): what a sheet may be, sent in hello. The
   // descriptor's top-level `flows`, else a Signal flow and every flow type a block of the

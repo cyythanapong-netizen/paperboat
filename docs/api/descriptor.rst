@@ -64,9 +64,10 @@ Top level
 ``[station]`` — the starter station and its view (optional)
    ``view``: ``"scene"`` (default), ``"graph"`` or ``"web"``; ``page``: the web station's
    page, a path inside the backend's folder (``"station/index.html"``), required for
-   ``"web"`` only. ``objects``: ``{ id, type, props?, links?, pos? }``; ``links`` maps each
-   link slot to another object's id (checked: the slot exists, the object is there).
-   :doc:`station`.
+   ``"web"`` only; ``visible``: ``false`` hides the Station page by default (the user
+   can still show it from View). ``objects``: ``{ id, type, props?, links?, pos? }``;
+   ``links`` maps each link slot to another object's id (checked: the slot exists, the
+   object is there). :doc:`station`.
 
 A complete example
 ------------------
