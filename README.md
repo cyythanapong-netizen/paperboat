@@ -85,8 +85,10 @@ unchanged, and all pass the same domain-neutral smoke test and their golden runs
 ## Run the proof of concept
 
 The `backend:*` scripts run the example backends, so they need a `paperboat-examples`
-checkout (see Layout). Without one, `engine/tests/sdk-backend` is a backend in this
-repository: `./bin/paperboat build engine/tests/sdk-backend && ./bin/paperboat check engine/tests/sdk-backend`.
+checkout (see Layout). Without one, `npm run backend:workbench` serves the standard
+toolkits with no domain (the Flow and Dashboard work on their own), and
+`engine/tests/sdk-backend` is a backend in this repository:
+`./bin/paperboat build engine/tests/sdk-backend && ./bin/paperboat check engine/tests/sdk-backend`.
 
 ```sh
 pip install websockets

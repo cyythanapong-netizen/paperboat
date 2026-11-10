@@ -126,6 +126,11 @@ endif()
 
 add_subdirectory(toolkit)
 add_subdirectory(core)
+# The workbench backend (base, math, signal, control and dashboard, no domain). Only a
+# standalone engine build serves it; a backend that pulls the engine in has its own.
+if(PROJECT_IS_TOP_LEVEL)
+  add_subdirectory(workbench)
+endif()
 
 # Apple's libc++ up to the macOS 15 SDK (Xcode 16) still ships <stop_token> and std::jthread as
 # experimental, off unless _LIBCPP_ENABLE_EXPERIMENTAL is defined; from the macOS 26 SDK they are on.

@@ -17,6 +17,7 @@
     "cli": "./bin/paperboat",
     "typecheck": "npm run typecheck -w @paperboat/web && npm run typecheck -w @paperboat/cli",
     "e2e": "npm run e2e -w @paperboat/web --",
+    "backend:workbench": "cmake --build engine/build --target paperboat-workbench && engine/build/workbench/paperboat-workbench",
     "backend:thermostat": "./bin/paperboat run 01",
     "backend:cart-pole": "./bin/paperboat run 02",
     "backend:island": "./bin/paperboat run 03",

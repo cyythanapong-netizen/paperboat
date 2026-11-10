@@ -291,6 +291,25 @@ Click the **Console** tab on the rail or open it from the Board drawer to inspec
 - When an error occurs, the Console prints the exact node ID that failed. Clicking the node
   link in the Console immediately highlights and pans to the offending block on the Flow canvas.
 
+The Workbench (no domain)
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Paperboat's engine includes a **workbench** backend with only the standard toolkits
+(`base`, `math`, `signal`, `control` and `dashboard`) and no domain. It listens on the
+default backend port, so the web app connects to it as it is:
+
+.. code-block:: sh
+
+   npm run backend:workbench     # ws://localhost:8765
+   npm run dev                   # http://localhost:3047
+
+The Flow opens with a Sine into a Graph; build any signal, mathematical or control model
+from the palette and run it. The Station page is hidden by default (View > Station shows
+it): a station belongs to a domain backend, and the workbench has none. The `control`
+blocks come from the optional control toolkit; install it with
+``paperboat toolkit install control`` to have them in the palette too. Connect a domain
+backend from **File > Backend…** to switch.
+
 Project Management
 ------------------
 
