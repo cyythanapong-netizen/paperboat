@@ -1,3 +1,18 @@
+# An install tree carries no optional toolkit (pb#297): the release guard, runnable with ctest.
+find_program(PAPERBOAT_TEST_PYTHON NAMES python3 python)
+if(PAPERBOAT_TEST_PYTHON)
+  add_test(NAME bundle_no_optional_toolkits
+    COMMAND ${CMAKE_COMMAND}
+      -DBUILD_DIR=${CMAKE_BINARY_DIR}
+      -DROOT=${CMAKE_CURRENT_SOURCE_DIR}/../..
+      -DPYTHON=${PAPERBOAT_TEST_PYTHON}
+      -DCONFIG=$<CONFIG>
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/bundle_test.cmake)
+  set_tests_properties(bundle_no_optional_toolkits PROPERTIES LABELS bundle)
+else()
+  message(STATUS "python3 not found: the install-tree bundle check is off")
+endif()
+
 # Windows builds only the process-layer and solver tests; the rest of the suite uses POSIX (setenv, sh, /tmp).
 if(WIN32)
   add_executable(paperboat_process_tests process_test.cpp)

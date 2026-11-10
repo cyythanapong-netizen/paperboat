@@ -36,4 +36,11 @@ if [ "${TESTS:-ON}" = ON ]; then (cd "$src" && "$build/tests/paperboat_tests"); 
 generators="DEB;TGZ"
 command -v rpmbuild >/dev/null && generators="DEB;RPM;TGZ"
 (cd "$build" && cpack -G "$generators" -B "$out")
+# Optional toolkits never ship (pb#297): the engine is Apache-2.0, a toolkit may be GPL-3.0.
+python3 "$src/scripts/check_bundle.py" --self-test
+shopt -s nullglob
+for artifact in "$out"/*.tar.gz "$out"/*.deb "$out"/*.rpm "$out"/*.whl; do
+  python3 "$src/scripts/check_bundle.py" --archive "$artifact"
+done
+shopt -u nullglob
 ls -l "$out"
