@@ -696,6 +696,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .mode-navigator .pages > .vars-sheet { grid-area: 1 / 2; }
 .mode-commander .pages { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; grid-template-areas: "station flow vars" "dashboard dashboard vars"; }
 .mode-lookout .pages { grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "station dashboard flow vars"; }
+/* The Station page hidden: Commander puts the Board beside the Flow; Lookout has no Station drawer. */
+.mode-commander.no-station .pages { grid-template-columns: repeat(2, minmax(0, 1fr)) auto; grid-template-rows: minmax(0, 1fr); grid-template-areas: "flow dashboard vars"; }
+.mode-lookout.no-station .pages { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: "dashboard flow vars"; }
 .mode-commander .pages > .vars-sheet, .mode-lookout .pages > .vars-sheet { grid-area: vars; }
 .vars-sheet { --drawer-size: 360px; }
 .mode-commander .vars-sheet, .mode-lookout .vars-sheet { --drawer-size: 330px; }
@@ -791,6 +794,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
   .pages > .vars-sheet.closed { display: none; } /* Edit > Variables or Alt+V opens it */
   .mode-navigator .pages { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
   .mode-commander .pages { grid-template-columns: minmax(0, 1fr); grid-template-areas: "station" "flow" "dashboard"; }
+  .mode-commander.no-station .pages { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: "flow" "dashboard"; overflow: auto; }
 }
 
 /* A port's or param's unit (#4): after its name, small and grey. */

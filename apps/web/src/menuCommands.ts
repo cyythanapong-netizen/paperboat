@@ -5,7 +5,7 @@ import type { MutableRefObject } from "react";
 import type { EngineState } from "./engine";
 import type { ClientMsg, Project, RunSettings, Variables } from "./protocol";
 import { ago, changed, type Stored } from "./project";
-import { PAGES, type Mode, type Page, type Theme } from "./Shell";
+import type { Mode, Page, PageInfo, Theme } from "./Shell";
 import { isModeAllowed, isPageAllowed, type LockConfig } from "./lock";
 import { SEARCH_CHORD, type Command } from "./commands";
 import { availableSolvers, SOLVER_LABELS, solverShort, type Solver } from "./solvers";
@@ -64,9 +64,12 @@ export type CommandContext = {
   mode: Mode;
   setMode: (m: Mode) => void;
   allowedModes: Mode[];
+  pages: PageInfo[];
   page: Page;
   setPage: (p: Page) => void;
   open: (p: Page) => void;
+  stationShown: boolean;
+  setStationShown: (shown: boolean) => void;
   stationDrawer: { open: boolean };
   flowDrawer: { open: boolean };
   view: EngineState["stationView"]["view"];
@@ -97,12 +100,12 @@ export function menuCommands(c: CommandContext): Command[] {
   const {
     state, send, openFile, saveProject, lastSession, restore, recent, openProject, projectLock, unlocked, locked, lockedArrange, setLockModalOpen, setBackendOpen, restartBackend,
     history, undoOpen, flow, stationCanvas, setBrowser, running, variables, varsShown, setVarsShown,
-    setSearchOpen, mode, setMode, allowedModes, page, setPage, open, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, errors,
+    setSearchOpen, mode, setMode, allowedModes, pages, page, setPage, open, stationShown, setStationShown, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, errors,
     gridOn, setGridChoice, cameraProjection, setCameraProjection, arrangeCanvas, arrange, setArrange,
     canRun, whyNotRun, run, usesSolvers, currentSolver, solvers, setRunSettings, setSolverOpen,
   } = c;
   const flowInView = mode === "commander" || (mode === "lookout" ? flowDrawer.open : page === "flow");
-  const stationInView = view === "graph" && (mode === "commander" || (mode === "lookout" ? stationDrawer.open : page === "station"));
+  const stationInView = stationShown && view === "graph" && (mode === "commander" || (mode === "lookout" ? stationDrawer.open : page === "station"));
   const arrangeVisible = () => {
     if (flowInView) arrangeCanvas("flow");
     if (stationInView) arrangeCanvas("station");
@@ -142,12 +145,15 @@ export function menuCommands(c: CommandContext): Command[] {
       group: "add",
       enabled: !running && state.objects.length > 0,
       why: running ? "Stop the run to edit the station" : "This backend has no station objects",
-      run: () => setBrowser("station"),
+      run: () => {
+        setStationShown(true);
+        setBrowser("station");
+      },
     },
     { id: "edit.variables", label: "Variables…", menu: "edit", group: "panels", shortcut: "Alt+V", chord: { key: "v", alt: true }, meta: String(variables.length), run: () => setVarsShown(varsShown === "open" ? "closed" : "open") },
 
     { id: "view.search", label: "Command search…", menu: "view", group: "search", shortcut: "Ctrl+K", chord: SEARCH_CHORD, quiet: true, run: () => setSearchOpen(true) },
-    ...PAGES.map((p, i): Command => {
+    ...pages.map((p, i): Command => {
       const allowed = isPageAllowed(p.id, projectLock, unlocked);
       return {
         id: `view.page.${p.id}`,
@@ -162,6 +168,7 @@ export function menuCommands(c: CommandContext): Command[] {
         run: () => { if (allowed) open(p.id); },
       };
     }),
+    { id: "view.station", label: "Station page", menu: "view", group: "layout", checked: stationShown, run: () => setStationShown(!stationShown) },
     { id: "view.mode.navigator", label: "Navigator", menu: "view", group: "mode", checked: mode === "navigator", enabled: isModeAllowed("navigator", projectLock, unlocked), why: isModeAllowed("navigator", projectLock, unlocked) ? undefined : "Locked by the project", run: () => setMode("navigator") },
     { id: "view.mode.commander", label: "Commander", menu: "view", group: "mode", checked: mode === "commander", enabled: isModeAllowed("commander", projectLock, unlocked), why: isModeAllowed("commander", projectLock, unlocked) ? undefined : "Locked by the project", run: () => setMode("commander") },
     { id: "view.mode.lookout", label: "Lookout", menu: "view", group: "mode", checked: mode === "lookout", enabled: isModeAllowed("lookout", projectLock, unlocked), why: isModeAllowed("lookout", projectLock, unlocked) ? undefined : "Locked by the project", run: () => setMode("lookout") },

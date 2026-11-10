@@ -490,9 +490,10 @@ void load_starters(const json& doc, Catalog& catalog) {
 
   if (!doc.contains("station")) return;
   json station = doc.at("station");
-  only_fields(station, {"view", "page", "objects"}, "station");
+  only_fields(station, {"view", "page", "objects", "visible"}, "station");
   catalog.station_view = station.value("view", std::string{"scene"});
   catalog.station_page = station.value("page", std::string{});
+  catalog.station_visible = station.value("visible", true);
   if (catalog.station_view != "scene" && catalog.station_view != "graph" && catalog.station_view != "web")
     throw DescriptorError("station.view must be scene, graph or web, not \"" + catalog.station_view + "\"");
   if ((catalog.station_view == "web") != !catalog.station_page.empty())

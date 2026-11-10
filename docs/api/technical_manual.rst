@@ -252,7 +252,7 @@ Schema Breakdown
      - Defines the initial starter flow topology (`nodes`, `edges`, `groups`).
    * - `[station]`
      - Defines initial station objects, scene camera view presets (`2d`, `3d`, or `web`),
-       and coordinate extents.
+       coordinate extents, and whether the Station page is shown by default (`visible`).
    * - `[dashboard]`
      - Declares the default layout of instrument tiles, section groupings, and formatted
        label cards.

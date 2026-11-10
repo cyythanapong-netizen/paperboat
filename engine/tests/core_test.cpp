@@ -215,6 +215,21 @@ TEST_CASE("a session sends the handshake, checks station edits and runs") {
   CHECK(sent.back()["status"] == "done");
 }
 
+TEST_CASE("hello says the Station is hidden when the descriptor says so") {
+  const auto shown = tk::load_descriptor("domain = \"rig\"\n", rig::registry());
+  const auto hidden = tk::load_descriptor("domain = \"rig\"\n[station]\nvisible = false\n", rig::registry());
+  for (const auto* catalog : {&shown, &hidden}) {
+    const core::Backend backend{.engine = "test", .catalog = catalog};
+    std::vector<json> sent;
+    {
+      core::Session session(backend, [&](const std::string& text) { sent.push_back(json::parse(text)); });
+    }
+    REQUIRE(!sent.empty());
+    CHECK(sent.front()["type"] == "hello");
+    CHECK(sent.front()["station"].value("visible", true) == (catalog == &shown));
+  }
+}
+
 TEST_CASE("variables (#36): the same run with its numbers given by variables, and errors on the block") {
   const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = {.real_time = false}};
   json graph = starter_graph();

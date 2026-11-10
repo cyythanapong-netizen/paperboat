@@ -91,6 +91,7 @@ Session::Session(const Backend& backend, Send send)
   const auto& catalog = *backend.catalog;
   json station_view = {{"view", catalog.station_view}};
   if (!catalog.station_page.empty()) station_view["page"] = "/" + catalog.station_page;  // on this port, over HTTP
+  if (!catalog.station_visible) station_view["visible"] = false;
   json hello = {{"type", "hello"},
                 {"protocol", "paperboat/0"},
                 {"engine", backend.engine},

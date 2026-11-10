@@ -20,7 +20,8 @@ Define them in code (C++ :cpp:func:`paperboat::toolkit::define_object`, Python
 Views
 -----
 
-``[station] view`` says how the Station page shows the station.
+``[station] view`` says how the Station page shows the station. ``[station] visible = false``
+hides the page by default; the user can still show or hide it from **View > Station page**.
 
 ``scene`` (default)
    The built-in 2D or 3D scene of **entities**: ``box``, ``sphere`` (``size[0]`` = radius), ``cylinder`` (``size[0]`` = radius, ``size[1]`` = length along y),

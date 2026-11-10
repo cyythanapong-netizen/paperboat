@@ -2747,6 +2747,10 @@
         },
         "page": {
           "type": "string"
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "Whether the Station page is offered (default true). False hides it in every view mode; the user can still show it from View."
         }
       }
     },
