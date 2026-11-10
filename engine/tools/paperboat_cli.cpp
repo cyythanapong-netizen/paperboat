@@ -89,6 +89,7 @@ Start and stop (the web app, backends and programs):
                                --time          Print build and startup timing
                                --verbose       Verbose build output
                                --var <key=val> Set a default variable value
+                               --record <dir>  Keep the run as <dir>/record.json (#277)
   stop [target | --all]      Without a target: the web app. Otherwise a backend (port, name or folder) or a
                              program. --all stops every running backend.
   restart [target]           Restart the web app, or a backend or program
@@ -102,8 +103,9 @@ Backends:
   backends [--json]          List the backends you can run (examples, installed)
   build [path] [--clean]     Compile a C++ backend (a Python one has nothing to compile)
   rebuild [path]             Clean and compile a C++ backend (build --clean)
-  open <file.ppj> [--run] [--port <N>] [--no-build]
-                             Open a saved project file with its backend (--run: headless)
+  open <file.ppj> [--run] [--port <N>] [--no-build] [--record <dir>]
+                             Open a saved project file with its backend (--run: headless);
+                             --record keeps each run as <dir>/record.json
 
 Web app:
   app start|stop|restart     The same as start, stop and restart without a target
@@ -183,6 +185,12 @@ int cmd_run(const std::vector<std::string_view>& args) {
       opts.time_metrics = true;
     } else if (a == "--verbose") {
       opts.verbose = true;
+    } else if (a == "--record") {
+      if (i + 1 >= args.size()) {
+        std::cerr << "error: --record takes a directory\n";
+        return 2;
+      }
+      opts.record = std::string(args[++i]);
     } else if (a == "--var" && i + 1 < args.size()) {
       std::string setting(args[++i]);
       auto eq = setting.find('=');
@@ -198,6 +206,8 @@ int cmd_run(const std::vector<std::string_view>& args) {
   if (path.empty() && core::BackendManager::detect_backend_kind(fs::current_path()) == core::BackendKind::Unknown) {
     launch_console({"run"});  // the backend picker; returns only when the console can't open
   }
+  opts.command = "paperboat run";
+  for (auto a : args) opts.command += " " + std::string(a);
   return core::BackendManager::run_backend(path, opts);
 }
 
@@ -215,13 +225,19 @@ int cmd_open(const std::vector<std::string_view>& args) {
       port = std::stoi(std::string(args[++i]));
     } else if (a == "--no-build") {
       opts.build = false;
+    } else if (a == "--record") {
+      if (i + 1 >= args.size()) {
+        std::cerr << "error: --record takes a directory\n";
+        return 2;
+      }
+      opts.record = std::string(args[++i]);
     } else if (!a.starts_with("-") && file_path.empty()) {
       file_path = std::string(a);
     }
   }
 
   if (file_path.empty()) {
-    std::cerr << "usage: paperboat open <file.ppj|file.paperboat.json> [--run] [--port <port>] [--no-build]\n";
+    std::cerr << "usage: paperboat open <file.ppj|file.paperboat.json> [--run] [--port <port>] [--no-build] [--record <dir>]\n";
     return 2;
   }
 
@@ -284,6 +300,8 @@ int cmd_open(const std::vector<std::string_view>& args) {
   opts.port = port;
   opts.project_file = fs::canonical(p).string();
   opts.run = run_headless;
+  opts.command = "paperboat open";
+  for (auto a : args) opts.command += " " + std::string(a);
 
   if (run_headless) {
     return core::BackendManager::run_backend(backend_dir, opts);
@@ -1328,9 +1346,9 @@ const std::vector<CommandSpec>& command_table() {
        "target"},
       {"restart", cmd_restart, "Restart the web app, or a backend or program", {}, {}, {"--port"}, "target"},
       {"run", cmd_run, "Build and run a backend (or .ppk) in the foreground", {}, {},
-       {"--port", "--no-build", "--clean", "--time", "--verbose", "--var"}, "backend"},
+       {"--port", "--no-build", "--clean", "--time", "--verbose", "--var", "--record"}, "backend"},
       {"open", cmd_open, "Open a saved project file (.ppj, .paperboat.json)", {}, {},
-       {"--run", "--port", "--no-build"}, "project"},
+       {"--run", "--port", "--no-build", "--record"}, "project"},
       {"new", paperboat::cli::cmd_new, "Scaffold a new backend that passes check (C++ or Python)", {}, {},
        {"--cpp", "--python", "--dir"}},
       {"build", cmd_build, "Compile a C++ backend", {}, {}, {"--clean"}, "backend"},

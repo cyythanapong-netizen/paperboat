@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -14,6 +15,7 @@
 #endif
 
 #include "paperboat/core/backend.hpp"
+#include "paperboat/core/record.hpp"
 
 namespace paperboat::core {
 namespace {
@@ -157,7 +159,23 @@ std::string run_starter(const Backend& backend, std::ostream& out, const std::ve
     if (p.contains("variables") && p["variables"].is_array()) variables = p["variables"];
     if (p.contains("run") && p["run"].is_object()) headless.run = with_overrides(headless.run, p["run"]);
   }
-  const auto emit = [&out](const json& msg) { out << msg.dump() << '\n'; };
+  // A headless record (#277), when `paperboat run/open --record` asked for one.
+  std::optional<RunRecord> record;
+  if (auto meta = record_meta_from_env()) {
+    record.emplace(std::move(*meta), backend.engine,
+                   json{{"graph", graph}, {"station", station}, {"variables", variables}, {"settings", settings_json(headless.run)}});
+  }
+  const auto emit = [&out, &record](const json& msg) {
+    if (record) {
+      try {
+        record->add(msg);
+      } catch (const std::exception& err) {
+        std::cerr << "error: cannot write run record: " << err.what() << '\n';
+        record.reset();
+      }
+    }
+    out << msg.dump() << '\n';
+  };
   const auto status = run("run-1", graph, station, headless, emit, nullptr, {}, nullptr, variables);
   out.flush();  // a host may end the process right after (the Python bindings do)
   return status;

@@ -35,6 +35,8 @@ struct BackendRunOptions {
   std::vector<std::pair<std::string, std::string>> vars;
   std::string project_file = "";
   bool run = false;
+  std::string record = "";  // --record <dir>: keep a run record there (#277)
+  std::string command = "";  // the command line, as the record names it
 };
 
 enum class BackendKind {

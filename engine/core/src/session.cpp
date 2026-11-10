@@ -8,6 +8,7 @@
 #include "paperboat/core/backend.hpp"
 #include "paperboat/core/backend_manager.hpp"
 #include "paperboat/core/cache.hpp"
+#include "paperboat/core/record.hpp"
 
 #include <paperboat/toolkit/installer.hpp>
 #include <paperboat/toolkit/platform.hpp>
@@ -168,15 +169,43 @@ void Session::on_message(const std::string& text) {
       s.run.request_stop();
       s.run.join();
     }
+    // A record of this run (#277), when the CLI asked for one.
+    std::optional<RunRecord> record;
+    if (auto meta = record_meta_from_env()) {
+      json tools = json::array();
+      try {
+        tools = s.current_toolkits();
+      } catch (...) {
+        // the record is still worth keeping without the toolkit list
+      }
+      json request = {{"graph", msg.value("graph", json::object())},
+                      {"variables", variables},
+                      {"settings", msg.value("settings", json::object())}};
+      if (!station.is_null()) request["station"] = station;
+      try {  // what the run goes with: the backend's defaults, and graph.run's overrides
+        request["settings"] = settings_json(with_overrides(s.backend.run, msg.value("settings", json())));
+      } catch (...) {
+        // an invalid setting fails the run; the record still says what was asked
+      }
+      record.emplace(std::move(*meta), s.backend.engine, std::move(request), std::move(tools));
+    }
     s.run = std::jthread([&s, id, number, graph = msg.value("graph", json::object()), station, variables, keys_now, tune_now,
-                          speed_now, settings = msg.value("settings", json())](std::stop_token stop) {
-      auto emit = [&s, number](const json& m) {
+                          speed_now, settings = msg.value("settings", json()), record = std::move(record)](std::stop_token stop) mutable {
+      auto emit = [&s, number, &record](const json& m) {
         if (m.value("type", "") == "variables.patch") {  // a block set variables (#166): later runs start from them
           std::lock_guard lock(s.mutex);
           for (json* list : {&s.variables, s.tuned ? &*s.tuned : nullptr}) {
             if (!list || !list->is_array()) continue;
             for (auto& v : *list)
               if (const auto it = m.at("values").find(v.value("name", std::string{})); it != m.at("values").end() && !v.contains("expr")) v["value"] = *it;
+          }
+        }
+        if (record) {
+          try {
+            record->add(m);
+          } catch (const std::exception& err) {
+            s.log("error", std::string("cannot write run record: ") + err.what());
+            record.reset();  // one error, not one per message
           }
         }
         if (m.value("type", "") == "run.finished") {  // before the UI hears it: its next edit is not a tuning

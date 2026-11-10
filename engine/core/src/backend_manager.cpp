@@ -1,5 +1,9 @@
 #include "paperboat/core/backend_manager.hpp"
 
+#ifndef PAPERBOAT_VERSION
+#define PAPERBOAT_VERSION "0.0.0-dev"
+#endif
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -85,9 +89,18 @@ std::function<void(toolkit::Registry&)>& registry_extension() {
 }
 
 // backend.toml's [run] for the backend process (core main reads PAPERBOAT_RUN).
-std::vector<std::pair<std::string, std::string>> run_env(const BackendManifest& m) {
-  if (m.run_settings.empty()) return {};
-  return {{"PAPERBOAT_RUN", m.run_settings}};
+std::vector<std::pair<std::string, std::string>> run_env(const BackendManifest& m, const BackendRunOptions& opts) {
+  std::vector<std::pair<std::string, std::string>> env;
+  if (!m.run_settings.empty()) env.emplace_back("PAPERBOAT_RUN", m.run_settings);
+  if (!opts.record.empty()) {
+    std::error_code ec;
+    const auto dir = std::filesystem::absolute(opts.record, ec).lexically_normal();
+    env.emplace_back("PAPERBOAT_RECORD", (ec ? std::filesystem::path(opts.record) : dir).string());
+    env.emplace_back("PAPERBOAT_VERSION", PAPERBOAT_VERSION);
+    if (!opts.command.empty()) env.emplace_back("PAPERBOAT_COMMAND", opts.command);
+    if (!m.version.empty()) env.emplace_back("PAPERBOAT_BACKEND_VERSION", m.version);
+  }
+  return env;
 }
 
 // The installed SDK next to this binary: <prefix>/bin/paperboat, <prefix>/lib*/cmake/Paperboat (pb#177).
@@ -914,6 +927,15 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     return 1;
   }
 
+  if (!opts.record.empty()) {
+    std::error_code ec;
+    std::filesystem::create_directories(opts.record, ec);
+    if (ec) {
+      std::cerr << "error: cannot create record directory " << opts.record << ": " << ec.message() << '\n';
+      return 1;
+    }
+  }
+
   // Determine port
   int port = opts.port;
   BackendManifest manifest = load_manifest(dir);
@@ -975,7 +997,7 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     append_vars(args, opts);
 
     std::cout << "paperboat running " << bin.filename().string() << " on " << ws_url(port) << std::endl;
-    return ProcessRunner::run_stream(args, dir, run_env(manifest), log_cb);
+    return ProcessRunner::run_stream(args, dir, run_env(manifest, opts), log_cb);
   } else {
     // Python backend
     const fs::path repo_root = toolkit::find_repo_root(dir);
@@ -1001,7 +1023,7 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
 
     std::cout << "paperboat running python " << server_script.filename().string() << " on " << ws_url(port) << std::endl;
     auto env = py_env.env;
-    for (auto& e : run_env(manifest)) env.push_back(std::move(e));
+    for (auto& e : run_env(manifest, opts)) env.push_back(std::move(e));
     return ProcessRunner::run_stream(args, dir, env, log_cb);
   }
 }
@@ -1877,7 +1899,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   fs::create_directories(runtime_dir());
 
   auto smoke_env = py_env.env;
-  for (auto& e : run_env(manifest)) smoke_env.push_back(std::move(e));
+  for (auto& e : run_env(manifest, {})) smoke_env.push_back(std::move(e));
   int backend_pid = ProcessRunner::run_detached(launch_cmd, dir, smoke_env, log_path);
   if (backend_pid <= 0) {
     return fail(step_smoke, "failed to start backend process");
