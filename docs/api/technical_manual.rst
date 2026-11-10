@@ -32,7 +32,8 @@ Paperboat is architected as four decoupled layers:
    manages graph compilation, cycle detection, topological execution scheduling, run clock
    stepping, and network sessions. It owns no domain physics or visual rendering logic.
 2. **Standard Toolkit (`paperboat::toolkit`)**: Modular library of reusable block primitives
-   (`base`, `signal`, `math`, `control`, `dashboard`, `step`).
+   (`base`, `signal`, `math`, `dashboard`, `step`), plus optional external toolkits such as
+   `control` (`paperboat-toolkit-control`).
 3. **Python Bindings (`paperboat._engine`)**: Native C-extension bindings exposing the C++
    scheduler and data types to Python backends with zero protocol serialization overhead.
 4. **Web Frontend (`apps/web`)**: A domain-agnostic React/TypeScript interface that builds its
@@ -241,7 +242,7 @@ Schema Breakdown
      - Domain namespace string (e.g., `"robotics"`). Blocks registered under this package
        are imported automatically into the palette.
    * - `import`
-     - Array of toolkit packages to load into the catalog (e.g., `["base", "signal", "math", "control", "dashboard"]`).
+     - Array of toolkit packages to load into the catalog (e.g., `["base", "signal", "math", "dashboard"]`).
    * - `[[blocks]]`
      - Customizes or specializes a block template. May override `label`, `defaults`, or
        supply a custom `config` expression to specialize an extensible parent (such as `signal/generator`).

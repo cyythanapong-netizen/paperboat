@@ -122,7 +122,7 @@ There are three ways to add blocks:
   fast search palette at your cursor. Type the name of a block (e.g., `sine`, `pid`, `gain`,
   `monitor`) and press :kbd:`Enter`.
 - **Block Browser**: Click **+ Add** on the canvas header to browse cards organized by
-  package (`signal`, `math`, `control`, `dashboard`, domain-specific packages). Drag cards
+  package (`signal`, `math`, `step`, `dashboard`, domain-specific packages). Drag cards
   onto the canvas.
 - **Insert onto Wire**: Drag a block card from the browser directly over an existing wire.
   The wire will split and reconnect through the inserted block.

@@ -753,7 +753,7 @@ print(h.catalog_json())
 
 def test_a_python_block_says_which_flow_types_it_works_in(tmp_path: Path) -> None:
     # #9: `flows` on a block class; a Step works in a Step flow unless it says; none: every flow type.
-    (tmp_path / "descriptor.toml").write_text('domain = "flows"\nimport = ["control"]\n')
+    (tmp_path / "descriptor.toml").write_text('domain = "flows"\n')
     env = {**os.environ, "PYTHONPATH": str(ROOT / "python")}
 
     def catalog(backend: str) -> subprocess.CompletedProcess:
@@ -768,7 +768,6 @@ def test_a_python_block_says_which_flow_types_it_works_in(tmp_path: Path) -> Non
     assert blocks["clocked"]["flows"] == ["signal"]
     assert blocks["resistor"]["flows"] == ["model"]
     assert blocks["beep"]["flows"] == ["step"]
-    assert blocks["pid"]["flows"] == ["signal", "step"]  # the control package's default
 
     proc = catalog(FLOWS_BACKEND.replace('flows = ("model",)', 'flows = ("liquid",)'))
     assert proc.returncode != 0

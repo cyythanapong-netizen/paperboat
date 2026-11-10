@@ -37,7 +37,7 @@ Package Quick Reference
    * - :ref:`pkg-list`
      - ``range``, ``series``, ``list_length``, ``item``, ``aggregate``, ``points``, ``coordinates``
      - Lists of numbers and of points on the wires: made, measured, indexed, joined, split and reduced.
-   * - :ref:`pkg-control`
+   * - control (external)
      - ``pid``, ``integrator``, ``lag``, ``delay``, ``mpc``, ``lp_step``, ``nmpc``
      - Clock dynamics and per-step model predictive control; install ``optimization`` for the dynamic blocks.
    * - :ref:`pkg-dashboard`
@@ -158,7 +158,7 @@ Package Quick Reference
    * - :ref:`pkg-list`
      - ``range``, ``series``, ``list_length``, ``item``, ``aggregate``, ``points``, ``coordinates``
      - Lists of numbers and of points on the wires: made, measured, indexed, joined, split and reduced.
-   * - :ref:`pkg-control`
+   * - control (external)
      - ``pid``, ``integrator``, ``lag``, ``delay``, ``mpc``, ``lp_step``, ``nmpc``
      - Clock dynamics and per-step model predictive control; install ``optimization`` for the dynamic blocks.
    * - :ref:`pkg-dashboard`
