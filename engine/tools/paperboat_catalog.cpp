@@ -17,6 +17,9 @@
 #ifdef PAPERBOAT_HAS_OPTIMIZATION
 #include "paperboat/toolkit/optimization.hpp"
 #endif
+#ifdef PAPERBOAT_HAS_CONTROL
+#include "paperboat/toolkit/control.hpp"
+#endif
 
 namespace tk = paperboat::toolkit;
 
@@ -31,6 +34,9 @@ const tk::Registry& registry() {
 #endif
 #ifdef PAPERBOAT_HAS_OPTIMIZATION
     tk::optimization::register_optimization(all);
+#endif
+#ifdef PAPERBOAT_HAS_CONTROL
+    tk::control::register_control(all);
 #endif
     return all;
   }();
