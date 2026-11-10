@@ -60,9 +60,14 @@ toolkit::Registry make_registry() {
 
 }  // namespace
 
+const toolkit::Registry& workbench_registry() {
+  static const toolkit::Registry reg = make_registry();
+  return reg;
+}
+
 const toolkit::Catalog& catalog() {
   static const toolkit::Catalog catalog = [] {
-    const auto registry = make_registry();
+    const auto& registry = workbench_registry();
     std::string imports;
     for (const auto& pkg : registry.packages()) {
       if (!imports.empty()) imports += ", ";
