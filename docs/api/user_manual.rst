@@ -262,6 +262,26 @@ The Run Dock floats gracefully at the bottom of the canvas, rendered in semi-tra
   block and station object whose own `solver` is `auto` (the default) uses it; the settings
   save with the project.
 
+Replay and Stepping
+~~~~~~~~~~~~~~~~~~~
+
+A finished interactive run keeps its samples and Station motion, so it can be studied again
+without rerunning it. Click **⏱ Replay** on the dock (or **Run > Replay last run**):
+
+- **Timeline**: drag the scrubber to jump to any sim time.
+- **Step back / forward** (:kbd:`◀` / :kbd:`▶`): move one sample interval, the run's own
+  :math:`\Delta t`, so a mode switch or an edge can be inspected.
+- **Play / pause** (:kbd:`▶` / :kbd:`❚❚`): play the run again; at the end it starts over.
+- **Speed**: `0.25×`, `0.5×`, `1×`, `2×` or `5×` wall-clock playback.
+- **Live**: leave replay and follow the next run.
+
+While a replay is open, every Scope shows a needle at the playhead, Board readouts show the
+values at that time, wires into monitors carry the value they had then, and the Station shows
+the entity positions at that time (a web Station gets the same scene updates). Replays read
+the in-memory trace store, and a saved **run record** can be opened with
+**File > Open run record…**; **File > Save run record…** writes the current run's samples and
+Station history as JSON (:code:`record.json` from :code:`paperboat run --record`, #277).
+
 The Console
 ~~~~~~~~~~~
 

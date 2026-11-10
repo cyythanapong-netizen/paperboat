@@ -222,6 +222,29 @@ Paperboat supports three distinct execution models:
    - Suitable for CAD model generation, build automation, dataset extraction, or image
      processing pipelines.
 
+Run Replay
+~~~~~~~~~~
+
+Replay is an app-side view of the last run (#284); the engine keeps sending the same
+`signal` and `scene.patch` messages it always did.
+
+- **Samples** live in the trace store (`apps/web/src/traces.ts`), a typed-array ring per
+  channel. `valuesAt(node, t)` is the latest sample at or before `t` (a zero-order hold);
+  `span()` and `step()` give the scrubber's ends and its :math:`\Delta t`. Text samples are
+  not stored, so a readout falls back to its latest value.
+- **Station motion** lives beside it in `ReplayStore` (`apps/web/src/replay.ts`): the scene
+  on screen when `run.started` arrived (the base), then each `scene.patch` at the run clock.
+  `entitiesAt(t)` rebuilds the base with the patches up to `t`. The built-in Scene and a web
+  Station both read that scene; the web Station receives it as a normal `scene` message.
+- **The playhead** is `EngineState.replay` (`{active, playing, time, from, to, speed}`), driven
+  by the reducer's own `replay.*` actions, not by the backend. While it is open, Dashboard
+  readouts, wire probes into monitors (`node:port`) and Scope needles read `t`; live, they
+  read the latest message.
+- **Records**: `File > Save run record…` writes `{paperboat: 0, run, channels, scene}`;
+  `File > Open run record…` loads channels and scene patches back into the stores. The loader
+  also accepts a `signals` array of protocol `signal` samples, so a record written by
+  `paperboat run --record` (#277) can be opened without a converter.
+
 The Descriptor System (`descriptor.toml`)
 -----------------------------------------
 

@@ -30,6 +30,8 @@ type Props = {
 };
 
 export function StationView({ view, state, url, subscribe, send, station, editStation, running, stationCanvas, theme, gridOn, cameraProjection, taken, addObject }: Props) {
+  // A replay puts the Station back at the playhead (#284); live, it is what the backend last sent.
+  const entities = state.replay?.active ? state.sceneHistory.entitiesAt(state.replay.time) : state.entities;
   return (
     <div
       className={`station view-${view}`}
@@ -59,7 +61,7 @@ export function StationView({ view, state, url, subscribe, send, station, editSt
         <StationGraph objects={state.objects} station={station ?? { objects: [] }} onChange={editStation} locked={running} controls={stationCanvas} />
       ) : (
         <Suspense fallback={null}>
-          <SceneView key={`${theme}:${JSON.stringify(state.view)}`} view={state.view} grid={gridOn} projection={cameraProjection} entities={state.entities} />
+          <SceneView key={`${theme}:${JSON.stringify(state.view)}`} view={state.view} grid={gridOn} projection={cameraProjection} entities={entities} />
         </Suspense>
       )}
       {station && state.objects.length > 0 && (

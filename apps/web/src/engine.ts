@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { TraceStore } from "./traces.ts";
+import { ReplayStore, type ReplayRecord, type ReplayState } from "./replay.ts";
 import type { BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, FlowType, Graph, MonitorState, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
 
 /** The run the backend is on, or last ran. */
@@ -46,6 +47,10 @@ export type EngineState = {
   run: RunState | null;
   /** Every monitor's plotted history (traces.ts), kept outside React state. */
   traces: TraceStore;
+  /** The run's Station changes over time, for replay (#284); kept outside React state too. */
+  sceneHistory: ReplayStore;
+  /** The playhead through the last run (#284); null: live (or nothing to replay). */
+  replay: ReplayState | null;
   /** Ticks when `traces` changed, at most once per animation frame: what plots re-render on. */
   traceVersion: number;
   /** The latest value each monitor sent: what a Display or Image view shows. */
@@ -90,6 +95,8 @@ export const initial: EngineState = {
   varError: null,
   run: null,
   traces: new TraceStore(),
+  sceneHistory: new ReplayStore(),
+  replay: null,
   traceVersion: 0,
   latest: {},
   vectorComponents: {},
@@ -111,7 +118,18 @@ export type MonitorReading = { state: MonitorState; t: number; v?: number };
 
 /** Max points kept per metric series (the oldest go first). */
 export const MAX_METRIC_POINTS = 2000;
-export type Action = ServerMsg | { type: "signals"; list: SignalMsg[] } | { type: "reset" } | { type: "connection"; value: EngineState["connection"] };
+/** What a replay control asks for (#284): the app's own, not the backend's. */
+export type ReplayAction =
+  | { type: "replay.start" }
+  | { type: "replay.exit" }
+  | { type: "replay.seek"; t: number }
+  | { type: "replay.step"; direction: 1 | -1 }
+  | { type: "replay.play"; playing: boolean }
+  | { type: "replay.speed"; speed: number }
+  | { type: "replay.advance"; dt: number }
+  | { type: "replay.load"; record: ReplayRecord };
+
+export type Action = ServerMsg | ReplayAction | { type: "signals"; list: SignalMsg[] } | { type: "reset" } | { type: "connection"; value: EngineState["connection"] };
 
 /** Max Console lines kept in memory. */
 export const MAX_LOGS = 200;
@@ -142,6 +160,16 @@ export function runWord(
 
 function pushLog(logs: EngineState["logs"], entry: EngineState["logs"][number]): EngineState["logs"] {
   return [...logs.slice(-(MAX_LOGS - 1)), entry];
+}
+
+const clampTime = (t: number, from: number, to: number) => Math.min(to, Math.max(from, Number.isFinite(t) ? t : from));
+
+/** The replay the trace store allows, at `t`; null when there is nothing sampled. */
+function replayAt(s: EngineState, t: number): ReplayState | null {
+  const span = s.traces.span();
+  if (!span) return null;
+  const [from, to] = span;
+  return { active: true, playing: false, time: clampTime(t, from, to), from, to, speed: s.replay?.speed ?? 1 };
 }
 
 export function reduce(s: EngineState, m: Action): EngineState {
@@ -194,13 +222,18 @@ export function reduce(s: EngineState, m: Action): EngineState {
     case "variables.patch":
       return { ...s, varValues: { ...s.varValues, ...m.values } };
     case "scene.patch": {
+      // During a run, keep the patch on the run clock: that is what replay puts back (#284).
+      if (s.run?.status === "running") s.sceneHistory.add(s.run.simTime ?? 0, m.entities);
       const entities = { ...s.entities };
       for (const p of m.entities) if (entities[p.id]) entities[p.id] = { ...entities[p.id], ...p };
       return { ...s, entities };
     }
     case "run.started":
+      s.sceneHistory.reset(s.entities);
       return {
         ...s,
+        sceneHistory: s.sceneHistory,
+        replay: null,
         run: { id: m.run, progress: 0, status: "running", startedAt: Date.now(), simTime: 0 },
         traceVersion: s.traceVersion + 1,
         latest: {},
@@ -261,6 +294,54 @@ export function reduce(s: EngineState, m: Action): EngineState {
     }
     case "log":
       return { ...s, logs: pushLog(s.logs, { level: m.level, text: m.text, node: m.node }) };
+    case "replay.start": {
+      const replay = replayAt(s, s.traces.span()?.[1] ?? 0);
+      return replay ? { ...s, replay } : s;
+    }
+    case "replay.exit":
+      return s.replay ? { ...s, replay: null } : s;
+    case "replay.seek": {
+      if (!s.replay) return s;
+      return { ...s, replay: { ...s.replay, playing: false, time: clampTime(m.t, s.replay.from, s.replay.to) } };
+    }
+    case "replay.step": {
+      if (!s.replay) return s;
+      const dt = s.traces.step(s.runDefaults.dt ?? 0.01);
+      return { ...s, replay: { ...s.replay, playing: false, time: clampTime(s.replay.time + m.direction * dt, s.replay.from, s.replay.to) } };
+    }
+    case "replay.play": {
+      if (!s.replay) return s;
+      // Play from where it is; at the end, play the run again from the start.
+      const atEnd = s.replay.time >= s.replay.to;
+      const time = m.playing && atEnd ? s.replay.from : s.replay.time;
+      return { ...s, replay: { ...s.replay, playing: m.playing, time } };
+    }
+    case "replay.speed":
+      return s.replay && Number.isFinite(m.speed) && m.speed > 0 ? { ...s, replay: { ...s.replay, speed: m.speed } } : s;
+    case "replay.advance": {
+      if (!s.replay?.playing) return s;
+      const time = clampTime(s.replay.time + Math.max(0, m.dt) * s.replay.speed, s.replay.from, s.replay.to);
+      return { ...s, replay: { ...s.replay, time, playing: time < s.replay.to } };
+    }
+    case "replay.load": {
+      // A saved run takes the place of this session's history, and opens at its end.
+      if (m.record.channels?.length || m.record.signals?.length) {
+        if (m.record.channels?.length) s.traces.load(m.record.channels);
+        else {
+          s.traces.clear();
+          for (const one of m.record.signals ?? []) s.traces.add(one);
+        }
+      }
+      s.sceneHistory.reset(m.record.scene?.base ?? {});
+      for (const frame of m.record.scene?.frames ?? []) s.sceneHistory.add(frame.t, frame.entities);
+      const span = s.traces.span();
+      if (!span) return s;
+      const [from, to] = span;
+      const said = m.record.run?.status;
+      const status: RunState["status"] = said === "failed" || said === "cancelled" ? said : "done";
+      const run: RunState = { id: m.record.run?.id ?? "record", progress: 1, status, startedAt: m.record.run?.started, simTime: to };
+      return { ...s, run, replay: { active: true, playing: false, time: to, from, to, speed: s.replay?.speed ?? 1 }, traceVersion: s.traceVersion + 1 };
+    }
     default: {
       const type = (m as { type?: unknown }).type;
       return { ...s, logs: pushLog(s.logs, { level: "warn", text: `ignored unknown message type "${String(type)}"` }) };
@@ -342,6 +423,22 @@ export function useEngine(url: string) {
     };
   }, [url, traces]);
 
+  // Playback (#284): while a replay plays, advance its clock once per frame. The reducer stops it
+  // at the end; a scrub or a speed change does not restart the loop.
+  useEffect(() => {
+    if (!state.replay?.active || !state.replay.playing) return;
+    let frame = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.25); // a background tab resumes where it left off
+      last = now;
+      dispatch({ type: "replay.advance", dt });
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [state.replay?.active, state.replay?.playing]);
+
   const send = useCallback((m: ClientMsg) => {
     if (socket.current?.readyState === WebSocket.OPEN) socket.current.send(JSON.stringify(m));
   }, []);
@@ -357,5 +454,16 @@ export function useEngine(url: string) {
     dispatch({ type: "log", level, text, ...(node ? { node } : {}) });
   }, []);
 
-  return { state, send, subscribe, log };
+  /** The replay's controls (#284): the app's own, not sent to the backend. */
+  const replay = {
+    start: () => dispatch({ type: "replay.start" }),
+    exit: () => dispatch({ type: "replay.exit" }),
+    seek: (t: number) => dispatch({ type: "replay.seek", t }),
+    step: (direction: 1 | -1) => dispatch({ type: "replay.step", direction }),
+    play: (playing: boolean) => dispatch({ type: "replay.play", playing }),
+    speed: (speed: number) => dispatch({ type: "replay.speed", speed }),
+    load: (record: ReplayRecord) => dispatch({ type: "replay.load", record }),
+  };
+
+  return { state, send, subscribe, log, replay };
 }

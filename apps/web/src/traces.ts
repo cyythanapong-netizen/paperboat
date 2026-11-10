@@ -58,6 +58,19 @@ export type Channel = {
   buf: TraceBuffer;
 };
 
+/** The index of the latest sample at or before `t`: what a replay shows between samples. -1: before the first. */
+function sampleAt(times: Float64Array, n: number, t: number): number {
+  if (!n || t < times[0]) return -1;
+  let lo = 0;
+  let hi = n - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (times[mid] <= t) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
 /** What the store takes: the shape of a protocol `signal` message. */
 export type Sample = { node: string; port?: string; t: number; v: unknown; components?: { id: string; unit?: string }[] };
 
@@ -85,6 +98,79 @@ export class TraceStore {
   /** A monitor's channels, in the order they first arrived. */
   channels(node: string): readonly Channel[] {
     return this.byNode.get(node) ?? [];
+  }
+
+  /** Replace every channel with a saved record's (a replay of a run that is not this session's). */
+  load(channels: readonly { node: string; id: string; label: string; unit?: string; t: readonly number[]; v: readonly number[] }[]): void {
+    this.clear();
+    for (const c of channels) {
+      const channel = this.channel(c.node, c.id, c.label, c.unit);
+      for (let i = 0; i < c.t.length && i < c.v.length; i++) channel.buf.push(c.t[i], c.v[i]);
+    }
+  }
+
+  /** The monitors that have ever sent a sample. */
+  nodes(): string[] {
+    return [...this.byNode.keys()];
+  }
+
+  /** The span every channel covers: the first and last sample times, or null when nothing was sampled. */
+  span(): [number, number] | null {
+    let t0 = Infinity;
+    let t1 = -Infinity;
+    for (const list of this.byNode.values())
+      for (const c of list) {
+        if (!c.buf.n) continue;
+        t0 = Math.min(t0, c.buf.t[0]);
+        t1 = Math.max(t1, c.buf.t[c.buf.n - 1]);
+      }
+    return Number.isFinite(t0) && Number.isFinite(t1) ? [t0, t1] : null;
+  }
+
+  /** The run's sample spacing: the middle of the gaps in its channels, else `fallback` (the backend's dt). */
+  step(fallback = 0.01): number {
+    const gaps: number[] = [];
+    for (const list of this.byNode.values())
+      for (const c of list) {
+        if (c.buf.n < 2) continue;
+        const start = Math.max(1, c.buf.n - 200);
+        for (let i = start; i < c.buf.n; i++) {
+          const d = c.buf.t[i] - c.buf.t[i - 1];
+          if (d > 0 && Number.isFinite(d)) gaps.push(d);
+        }
+        if (gaps.length) {
+          gaps.sort((a, b) => a - b);
+          return gaps[Math.floor(gaps.length / 2)];
+        }
+      }
+    return fallback > 0 ? fallback : 0.01;
+  }
+
+  /**
+   * What a monitor showed at `t`: each input's latest sample at or before it, as a scalar or, for
+   * a vector input, its components in order. Undefined before the first sample and for an unknown
+   * monitor. Text samples were never plotted, so they are not here (readers fall back to `latest`).
+   */
+  valuesAt(node: string, t: number): Record<string, number | number[]> | undefined {
+    const list = this.byNode.get(node);
+    if (!list?.length) return undefined;
+    const out: Record<string, number | number[]> = {};
+    const vectors = new Map<string, number[]>();
+    for (const c of list) {
+      if (!c.buf.n) continue;
+      const i = sampleAt(c.buf.t, c.buf.n, t);
+      if (i < 0) continue;
+      const dot = c.id.indexOf(".");
+      if (dot < 0) out[c.id] = c.buf.v[i];
+      else {
+        const port = c.id.slice(0, dot);
+        let parts = vectors.get(port);
+        if (!parts) vectors.set(port, (parts = []));
+        parts.push(c.buf.v[i]);
+      }
+    }
+    for (const [port, parts] of vectors) out[port] = parts;
+    return Object.keys(out).length ? out : undefined;
   }
 
   private channel(node: string, id: string, label: string, unit?: string): Channel {
