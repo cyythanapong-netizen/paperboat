@@ -185,16 +185,19 @@ started another way needs the wheel: `pip install paperboat-<version>-cp312-abi3
 
 ### The console
 
-`./bin/paperboat` with no command opens the console: run, build and check backends without
-leaving the prompt. Backends run as background jobs, the bar at the bottom shows what is
-live, Tab completes commands, backends and paths, and → takes the grey suggestion from
-history. In a script or a pipe, `paperboat` stays the plain CLI. Build it once with
+`./bin/paperboat` with no command opens the full-screen console: run, build and check
+backends without leaving the prompt. The mark at the top rides its water while work is
+live, the transcript scrolls under it (PgUp/PgDn; quitting gives the terminal back as it
+was), and the bar at the bottom shows what is live. Backends run as background jobs, Tab
+completes commands, backends and paths, and → takes the grey suggestion from history. In a
+script or a pipe, `paperboat` stays the plain CLI. Build it once with
 `npm install && npm run build:cli`; see [the quickstart](https://paperboatlab.github.io/paperboat/quickstart.html) for the keys.
 
 <img src=".github/readme/console.png" alt="The console: two backends running as jobs, a check with its stages, and a grey suggestion from history" width="100%">
 
 Tab opens a menu with each backend's language, port and description; `top` lists every
-running backend to restart, stop or follow its log.
+running backend to restart, stop or follow its log; `about` shows the console and engine
+versions and what is installed.
 
 <img src=".github/readme/complete.png" alt="Tab completion of run, listing the example backends" width="100%">
 <img src=".github/readme/dashboard.png" alt="The process dashboard" width="100%">

@@ -15,6 +15,7 @@ import { VariablesSheet } from "./Variables";
 import { VarsContext } from "./VarsContext";
 import { toToml, type Use } from "./bindings";
 import { ConsoleWindow } from "@paperboat/shared/components";
+import { AboutWindow } from "./About";
 import { Dashboard } from "./Dashboard";
 import { loadSaved, save as saveLayout } from "./dashboardLayout";
 import { remembered, useDrawer } from "./remembered";
@@ -98,6 +99,7 @@ export function App() {
   const [varsShown, setVarsShown] = remembered<"open" | "closed">("paperboat.variables", "closed", ["open", "closed"]);
   const [openVar, setOpenVar] = useState<string | null>(null);
   const [consoleShown, setConsoleShown] = useState(false);
+  const [aboutShown, setAboutShown] = useState(false);
   useEffect(() => setRunSettings({}), [state.engine]); // another backend: its own defaults
 
   // The Flow sheet's flow type, if one was chosen (#9); null: taken from its blocks.
@@ -391,7 +393,7 @@ export function App() {
   const commands = menuCommands({
     state, send, openFile, saveProject, lastSession, restore, recent, openProject, projectLock, unlocked, locked, lockedArrange, setLockModalOpen, setBackendOpen, restartBackend,
     history, undoOpen, flow, stationCanvas, setBrowser, running, variables, varsShown, setVarsShown,
-    setSearchOpen, mode, setMode, allowedModes, pages, page, setPage, open, stationShown, setStationShown, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, errors,
+    setSearchOpen, mode, setMode, allowedModes, pages, page, setPage, open, stationShown, setStationShown, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, aboutShown, setAboutShown, errors,
     gridOn, setGridChoice, cameraProjection, setCameraProjection, arrangeCanvas, arrange, setArrange,
     canRun, whyNotRun, run, usesSolvers, currentSolver, solvers, setRunSettings, setSolverOpen,
     loadRecord, saveRecord, startReplay: replayApi.start,
@@ -414,6 +416,8 @@ export function App() {
         errors={errors}
         consoleShown={consoleShown}
         onConsole={() => setConsoleShown(!consoleShown)}
+        aboutShown={aboutShown}
+        onAbout={() => setAboutShown(!aboutShown)}
         mode={mode}
         setMode={setMode}
         allowedModes={allowedModes}
@@ -555,6 +559,7 @@ export function App() {
         />
       )}
       {consoleShown && <ConsoleWindow logs={state.logs} errors={errors} onBlock={showBlock} onClose={() => setConsoleShown(false)} />}
+      {aboutShown && <AboutWindow state={state} onClose={() => setAboutShown(false)} />}
       {browser === "flow" && (
         <BrowserWindow
           title="Add a block"

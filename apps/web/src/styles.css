@@ -916,3 +916,28 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .dock .var-controls-group { display: contents; }
 
 /* ---- Custom block look (#160): view.icon and connector ports ----------------------------- */
+
+/* ---- About: the mark, continuously rippling, and what this build is. ---------------- */
+.about-window { width: min(720px, calc(100vw - 32px)); height: auto; max-height: calc(100vh - 80px); }
+.about-body { display: grid; grid-template-columns: minmax(190px, 236px) minmax(0, 1fr); gap: var(--space-5); padding: var(--panel-pad); overflow: auto; }
+.about-mark { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-3); padding: var(--space-5) var(--space-3); text-align: center; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); }
+.about-name { font: 600 var(--size-xl) var(--font-sans); letter-spacing: -0.01em; line-height: 1; }
+.about-info { display: flex; flex-direction: column; gap: var(--space-4); min-width: 0; }
+.about-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px var(--space-4); margin: 0; }
+.about-facts dt, .about-section h3 { font: 600 var(--size-2xs) var(--font-sans); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.about-facts dd { margin: 0; font: 400 var(--size-xs) var(--font-mono); color: var(--text); }
+.about-facts a, .about-creators a, .about-org a { color: var(--text); text-decoration-color: var(--line-strong); text-underline-offset: 2px; }
+.about-facts a:hover, .about-creators a:hover, .about-org a:hover { text-decoration-color: var(--text); }
+.about-section { padding-top: var(--space-3); border-top: 1px solid var(--line); }
+.about-section h3 { margin: 0 0 var(--space-2); }
+.about-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.about-list li { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); font: 400 var(--size-xs) var(--font-mono); }
+.about-version { color: var(--text-muted); }
+.about-empty, .about-creators, .about-org { margin: 0; font: 400 var(--size-xs) var(--font-sans); color: var(--text-muted); }
+@media (max-width: 640px) {
+  .about-body { grid-template-columns: 1fr; }
+  .about-mark { padding: var(--space-4) var(--space-3); }
+}
+
+/* The bar's menus and the About title sit as one row, the same 2px apart. */
+.menubar-group { display: flex; align-items: center; gap: 2px; }
