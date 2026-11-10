@@ -519,11 +519,11 @@ and ``status``. The file uses ``P``, ``q`` for a QP (``P``'s upper triangle), ``
 or ``variables``/``objective``/``constraints`` for an NLP, with optional ``A``, ``l`` and ``u``;
 a ``null`` bound is infinite.
 
-control (external toolkit)
---------------------------
+mpc (external toolkit)
+----------------------
 
 Optional external toolkit from ``paperboat-toolkit-control`` (installed into
-``engine/toolkit/control``; ``paperboat::toolkit_control``, ``register_control``). It links the
+``engine/toolkit/mpc``; ``paperboat::toolkit_mpc``, ``register_mpc``). It links the
 optimization toolkit's ``Workspace`` and adds per-step Signal blocks: ``mpc`` (a condensed QP
 from ``A``, ``B``, ``Q``, ``R``, ``N`` and ``u`` bounds), ``lp_step`` (an LP every step) and
 ``nmpc`` (an NLP every step, needs Ipopt). They are ``feedthrough = false``: ``outputs()``
