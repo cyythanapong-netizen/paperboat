@@ -77,6 +77,13 @@ bool connect_pending() { return errno == EINPROGRESS; }
 using nlohmann::json;
 namespace fs = std::filesystem;
 
+// Optional packages compiled into this binary (opencv, optimization). core cannot link them
+// (they are optional), so the CLI installs this hook before check_backend.
+std::function<void(toolkit::Registry&)>& registry_extension() {
+  static std::function<void(toolkit::Registry&)> extension;
+  return extension;
+}
+
 // backend.toml's [run] for the backend process (core main reads PAPERBOAT_RUN).
 std::vector<std::pair<std::string, std::string>> run_env(const BackendManifest& m) {
   if (m.run_settings.empty()) return {};
@@ -156,6 +163,10 @@ const std::string& output_of(const ProcessResult& r) {
 }
 
 }  // namespace
+
+void BackendManager::set_registry_extension(std::function<void(toolkit::Registry&)> extension) {
+  registry_extension() = std::move(extension);
+}
 
 bool BackendManager::is_port_listening(int port) {
   if (port <= 0 || port > 65535) return false;
@@ -1538,6 +1549,8 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   }
 
   const fs::path repo_root = toolkit::find_repo_root(dir);
+  toolkit::Registry registry = toolkit::builtins();
+  if (registry_extension()) registry_extension()(registry);
 
   // Each stage reports when it starts and when it ends (`paperboat check --json-stream`).
   const auto begin = [&progress](const CheckStep& step) {
@@ -1666,7 +1679,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   try {
     toolkit::DescriptorOptions desc_opts;
     desc_opts.optional_imports = available_toolkits;
-    const auto catalog = toolkit::load_descriptor_file(desc_file, toolkit::builtins(), desc_opts);
+    const auto catalog = toolkit::load_descriptor_file(desc_file, registry, desc_opts);
     res.domain = catalog.domain.empty() ? res.domain : catalog.domain;
     res.block_count = static_cast<int>(catalog.entries.size());
     res.object_count = static_cast<int>(catalog.objects.size());
@@ -1756,7 +1769,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
     try {
       toolkit::DescriptorOptions desc_opts;
       desc_opts.optional_imports = available_toolkits;
-      const auto cat = toolkit::load_descriptor_file(desc_file, toolkit::builtins(), desc_opts);
+      const auto cat = toolkit::load_descriptor_file(desc_file, registry, desc_opts);
       for (const auto& entry : cat.entries) {
         if (entry.def.type == "integrator" || entry.def.type == "lag") { uses_solvers = true; break; }
         for (const auto& p : entry.def.params) {

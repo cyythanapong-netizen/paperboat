@@ -4,12 +4,20 @@ if(TARGET paperboat_toolkit_opencv)  # knows the optional packages that were bui
   target_link_libraries(paperboat-catalog PRIVATE paperboat::toolkit_opencv)
   target_compile_definitions(paperboat-catalog PRIVATE PAPERBOAT_HAS_OPENCV)
 endif()
+if(TARGET paperboat_toolkit_optimization)
+  target_link_libraries(paperboat-catalog PRIVATE paperboat::toolkit_optimization)
+  target_compile_definitions(paperboat-catalog PRIVATE PAPERBOAT_HAS_OPTIMIZATION)
+endif()
 
 add_executable(paperboat-toolkit paperboat_toolkit.cpp)
 target_link_libraries(paperboat-toolkit PRIVATE paperboat::toolkit paperboat_warnings)
 if(TARGET paperboat_toolkit_opencv)
   target_link_libraries(paperboat-toolkit PRIVATE paperboat::toolkit_opencv)
   target_compile_definitions(paperboat-toolkit PRIVATE PAPERBOAT_HAS_OPENCV)
+endif()
+if(TARGET paperboat_toolkit_optimization)
+  target_link_libraries(paperboat-toolkit PRIVATE paperboat::toolkit_optimization)
+  target_compile_definitions(paperboat-toolkit PRIVATE PAPERBOAT_HAS_OPTIMIZATION)
 endif()
 
 # `paperboat new`: the scaffolder and the templates it writes, embedded (new_templates.cmake).
@@ -29,6 +37,10 @@ target_link_libraries(paperboat PRIVATE paperboat_new paperboat::core paperboat:
 if(TARGET paperboat_toolkit_opencv)
   target_link_libraries(paperboat PRIVATE paperboat::toolkit_opencv)
   target_compile_definitions(paperboat PRIVATE PAPERBOAT_HAS_OPENCV)
+endif()
+if(TARGET paperboat_toolkit_optimization)
+  target_link_libraries(paperboat PRIVATE paperboat::toolkit_optimization)
+  target_compile_definitions(paperboat PRIVATE PAPERBOAT_HAS_OPTIMIZATION)
 endif()
 
 # Installed layout: bin/paperboat and share/paperboat/{toolkits.toml,apps.toml,web/,cli/}. The binary finds

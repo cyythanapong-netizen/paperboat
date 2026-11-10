@@ -20,4 +20,8 @@ optional = true
 prefix = "ocv"
 engine = ">=0.1"
 blocks = ["gray", "blur", "median", "threshold", "adaptive_threshold", "hsv_range", "canny",
-          "erode", "dilate", "open", "close", "invert", "distance", "centroid", "view", "image"]
+          "erode", "dilate", "open", "close", "invert", "distance",
+          "resize", "crop", "flip", "rotate", "convert", "normalize", "equalize", "clahe",
+          "sobel", "laplacian", "bitwise", "blend", "absdiff",
+          "stats", "centroid", "contours", "hough_lines", "hough_circles", "template_match",
+          "draw", "save", "background", "view", "image"]

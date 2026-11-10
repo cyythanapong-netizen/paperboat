@@ -503,7 +503,6 @@ std::string toolkits_json(const std::vector<ToolkitEntry>& list,
   json arr = json::array();
   for (const auto& e : list) {
     json item = {{"name", e.name}, {"repo", e.repo}, {"installed", e.installed}, {"builtin", e.builtin}};
-    if (!e.prefix.empty()) item["prefix"] = e.prefix;
     if (!e.description.empty()) item["description"] = e.description;
     if (e.required) item["required"] = true;
     if (!e.version.empty()) item["version"] = e.version;
@@ -628,7 +627,9 @@ ToolkitResult install_toolkit(std::string_view name,
 
   const auto mat = materialize_toolkit(stage_dir, entry->name, target_dir);
   if (!mat.ok) {
-    if (fs::exists(prev_backup)) fs::rename(prev_backup, target_dir, ec);
+    std::error_code restore_ec;
+    fs::remove_all(target_dir, restore_ec);  // a partial copy; rename cannot replace it
+    if (fs::exists(prev_backup)) fs::rename(prev_backup, target_dir, restore_ec);
     return mat;
   }
   fs::remove_all(prev_backup, ec);
