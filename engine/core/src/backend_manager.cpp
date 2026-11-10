@@ -546,7 +546,10 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
                                   std::string* error_msg,
                                   double* elapsed_seconds) {
   auto start_time = std::chrono::steady_clock::now();
-  const fs::path root = toolkit::find_repo_root(backend_dir);
+  fs::path root = toolkit::find_repo_root(backend_dir);
+  if (root.empty()) {
+    root = toolkit::find_repo_root();
+  }
 
   if (backend_dir.filename() == "workbench" && !root.empty() && fs::is_regular_file(root / "engine" / "CMakeLists.txt")) {
     const fs::path engine_build = root / "engine" / "build";
@@ -857,7 +860,8 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
     }
   }
 
-  // An installed toolkit's examples: engine/toolkit/<toolkit>/examples/<ocv|opt>-NN-name.
+  // An installed toolkit's examples: engine/toolkit/<toolkit>/examples/<ocv|opt>-NN-name,
+  // or a sibling toolkit repository: paperboat-toolkit-<name>/examples/<ocv|opt>-NN-name.
   // `ocv-01`, `ocv-1` and the full name all find the same folder.
   if (!root.empty()) {
     std::string prefix = name;
@@ -866,16 +870,34 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
         std::isdigit(static_cast<unsigned char>(prefix.back()))) {
       prefix.insert(dash + 1, "0");
     }
+
+    auto search_examples = [&](const fs::path& examples) -> fs::path {
+      if (!fs::is_directory(examples, ec)) return {};
+      for (const auto& entry : fs::directory_iterator(examples, ec)) {
+        if (!entry.is_directory(ec)) continue;
+        const std::string fn = entry.path().filename().string();
+        if ((fn == prefix || fn.starts_with(prefix + "-") || (fn.find(prefix) != std::string::npos && fn.find('-') != std::string::npos)) &&
+            is_valid_backend_dir(entry.path())) {
+          return entry.path();
+        }
+      }
+      return {};
+    };
+
     const fs::path toolkits = root / "engine" / "toolkit";
     if (fs::is_directory(toolkits, ec)) {
       for (const auto& toolkit : fs::directory_iterator(toolkits, ec)) {
-        const fs::path examples = toolkit.path() / "examples";
-        if (!fs::is_directory(examples, ec)) continue;
-        for (const auto& entry : fs::directory_iterator(examples, ec)) {
-          if (!entry.is_directory(ec)) continue;
-          const std::string fn = entry.path().filename().string();
-          if ((fn == prefix || fn.starts_with(prefix + "-")) && is_valid_backend_dir(entry.path())) return entry.path();
-        }
+        if (auto p = search_examples(toolkit.path() / "examples"); !p.empty()) return p;
+      }
+    }
+
+    const fs::path parent = root.parent_path();
+    if (fs::is_directory(parent, ec)) {
+      for (const auto& repo : fs::directory_iterator(parent, ec)) {
+        if (!repo.is_directory(ec)) continue;
+        const std::string rname = repo.path().filename().string();
+        if (!rname.starts_with("paperboat-toolkit-")) continue;
+        if (auto p = search_examples(repo.path() / "examples"); !p.empty()) return p;
       }
     }
   }
@@ -1196,16 +1218,42 @@ std::vector<ExampleBackend> BackendManager::get_examples(const fs::path& example
       }
     }
   }
-  if (const fs::path root = toolkit::find_repo_root(edir); !root.empty()) {
+  fs::path root = toolkit::find_repo_root(edir);
+  if (root.empty()) {
+    root = toolkit::find_repo_root(examples_dir);
+  }
+  if (root.empty()) {
+    root = toolkit::find_repo_root();
+  }
+  if (!root.empty()) {
     const fs::path toolkits = root / "engine" / "toolkit";
-    for (const auto& toolkit : fs::directory_iterator(toolkits, ec)) {
-      if (!toolkit.is_directory(ec)) continue;
-      const fs::path examples = toolkit.path() / "examples";
-      if (!fs::is_directory(examples, ec)) continue;
-      for (const auto& entry : fs::directory_iterator(examples, ec)) {
-        if (entry.is_directory(ec) && (fs::is_regular_file(entry.path() / "backend.toml", ec) ||
-                                       fs::is_regular_file(entry.path() / "descriptor.toml", ec))) {
-          add_dir(entry.path());
+    if (fs::is_directory(toolkits, ec)) {
+      for (const auto& toolkit : fs::directory_iterator(toolkits, ec)) {
+        if (!toolkit.is_directory(ec)) continue;
+        const fs::path examples = toolkit.path() / "examples";
+        if (!fs::is_directory(examples, ec)) continue;
+        for (const auto& entry : fs::directory_iterator(examples, ec)) {
+          if (entry.is_directory(ec) && (fs::is_regular_file(entry.path() / "backend.toml", ec) ||
+                                         fs::is_regular_file(entry.path() / "descriptor.toml", ec))) {
+            add_dir(entry.path());
+          }
+        }
+      }
+    }
+
+    const fs::path parent = root.parent_path();
+    if (fs::is_directory(parent, ec)) {
+      for (const auto& repo : fs::directory_iterator(parent, ec)) {
+        if (!repo.is_directory(ec)) continue;
+        const std::string rname = repo.path().filename().string();
+        if (!rname.starts_with("paperboat-toolkit-")) continue;
+        const fs::path examples = repo.path() / "examples";
+        if (!fs::is_directory(examples, ec)) continue;
+        for (const auto& entry : fs::directory_iterator(examples, ec)) {
+          if (entry.is_directory(ec) && (fs::is_regular_file(entry.path() / "backend.toml", ec) ||
+                                         fs::is_regular_file(entry.path() / "descriptor.toml", ec))) {
+            add_dir(entry.path());
+          }
         }
       }
     }
