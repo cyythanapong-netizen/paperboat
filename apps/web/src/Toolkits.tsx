@@ -156,16 +156,17 @@ export function ToolkitsButton({
             items.map((t) => {
             const busy = t.busy;
             const versions = t.versions ?? [];
+            const installedVer = t.version && t.version !== "unknown" ? t.version : undefined;
             const curSelection =
               selectedVersions[t.name] ??
-              t.version ??
+              installedVer ??
               t.default ??
               (versions.length > 0 ? versions[0] : "dev");
             const statusText = busy
               ? `${busy}…`
               : t.installed
-                ? t.version
-                  ? `installed ${t.version}`
+                ? installedVer
+                  ? `installed ${installedVer}`
                   : "installed"
                 : t.required
                   ? "missing (required)"
@@ -218,9 +219,9 @@ export function ToolkitsButton({
                     <>
                       <button
                         className="key small"
-                        disabled={!connected || !!busy || curSelection === t.version}
+                        disabled={!connected || !!busy || (installedVer !== undefined && curSelection === installedVer)}
                         title={
-                          curSelection === t.version
+                          installedVer !== undefined && curSelection === installedVer
                             ? `Version ${curSelection} already installed`
                             : `Switch to ${curSelection} and rebuild`
                         }
