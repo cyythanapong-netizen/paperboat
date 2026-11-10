@@ -185,7 +185,8 @@ ToolkitResult materialize_toolkit(const fs::path& clone_dir, std::string_view na
     fs::copy(src_dir, target_dir, fs::copy_options::recursive, ec);
     // A toolkit repository may keep its examples at the root; install them next to the
     // toolkit so the CLI finds them under engine/toolkit/<name>/examples.
-    if (!ec && fs::is_directory(clone_dir / "examples", ec)) {
+    std::error_code examples_ec;
+    if (!ec && fs::is_directory(clone_dir / "examples", examples_ec)) {
       fs::copy(clone_dir / "examples", target_dir / "examples", fs::copy_options::recursive, ec);
     }
     fs::remove_all(clone_dir);
