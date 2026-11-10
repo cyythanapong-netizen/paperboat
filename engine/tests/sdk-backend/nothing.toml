@@ -1,0 +1,7 @@
+# The e2e empty-Flow fixture with nothing on the station either, and an explicit empty
+# [graph]: the Flow page opens empty.
+domain = "sdk-backend-empty"
+import = ["base"]
+
+[graph]
+nodes = []

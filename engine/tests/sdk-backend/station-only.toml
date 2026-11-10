@@ -1,0 +1,7 @@
+# The e2e empty-Flow fixture: no [graph] (and no [dashboard]), so the Flow page opens with
+# just the block its station object spawns.
+domain = "sdk-backend-empty"
+import = ["base"]
+
+[station]
+objects = [{ id = "thermo-1", type = "thermo" }]

@@ -230,6 +230,31 @@ TEST_CASE("hello says the Station is hidden when the descriptor says so") {
   }
 }
 
+TEST_CASE("a descriptor with no starter graph, or an empty one, opens an empty canvas without an error") {
+  // A backend may ship no [graph] at all, or one with nodes = []: both open the same empty
+  // canvas, and neither is an error (no station either, so no station.load).
+  const std::vector<std::string> descriptors = {
+      "domain = \"rig\"\n",
+      "domain = \"rig\"\n[graph]\nnodes = []\n",
+  };
+  for (const auto& toml : descriptors) {
+    INFO(toml);
+    const auto catalog = tk::load_descriptor(toml, rig::registry());
+    const core::Backend backend{.engine = "test", .catalog = &catalog};
+    std::vector<json> sent;
+    {
+      core::Session session(backend, [&](const std::string& text) { sent.push_back(json::parse(text)); });
+    }
+    std::vector<std::string> types;
+    for (const auto& m : sent) types.push_back(m["type"]);
+    CHECK(types == std::vector<std::string>{"hello", "catalog", "scene", "graph.load"});
+    const auto loaded = std::ranges::find_if(sent, [](const json& m) { return m.value("type", "") == "graph.load"; });
+    REQUIRE(loaded != sent.end());
+    CHECK((*loaded)["graph"] == json{{"nodes", json::array()}, {"edges", json::array()}});
+    CHECK(std::ranges::none_of(sent, [](const json& m) { return m.value("type", "") == "log"; }));
+  }
+}
+
 TEST_CASE("variables (#36): the same run with its numbers given by variables, and errors on the block") {
   const core::Backend backend{.engine = "test", .catalog = &rig::catalog(), .run = {.real_time = false}};
   json graph = starter_graph();
