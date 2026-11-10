@@ -102,6 +102,27 @@ function Mark({phase}: {phase: number}) {
   );
 }
 
+function Fact({label, value}: {label: string; value: string}) {
+  return (
+    <Text wrap="truncate">
+      <Text dimColor>{label.padEnd(22)}</Text>
+      <Text>{value}</Text>
+    </Text>
+  );
+}
+
+/** What both the banner and `about` say about this install. */
+function installedFacts(): {label: string; value: string}[] {
+  const toolkits = S.toolkits.filter(t => t.installed).length;
+  const apps = S.programs.filter(p => p.installed).length;
+  return [
+    {label: 'Paperboat CLI version', value: CLI_VERSION},
+    {label: 'paperboat version', value: S.version || 'unknown'},
+    {label: 'installed toolkits', value: `${toolkits} ${toolkits === 1 ? 'toolkit' : 'toolkits'}`},
+    {label: 'installed apps', value: `${apps} ${apps === 1 ? 'app' : 'apps'}`},
+  ];
+}
+
 function Banner({working, pulse, columns}: {working: boolean; pulse: number; columns: number}) {
   const phase = useRipple(working, pulse);
   const cwd = process.cwd().replace(homedir(), '~');
@@ -113,6 +134,7 @@ function Banner({working, pulse, columns}: {working: boolean; pulse: number; col
           <Box flexDirection="column" justifyContent="center" flexShrink={1} minWidth={0}>
             <Text bold wrap="truncate">Paperboat console</Text>
             <Text dimColor wrap="truncate">C++20 core · protocol paperboat/0</Text>
+            {installedFacts().map(f => <Fact key={f.label} {...f} />)}
             <Text dimColor wrap="truncate">{cwd}</Text>
           </Box>
         )}
@@ -122,20 +144,9 @@ function Banner({working, pulse, columns}: {working: boolean; pulse: number; col
   );
 }
 
-function Fact({label, value}: {label: string; value: string}) {
-  return (
-    <Text wrap="truncate">
-      <Text dimColor>{label.padEnd(22)}</Text>
-      <Text>{value}</Text>
-    </Text>
-  );
-}
-
 /** `about`: the mark (always rippling) and what this console is made of. */
 function About() {
   const phase = useRipple(true, 0);
-  const toolkits = S.toolkits.filter(t => t.installed).length;
-  const apps = S.programs.filter(p => p.installed).length;
   return (
     <Panel title={<Text><Text bold>About</Text><Text dimColor> · paperboat cli</Text></Text>}>
       <Box flexDirection="row" flexGrow={1} alignItems="center" paddingX={2} gap={4}>
@@ -143,10 +154,7 @@ function About() {
         <Box flexDirection="column" gap={1} flexShrink={1} minWidth={0}>
           <Text bold>Paperboat CLI</Text>
           <Box flexDirection="column">
-            <Fact label="Paperboat CLI version" value={CLI_VERSION} />
-            <Fact label="paperboat version" value={S.version || 'unknown'} />
-            <Fact label="installed toolkits" value={`${toolkits} ${toolkits === 1 ? 'toolkit' : 'toolkits'}`} />
-            <Fact label="installed apps" value={`${apps} ${apps === 1 ? 'app' : 'apps'}`} />
+            {installedFacts().map(f => <Fact key={f.label} {...f} />)}
           </Box>
         </Box>
       </Box>
