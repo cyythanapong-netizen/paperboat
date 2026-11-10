@@ -512,8 +512,20 @@ optimization (external toolkit)
 
 Optional external toolkit from ``paperboat-toolkit-optimization`` (installed into
 ``engine/toolkit/optimization``; ``paperboat::toolkit_optimization``, ``register_optimization``).
-Programs from a JSON file, solved by OSQP: ``qp`` (min ½·xᵀPx + qᵀx) and ``lp`` (min cᵀx),
-both with ``l ≤ Ax ≤ u``. Outputs ``x`` (numbers), ``objective``, ``iterations`` and ``status``.
-The file uses ``P``, ``q`` for a QP (``P``'s upper triangle) or ``c`` for an LP, with optional
-``A``, ``l`` and ``u``; a ``null`` bound is infinite. The block solves on its first step and keeps
-the result, so it fits a run-once (a design point, a plan, a schedule).
+Step blocks from a JSON file, solved by OSQP: ``qp`` (min ½·xᵀPx + qᵀx), ``lp`` (min cᵀx)
+and ``nlp`` (min f(x), Ipopt when built). A solve block has step ``in``/``out``: the path
+arrives, one solve, the path leaves. Outputs ``x`` (numbers), ``objective``, ``iterations``
+and ``status``. The file uses ``P``, ``q`` for a QP (``P``'s upper triangle), ``c`` for an LP,
+or ``variables``/``objective``/``constraints`` for an NLP, with optional ``A``, ``l`` and ``u``;
+a ``null`` bound is infinite.
+
+control (external toolkit)
+--------------------------
+
+Optional external toolkit from ``paperboat-toolkit-control`` (installed into
+``engine/toolkit/control``; ``paperboat::toolkit_control``, ``register_control``). It links the
+optimization toolkit's ``Workspace`` and adds per-step Signal blocks: ``mpc`` (a condensed QP
+from ``A``, ``B``, ``Q``, ``R``, ``N`` and ``u`` bounds), ``lp_step`` (an LP every step) and
+``nmpc`` (an NLP every step, needs Ipopt). They are ``feedthrough = false``: ``outputs()``
+returns the last ``u``, ``step()`` solves for the next one. Outputs ``u``, ``status``,
+``iterations`` and ``solve_time``. Install ``optimization`` with it.
