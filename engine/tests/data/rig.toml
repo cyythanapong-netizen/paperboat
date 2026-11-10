@@ -13,7 +13,7 @@ objects = [{ id = "slider-1", type = "slider", props = { mass = 1, max_force = 5
 [graph]
 nodes = [
   { id = "slider-1", type = "slider", pos = [0, 120] },
-  { id = "pid-x", type = "pid", params = { kp = 4, ki = 0, kd = 3 }, pos = [260, 0] },
+  { id = "pid-x", type = "pd", params = { kp = 4, kd = 3 }, pos = [260, 0] },
   { id = "gain-1", type = "gain", pos = [520, 0] },
   { id = "graph-x", type = "graph", pos = [260, 300] },
   { id = "graph-v", type = "graph", pos = [520, 300] },

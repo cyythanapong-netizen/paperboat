@@ -37,9 +37,9 @@ Package Quick Reference
    * - :ref:`pkg-list`
      - ``range``, ``series``, ``list_length``, ``item``, ``aggregate``, ``points``, ``coordinates``
      - Lists of numbers and of points on the wires: made, measured, indexed, joined, split and reduced.
-   * - :ref:`pkg-control`
-     - ``pid``, ``rate_limiter``, ``deadband``, ``hysteresis``, ``lowpass``, ``integrator``
-     - Dynamic feedback controllers, signal filters, and rate-of-change limiters.
+   * - control (external)
+     - ``pid``, ``integrator``, ``lag``, ``delay``, ``mpc``, ``lp_step``, ``nmpc``
+     - Clock dynamics and per-step model predictive control; install ``optimization`` for the dynamic blocks.
    * - :ref:`pkg-dashboard`
      - ``graph``, ``display``, ``scope``, ``lamp``, ``image``
      - Telemetry instruments piping signals to real-time oscilloscopes, digital readouts, and visual frames.
@@ -158,9 +158,9 @@ Package Quick Reference
    * - :ref:`pkg-list`
      - ``range``, ``series``, ``list_length``, ``item``, ``aggregate``, ``points``, ``coordinates``
      - Lists of numbers and of points on the wires: made, measured, indexed, joined, split and reduced.
-   * - :ref:`pkg-control`
-     - ``pid``, ``rate_limiter``, ``deadband``, ``hysteresis``, ``lowpass``, ``integrator``
-     - Dynamic feedback controllers, signal filters, and rate-of-change limiters.
+   * - control (external)
+     - ``pid``, ``integrator``, ``lag``, ``delay``, ``mpc``, ``lp_step``, ``nmpc``
+     - Clock dynamics and per-step model predictive control; install ``optimization`` for the dynamic blocks.
    * - :ref:`pkg-dashboard`
      - ``graph``, ``display``, ``scope``, ``lamp``, ``image``
      - Telemetry instruments piping signals to real-time oscilloscopes, digital readouts, and visual frames.
@@ -452,19 +452,6 @@ Indicator: ``lamp`` (``in`` → ``y``, 0 or 1), lit while ``in`` passes ``thresh
 Dashboard and ``color`` its colour when lit: ``signal`` or ``danger``. Its output can end a run
 (a Step flow's ``when`` → ``stop``).
 
-.. _pkg-control:
-
-control
--------
-
-Dynamics on a clock (all but ``delay`` :ref:`elementwise <elementwise>`): ``pid`` (``e`` → ``u``; ``kp``, ``ki``, ``kd``), ``integrator`` (``u`` → ``y``;
-``initial``), ``lag`` (``u`` → ``y``; ``tau``; 0 is a one-step delay) and ``delay`` (``u`` → ``y``:
-its input ``steps`` clock steps ago, ``initial`` before then; any value). The last three have
-no direct feedthrough (they output their state, then take the input), so a feedback loop
-may pass through them: integrator → gain → back into the integrator is x' = −k x. A loop
-without one is an algebraic loop and fails. C++ helpers ``rk4_step`` and ``euler_step`` in
-``paperboat/toolkit/control/simulator.hpp``.
-
 .. _pkg-step:
 
 step
@@ -512,8 +499,31 @@ optimization (external toolkit)
 
 Optional external toolkit from ``paperboat-toolkit-optimization`` (installed into
 ``engine/toolkit/optimization``; ``paperboat::toolkit_optimization``, ``register_optimization``).
-Programs from a JSON file, solved by OSQP: ``qp`` (min ½·xᵀPx + qᵀx) and ``lp`` (min cᵀx),
-both with ``l ≤ Ax ≤ u``. Outputs ``x`` (numbers), ``objective``, ``iterations`` and ``status``.
-The file uses ``P``, ``q`` for a QP (``P``'s upper triangle) or ``c`` for an LP, with optional
-``A``, ``l`` and ``u``; a ``null`` bound is infinite. The block solves on its first step and keeps
-the result, so it fits a run-once (a design point, a plan, a schedule).
+Step blocks from a JSON file, solved by OSQP: ``qp`` (min ½·xᵀPx + qᵀx), ``lp`` (min cᵀx)
+and ``nlp`` (min f(x), Ipopt when built). A solve block has step ``in``/``out``: the path
+arrives, one solve, the path leaves. Outputs ``x`` (numbers), ``objective``, ``iterations``
+and ``status``. The file uses ``P``, ``q`` for a QP (``P``'s upper triangle), ``c`` for an LP,
+or ``variables``/``objective``/``constraints`` for an NLP, with optional ``A``, ``l`` and ``u``;
+a ``null`` bound is infinite.
+
+.. _pkg-control:
+
+control (external toolkit)
+--------------------------
+
+Optional external toolkit from ``paperboat-toolkit-control`` (installed into
+``engine/toolkit/control``; ``paperboat::toolkit_control``, ``register_control``). It carries
+the clock dynamics (all but ``delay`` :ref:`elementwise <elementwise>`): ``pid`` (``e`` → ``u``;
+``kp``, ``ki``, ``kd``), ``integrator`` (``u`` → ``y``; ``initial``), ``lag`` (``u`` → ``y``;
+``tau``; 0 is a one-step delay) and ``delay`` (``u`` → ``y``: its input ``steps`` clock steps
+ago, ``initial`` before then; any value). The last three have no direct feedthrough (they
+output their state, then take the input), so a feedback loop may pass through them:
+integrator → gain → back into the integrator is x' = −k x. A loop without one is an algebraic
+loop and fails. C++ helpers ``rk4_step`` and ``euler_step`` live in
+``paperboat/toolkit/control/simulator.hpp``.
+
+It also links the optimization toolkit's ``Workspace`` for per-step Signal blocks: ``mpc``
+(a condensed QP from ``A``, ``B``, ``Q``, ``R``, ``N`` and ``u`` bounds), ``lp_step`` (an LP
+every step) and ``nmpc`` (an NLP every step, needs Ipopt). They are ``feedthrough = false``:
+``outputs()`` returns the last ``u``, ``step()`` solves for the next one. Outputs ``u``,
+``status``, ``iterations`` and ``solve_time``. Install ``optimization`` with it.

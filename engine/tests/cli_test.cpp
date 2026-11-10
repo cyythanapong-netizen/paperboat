@@ -263,7 +263,7 @@ TEST_CASE("BackendManager check_backend checks solver setting and solver api det
   }
   {
     std::ofstream desc(tmp_dir / "descriptor.toml");
-    desc << "domain = \"solver-check\"\nimport = [\"control\"]\n";
+    desc << "domain = \"solver-check\"\nimport = [\"math\"]\n";
   }
 
   auto res = core::BackendManager::check_backend(tmp_dir, /*fast=*/true);

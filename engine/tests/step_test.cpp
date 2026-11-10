@@ -28,7 +28,7 @@ TEST_CASE("step templates have step ports, math and control ones don't") {
   CHECK(has_step_ports(builtins().find("step/wait")->def));
   CHECK(has_step_ports(builtins().find("step/start")->def));
   CHECK_FALSE(has_step_ports(builtins().find("math/threshold")->def));
-  CHECK_FALSE(has_step_ports(builtins().find("control/pid")->def));
+  CHECK_FALSE(has_step_ports(builtins().find("math/gain")->def));
   // If (base, magic) in its step form reads its condition from a signal port.
   const auto step_if = in_form(builtins().find("base/if")->def, "step");
   CHECK(has_step_ports(step_if));

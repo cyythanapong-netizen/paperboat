@@ -45,7 +45,7 @@ struct Twice final : tk::Block {
 
 const tk::Catalog& mixed() {
   static const tk::Catalog catalog = tk::load_descriptor(R"(domain = "mixed"
-import = ["step", "base", "signal", "math", "control", "dashboard"]
+import = ["step", "base", "signal", "math", "dashboard"]
 [[blocks]]
 use = "math/gain"
 type = "signal-only"
@@ -85,12 +85,6 @@ TEST_CASE("packages say which flow types their blocks work in (#9)") {
     CHECK(builtin(name).flows.empty());
     for (const auto& flow : tk::flow_types()) CHECK(tk::works_in(builtin(name), flow));
   }
-  // control: a Signal flow's clock and a Step flow's signal blocks (toolkit.toml `flows`).
-  for (const char* name : {"control/pid", "control/integrator", "control/lag", "control/delay"}) {
-    INFO(name);
-    CHECK(builtin(name).flows == Flows{"signal", "step"});
-    CHECK(tk::works_in(builtin(name), "step"));
-  }
   for (const char* name : {"step/start", "step/when", "step/wait", "step/repeat", "step/stop", "step/say"}) {
     INFO(name);
     CHECK(builtin(name).flows == Flows{"step"});
@@ -118,28 +112,28 @@ TEST_CASE("a block in code: a step works in a Step flow unless it says; a packag
 
 TEST_CASE("a descriptor entry overrides a block's flow types, and the catalog carries them") {
   const auto catalog = tk::load_descriptor(R"(domain = "d"
-import = ["base", "control", "step"]
+import = ["base", "math", "step"]
 [[blocks]]
-use = "control/pid"
-type = "pid-anywhere"
+use = "math/gain"
+type = "gain-anywhere"
 flows = ["signal", "step"]
 [[blocks]]
 use = "base/constant"
 type = "model-constant"
 flows = ["model"]
 )");
-  CHECK(catalog.find("pid-anywhere")->def.flows == Flows{"signal", "step"});
+  CHECK(catalog.find("gain-anywhere")->def.flows == Flows{"signal", "step"});
   CHECK(catalog.find("model-constant")->def.flows == Flows{"model"});
   const json blocks = blocks_of(catalog);
-  CHECK(blocks.at("pid-anywhere").at("flows") == json::array({"signal", "step"}));
-  CHECK(blocks.at("pid").at("flows") == json::array({"signal", "step"}));  // the package's default
+  CHECK(blocks.at("gain-anywhere").at("flows") == json::array({"signal", "step"}));
+  CHECK_FALSE(blocks.at("gain").contains("flows"));
   CHECK(blocks.at("start").at("flows") == json::array({"step"}));
-  CHECK_FALSE(blocks.at("constant").contains("flows"));  // every flow type: no field
+  CHECK_FALSE(blocks.at("constant").contains("flows"));
 
   const auto bad = [](const std::string& flows) {
-    return "domain = \"d\"\n[[blocks]]\nuse = \"control/pid\"\nflows = " + flows + "\n";
+    return "domain = \"d\"\n[[blocks]]\nuse = \"math/gain\"\nflows = " + flows + "\n";
   };
-  CHECK_THROWS_WITH(tk::load_descriptor(bad("[\"liquid\"]")), ContainsSubstring("blocks[0] (control/pid): no flow type \"liquid\""));
+  CHECK_THROWS_WITH(tk::load_descriptor(bad("[\"liquid\"]")), ContainsSubstring("blocks[0] (math/gain): no flow type \"liquid\""));
   CHECK_THROWS_WITH(tk::load_descriptor(bad("[]")), ContainsSubstring("flows is empty; leave it out for every flow type"));
   CHECK_THROWS_WITH(tk::load_descriptor(bad("\"signal\"")), ContainsSubstring("flows is a list of flow types"));
   CHECK_THROWS_WITH(tk::load_descriptor(bad("[\"step\", \"step\"]")), ContainsSubstring("listed twice"));
@@ -147,7 +141,7 @@ flows = ["model"]
 
 TEST_CASE("the flow types a domain offers: the descriptor's, else Signal flow and those its blocks name") {
   CHECK(tk::load_descriptor("domain = \"a\"\nimport = [\"base\", \"math\", \"dashboard\"]\n").flows == Flows{"signal"});
-  CHECK(tk::load_descriptor("domain = \"a\"\nimport = [\"base\", \"control\"]\n").flows == Flows{"signal", "step"});
+  CHECK(tk::load_descriptor("domain = \"a\"\nimport = [\"base\"]\n").flows == Flows{"signal"});
   CHECK(tk::load_descriptor("domain = \"a\"\nimport = [\"step\", \"base\"]\n").flows == Flows{"signal", "step"});
   CHECK(tk::load_descriptor("domain = \"a\"\nimport = [\"base\"]\n[[blocks]]\nuse = \"base/constant\"\ntype = \"m\"\nflows = [\"model\"]\n").flows ==
         Flows{"signal", "model"});
@@ -157,7 +151,7 @@ TEST_CASE("the flow types a domain offers: the descriptor's, else Signal flow an
 }
 
 TEST_CASE("a starter graph's flow type is checked at load") {
-  const std::string head = "domain = \"a\"\nimport = [\"step\", \"base\", \"control\"]\n[graph]\n";
+  const std::string head = "domain = \"a\"\nimport = [\"step\", \"base\"]\n[graph]\n";
   const auto ok = tk::load_descriptor(head + "flow = \"step\"\nnodes = [{ id = \"s\", type = \"start\" }, { id = \"c\", type = \"constant\" }]\n");
   CHECK(json::parse(ok.graph)["flow"] == "step");
   CHECK_FALSE(json::parse(tk::load_descriptor(head + "nodes = []\n").graph).contains("flow"));  // not chosen
@@ -206,8 +200,8 @@ TEST_CASE("the engine refuses a block on a sheet of a flow type it doesn't work 
   CHECK(refusal(g, catalog, &node) ==
         "block start (Start) works only in a Step flow, not on this Signal flow sheet: remove it, or make the sheet a Step flow");
   CHECK(node == "start");
-  g["nodes"] = {{{"id", "one"}, {"type", "constant"}}, {{"id", "pid"}, {"type", "pid"}}};
-  g["edges"] = {{{"from", {"one", "y"}}, {"to", {"pid", "e"}}}};
+  g["nodes"] = {{{"id", "one"}, {"type", "constant"}}, {{"id", "pid"}, {"type", "signal-only"}}};
+  g["edges"] = {{{"from", {"one", "y"}}, {"to", {"pid", "u"}}}};
   CHECK(refusal(g, catalog).empty());
 
   // A flow type the backend doesn't offer.

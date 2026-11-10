@@ -12,6 +12,7 @@
 
 #include "paperboat/core/backend.hpp"
 #include "paperboat/core/graph.hpp"
+#include "rig.hpp"
 
 namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
@@ -23,7 +24,7 @@ namespace {
 
 const tk::Catalog& catalog() {
   static const tk::Catalog c =
-      tk::load_descriptor("domain = \"l\"\nimport = [\"base\", \"list\", \"math\", \"control\", \"signal\", \"dashboard\"]\n");
+      tk::load_descriptor("domain = \"l\"\nimport = [\"base\", \"list\", \"math\", \"control\", \"signal\", \"dashboard\"]\n", rig::registry());
   return c;
 }
 

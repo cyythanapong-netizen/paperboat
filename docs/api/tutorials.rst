@@ -26,8 +26,8 @@ Every backend is self-contained in its own directory:
 Writing the Descriptor
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The :file:`descriptor.toml` tells Paperboat what your application offers, which standard
-toolkits to import, and how the initial workspace opens.
+The :file:`descriptor.toml` tells Paperboat what your application offers, which toolkits to
+import, and how the initial workspace opens.
 
 Create :file:`reservoir/descriptor.toml`:
 
@@ -35,7 +35,8 @@ Create :file:`reservoir/descriptor.toml`:
 
    domain = "reservoir"
 
-   # Import standard blocks from the built-in toolkit
+   # Built-in packages, plus the optional control toolkit that provides the PID
+   # (`paperboat toolkit install control --repo https://github.com/paperboatlab/paperboat-toolkit-control.git`)
    import = ["base", "control", "dashboard", "math", "signal", "step", "string"]
 
    # Default run settings (10 seconds duration, 100 Hz step rate)

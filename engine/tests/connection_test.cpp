@@ -56,7 +56,7 @@ namespace {
 
 const tk::Catalog& catalog() {
   static const tk::Catalog c = tk::load_descriptor(R"(domain = "c"
-import = ["base", "math", "control", "dashboard"]
+import = ["base", "math", "dashboard"]
 
 [[blocks]]
 use = "math/gain"
