@@ -13,12 +13,12 @@ engine = ">=0.1"
 blocks = ["qp", "lp"]
 
 [[toolkits]]
-name = "mpc"
+name = "control"
 repo = "https://github.com/paperboatlab/paperboat-toolkit-control.git"
-description = "Model predictive control blocks: mpc, lp_step, nmpc (needs optimization)."
+description = "Control blocks: pid, integrator, lag, delay, and per-step mpc, lp_step, nmpc (needs optimization)."
 optional = true
 engine = ">=0.1"
-blocks = ["mpc", "lp_step", "nmpc"]
+blocks = ["pid", "integrator", "lag", "delay", "mpc", "lp_step", "nmpc"]
 
 [[toolkits]]
 name = "opencv"

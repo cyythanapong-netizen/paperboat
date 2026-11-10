@@ -1,7 +1,7 @@
 #pragma once
 
 // Templates: reusable blocks that a domain descriptor refers to by name, such as
-// "control/pid". A template is a BlockDef plus a factory for instances.
+// "math/gain". A template is a BlockDef plus a factory for instances.
 
 #include <functional>
 #include <memory>
@@ -16,7 +16,7 @@
 namespace paperboat::toolkit {
 
 struct Template {
-  std::string name;  // "<package>/<block>", e.g. "control/pid"
+  std::string name;  // "<package>/<block>", e.g. "math/gain"
   BlockDef def;      // def.type is the default type id in a catalog ("pid")
   // Descriptor-time settings this template accepts, with their defaults (e.g. key → "Space").
   Config config;

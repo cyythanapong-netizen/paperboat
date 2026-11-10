@@ -5,7 +5,7 @@ A backend's ``descriptor.toml`` says what its app offers: which packages and tem
 are in the palette (customised or not), the starter graph and station, and how the
 Station page shows the station. It is data; it never defines a block (code does) and code
 never depends on what's in its starters. Unknown fields are errors, reported with where
-they are (``blocks[2] (control/pid): has no param "kq"``).
+they are (``blocks[2] (math/gain): has no param "kq"``).
 
 Top level
 ---------
@@ -46,10 +46,10 @@ Top level
    .. code-block:: toml
 
       [[blocks]]
-      use = "control/pid"
-      type = "pid-theta"
-      label = "PID θ"
-      defaults = { kp = 40, kd = 8 }
+      use = "math/gain"
+      type = "gain-theta"
+      label = "Gain θ"
+      defaults = { k = 40 }
 
 ``[[objects]]``
    A station template, used as is or customised: ``use``, ``type``, ``label``, ``defaults``

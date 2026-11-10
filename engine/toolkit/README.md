@@ -13,10 +13,9 @@ its domain state).
 | `signal`  | Signals f(t): t is the block's input `t` when wired (a step's `progress`), else the run clock. C++: `clock`, `fft` (the amplitude spectrum of the last N samples via pocketfft, and its strongest frequency), and the abstract parent `generator` (f is an expression). TOML definitions on it (`src/signal/blocks.toml`): `sine`, `step`, `ramp`, `square`, `ease` (shape a 0–1 progress; `shape`: in-out, in, out, linear), `function` (f(t): type f on the block; its free names are its inputs, with t as the clock when unwired) |
 | `math`    | Pointwise arithmetic on signals: `gain`, `sum`, `threshold`, `saturation`, and special functions from Boost.Math: `erf`, `gamma` (gamma/log-gamma/digamma), `bessel` (J/Y/I/K, of any order), `distribution` (normal/uniform/exponential pdf, cdf or quantile) |
 | `dashboard` | Monitors, shown on the Dashboard as instruments: `graph` (plots its input over time), `display` (its latest value as a number or text), `scope`, `lamp` (on while its input passes `threshold` by `op`; `latch`; outputs `y`), and the `switch` control |
-| `control` | Dynamics that run on a clock in a Signal flow, and as signal blocks in a Step flow (`flows = ["signal", "step"]`): `pid`, and without direct feedthrough (a feedback loop may pass through them) `integrator`, `lag`, `delay` (`steps`, `initial`) |
 | `step`    | The path of a Step flow (`flows = ["step"]`), with step ports. Hats: `start` (once), `when` (each time signal `cond` rises, e.g. a key; a path alongside the others). Then `wait` (`seconds`), `repeat` (leaves by `loop` `times` times, then `done`), `stop` (ends the whole run). Branch with a `base` logic block in its step form |
 | `optimization` | External optional toolkit (`paperboat-toolkit-optimization`, installed into `engine/toolkit/optimization`; `paperboat::toolkit_optimization`, `register_optimization`). Step blocks from a JSON file: `qp` (min ½xᵀPx + qᵀx), `lp` (min cᵀx) and `nlp` (min f(x), Ipopt when built), with `l ≤ Ax ≤ u`; step `in`/`out` and outputs `x`, `objective`, `iterations`, `status` |
-| `mpc` (external) | External optional toolkit (`paperboat-toolkit-control`, installed into `engine/toolkit/mpc`; `paperboat::toolkit_mpc`, `register_mpc`). Per-step Signal blocks on the optimization `Workspace`: `mpc` (condensed QP from `A`, `B`, `Q`, `R`, `N`, `u` bounds), `lp_step` (LP every step), `nmpc` (NLP every step, needs Ipopt). Outputs `u`, `status`, `iterations`, `solve_time`; no step ports |
+| `control` (external) | External optional toolkit (`paperboat-toolkit-control`, installed into `engine/toolkit/control`; `paperboat::toolkit_control`, `register_control`). Clock dynamics (`flows = ["signal", "step"]`): `pid`, and without direct feedthrough (a feedback loop may pass through them) `integrator`, `lag`, `delay` (`steps`, `initial`). Links the optimization `Workspace` for per-step Signal blocks: `mpc` (condensed QP from `A`, `B`, `Q`, `R`, `N`, `u` bounds), `lp_step` (LP every step), `nmpc` (NLP every step, needs Ipopt); outputs `u`, `status`, `iterations`, `solve_time` |
 | `opencv`  | External optional toolkit (`paperboat-toolkit-opencv`, installed into `engine/toolkit/opencv`; `paperboat::toolkit_opencv`, `register_opencv`). Image stages on `image` ports: geometry (`resize`, `crop`, `flip`, `rotate`), colour/tone (`gray`, `convert`, `normalize`, `equalize`, `clahe`), filters/edges (`blur`, `median`, `threshold`, `adaptive_threshold`, `hsv_range`, `canny`, `sobel`, `laplacian`, `erode`, `dilate`, `open`, `close`, `invert`, `distance`), algebra (`bitwise`, `blend`, `absdiff`, `background`), analysis (`stats`, `centroid`, `contours`, `hough_lines`, `hough_circles`, `template_match`), annotation/output (`draw`, `save`) · monitor: `view` (an image instrument) · station: `image` (a picture from a `file` prop; its linked block outputs it) · examples: `ocv-01`…`ocv-03` under `examples/` |
 
 ## Package layout
@@ -58,7 +57,7 @@ offers a block only on a sheet of a type it works in, and the engine refuses it 
 | Package | Flow types |
 | ------- | ---------- |
 | `base`, `signal`, `math`, `dashboard`, `string` | every one (a value, a wave, arithmetic, a monitor work anywhere; in a Step flow they run once per clock step) |
-| `control` | `signal` (a clock's dynamics) |
+| `control` (external) | `signal` and `step` (a clock's dynamics, or signal blocks on a Step flow) |
 | `step` | `step` (the path itself) |
 | a domain's own | every one, unless the block says (`flows` in C++ or Python) or the descriptor does; e.g. an electrical package: `model` |
 
@@ -88,12 +87,12 @@ equipment parameters live in the physical model, not in the procedure).
 **Where a block goes.** Paperboat is not Simulink: `base` stays small, holding only what
 any domain needs (a value, a key press). Everything else goes in the package of what it
 is about: waves in `signal`, arithmetic in `math`, monitors in `dashboard`, a PID that needs
-a clock in `control`, image filters in `opencv`. A descriptor imports the packages it
+a clock in the optional `control` toolkit, image filters in `opencv`. A descriptor imports the packages it
 wants, so a domain's palette shows only what makes sense there.
 
-The control package also has `rk4_step` and `euler_step` in
+The optional control package also has `rk4_step` and `euler_step` in
 `paperboat/toolkit/control/simulator.hpp`, for domains to integrate their own
-equations of motion.
+equations of motion once it is installed.
 
 List them with ports and defaults:
 
@@ -111,18 +110,18 @@ domain = "cart-pole"
 
 # 0. Whole packages: every template of these joins the palette under its default type.
 #    Entries below with the same type replace the imported one.
-import = ["base", "signal", "math", "control", "dashboard"]
+import = ["base", "signal", "math", "dashboard"]
 
 # 1. A toolkit template, used as is: type "pid", label "PID", kp=1 ki=0 kd=0
 [[blocks]]
-use = "control/pid"
+use = "math/gain"
 
 # ...or customised: a new type id and label, new param defaults
 [[blocks]]
-use = "control/pid"
-type = "pid-theta"
-label = "PID θ"
-defaults = { kp = 40, kd = 8 }
+use = "math/gain"
+type = "gain-theta"
+label = "Gain θ"
+defaults = { k = 40 }
 
 [[blocks]]
 use = "base/key"
@@ -231,7 +230,7 @@ threshold, saturation) and the `base` constant and logic blocks are compact by d
 dict of the same keys).
 
 Mistakes fail loudly with their location, e.g.
-`blocks[2] (control/pid): control/pid has no param "kq"`, and unknown fields are
+`blocks[2] (math/gain): math/gain has no param "kq"`, and unknown fields are
 rejected so a typo like `lable` doesn't pass silently. TOML syntax errors give the line
 (`not valid TOML: line 12: …`).
 

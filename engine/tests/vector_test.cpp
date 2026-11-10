@@ -12,6 +12,7 @@
 
 #include "paperboat/core/backend.hpp"
 #include "paperboat/core/graph.hpp"
+#include "rig.hpp"
 
 namespace core = paperboat::core;
 namespace tk = paperboat::toolkit;
@@ -22,7 +23,7 @@ using Catch::Matchers::WithinAbs;
 namespace {
 
 const tk::Catalog& catalog() {
-  static const tk::Catalog c = tk::load_descriptor("domain = \"v\"\nimport = [\"base\", \"math\", \"control\", \"signal\", \"string\", \"dashboard\"]\n");
+  static const tk::Catalog c = tk::load_descriptor("domain = \"v\"\nimport = [\"base\", \"math\", \"control\", \"signal\", \"string\", \"dashboard\"]\n", rig::registry());
   return c;
 }
 

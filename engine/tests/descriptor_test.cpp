@@ -181,19 +181,19 @@ defaults = { key = "ArrowDown" }
 TEST_CASE("a template entry can be renamed, relabelled and given new defaults") {
   const auto catalog = tk::load_descriptor(descriptor(R"(
 [[blocks]]
-use = "control/pid"
-type = "pid-theta"
-label = "PID θ"   # comments are fine
-defaults = { kp = 40, kd = 8 }
+use = "math/gain"
+type = "gain-theta"
+label = "Gain θ"   # comments are fine
+defaults = { k = 40 }
 )"));
-  const auto* e = catalog.find("pid-theta");
+  const auto* e = catalog.find("gain-theta");
   REQUIRE(e);
-  CHECK(e->def.label == "PID θ");
-  CHECK(e->from == tk::builtins().find("control/pid"));
-  CHECK(e->def.params[0].id == "kp");
+  CHECK(e->def.label == "Gain θ");
+  CHECK(e->from == tk::builtins().find("math/gain"));
+  CHECK(e->def.params[0].id == "k");
   CHECK(e->def.params[0].default_value == 40);
   // The template itself is untouched.
-  CHECK(tk::builtins().find("control/pid")->def.params[0].default_value == 1);
+  CHECK(tk::builtins().find("math/gain")->def.params[0].default_value == 1);
 }
 
 TEST_CASE("the same template can appear twice under different types") {
@@ -375,7 +375,7 @@ TEST_CASE("a block's view: built-in for simple maths, inherited, overridden one 
     return nlohmann::json{};
   };
   // Simple maths blocks are compact plates by default…
-  const auto base = msg("[[blocks]]\nuse = \"math/gain\"\n[[blocks]]\nuse = \"math/sum\"\n[[blocks]]\nuse = \"control/pid\"\n");
+  const auto base = msg("[[blocks]]\nuse = \"math/gain\"\n[[blocks]]\nuse = \"math/sum\"\n[[blocks]]\nuse = \"signal/sine\"\n");
   CHECK(block(base, "gain")["view"]["compact"] == true);
   CHECK(block(base, "gain")["view"]["glyph"] == "gain");
   CHECK(block(base, "gain")["view"]["value"] == "{k}");
@@ -384,7 +384,7 @@ TEST_CASE("a block's view: built-in for simple maths, inherited, overridden one 
   CHECK(block(base, "sum")["view"]["glyph"] == "plus");
   CHECK(block(base, "sum")["view"].contains("icon"));
   // …and a block with no view is the normal card: the key is absent.
-  CHECK_FALSE(block(base, "pid").contains("view"));
+  CHECK_FALSE(block(base, "sine").contains("view"));
 
   // A definition inherits its parent's view and overrides single keys of it.
   const auto child = msg("[[blocks]]\nuse = \"math/gain\"\ntype = \"half\"\ndefaults = { k = 0.5 }\nview = { glyph = \"plus\" }\n");
@@ -436,9 +436,9 @@ TEST_CASE("descriptor mistakes are reported with where they are") {
     CHECK_THROWS_WITH(tk::load_descriptor(descriptor(blocks)), ContainsSubstring(text));
   };
   fails_with("import = [\"opencv\"]", R"(import: no package "opencv" (known: )");
-  fails_with("[[blocks]]\nuse = \"control/pdi\"", R"(blocks[0] (control/pdi): no template "control/pdi" (known: )");
-  fails_with("[[blocks]]\nuse = \"control/pid\"\ndefaults = { kq = 1 }", R"(control/pid has no param "kq")");
-  fails_with("[[blocks]]\nuse = \"control/pid\"\nconfig = { key = \"x\" }", R"(control/pid has no config "key")");
+  fails_with("[[blocks]]\nuse = \"math/gainn\"", R"(blocks[0] (math/gainn): no template "math/gainn" (known: )");
+  fails_with("[[blocks]]\nuse = \"math/gain\"\ndefaults = { kq = 1 }", R"(math/gain has no param "kq")");
+  fails_with("[[blocks]]\nuse = \"math/gain\"\nconfig = { key = \"x\" }", R"(math/gain has no config "key")");
   fails_with("[[blocks]]\nuse = \"math/sum\"\n[[blocks]]\nuse = \"math/sum\"",
              R"(blocks[1] (math/sum): duplicate type "sum")");
   fails_with("[[blocks]]\nuse = \"math/sum\"\nlable = \"Add\"", R"(unknown field "lable")");
@@ -494,7 +494,7 @@ config = { f = "size * sin((fast ? 4 : 1) * t)" }
 
 TEST_CASE("blocks and objects carry a one-line description to the catalog") {
   const auto catalog = tk::load_descriptor(descriptor(R"(
-import = ["control", "signal"]
+import = ["signal"]
 [[blocks]]
 use = "math/gain"
 type = "double"
@@ -507,7 +507,6 @@ defaults = { k = 2 }
       if (b["type"] == type) return b;
     return nlohmann::json();
   };
-  CHECK(find("pid")["description"].get<std::string>().find("error") != std::string::npos);  // built in
   CHECK(find("sine")["description"] == "A smooth wave: amplitude, frequency, phase.");       // from TOML
   CHECK(find("double")["description"] == "Twice its input.");                              // the descriptor's own
 }

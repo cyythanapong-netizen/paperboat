@@ -130,6 +130,6 @@ objects = [
   CHECK_THROWS_WITH(tk::load_descriptor("domain = \"crane\"\n[station]\nobjects = [{ id = \"t\", type = \"trolley\" }, "
                                         "{ id = \"r\", type = \"rope\", links = { hook = \"t\" } }]\n", registry),
                     ContainsSubstring("no link slot \"hook\""));
-  CHECK_THROWS_WITH(tk::load_descriptor("[[objects]]\nuse = \"control/pdi\"\n"),
-                    ContainsSubstring("no station template \"control/pdi\""));
+  CHECK_THROWS_WITH(tk::load_descriptor("[[objects]]\nuse = \"base/pdi\"\n"),
+                    ContainsSubstring("no station template \"base/pdi\""));
 }

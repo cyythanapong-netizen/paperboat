@@ -965,7 +965,7 @@ edges = [
   { from = ["one", "y"], to = ["pid", "e"] }, { from = ["pid", "u"], to = ["see-pid", "in"] },
   { from = ["one", "y"], to = ["lag", "u"] },
 ]
-)", tk::builtins());
+)", rig::registry());
   return catalog;
 }
 
@@ -1244,7 +1244,7 @@ const tk::Catalog& writer_catalog() {
     return r;
   }();
   static const tk::Catalog catalog = tk::load_descriptor(R"(domain = "tune"
-import = ["base", "math", "control", "dashboard"]
+import = ["base", "math", "dashboard"]
 [[variables]]
 name = "g"
 value = 2
