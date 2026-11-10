@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The Paperboat console. `paperboat` (no command) execs this on a terminal, with
 // PAPERBOAT_BIN set to itself; `paperboat run|toolkit|top` open it on a picker or panel.
+// Full screen (the alternate buffer), so the mark can move and the shell is restored on exit.
 //   node apps/cli/dist/main.js [run|toolkit|top]
 
 import {render} from 'ink';
@@ -12,6 +13,6 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
   process.exit(2);
 }
 
-const instance = render(<App start={process.argv[2]} />, {exitOnCtrlC: false});
+const instance = render(<App start={process.argv[2]} />, {exitOnCtrlC: false, alternateScreen: true});
 await instance.waitUntilExit();
 process.exit(0);

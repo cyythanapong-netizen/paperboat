@@ -46,7 +46,7 @@ export const sec = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
 /* ---------- state ---------- */
 
-export type Mode = 'prompt' | 'picker' | 'toolkit' | 'dash' | 'logs';
+export type Mode = 'prompt' | 'picker' | 'toolkit' | 'dash' | 'logs' | 'about';
 
 export interface Job {
   id: number;
@@ -132,6 +132,7 @@ const OWN: CommandSpec[] = [
   {name: 'logs', summary: 'Show a job log (-f follows it)', aliases: [], subcommands: [], flags: ['-f', '-n'], arg: 'job'},
   {name: 'clear', summary: 'Clear the screen', aliases: [], subcommands: [], flags: [], arg: ''},
   {name: 'help', summary: 'List commands and keys', aliases: [], subcommands: [], flags: [], arg: ''},
+  {name: 'about', summary: 'Versions and installed pieces', aliases: [], subcommands: [], flags: [], arg: ''},
   {name: 'exit', summary: 'Leave the console', aliases: ['quit'], subcommands: [], flags: [], arg: ''},
 ];
 
@@ -143,6 +144,10 @@ export const S = {
   hi: -1,
   search: null as null | {query: string; i: number},
   transcript: [] as Out[],
+  /** -1 follows the tail; otherwise the first visible row. */
+  scroll: -1,
+  /** Measured transcript viewport and content height, for paging. */
+  view: {height: 0, total: 0},
   clears: 0,
   jobs: [] as Job[],
   tasks: [] as Task[],
@@ -179,13 +184,20 @@ export function useStore(): number {
   );
 }
 
+/** A full-screen console only lays out the recent past; older lines fall off. */
+const TRANSCRIPT_MAX = 600;
+
 export function say(line: Out): void {
-  S.transcript = [...S.transcript, line];  // a new array: <Static> notices only a new reference
+  const next = [...S.transcript, line];
+  S.transcript = next.length > TRANSCRIPT_MAX ? next.slice(-TRANSCRIPT_MAX) : next;
   changed();
 }
 
 export const alive = (j: Job) => j.state !== 'exited';
-export const busy = () => S.jobs.some(j => j.state === 'building') || S.tasks.length > 0 || S.mode === 'dash';
+/** Something is being built or checked: the spinner and the logo's live ripple. */
+export const working = () => S.jobs.some(j => j.state === 'building') || S.tasks.length > 0;
+/** Anything that keeps the console's spinner running, including the live dashboard. */
+export const busy = () => working() || S.mode === 'dash';
 
 /** The newest job by that name (or instance base name / port): a live service first, then any live one, then any. */
 export function jobBy(name: string): Job | undefined {
@@ -359,30 +371,16 @@ export async function init(): Promise<void> {
 /* ---------- banner ---------- */
 
 export function banner(): void {
-  const W = (t: string) => s(t);
-  const Sh = (t: string) => fa(t);
-  const boat: Out[] = [
-    [W('          ▄█'), Sh('▄'), W('          ')],
-    [W('        ▄███'), Sh('██▄'), W('        ')],
-    [W('      ▄█████'), Sh('████▄'), W('      ')],
-    [W('▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄')],
-    [W(' ▀███████████████████▀ ')],
-    [W('   ▀███████████████▀   ')],
-  ];
-  const cwd = process.cwd().replace(homedir(), '~');
-  const text: Out[] = [[b('Paperboat console')], [mu('C++20 core · protocol paperboat/0')], [mu(cwd)], [], [], []];
-  boat.forEach((l, i) => say([s('  '), ...l, s('   '), ...text[i]]));
-  say([s('  '), sg('███  ███  ███  ███  ███')]);
-  say([]);
   say([mu('Type a command, or '), s('help'), mu('. Tab completes, → takes the grey suggestion.')]);
   say([]);
 }
 
 export function clearScreen(): void {
-  process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
   S.transcript = [];
+  S.scroll = -1;
   S.clears++;
   banner();
+  changed();
 }
 
 /* ---------- jobs ---------- */
@@ -814,6 +812,9 @@ export function exec(raw: string): void {
       return help();
     case 'clear':
       return clearScreen();
+    case 'about':
+      S.mode = 'about';
+      return changed();
     case 'exit':
       return requestExit();
     case 'run':

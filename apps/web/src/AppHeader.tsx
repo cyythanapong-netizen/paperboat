@@ -33,6 +33,8 @@ type Props = {
   errors: number;
   consoleShown: boolean;
   onConsole: () => void;
+  aboutShown: boolean;
+  onAbout: () => void;
   mode: Mode;
   setMode: (m: Mode) => void;
   allowedModes: Mode[];
@@ -44,11 +46,21 @@ type Props = {
   setThemeChoice: (t: Theme) => void;
 };
 
-export function AppHeader({ state, running, commands, solver, projectTitle, dirty, installToolkit, uninstallToolkit, restartBackend, toolkitVersions, errors, consoleShown, onConsole, mode, setMode, allowedModes, projectLock, locked, onLock, onBackend, themeChoice, setThemeChoice }: Props) {
+export function AppHeader({ state, running, commands, solver, projectTitle, dirty, installToolkit, uninstallToolkit, restartBackend, toolkitVersions, errors, consoleShown, onConsole, aboutShown, onAbout, mode, setMode, allowedModes, projectLock, locked, onLock, onBackend, themeChoice, setThemeChoice }: Props) {
   return (
     <header className="bar">
       <Wordmark running={running} />
-      <MenuBar commands={commands} menuLabels={solver ? { run: `Run (${solver})` } : undefined} />
+      <div className="menubar-group" data-own-keys>
+        <MenuBar commands={commands} menuLabels={solver ? { run: `Run (${solver})` } : undefined} />
+        <button
+          className="menu-title"
+          aria-expanded={aboutShown}
+          title="About Paperboat"
+          onClick={onAbout}
+        >
+          About
+        </button>
+      </div>
       <ProjectLabel name={projectTitle} dirty={dirty} />
       <span className="spacer" />
       <ToolkitsButton

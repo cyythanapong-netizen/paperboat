@@ -77,6 +77,8 @@ export type CommandContext = {
   setThemeChoice: (t: Theme) => void;
   consoleShown: boolean;
   setConsoleShown: (shown: boolean) => void;
+  aboutShown: boolean;
+  setAboutShown: (shown: boolean) => void;
   errors: number;
   gridOn: boolean;
   setGridChoice: (g: "auto" | "on" | "off") => void;
@@ -106,7 +108,7 @@ export function menuCommands(c: CommandContext): Command[] {
   const {
     state, send, openFile, saveProject, lastSession, restore, recent, openProject, projectLock, unlocked, locked, lockedArrange, setLockModalOpen, setBackendOpen, restartBackend,
     history, undoOpen, flow, stationCanvas, setBrowser, running, variables, varsShown, setVarsShown,
-    setSearchOpen, mode, setMode, allowedModes, pages, page, setPage, open, stationShown, setStationShown, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, errors,
+    setSearchOpen, mode, setMode, allowedModes, pages, page, setPage, open, stationShown, setStationShown, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, aboutShown, setAboutShown, errors,
     gridOn, setGridChoice, cameraProjection, setCameraProjection, arrangeCanvas, arrange, setArrange,
     canRun, whyNotRun, run, usesSolvers, currentSolver, solvers, setRunSettings, setSolverOpen,
     loadRecord, saveRecord, startReplay,
@@ -239,6 +241,7 @@ export function menuCommands(c: CommandContext): Command[] {
         setArrange(!arrange);
       },
     },
+    { id: "view.about", label: "About Paperboat", menu: "view", group: "about", run: () => setAboutShown(!aboutShown) },
 
     {
       id: "run.run",

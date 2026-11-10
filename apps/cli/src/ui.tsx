@@ -1,21 +1,158 @@
-// What the console draws: the transcript (Ink <Static>, printed once, scrolls away like any
-// terminal output), the live area (running tasks and the open panel), the input line and the
-// two-line status bar pinned under it. Colors follow apps/web/DESIGN.md: the terminal's own
-// text color and greys, one signal orange for what is live, red only for failures.
+// What the console draws: a fixed mark, a scrolling transcript, the live area (running tasks
+// and the open panel), the input line and the two-line status bar. Full screen, so the mark
+// can ripple and the transcript belongs to the console rather than the terminal's scrollback.
+// Colors follow apps/web/DESIGN.md: the terminal's own text color and greys, one signal orange
+// for what is live, red only for failures.
 
-import {Box, Static, Text, useAnimation, useApp, useInput, useWindowSize} from 'ink';
-import {useEffect, type ReactNode} from 'react';
+import {Box, Text, useAnimation, useApp, useBoxMetrics, useInput, useWindowSize, type DOMElement} from 'ink';
+import {useEffect, useRef, useState, type ReactNode} from 'react';
+import {homedir} from 'node:os';
 
 import {handleKey} from './keys.ts';
+import {LOGO_ROWS, LOGO_WIDTH, logoFrame} from './logo.ts';
 import {ghost, isInstance, searchHistory} from './model.ts';
+import {CLI_VERSION} from './version.ts';
 import {
   S, alive, busy, dashRows, doing, init, kb, openDash, openPicker, openToolkits, pickList, sec, sources, stepLine,
-  useStore, type Out, type Seg, type Task,
+  useStore, working, type Out, type Seg, type Task,
 } from './store.ts';
 
 const SIGNAL = '#ff6a30';
 const SIGNAL_HI = '#ffa064';
 const DANGER = '#ff5d55';
+
+/** The launch ripple, then one every 18 s; continuously while work is live. Frames only run during a cycle. */
+const RIPPLE_MS = 1400;
+const IDLE_MS = 18000;
+
+function useRipple(working: boolean, pulse: number): number {
+  const [start, setStart] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+  const [active, setActive] = useState(true);
+  const seen = useRef(pulse);
+  const was = useRef(working);
+
+  useEffect(() => {
+    if (pulse !== seen.current) {
+      seen.current = pulse;
+      setStart(Date.now());
+      setNow(Date.now());
+      setActive(true);
+    }
+  }, [pulse]);
+
+  useEffect(() => {
+    if (working && !was.current) {
+      setStart(Date.now());
+      setNow(Date.now());
+      setActive(true);
+    }
+    was.current = working;
+  }, [working]);
+
+  useEffect(() => {
+    if (!active) return;
+    const tick = setInterval(() => setNow(Date.now()), 70);
+    return () => clearInterval(tick);
+  }, [active]);
+
+  useEffect(() => {
+    if (!active) {
+      const next = setTimeout(() => {
+        setStart(Date.now());
+        setNow(Date.now());
+        setActive(true);
+      }, IDLE_MS);
+      return () => clearTimeout(next);
+    }
+    if (working) {
+      const next = setTimeout(() => {
+        setStart(Date.now());
+        setNow(Date.now());
+      }, RIPPLE_MS);
+      return () => clearTimeout(next);
+    }
+    // Let the cycle in flight finish, then rest until the idle timer.
+    const next = setTimeout(() => setActive(false), Math.max(70, RIPPLE_MS - (Date.now() - start)));
+    return () => clearTimeout(next);
+  }, [active, working, start]);
+
+  return active ? Math.min(1, Math.max(0, (now - start) / RIPPLE_MS)) : 1;
+}
+
+/** The mark itself, at a point in the ripple. */
+function Mark({phase}: {phase: number}) {
+  const frame = logoFrame(phase);
+  return (
+    <Box flexDirection="column" width={LOGO_WIDTH} flexShrink={0}>
+      {frame.map((row, i) => (
+        <Text key={i}>
+          {row.map((span, k) =>
+            span.tone === 'water' ? (
+              <Text key={k} color={SIGNAL}>{span.text}</Text>
+            ) : span.tone === 'shade' ? (
+              <Text key={k} dimColor>{span.text}</Text>
+            ) : (
+              <Text key={k}>{span.text}</Text>
+            ),
+          )}
+        </Text>
+      ))}
+    </Box>
+  );
+}
+
+function Banner({working, pulse, columns}: {working: boolean; pulse: number; columns: number}) {
+  const phase = useRipple(working, pulse);
+  const cwd = process.cwd().replace(homedir(), '~');
+  return (
+    <Box flexDirection="column" flexShrink={0}>
+      <Box height={LOGO_ROWS} paddingX={1} gap={3} flexShrink={0}>
+        <Mark phase={phase} />
+        {columns >= 52 && (
+          <Box flexDirection="column" justifyContent="center" flexShrink={1} minWidth={0}>
+            <Text bold wrap="truncate">Paperboat console</Text>
+            <Text dimColor wrap="truncate">C++20 core · protocol paperboat/0</Text>
+            <Text dimColor wrap="truncate">{cwd}</Text>
+          </Box>
+        )}
+      </Box>
+      <Text dimColor>{` ${'─'.repeat(Math.max(0, columns - 2))} `}</Text>
+    </Box>
+  );
+}
+
+function Fact({label, value}: {label: string; value: string}) {
+  return (
+    <Text wrap="truncate">
+      <Text dimColor>{label.padEnd(22)}</Text>
+      <Text>{value}</Text>
+    </Text>
+  );
+}
+
+/** `about`: the mark (always rippling) and what this console is made of. */
+function About() {
+  const phase = useRipple(true, 0);
+  const toolkits = S.toolkits.filter(t => t.installed).length;
+  const apps = S.programs.filter(p => p.installed).length;
+  return (
+    <Panel title={<Text><Text bold>About</Text><Text dimColor> · paperboat cli</Text></Text>}>
+      <Box flexDirection="row" flexGrow={1} alignItems="center" paddingX={2} gap={4}>
+        <Mark phase={phase} />
+        <Box flexDirection="column" gap={1} flexShrink={1} minWidth={0}>
+          <Text bold>Paperboat CLI</Text>
+          <Box flexDirection="column">
+            <Fact label="Paperboat CLI version" value={CLI_VERSION} />
+            <Fact label="paperboat version" value={S.version || 'unknown'} />
+            <Fact label="installed toolkits" value={`${toolkits} ${toolkits === 1 ? 'toolkit' : 'toolkits'}`} />
+            <Fact label="installed apps" value={`${apps} ${apps === 1 ? 'app' : 'apps'}`} />
+          </Box>
+        </Box>
+      </Box>
+    </Panel>
+  );
+}
 
 function Segment({seg}: {seg: Seg}) {
   switch (seg.tone) {
@@ -44,6 +181,31 @@ function Row({line, wrap = 'wrap'}: {line: Out; wrap?: 'wrap' | 'truncate'}) {
   );
 }
 
+/** The transcript, scrolled by rows: follow the tail unless the reader has paged up. */
+function Transcript({columns}: {columns: number}) {
+  const viewport = useRef<DOMElement | null>(null);
+  const content = useRef<DOMElement | null>(null);
+  const vp = useBoxMetrics(viewport);
+  const ct = useBoxMetrics(content);
+  const max = Math.max(0, ct.height - vp.clientHeight);
+  const offset = S.scroll < 0 ? max : Math.min(Math.max(0, S.scroll), max);
+
+  useEffect(() => {
+    S.view.height = vp.clientHeight;
+    S.view.total = ct.height;
+  }, [vp.clientHeight, ct.height]);
+
+  return (
+    <Box ref={viewport} width={columns} flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden">
+      <Box flexDirection="column" contentOffsetY={offset} paddingX={1}>
+        <Box ref={content} flexDirection="column" flexShrink={0}>
+          {S.transcript.map((line, i) => <Row key={i} line={line} />)}
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
 /** The 5-dot wave from the logo's water line, the crest moving along: the one spinner. */
 function Ripple({frame}: {frame: number}) {
   const crest = frame % 5;
@@ -56,11 +218,13 @@ function Ripple({frame}: {frame: number}) {
   );
 }
 
-function Panel({title, children}: {title: ReactNode; children: ReactNode}) {
+function Panel({title, children, grow = true}: {title: ReactNode; children: ReactNode; grow?: boolean}) {
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
+    <Box flexDirection="column" flexGrow={grow ? 1 : 0} flexShrink={grow ? 1 : 0} minHeight={0} borderStyle="round" borderColor="gray" paddingX={1}>
       {title}
-      {children}
+      <Box flexDirection="column" flexGrow={grow ? 1 : 0} flexShrink={grow ? 1 : 0} minHeight={0} overflow="hidden">
+        {children}
+      </Box>
     </Box>
   );
 }
@@ -228,8 +392,11 @@ function Toolkits() {
   );
 }
 
-function LogView({rows}: {rows: number}) {
+function LogView() {
   const job = S.jobs.find(j => j.id === S.logs.job)!;
+  const viewport = useRef<DOMElement | null>(null);
+  const vp = useBoxMetrics(viewport);
+  const offset = Math.max(0, job.log.length - Math.max(1, vp.clientHeight));
   return (
     <Panel
       title={
@@ -241,17 +408,23 @@ function LogView({rows}: {rows: number}) {
         </Text>
       }
     >
-      {job.log.slice(-Math.max(5, rows - 10)).map((l, i) => (
-        <Text key={i} wrap="truncate">
-          <Text color="gray">│ </Text>
-          {/error|fail/i.test(l) ? <Text color={DANGER}>{l}</Text> : l}
-        </Text>
-      ))}
+      <Box ref={viewport} flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden">
+        <Box flexDirection="column" contentOffsetY={offset}>
+          <Box flexDirection="column" flexShrink={0}>
+            {job.log.map((l, i) => (
+              <Text key={i} wrap="truncate">
+                <Text color="gray">│ </Text>
+                {/error|fail/i.test(l) ? <Text color={DANGER}>{l}</Text> : l}
+              </Text>
+            ))}
+          </Box>
+        </Box>
+      </Box>
     </Panel>
   );
 }
 
-function Input() {
+function Input({menuRows}: {menuRows: number}) {
   if (S.search) {
     const match = searchHistory(S.history, S.search.query)[S.search.i];
     const at = match ? match.indexOf(S.search.query) : -1;
@@ -287,17 +460,18 @@ function Input() {
           {text ? '' : <Text color="gray">run, check, top, toolkit… or help</Text>}
         </Text>
       </Box>
-      {S.menu && <Menu />}
+      {S.menu && <Menu rows={menuRows} />}
     </Box>
   );
 }
 
-function Menu() {
+function Menu({rows}: {rows: number}) {
   const {candidates, i} = S.menu!;
-  const top = Math.max(0, Math.min(i - 3, candidates.length - 7));
+  const height = Math.max(1, rows);
+  const top = Math.max(0, Math.min(i - Math.floor(height / 2), candidates.length - height));
   return (
     <Box flexDirection="column">
-      {candidates.slice(top, top + 7).map((c, k) => {
+      {candidates.slice(top, top + height).map((c, k) => {
         const on = top + k === i;
         return (
           <Text key={c.value} wrap="truncate" bold={on}>
@@ -307,7 +481,7 @@ function Menu() {
           </Text>
         );
       })}
-      {candidates.length > 7 && <Text color="gray">{`      ${i + 1}/${candidates.length}`}</Text>}
+      {candidates.length > height && <Text color="gray">{`      ${i + 1}/${candidates.length}`}</Text>}
     </Box>
   );
 }
@@ -315,18 +489,21 @@ function Menu() {
 const TASK_LABEL: Partial<Record<Task['kind'], string>> = {check: 'checking', pack: 'packing', unpack: 'unpacking', toolkit: 'toolkits'};
 
 const HINTS = {
-  prompt: 'tab complete · → take suggestion · ↑↓ history · ctrl+r search · top processes',
+  prompt: 'pgup/pgdn scroll · tab complete · → suggestion · ↑↓ history · ctrl+r search · top processes',
   picker: '↑↓ move · type to filter · enter run · esc cancel',
   dash: '↑↓ select · r restart · s stop · enter logs · esc back',
   toolkit: '↑↓ move · space toggle · u update · enter apply · esc cancel',
   logs: 'esc back',
+  about: 'esc back',
 };
 
 function Hud({columns, frame, now}: {columns: number; frame: number; now: number}) {
   const services = S.jobs.filter(j => alive(j) && j.kind !== 'build');
   const building = S.jobs.find(j => j.state === 'building');
   const task = S.tasks[0];
-  const hint = S.hint || (S.confirm ? 'y stop them and quit · n stay' : S.menu ? 'tab next · shift+tab back · enter take · esc close' : HINTS[S.mode]);
+  const hint =
+    S.hint ||
+    (S.scroll >= 0 ? 'scrolled · pgdn to follow' : S.confirm ? 'y stop them and quit · n stay' : S.menu ? 'tab next · shift+tab back · enter take · esc close' : HINTS[S.mode]);
   return (
     <Box flexDirection="column" width={columns} paddingX={1}>
       <Box gap={2}>
@@ -370,8 +547,8 @@ function Hud({columns, frame, now}: {columns: number; frame: number; now: number
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
           <Text wrap="truncate" color={S.hint ? SIGNAL : 'gray'}>{hint}</Text>
         </Box>
-        <Box flexShrink={0}>
-          <Text color="gray">{[S.git, S.version && `engine ${S.version}`].filter(Boolean).join(' · ')}</Text>
+        <Box flexShrink={0} maxWidth={Math.max(12, Math.floor(columns * 0.65))}>
+          <Text color="gray" wrap="truncate">{[S.git, S.version && `engine ${S.version}`].filter(Boolean).join(' · ')}</Text>
         </Box>
       </Box>
     </Box>
@@ -382,6 +559,7 @@ export function App({start}: {start?: string}) {
   useStore();
   const {exit} = useApp();
   const {columns, rows} = useWindowSize();
+  const live = working();
   const {frame} = useAnimation({interval: 90, isActive: busy()});
   const now = Date.now();
 
@@ -397,34 +575,43 @@ export function App({start}: {start?: string}) {
   });
   useInput((input, key) => handleKey(input, key));
 
-  if (S.quit) {
-    return (
-      <Static key={S.clears} items={S.transcript}>
-        {(line, i) => <Row key={i} line={line} />}
-      </Static>
-    );
-  }
+  if (S.quit) return null;
+
+  const showBanner = rows >= 18 && columns >= 30;
+  const bannerRows = showBanner ? LOGO_ROWS + 1 : 0;
+  const menuRows = Math.max(1, Math.min(7, rows - bannerRows - 9));
+  const body =
+    S.mode === 'picker' ? <Picker /> :
+    S.mode === 'dash' ? <Dashboard frame={frame} now={now} /> :
+    S.mode === 'toolkit' ? <Toolkits /> :
+    S.mode === 'logs' && S.jobs.some(j => j.id === S.logs.job) ? <LogView /> :
+    S.mode === 'about' ? <About /> :
+    <Transcript columns={columns} />;
+
   return (
-    <>
-      <Static key={S.clears} items={S.transcript}>
-        {(line, i) => <Row key={i} line={line} />}
-      </Static>
-      <Box flexDirection="column">
-        {S.tasks.map(t => <TaskView key={t.id} task={t} frame={frame} now={now} />)}
-        {S.confirm && (
-          <Panel title={<Text><Text color={SIGNAL}>? </Text>{`stop ${S.jobs.filter(alive).map(j => j.name).join(', ')} and quit?`}</Text>}>
-            <Text>
-              <Text bold>y</Text><Text dimColor> stop and quit    </Text><Text bold>n</Text><Text dimColor> stay</Text>
-            </Text>
-          </Panel>
+    <Box flexDirection="column" height={rows} width={columns} overflow="hidden">
+      {showBanner && <Banner working={live} pulse={S.clears} columns={columns} />}
+      <Box flexDirection="column" flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden">
+        {body}
+        {S.tasks.length > 0 && (
+          <Box flexDirection="column" flexShrink={0}>
+            {S.tasks.map(t => <TaskView key={t.id} task={t} frame={frame} now={now} />)}
+          </Box>
         )}
-        {S.mode === 'picker' && <Picker />}
-        {S.mode === 'dash' && <Dashboard frame={frame} now={now} />}
-        {S.mode === 'toolkit' && <Toolkits />}
-        {S.mode === 'logs' && S.jobs.some(j => j.id === S.logs.job) && <LogView rows={rows} />}
-        {S.mode === 'prompt' && !S.confirm && <Input />}
+        {S.confirm && (
+          <Box flexShrink={0}>
+            <Panel grow={false} title={<Text><Text color={SIGNAL}>? </Text>{`stop ${S.jobs.filter(alive).map(j => j.name).join(', ')} and quit?`}</Text>}>
+              <Text>
+                <Text bold>y</Text><Text dimColor> stop and quit    </Text><Text bold>n</Text><Text dimColor> stay</Text>
+              </Text>
+            </Panel>
+          </Box>
+        )}
       </Box>
-      <Hud columns={columns} frame={frame} now={now} />
-    </>
+      <Box flexDirection="column" flexShrink={0}>
+        {S.mode === 'prompt' && !S.confirm && <Input menuRows={menuRows} />}
+        <Hud columns={columns} frame={frame} now={now} />
+      </Box>
+    </Box>
   );
 }

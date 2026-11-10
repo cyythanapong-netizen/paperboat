@@ -11,6 +11,19 @@ import {
 
 const clamp = (i: number, n: number) => Math.max(0, Math.min(i, n - 1));
 
+/** Page the transcript; reaching the bottom goes back to following the tail. */
+function scrollTranscript(dir: number): void {
+  const height = Math.max(1, S.view.height);
+  const max = Math.max(0, S.view.total - height);
+  if (!max) {
+    S.scroll = -1;
+    return;
+  }
+  const at = S.scroll < 0 ? max : Math.min(S.scroll, max);
+  const next = Math.max(0, Math.min(max, at + dir * Math.max(1, height - 1)));
+  S.scroll = next >= max ? -1 : next;
+}
+
 export function handleKey(input: string, key: Key): void {
   const ctrlC = key.ctrl && input === 'c';
   if (S.confirm) {
@@ -19,6 +32,10 @@ export function handleKey(input: string, key: Key): void {
       S.confirm = false;
       say([mu('still here')]);
     }
+    return changed();
+  }
+  if (S.mode === 'prompt' && !S.search && (key.pageUp || key.pageDown)) {
+    scrollTranscript(key.pageUp ? -1 : 1);
     return changed();
   }
   switch (S.mode) {
@@ -30,6 +47,9 @@ export function handleKey(input: string, key: Key): void {
       return toolkits(input, key, ctrlC);
     case 'logs':
       if (key.escape || input === 'q' || ctrlC) S.mode = S.logs.back;
+      return changed();
+    case 'about':
+      if (key.escape || input === 'q' || ctrlC) S.mode = 'prompt';
       return changed();
   }
   if (S.search) return search(input, key, ctrlC);
