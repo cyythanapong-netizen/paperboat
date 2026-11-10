@@ -85,6 +85,12 @@ export type CommandContext = {
   arrangeCanvas: (which: "flow" | "station") => boolean;
   arrange: boolean;
   setArrange: (on: boolean) => void;
+  // Replay (#284)
+  /** Open a saved run record; a rejected file is reported in the Console. */
+  loadRecord: () => Promise<void>;
+  /** Save this run's samples and Station history. */
+  saveRecord: () => Promise<void>;
+  startReplay: () => void;
   // Run
   canRun: boolean;
   whyNotRun: string;
@@ -103,6 +109,7 @@ export function menuCommands(c: CommandContext): Command[] {
     setSearchOpen, mode, setMode, allowedModes, pages, page, setPage, open, stationShown, setStationShown, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, errors,
     gridOn, setGridChoice, cameraProjection, setCameraProjection, arrangeCanvas, arrange, setArrange,
     canRun, whyNotRun, run, usesSolvers, currentSolver, solvers, setRunSettings, setSolverOpen,
+    loadRecord, saveRecord, startReplay,
   } = c;
   const flowInView = mode === "commander" || (mode === "lookout" ? flowDrawer.open : page === "flow");
   const stationInView = stationShown && view === "graph" && (mode === "commander" || (mode === "lookout" ? stationDrawer.open : page === "station"));
@@ -118,6 +125,8 @@ export function menuCommands(c: CommandContext): Command[] {
     { id: "file.open", label: "Open…", menu: "file", group: "project", shortcut: "Ctrl+O", chord: { key: "o", ctrl: true }, enabled: state.connection === "open", why: "Not connected to a backend", run: () => void openFile() },
     { id: "file.save", label: "Save", menu: "file", group: "project", shortcut: "Ctrl+S", chord: { key: "s", ctrl: true }, enabled: !!state.engine, why: "Not connected to a backend yet", run: () => void saveProject(false) },
     { id: "file.saveAs", label: "Save as…", menu: "file", group: "project", shortcut: "Ctrl+Shift+S", chord: { key: "s", ctrl: true, shift: true }, enabled: !!state.engine, why: "Not connected to a backend yet", run: () => void saveProject(true) },
+    { id: "file.openRecord", label: "Open run record…", menu: "file", group: "record", run: () => void loadRecord() },
+    { id: "file.saveRecord", label: "Save run record…", menu: "file", group: "record", enabled: !!state.traces.span(), why: "No run to save yet", run: () => void saveRecord() },
     { id: "file.restore", label: "Restore last session", menu: "file", group: "session", enabled: !!lastSession, why: "No unsaved session to restore", run: () => lastSession && restore(lastSession) },
     { id: "file.lock", label: locked ? "Unlock UI…" : projectLock ? "UI Lock Settings…" : "Lock UI…", menu: "file", group: "session", run: () => setLockModalOpen(true) },
     ...recent.map((s): Command => ({ id: `file.recent.${s.name}`, label: s.name, menu: "file", group: "recent", meta: ago(s.savedAt, Date.now()), enabled: state.connection === "open", why: "Not connected to a backend", run: () => openProject(s.project, s.name) })),
@@ -242,6 +251,15 @@ export function menuCommands(c: CommandContext): Command[] {
       run,
     },
     { id: "run.cancel", label: "Cancel", menu: "run", group: "run", enabled: running, why: "No run in progress", run: () => send({ type: "run.cancel" }) },
+    {
+      id: "run.replay",
+      label: "Replay last run",
+      menu: "run",
+      group: "run",
+      enabled: !running && !!state.traces.span(),
+      why: running ? "A run is in progress" : "No run to replay yet",
+      run: startReplay,
+    },
     ...(usesSolvers
       ? solvers.map((s) => ({
           id: `run.solver.${s}`,

@@ -35,6 +35,9 @@ import { MODES, PAGES, Panel, Rail, useTheme, type Drawer, type Mode, type Page,
 import type { StationControls } from "./StationGraph";
 import { withObject } from "./StationPanel";
 import { BackendWindow, Dock } from "./Dock";
+import { ReplayBar } from "./ReplayBar";
+import { formatProbe, parseRecord, recordOf } from "./replay";
+import { pickText, saveText } from "./projectFiles";
 import { CommandSearch } from "./Menus";
 import { useShortcuts } from "./commands";
 import { MissingToolkitsDialog } from "./Toolkits";
@@ -73,7 +76,7 @@ export function App() {
   const [backendOpen, setBackendOpen] = useState(false); // File > Backend…
   const flow = useRef<FlowControls | null>(null); // the canvas's actions, for the menus
   const stationCanvas = useRef<StationControls | null>(null);
-  const { state, send, subscribe, log } = useEngine(url);
+  const { state, send, subscribe, log, replay: replayApi } = useEngine(url);
   const stationShown = stationChoice === "auto" ? state.stationView.visible !== false : stationChoice === "shown";
   const setStationShown = (shown: boolean) => setStationChoice(shown ? "shown" : "hidden");
   const pages = useMemo(() => (stationShown ? PAGES : PAGES.filter((p) => p.id !== "station")), [stationShown]);
@@ -142,6 +145,40 @@ export function App() {
     () => ({ active: new Set(state.active), failed: new Set(state.failed), queued: new Set(state.queued), cached: new Set(state.cached), progress: state.progress }),
     [state.active, state.failed, state.queued, state.cached, state.progress],
   );
+
+  // Replay probes (#284): what each monitor's input carried at the playhead, for the wire labels.
+  const probes = useMemo(() => {
+    if (!state.replay?.active) return null;
+    const out = new Map<string, string>();
+    for (const n of nodes) {
+      if (!isBlock(n)) continue;
+      const values = state.traces.valuesAt(n.id, state.replay.time);
+      if (!values) continue;
+      for (const [port, value] of Object.entries(values)) out.set(`${n.id}:${port}`, formatProbe(value));
+    }
+    return out;
+  }, [state.replay?.active, state.replay?.time, state.traces, state.traceVersion, nodes]);
+
+  /** Save this run's samples and Station history as a record (#277 shape; replay opens it again). */
+  const saveRecord = async () => {
+    if (!state.traces.span()) return;
+    const record = recordOf(state.engine, state.run?.id, state.run?.status, state.run?.startedAt, state.traces, state.sceneHistory);
+    const name = `run-${state.run?.id ?? "record"}.json`;
+    const saved = await saveText(JSON.stringify(record, null, 2), name, null);
+    if (saved) log("info", `saved run record ${saved.name}`);
+  };
+
+  /** Open a run record and scrub it as if it had just run here. */
+  const loadRecord = async () => {
+    const picked = await pickText();
+    if (!picked) return;
+    try {
+      replayApi.load(parseRecord(picked.text));
+      log("info", `loaded run record ${picked.name}`);
+    } catch (err) {
+      log("error", `cannot open run record ${picked.name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
 
   // The subsystem or story open on the Flow canvas (#68); null: the top level.
   const [flowLevel, setFlowLevel] = useState<string | null>(null);
@@ -357,6 +394,7 @@ export function App() {
     setSearchOpen, mode, setMode, allowedModes, pages, page, setPage, open, stationShown, setStationShown, stationDrawer, flowDrawer, view, themeChoice, setThemeChoice, consoleShown, setConsoleShown, errors,
     gridOn, setGridChoice, cameraProjection, setCameraProjection, arrangeCanvas, arrange, setArrange,
     canRun, whyNotRun, run, usesSolvers, currentSolver, solvers, setRunSettings, setSolverOpen,
+    loadRecord, saveRecord, startReplay: replayApi.start,
   });
   useShortcuts(commands);
 
@@ -438,6 +476,7 @@ export function App() {
               setLevel={setFlowLevel}
               locked={running}
               sheetFlow={sheet.flow}
+              probes={probes}
               fitPadding={mode === "navigator" && page === "flow" ? FIT_PADDING_MINIMAP : FIT_PADDING}
             />
           </RunStates.Provider>
@@ -483,6 +522,7 @@ export function App() {
           }}
           onRun={run}
           onCancel={() => send({ type: "run.cancel" })}
+          replay={<ReplayBar state={state} replay={replayApi} />}
         />
       </main>
       </VarsContext.Provider>

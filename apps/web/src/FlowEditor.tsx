@@ -11,7 +11,7 @@ import { Boundary, display, GroupActions, GroupBox, isFrame, type GroupData, typ
 import type { BlockDef, Connectors, FlowType } from "./protocol";
 import { isBlock, portType, type FlowNode, type Wire } from "./flowModel";
 import { withBlock } from "./flowGraph";
-import { CommentedOutContext, ConnectorsContext, HotWire, IconWires, Lit, RunStates, SetBends, WireRoutes } from "./flowContexts";
+import { CommentedOutContext, ConnectorsContext, HotWire, IconWires, Lit, ProbeValues, RunStates, SetBends, WireRoutes } from "./flowContexts";
 import { commentedOutIds, iconWireCounts, routeCanvasWires } from "./flowWires";
 import { wireRules } from "./wireRules";
 import { useFlowLevels } from "./flowLevels";
@@ -54,6 +54,8 @@ type Props = {
   sheetFlow?: FlowType;
   /** Room to leave round the whole flow, so the glass dock and the minimap don't cover its bottom. */
   fitPadding?: { top?: `${number}px`; right?: `${number}px`; bottom?: `${number}px`; left?: `${number}px` };
+  /** Upload a record's samples into the replay (#284): what each monitor input carried at the playhead. */
+  probes?: ReadonlyMap<string, string> | null;
 };
 
 /**
@@ -92,7 +94,7 @@ export type FlowControls = {
 const NO_CONNECTORS: Connectors = {};
 
 /** Blocks by palette group, groups in catalog order. */
-export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls, sheetFlow, fitPadding }: Props) {
+export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls, sheetFlow, fitPadding, probes = null }: Props) {
   const states = useContext(RunStates);
   // ---- Levels (#68): a subsystem or story opens on the canvas; the way back is the breadcrumb ----
   const { level, go, path } = useFlowLevels(wanted, setLevel, nodes, edges, setNodes, setEdges);
@@ -295,6 +297,7 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
   return (
     <GroupActions.Provider value={{ ...actions, enter: go, stateOf }}>
     <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
+    <ProbeValues.Provider value={probes}>
     <Lit.Provider value={lit}>
     <WireRoutes.Provider value={wireRoutes}>
     <SetBends.Provider value={setBends}>
@@ -417,6 +420,7 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
     </SetBends.Provider>
     </WireRoutes.Provider>
     </Lit.Provider>
+    </ProbeValues.Provider>
     </HotWire.Provider>
     </GroupActions.Provider>
   );

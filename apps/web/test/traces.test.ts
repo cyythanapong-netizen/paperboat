@@ -30,3 +30,27 @@ test("the store makes one channel per input, and per component of a vector", () 
   s.add({ node: "g", t: 0, v: [5, 6] }); // a Graph's vector: components by index
   assert.deepEqual(s.channels("g").map((c) => c.label), ["0", "1"]);
 });
+
+test("replay reads the span, the sample spacing and each input's value at a time (#284)", () => {
+  const s = new TraceStore();
+  for (let i = 0; i < 4; i++) s.add({ node: "sc", port: "a", t: i * 0.5, v: i });
+  s.add({ node: "sc", port: "c", t: 0.5, v: [10, 20], components: [{ id: "x" }, { id: "y" }] });
+  assert.deepEqual(s.span(), [0, 1.5]);
+  assert.equal(s.step(), 0.5);
+  // The latest sample at or before t, like a zero-order hold.
+  assert.deepEqual(s.valuesAt("sc", 0.6), { a: 1, c: [10, 20] });
+  assert.deepEqual(s.valuesAt("sc", 1.4), { a: 2, c: [10, 20] });
+  assert.equal(s.valuesAt("sc", -1), undefined); // before the first sample
+  assert.equal(s.valuesAt("gone", 0), undefined);
+});
+
+test("a record loads channels back into the store", () => {
+  const s = new TraceStore();
+  s.load([
+    { node: "sc", id: "a", label: "a", t: [0, 1], v: [2, 3] },
+    { node: "sc", id: "c.x", label: "x", unit: "m", t: [0, 1], v: [4, 5] },
+  ]);
+  assert.deepEqual(s.span(), [0, 1]);
+  assert.deepEqual(s.valuesAt("sc", 1), { a: 3, c: [5] });
+  assert.deepEqual(s.channels("sc").map((c) => [c.id, c.unit]), [["a", undefined], ["c.x", "m"]]);
+});

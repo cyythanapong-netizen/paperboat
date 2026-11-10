@@ -42,13 +42,22 @@ const GAP = 12; // px between cells
 const ROW = 116; // px, one cell's height
 const MIN_CELL = 96; // px: a screen too narrow for the layout's columns gets fewer
 
+/** A monitor's value at the replay playhead, else the latest one the run sent (#284). */
+function latestOf(state: EngineState, name: string): unknown {
+  if (!state.replay?.active) return state.latest[name];
+  const values = state.traces.valuesAt(name, state.replay.time);
+  if (!values) return state.latest[name];
+  const list = Object.values(values);
+  return list.length ? list[list.length - 1] : state.latest[name];
+}
+
 /**
  * One instrument: how a monitor shows on the Dashboard is up to its block's `instrument`.
  * Before a run sends it anything it is a greyed placeholder of the same frame (#58), so it
  * can be placed and sized before the first run.
  */
 function Instrument({ name, kind, state, send, params, ...host }: { name: string; kind: string; state: EngineState; send?: (m: ClientMsg) => void; params?: Record<string, ParamValue> } & Pick<InstrumentProps, "size" | "inputs" | "sources" | "settings" | "onSettings" | "taps" | "onTap">) {
-  const latest = state.latest[name];
+  const latest = latestOf(state, name);
   const idle = latest === undefined;
   const vector = Array.isArray(latest)
     ? latest.map((v, i) => {
@@ -212,6 +221,21 @@ export function Dashboard({
   // Every monitor block on the Flow canvas has an instrument, and only those (#58): what a
   // run reported for a block that's gone since doesn't keep its tile.
   const all = monitors;
+
+  // At a replay playhead, labels and readouts show the values at that time (#284); live, the latest.
+  const latest = useMemo(() => {
+    if (!state.replay?.active) return state.latest;
+    const out = { ...state.latest };
+    for (const name of Object.keys(all)) {
+      const value = latestOf(state, name);
+      if (value !== undefined) out[name] = value as (typeof out)[string];
+    }
+    return out;
+  }, [all, state.latest, state.replay?.active, state.replay?.time, state.traces, state.traceVersion]);
+  const entities = useMemo(
+    () => (state.replay?.active ? state.sceneHistory.entitiesAt(state.replay.time) : state.entities),
+    [state.replay?.active, state.replay?.time, state.sceneHistory, state.entities],
+  );
 
   const root = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -558,10 +582,10 @@ export function Dashboard({
               >
                 {d.kind === "section" && (
                   <span className="deco-title">
-                    {editing === d.index ? <EditText value={d.text} label="Section title" inputRef={editor} onDone={(v) => finishText(d, v)} /> : <Formatted text={d.text} latest={state.latest} />}
+                    {editing === d.index ? <EditText value={d.text} label="Section title" inputRef={editor} onDone={(v) => finishText(d, v)} /> : <Formatted text={d.text} latest={latest} />}
                   </span>
                 )}
-                {d.kind === "label" && (editing === d.index ? <EditText value={d.text} label="Label text" inputRef={editor} onDone={(v) => finishText(d, v)} /> : <span><Formatted text={d.text} latest={state.latest} /></span>)}
+                {d.kind === "label" && (editing === d.index ? <EditText value={d.text} label="Label text" inputRef={editor} onDone={(v) => finishText(d, v)} /> : <span><Formatted text={d.text} latest={latest} /></span>)}
                 {d.kind === "console" && (
                   <div className="deco-console">
                     <Console logs={state.logs} onBlock={onBlock} />
@@ -579,7 +603,7 @@ export function Dashboard({
                     ) : state.stationView.view === "graph" ? (
                       <div className="deco-station-fallback">Station graph view is not available in the Board.</div>
                     ) : (
-                      <SceneView view={state.view} grid={gridOn} entities={state.entities} />
+                      <SceneView view={state.view} grid={gridOn} entities={entities} />
                     )}
                   </div>
                 )}

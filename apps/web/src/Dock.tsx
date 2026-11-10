@@ -17,6 +17,7 @@ export function Dock({
   onSettings,
   onRun,
   onCancel,
+  replay,
 }: {
   canRun: boolean;
   whyNot?: string;
@@ -28,6 +29,8 @@ export function Dock({
   onSettings: (v: RunSettings) => void;
   onRun: () => void;
   onCancel: () => void;
+  /** The replay controls (#284), beside the variable controls; absent when there is nothing to replay. */
+  replay?: ReactNode;
 }) {
   return (
     <SharedDock
@@ -37,7 +40,12 @@ export function Dock({
       status={status}
       statusText={statusText}
       optionsSlot={<RunOptions defaults={defaults} value={settings} onChange={onSettings} />}
-      controlsSlot={<VarControls flag="dock" />}
+      controlsSlot={
+        <>
+          {replay}
+          <VarControls flag="dock" />
+        </>
+      }
       onRun={onRun}
       onCancel={onCancel}
     />

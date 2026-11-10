@@ -814,6 +814,25 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
   background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur);
   border: 1px solid var(--line-strong); border-radius: var(--radius-lg);
 }
+/* Replay (#284): the transport bar in the dock, the needle over scopes, wire probes. */
+.replay-bar { display: inline-flex; align-items: center; gap: var(--space-2); }
+.replay-bar .replay-step { width: 28px; padding: 0; justify-content: center; }
+.replay-bar .replay-play { width: 30px; padding: 0; justify-content: center; }
+.replay-bar .replay-play[aria-pressed="true"] { border-color: var(--line-ink); }
+.replay-slider { width: 11rem; accent-color: var(--line-ink); }
+.replay-time { font: var(--size-2xs) var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; min-width: 7ch; text-align: right; }
+.replay-speed { height: 24px; padding: 0 4px; font: var(--size-2xs) var(--font-mono); color: var(--text); background: var(--surface-well); box-shadow: var(--well-shadow); border: 0; border-radius: var(--radius-md); }
+.replay-open { white-space: nowrap; }
+@media (max-width: 1000px) {
+  .replay-slider { width: 6rem; }
+  .replay-time { min-width: 6ch; }
+}
+.scope-replay { position: relative; height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.scope-replay > .instrument { flex: 1; min-height: 0; }
+.replay-needle { position: absolute; width: 0; border-left: 1px solid var(--text-on-screen); opacity: 0.85; pointer-events: none; z-index: 3; }
+.replay-needle span { position: absolute; top: 0; left: 3px; padding: 0 3px; font: 10px var(--font-mono); color: var(--surface-screen); background: var(--text-on-screen); border-radius: var(--radius-sm); white-space: nowrap; }
+.wire-probe { position: absolute; padding: 1px 5px; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-float); color: var(--text); font: 500 var(--size-2xs) var(--font-mono); font-variant-numeric: tabular-nums; pointer-events: none; white-space: nowrap; }
+
 /* On the Flow page the helper line sits under the canvas (up to three lines): the dock rides above it. */
 /* Commander with the Board closed: the dock rides above the Board's head, not on it. */
 .dock { transition: bottom var(--slide); }

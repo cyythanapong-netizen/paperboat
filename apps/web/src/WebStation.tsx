@@ -33,6 +33,13 @@ export function WebStation({ backend, page, state, subscribe, send, onStation }:
   const latest = useRef(state);
   latest.current = state;
 
+  // Replay (#284): the page gets the scene at the playhead, so its entities move with the scrubber.
+  useEffect(() => {
+    if (!state.replay?.active) return;
+    const entities = Object.values(state.sceneHistory.entitiesAt(state.replay.time));
+    frame.current?.contentWindow?.postMessage({ paperboat: 0, message: { type: "scene", entities } }, "*");
+  }, [state.replay?.active, state.replay?.time, state.sceneHistory]);
+
   useEffect(() => {
     const post = (message: unknown) => frame.current?.contentWindow?.postMessage({ paperboat: 0, message }, "*");
     // What a page that just loaded missed: the handshake and the current scene and station.
@@ -40,7 +47,8 @@ export function WebStation({ backend, page, state, subscribe, send, onStation }:
       const s = latest.current;
       post({ type: "hello", protocol: "paperboat/0", engine: s.engine, station: s.stationView });
       post({ type: "catalog", blocks: s.blocks, objects: s.objects });
-      post({ type: "scene", entities: Object.values(s.entities), view: s.view });
+      const entities = s.replay?.active ? Object.values(s.sceneHistory.entitiesAt(s.replay.time)) : Object.values(s.entities);
+      post({ type: "scene", entities, view: s.view });
       if (s.station) post({ type: "station.load", station: s.station });
     };
     const onMessage = (e: MessageEvent) => {

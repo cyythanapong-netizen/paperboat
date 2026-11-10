@@ -3,7 +3,7 @@ import { useContext } from "react";
 import { useWireBends } from "@paperboat/shared/components";
 import { RemoveIcon } from "./RemoveIcon";
 import { middleOfWire, orthoPoints, roundedPolyline, squareUp, type WirePoint } from "./wireRouting.ts";
-import { CommentedOutContext, HotWire, IconWires, Lit, SetBends, WireRoutes } from "./flowContexts";
+import { CommentedOutContext, HotWire, IconWires, Lit, ProbeValues, SetBends, WireRoutes } from "./flowContexts";
 import type { Wire } from "./flowModel";
 
 const sideOf = (p: Position): "left" | "right" | "top" | "bottom" => (p === Position.Left ? "left" : p === Position.Top ? "top" : p === Position.Bottom ? "bottom" : "right");
@@ -18,6 +18,9 @@ export function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgePro
   const commentedOut = useContext(CommentedOutContext);
   const wireCommented = commentedOut.has(geometry.source) || commentedOut.has(geometry.target);
   const missing = useContext(IconWires).missing;
+  // A wire into a monitor reads the value it carried at the replay playhead (#284).
+  const probes = useContext(ProbeValues);
+  const probe = probes && geometry.targetHandleId ? probes.get(`${geometry.target}:${geometry.targetHandleId}`) : undefined;
   const commentedClass = (wireCommented ? " wire-commented" : "") + (missing.has(`${geometry.source}:${geometry.sourceHandleId}`) || missing.has(`${geometry.target}:${geometry.targetHandleId}`) ? " wire-missing" : "");
 
   const setBends = useContext(SetBends);
@@ -37,6 +40,13 @@ export function WireEdge({ id, data, selected, markerEnd, ...geometry }: EdgePro
       <BaseEdge id={id} path={path} markerEnd={markerEnd} className={`wire-${data?.type ?? "signal"}${hot ? " drop-target" : ""}${follow}${commentedClass}`} />
       {/* What a dropped card finds under the pointer: a wide, invisible stroke tagged with the wire. */}
       <path d={path} className="wire-hit" data-wire={id} />
+      {probe !== undefined && (
+        <EdgeLabelRenderer>
+          <span className="wire-probe nodrag nopan" title="Value on this wire at the replay time" style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y + 10}px)` }}>
+            {probe}
+          </span>
+        </EdgeLabelRenderer>
+      )}
       {selected && (
         <EdgeLabelRenderer>
           <button
