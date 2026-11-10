@@ -129,8 +129,9 @@ add_subdirectory(core)
 
 # Apple's libc++ up to the macOS 15 SDK (Xcode 16) still ships <stop_token> and std::jthread as
 # experimental, off unless _LIBCPP_ENABLE_EXPERIMENTAL is defined; from the macOS 26 SDK they are on.
-# Both are header-only there. PUBLIC: core's own headers use std::stop_token, so everything that
-# includes them (tests, the Python module, SDK backends through the exported target) needs it too.
+# Both are header-only there. PUBLIC: core's and the toolkit's own headers use std::stop_token
+# (toolkit's block.hpp is in the run's face), so everything that includes them (tests, the Python
+# module, SDK backends through the exported targets) needs it too.
 if(APPLE)
   include(CheckCXXSourceCompiles)
   set(_pb_jthread_src "#include <stop_token>\n#include <thread>\nint main() { std::jthread t([](std::stop_token) {}); }")
@@ -142,6 +143,8 @@ if(APPLE)
     if(NOT PAPERBOAT_HAS_JTHREAD_EXPERIMENTAL)
       message(FATAL_ERROR "This C++ standard library has no std::jthread / <stop_token> (C++20); use Xcode 16 or later")
     endif()
+    # The toolkit is not linked against core, so it needs the definition on its own target too.
+    target_compile_definitions(paperboat_toolkit PUBLIC _LIBCPP_ENABLE_EXPERIMENTAL)
     target_compile_definitions(paperboat_core PUBLIC _LIBCPP_ENABLE_EXPERIMENTAL)
   endif()
 endif()
