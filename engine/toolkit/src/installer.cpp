@@ -411,7 +411,7 @@ std::vector<std::string> load_toolkit_requirements(const fs::path& backend_dir,
     if (std::ranges::find(reqs, name) == reqs.end()) reqs.push_back(name);
   };
 
-  for (const char* fname : {"toolkit_requirements.toml", "toolkits.toml"}) {
+  for (const char* fname : {"toolkit_requirements.toml"}) {
     const fs::path p = backend_dir / fname;
     if (!fs::is_regular_file(p)) continue;
     try {
@@ -486,7 +486,15 @@ std::vector<ToolkitEntry> list_toolkits(const fs::path& repo_root,
     e.required = std::ranges::find(reqs, e.name) != reqs.end();
     if (e.installed) {
       e.version = read_marker_version(target);
-      if (e.version.empty()) e.version = "unknown";
+      if (e.version.empty()) {
+        try {
+          const auto doc = toml::parse_file((target / "toolkit.toml").string());
+          if (const auto v = doc["version"].value<std::string>()) {
+            e.version = *v;
+          }
+        } catch (...) {
+        }
+      }
     }
     if (fetch_versions) {
       e.versions = list_releases(e);
