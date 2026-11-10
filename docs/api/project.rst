@@ -93,4 +93,72 @@ running, and loads the project. To execute the saved project headlessly:
 
    paperboat open project.ppj --run
 
-What isn't in a project yet: the last run's results (logs, signals).
+A project holds what the user made, not what a run did. A run's results are kept separately, as
+a **run record**.
+
+Run records
+-----------
+
+``paperboat run --record <dir>`` (and ``paperboat open project.ppj --record <dir>``, with or
+without ``--run``) keeps the run as ``<dir>/record.json``, plus nothing else: plain JSON,
+indented, so two runs of the same project diff to the settings, variables and samples that
+changed.
+
+.. code-block:: bash
+
+   paperboat run 02-cart-pole-cpp --record runs/pole-1
+
+.. code-block:: json
+
+   {
+     "paperboat": 0,
+     "run": { "id": "run-1", "status": "done", "started": "2026-11-10T14:48:54Z", "finished": "2026-11-10T14:49:04Z" },
+     "backend": { "name": "cart-pole", "version": "0.2.0" },
+     "tool_versions": { "paperboat": "0.1.0-alpha.3" },
+     "command": "paperboat run 02-cart-pole-cpp --record runs/pole-1",
+     "flow": { "nodes": [], "edges": [] },
+     "station": { "objects": [] },
+     "variables": [],
+     "settings": { "duration": 10, "dt": 0.01 },
+     "signals": [
+       { "type": "signal", "node": "angle", "t": 0, "v": 0.2 },
+       { "type": "signal", "node": "angle", "t": 0.01, "v": 0.199 }
+     ],
+     "scene": {
+       "base": { "cart-1/body": { "id": "cart-1/body", "shape": "box", "pos": [0, 0, 0] } },
+       "frames": [{ "t": 0.01, "entities": [{ "id": "cart-1/body", "pos": [0.01, 0, 0] }] }]
+     }
+   }
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 82
+
+   * - Field
+     - Meaning
+   * - ``paperboat``
+     - The record format version, ``0`` today.
+   * - ``run``
+     - Its id (``run-1``), status (``done``, ``failed``, ``cancelled``), and wall-clock start and finish.
+   * - ``backend``
+     - The ``hello.engine`` name and, when ``backend.toml`` has one, its version.
+   * - ``tool_versions``
+     - The versions that made the record (paperboat, and the backend).
+   * - ``command``
+     - The command line that asked for the run.
+   * - ``flow``, ``station``, ``variables``, ``settings``
+     - The ``graph.run`` request the run was given, and the settings it resolved to.
+   * - ``signals``
+     - Every ``signal`` sample the monitors sent, in arrival order: what the Board scopes saw.
+   * - ``scene``
+     - The Station's opening ``base``, then each ``scene.patch`` in ``frames``, on the run clock.
+       A run that never moved the Station has none.
+   * - ``toolkits``
+     - The optional toolkits the backend offered, when it had any.
+
+The shape is ``protocol/schema/record-0.schema.json``. A directory that cannot be made or a file
+that cannot be written fails with a named error (``cannot create record directory …`` or
+``cannot write run record …``); it never stops the run.
+
+In the app, **File > Open run record…** opens a saved record for replay (#284), and
+**File > Save run record…** writes one from the run the app has in memory.

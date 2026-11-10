@@ -32,6 +32,7 @@ add_executable(paperboat_tests
   step_test.cpp
   station_test.cpp
   core_test.cpp
+  record_test.cpp
   cache_test.cpp
   events_test.cpp
   speed_test.cpp

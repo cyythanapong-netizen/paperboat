@@ -252,10 +252,13 @@ Replay is an app-side view of the last run (#284); the engine keeps sending the 
   by the reducer's own `replay.*` actions, not by the backend. While it is open, Dashboard
   readouts, wire probes into monitors (`node:port`) and Scope needles read `t`; live, they
   read the latest message.
-- **Records**: `File > Save run record…` writes `{paperboat: 0, run, channels, scene}`;
-  `File > Open run record…` loads channels and scene patches back into the stores. The loader
-  also accepts a `signals` array of protocol `signal` samples, so a record written by
-  `paperboat run --record` (#277) can be opened without a converter.
+- **Records**: `paperboat run --record <dir>` and `paperboat open … --record <dir>` set
+  `PAPERBOAT_RECORD` for the backend; `engine/core/src/record.cpp` keeps the run's `signal`
+  and `scene.patch` messages (and the `graph.run` request) and writes `<dir>/record.json` when
+  `run.finished` arrives. The CLI adds the version, command line and backend version to the
+  environment. In the app, `File > Save run record…` writes `{paperboat: 0, run, channels,
+  scene}` and `File > Open run record…` loads channels and scene patches into the stores; it
+  accepts the engine's `signals` array too, so both files open.
 
 The Descriptor System (`descriptor.toml`)
 -----------------------------------------

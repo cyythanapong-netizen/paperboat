@@ -83,8 +83,8 @@ export function formatProbe(v: number | number[] | unknown): string {
   return v === undefined ? "" : String(v);
 }
 
-/** A `signal` sample as a record keeps it (protocol shape, `type` implied). */
-export type RecordSignal = { node: string; port?: string; t: number; v: number; components?: { id: string; unit?: string }[] };
+/** A `signal` sample as a record keeps it (protocol shape, `type` implied): a number, text or a vector. */
+export type RecordSignal = { node: string; port?: string; t: number; v: number | string | number[]; components?: { id: string; unit?: string }[] };
 
 /** A channel as a record keeps it: lossless, including a vector's component names. */
 export type RecordChannel = { node: string; id: string; label: string; unit?: string; t: number[]; v: number[] };
@@ -131,6 +131,7 @@ export function recordOf(engine: string, id: string | undefined, status: string 
 }
 
 const isNumber = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
+const isSignalValue = (x: unknown): x is number | string | number[] => isNumber(x) || typeof x === "string" || (Array.isArray(x) && x.every(isNumber));
 
 /** Parse a record file, with a named error for what makes it unreplayable. */
 export function parseRecord(text: string): ReplayRecord {
@@ -169,7 +170,7 @@ export function parseRecord(text: string): ReplayRecord {
   if (Array.isArray(r.signals)) {
     record.signals = r.signals.map((item, i) => {
       const s = item as Record<string, unknown>;
-      if (!s || typeof s !== "object" || typeof s.node !== "string" || !isNumber(s.t) || !isNumber(s.v)) throw new RecordError(`signal ${i + 1} is not a signal sample`);
+      if (!s || typeof s !== "object" || typeof s.node !== "string" || !isNumber(s.t) || !isSignalValue(s.v)) throw new RecordError(`signal ${i + 1} is not a signal sample`);
       return {
         node: s.node,
         ...(typeof s.port === "string" ? { port: s.port } : {}),

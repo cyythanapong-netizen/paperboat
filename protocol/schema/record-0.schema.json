@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paperboat.dev/protocol/record-0.schema.json",
+  "title": "Paperboat run record v0",
+  "description": "One run of a backend, as `paperboat run --record <dir>` (and `paperboat open --record <dir>`) writes it: record.json next to the project. Plain JSON, diffable, no database (#277). It is not a protocol message; it carries the messages the run sent.",
+  "type": "object",
+  "required": ["paperboat", "run", "backend", "flow", "signals"],
+  "properties": {
+    "paperboat": {
+      "const": 0
+    },
+    "run": {
+      "type": "object",
+      "required": ["id", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "$ref": "paperboat-0.schema.json#/$defs/RunStatus" },
+        "started": { "type": "string", "description": "ISO 8601 UTC when the run started." },
+        "finished": { "type": "string", "description": "ISO 8601 UTC when it finished." }
+      },
+      "additionalProperties": false
+    },
+    "backend": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "description": "The backend's engine name, as hello.engine." },
+        "version": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "tool_versions": {
+      "type": "object",
+      "description": "The tool versions that made the record.",
+      "additionalProperties": { "type": "string" }
+    },
+    "command": {
+      "type": "string",
+      "description": "The command line that asked for the run."
+    },
+    "flow": {
+      "$ref": "paperboat-0.schema.json#/$defs/Graph",
+      "description": "The graph.run request's graph: flow type, nodes and wires."
+    },
+    "station": {
+      "$ref": "paperboat-0.schema.json#/$defs/Station",
+      "description": "The station the run was given, when it had one."
+    },
+    "variables": {
+      "$ref": "paperboat-0.schema.json#/$defs/Variables",
+      "description": "The variables the run resolved against."
+    },
+    "settings": {
+      "$ref": "paperboat-0.schema.json#/$defs/RunSettings",
+      "description": "The run's settings: the backend's defaults with graph.run's overrides."
+    },
+    "toolkits": {
+      "type": "array",
+      "description": "The optional toolkits the backend offered, with their installed versions."
+    },
+    "signals": {
+      "type": "array",
+      "description": "Every signal sample a monitor sent, in arrival order: what every Board scope saw.",
+      "items": { "$ref": "paperboat-0.schema.json#/$defs/signal" }
+    },
+    "scene": {
+      "type": "object",
+      "description": "Station motion: the scene at the run's start, then each scene.patch on the run clock.",
+      "properties": {
+        "base": {
+          "type": "object",
+          "description": "The entities of the run's opening scene, by id.",
+          "additionalProperties": { "$ref": "paperboat-0.schema.json#/$defs/Entity" }
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["t", "entities"],
+            "properties": {
+              "t": { "type": "number", "description": "The run clock when the patch arrived." },
+              "entities": { "type": "array", "items": { "$ref": "paperboat-0.schema.json#/$defs/EntityPatch" } }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

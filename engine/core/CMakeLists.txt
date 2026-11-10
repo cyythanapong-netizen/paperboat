@@ -22,6 +22,7 @@ add_library(paperboat_core
   src/executors.cpp
   src/session.cpp
   src/serve.cpp
+  src/record.cpp
   src/main.cpp
   ${PAPERBOAT_PROCESS_SOURCE}
   src/backend_manager.cpp
@@ -30,6 +31,8 @@ add_library(paperboat_core
 add_library(paperboat::core ALIAS paperboat_core)
 
 target_include_directories(paperboat_core PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+# A run record says which paperboat wrote it (#277); the tools use the same project version.
+target_compile_definitions(paperboat_core PRIVATE PAPERBOAT_VERSION="${PAPERBOAT_VERSION}")
 set_target_properties(paperboat_core PROPERTIES EXPORT_NAME core)
 target_link_libraries(paperboat_core
   PUBLIC paperboat::toolkit nlohmann_json::nlohmann_json

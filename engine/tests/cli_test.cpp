@@ -617,7 +617,21 @@ TEST_CASE("paperboat open validates project file and backend") {
   std::ofstream(valid_proj) << "{\"paperboat\": 0, \"backend\": \"" + backend_dir.string() + "\", \"flow\": {\"nodes\": [], \"edges\": []}}";
   auto res5 = core::ProcessRunner::run_sync({cli.string(), "open", valid_proj.string(), "--run", "--no-build"});
   CHECK(res5.exit_code == 0);
+
+  // --record is handed to the backend as PAPERBOAT_RECORD (#277), for open and run alike.
+  const fs::path record_dir = fs::temp_directory_path() / "pb_test_record";
+  fs::remove_all(record_dir);
+  std::ofstream(backend_dir / "server.py") << "import os, pathlib; pathlib.Path('seen.txt').write_text(os.environ.get('PAPERBOAT_RECORD', ''))\n";
+  auto res6 = core::ProcessRunner::run_sync({cli.string(), "open", valid_proj.string(), "--run", "--no-build", "--record", record_dir.string()});
+  CHECK(res6.exit_code == 0);
+  std::ifstream seen(backend_dir / "seen.txt");
+  std::string record_seen;
+  std::getline(seen, record_seen);
+  CHECK(record_seen == fs::absolute(record_dir).lexically_normal().string());
+  CHECK(fs::is_directory(record_dir));
+
   fs::remove(valid_proj);
+  fs::remove_all(record_dir);
   fs::remove_all(backend_dir);
 }
 

@@ -38,9 +38,17 @@ test("a record round-trips its channels and rejects what it cannot replay", () =
   assert.deepEqual(r.channels?.[0].v, [2, 3]);
   assert.deepEqual(r.scene?.frames?.[0].entities[0].id, "a");
 
-  // A foreign writer's signal samples are accepted too.
-  const signals = parseRecord(JSON.stringify({ signals: [{ type: "signal", node: "sc", t: 0, v: 1, components: [{ id: "x" }] }] }));
-  assert.deepEqual(signals.signals, [{ node: "sc", t: 0, v: 1, components: [{ id: "x" }] }]);
+  // A foreign writer's signal samples are accepted too, text and vectors included.
+  const signals = parseRecord(
+    JSON.stringify({
+      signals: [
+        { type: "signal", node: "sc", t: 0, v: 1, components: [{ id: "x" }] },
+        { type: "signal", node: "sc", t: 1, v: [2, 3], components: [{ id: "x" }, { id: "y" }] },
+        { type: "signal", node: "sc", t: 2, v: "done" },
+      ],
+    }),
+  );
+  assert.deepEqual(signals.signals?.map((s) => s.v), [1, [2, 3], "done"]);
 
   assert.throws(() => parseRecord("not json"), RecordError);
   assert.throws(() => parseRecord(JSON.stringify({ paperboat: 1, channels: [] })), /unknown record version/);
