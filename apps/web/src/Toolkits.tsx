@@ -120,7 +120,7 @@ export function ToolkitsButton({
   const [open, setOpen] = useState(false);
   const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
   const wrap = useRef<HTMLDivElement | null>(null);
-  const items = toolkits;
+  const items = toolkits.filter((t) => !t.builtin);
   const anyBusy = items.some((t) => !!t.busy);
 
   useDismiss(wrap, () => setOpen(false), { enabled: open });
