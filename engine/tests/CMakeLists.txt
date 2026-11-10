@@ -33,6 +33,11 @@ add_executable(paperboat_tests
 )
 target_link_libraries(paperboat_tests
   PRIVATE paperboat::toolkit paperboat::core nlohmann_json::nlohmann_json Catch2::Catch2WithMain paperboat_warnings)
+# The workbench is a standalone-engine target (engine/CMakeLists.txt); test it where it exists.
+if(TARGET paperboat_workbench)
+  target_sources(paperboat_tests PRIVATE workbench_test.cpp)
+  target_link_libraries(paperboat_tests PRIVATE paperboat_workbench)
+endif()
 if(TARGET paperboat_toolkit_optimization)
   target_sources(paperboat_tests PRIVATE optimization_test.cpp)
   target_link_libraries(paperboat_tests PRIVATE paperboat::toolkit_optimization)

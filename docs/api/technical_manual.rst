@@ -39,6 +39,18 @@ Paperboat is architected as four decoupled layers:
 4. **Web Frontend (`apps/web`)**: A domain-agnostic React/TypeScript interface that builds its
    entire UI dynamically from the backend's declared catalog and starter definitions.
 
+The Workbench Backend
+~~~~~~~~~~~~~~~~~~~~~
+
+`engine/workbench` is a backend made only of the first two layers: it embeds a descriptor
+that imports `base`, `math`, `signal`, `control` and `dashboard` and defines no domain
+blocks. It serves on 8765, the default backend port the web app connects to, so Flow and
+Dashboard work with no domain; the Station page is hidden (there is no scene to draw).
+`control` is optional (the external control toolkit): the workbench loads without it, and
+offers its blocks when it is installed. It is an ordinary `paperboat::core::Backend`; a
+domain backend differs only in its catalog and starters. Start it with
+`npm run backend:workbench` (or the installed `paperboat-workbench` binary).
+
 Fault Containment Principle
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
