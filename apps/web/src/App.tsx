@@ -308,7 +308,15 @@ export function App() {
     const group = nodes.find((n) => n.id === flowLevel);
     return `${count(here.length, "block")} in ${group && isFrame(group) ? group.data.label : "this level"}`;
   }, [nodes, flowLevel]);
-  const panel = (p: Page) => ({ page: p, mode, current: page === p, at, onOpen: () => open(p), drawer: drawerOf(p) });
+  const panel = (p: Page) => ({
+    page: p,
+    mode,
+    current: page === p,
+    at,
+    i: Math.max(0, pages.findIndex((x) => x.id === p)),
+    onOpen: () => open(p),
+    drawer: drawerOf(p),
+  });
   // Closed, the Board's head still shows the latest of its first few number readouts.
   const peek = Object.keys(monitors)
     .filter((id) => typeof state.latest[id] === "number")
