@@ -29,6 +29,7 @@ else
 fi
 step "paperboat: protocol.ts current" "$ROOT" python3 protocol/gen_ts.py --check
 step "paperboat: tokens current"  "$ROOT" python3 docs/gen_tokens.py --check
+step "paperboat: no bundled toolkits" "$ROOT" python3 scripts/check_bundle.py --self-test
 step "paperboat: typecheck"       "$ROOT" npm run -s typecheck
 step "paperboat: web+cli tests"   "$ROOT" npm test -w @paperboat/web -w @paperboat/cli
 if [ $QUICK = 0 ]; then
@@ -37,6 +38,7 @@ if [ $QUICK = 0 ]; then
   step "engine: build"            "$ROOT"   cmake --build engine/build -j"$(nproc 2>/dev/null || sysctl -n hw.ncpu)"
   step "engine: unit tests"       "$ROOT"   engine/build/tests/paperboat_tests
   step "engine: check sdk-backend" "$ROOT" "$PB" check engine/tests/sdk-backend
+  step "paperboat: install tree clean" "$ROOT" sh -c 'rm -rf engine/build/bundle-check && cmake --install engine/build --prefix engine/build/bundle-check >/dev/null && python3 scripts/check_bundle.py --prefix engine/build/bundle-check'
   step "docs: build (-W)"         "$ROOT"   ./scripts/build_docs.sh
 fi
 

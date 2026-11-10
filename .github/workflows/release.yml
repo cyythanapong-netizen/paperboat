@@ -104,6 +104,13 @@ jobs:
           cmake --install engine/build --prefix "$RUNNER_TEMP/root"   # the binary, share/ and the SDK
           python3 scripts/pack_npm.py --version "$v" --out dist/npm --target linux-x64 --prefix "$RUNNER_TEMP/root"
           python3 scripts/pack_npm.py --version "$v" --out dist/npm --main
+      - name: No optional toolkit is bundled
+        run: |
+          python3 scripts/check_bundle.py --self-test
+          python3 scripts/check_bundle.py --prefix "$RUNNER_TEMP/root"
+          shopt -s nullglob
+          archives=(dist/*.tar.gz dist/*.deb dist/*.rpm dist/*.whl)
+          python3 scripts/check_bundle.py --archive "${archives[@]}"
       - name: The .deb installs on a clean Debian 12 and runs
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" debian:bookworm sh -c '
@@ -218,6 +225,11 @@ jobs:
           cmake --install engine/build --prefix "$RUNNER_TEMP/root"
           python3 scripts/pack_npm.py --version "$v" --out dist/npm --target darwin-arm64 --prefix "$RUNNER_TEMP/root"
           python3 scripts/pack_npm.py --version "$v" --out dist/npm --main
+      - name: No optional toolkit is bundled
+        run: |
+          python3 scripts/check_bundle.py --self-test
+          python3 scripts/check_bundle.py --prefix "$RUNNER_TEMP/root"
+          python3 scripts/check_bundle.py --archive dist/*.tar.gz
       - name: The npm packages install on a clean Node, run, and build and check a backend
         run: |
           prefix=$(mktemp -d)
@@ -314,6 +326,11 @@ jobs:
           (cd engine/build && cpack -G ZIP -C Release -B "$GITHUB_WORKSPACE/dist")
           cmake --install engine/build --config Release --prefix "$RUNNER_TEMP/root"
           python scripts/pack_npm.py --version "$v" --out dist/npm --target win32-x64 --prefix "$RUNNER_TEMP/root"
+      - name: No optional toolkit is bundled
+        run: |
+          python scripts/check_bundle.py --self-test
+          python scripts/check_bundle.py --prefix "$RUNNER_TEMP/root"
+          Get-ChildItem dist/*.zip | ForEach-Object { python scripts/check_bundle.py --archive $_.FullName }
       - name: "SDK: the .zip builds and checks a backend"
         run: |
           v=${{ steps.version.outputs.version }}

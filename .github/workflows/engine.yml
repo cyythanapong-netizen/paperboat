@@ -48,7 +48,9 @@ jobs:
       - name: Build
         run: cmake --build engine/build
       - name: Test
-        run: ctest --test-dir engine/build --output-on-failure
+        run: |
+          ctest --test-dir engine/build --output-on-failure
+          python3 scripts/check_bundle.py --self-test
 
 
   engine-macos:
@@ -66,4 +68,6 @@ jobs:
       - name: Build
         run: cmake --build engine/build
       - name: Test
-        run: ctest --test-dir engine/build --output-on-failure
+        run: |
+          ctest --test-dir engine/build --output-on-failure
+          python3 scripts/check_bundle.py --self-test
