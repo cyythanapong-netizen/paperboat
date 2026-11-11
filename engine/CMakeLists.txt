@@ -152,7 +152,7 @@ endif()
 if(PAPERBOAT_INSTALL)
   include(CMakePackageConfigHelpers)
   set(PAPERBOAT_CMAKE_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/Paperboat)
-  install(TARGETS paperboat_core paperboat_toolkit paperboat_warnings EXPORT PaperboatTargets COMPONENT dev
+  install(TARGETS paperboat_core paperboat_toolkit paperboat_solvers paperboat_warnings EXPORT PaperboatTargets COMPONENT dev
           ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
   install(DIRECTORY core/include/ toolkit/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT dev)
   install(EXPORT PaperboatTargets NAMESPACE paperboat:: DESTINATION ${PAPERBOAT_CMAKE_DIR} COMPONENT dev)
