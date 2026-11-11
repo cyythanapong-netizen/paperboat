@@ -222,7 +222,8 @@ export function reduce(s: EngineState, m: Action): EngineState {
     case "variables.load":
       return { ...s, variables: m.variables };
     case "variables.remote":
-      return { ...s, remoteVariables: m.variables };
+      // A message without a list (or a malformed one) means none, never `undefined`.
+      return { ...s, remoteVariables: Array.isArray(m.variables) ? m.variables : [] };
     case "project.load":
       return s;
     case "variables.values":
