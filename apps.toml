@@ -17,6 +17,13 @@ kind = "library"
 build = ["npm ci"]
 
 [[apps]]
+name = "squero-julia-kernel"
+repo = "https://github.com/paperboatlab/squero-julia-kernel.git"
+description = "The Julia session behind Squero Studio MX (squero-kernel/0)."
+kind = "library"
+build = ["bin/build-image"]
+
+[[apps]]
 name = "squero-studio-om"
 repo = "https://github.com/paperboatlab/squero-studio-om.git"
 description = "Squero Studio: OpenModelica. The Modelica editor that exports Paperboat C++ backends."
@@ -24,5 +31,16 @@ kind = "program"
 launch = "bin/squero-om"  # `paperboat start squero-studio-om` runs its native launcher
 port = 59201  # squero-om's first free port (59201..59299)
 deps = ["paperboat-shared@0.1"]
+build = ["npm ci", "npm run build"]
+output = "dist"
+
+[[apps]]
+name = "squero-studio-mx"
+repo = "https://github.com/paperboatlab/squero-studio-mx.git"
+description = "Squero Studio: MX. The MATLAB-like Julia workbench with Paperboat simulation."
+kind = "program"
+launch = "bin/squero-mx"  # `paperboat start squero-studio-mx` runs its native launcher
+port = 59301  # squero-mx's first free port (59301..59399)
+deps = ["paperboat-shared@0.1", "squero-julia-kernel"]
 build = ["npm ci", "npm run build"]
 output = "dist"
