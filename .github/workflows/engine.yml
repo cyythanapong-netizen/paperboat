@@ -21,7 +21,7 @@ jobs:
     name: Engine (C++ build and tests, SUNDIALS ${{ matrix.sundials }})
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: false
+      fail-fast: true  # one failing leg cancels the other: the run is red at the first failure
       matrix:
         sundials: ["ON", "OFF"]  # OFF compiles the implicit solvers out (`unknown solver`, not a missing symbol)
     env:
