@@ -153,6 +153,27 @@ TEST_CASE("paperboat new writes a Python backend that check's manifest and catal
   CHECK(check.ok);
 }
 
+TEST_CASE("paperboat new writes a Julia backend whose manifest and project agree") {
+  TempDir tmp("julia");
+  const auto res = cli::new_backend({.name = "jl-thing", .language = "julia", .dir = tmp.path});
+  REQUIRE(res.ok);
+  CHECK(written(res) == std::set<std::string>{".gitignore", "Project.toml", "backend.toml", "descriptor.toml",
+                                              "domain/blocks.jl", "expected.json", "server.jl"});
+  const auto m = core::BackendManager::load_manifest(tmp.path);
+  REQUIRE(m.has_manifest);
+  CHECK(m.language == "julia");
+  CHECK(m.run == "server.jl");
+  CHECK(core::BackendManager::detect_backend_kind(tmp.path) == core::BackendKind::Julia);
+  CHECK_THAT(slurp(tmp.path / "server.jl"), ContainsSubstring("Paperboat.main"));
+  // Project.toml points at the checkout's Paperboat.jl, which `deps install` resolves.
+  CHECK_THAT(slurp(tmp.path / "Project.toml"), ContainsSubstring("[sources]"));
+  CHECK_THAT(slurp(tmp.path / "Project.toml"), ContainsSubstring("julia/Paperboat"));
+  CHECK_THAT(slurp(tmp.path / "domain/blocks.jl"), ContainsSubstring("ctx::Paperboat.Context"));
+  const auto expected = nlohmann::json::parse(slurp(tmp.path / "expected.json"));
+  CHECK(expected["run"] == "server.jl");
+  CHECK(expected["signals"]["result"] == 6.0);
+}
+
 TEST_CASE("paperboat new never overwrites: a non-empty folder is refused, an empty one is fine") {
   TempDir tmp("existing");
   fs::create_directories(tmp.path);

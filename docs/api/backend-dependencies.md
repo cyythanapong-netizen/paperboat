@@ -20,7 +20,8 @@ paperboat run my-backend
 
 `deps install` runs `python3 -m venv .venv` and `.venv/bin/python -m pip install -r
 requirements.txt`. `paperboat check` fails with `Python dependencies are not installed: run
-paperboat deps install` if `requirements.txt` exists without `.venv`. `paperboat pack` includes
+paperboat deps install` when `requirements.txt` lists packages but `.venv` is missing (a file
+with only comments, as `paperboat new` writes it, needs no environment). `paperboat pack` includes
 `requirements.txt` and excludes `.venv/`.
 
 `$PAPERBOAT_PYTHON` still selects a different interpreter; the backend venv wins when it exists.
