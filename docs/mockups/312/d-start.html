@@ -2,15 +2,15 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8" />
-<title>Squero Studio Octave — Start</title>
+<title>Squero Studio MX — Start</title>
 <link rel="stylesheet" href="mockup.css" />
 </head>
 <body>
 <div class="app d">
   <header class="topbar">
-    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">OCT</span></div>
+    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">MX</span></div>
     <div class="proj"><span class="dot" style="background:var(--line-strong)"></span>no script</div>
-    <div class="status"><span class="pip"></span>octave 10.3 · ready</div>
+    <div class="status"><span class="pip"></span>julia 1.11.5 · ready</div>
     <div class="keys">
       <button class="key">New <span class="tag">⌘N</span></button>
       <button class="key">Open</button>
@@ -21,14 +21,14 @@
   <aside class="panel">
     <div class="head"><b>recent</b><span class="sp"></span><button class="plain tag">⌕</button></div>
     <div style="padding:8px 0;">
-      <div class="file on"><span class="ico">◇</span>surface.m<span class="k">2 m</span></div>
-      <div class="file"><span class="ico">◇</span>lorenz.m<span class="k">1 h</span></div>
-      <div class="file"><span class="ico">◇</span>chladni.m<span class="k">3 h</span></div>
-      <div class="file"><span class="ico">◇</span>stories.m<span class="k">1 d</span></div>
+      <div class="file on"><span class="ico">◇</span>surface.jl<span class="k">2 m</span></div>
+      <div class="file"><span class="ico">◇</span>lorenz.jl<span class="k">1 h</span></div>
+      <div class="file"><span class="ico">◇</span>chladni.jl<span class="k">3 h</span></div>
+      <div class="file"><span class="ico">◇</span>stories.jl<span class="k">1 d</span></div>
       <div class="file" style="margin-top:6px"><span class="ico">▾</span>data<span class="k">/</span></div>
-      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-07.mat<span class="k">mat</span></div>
-      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-06.mat<span class="k">mat</span></div>
-      <div class="file" style="padding-left:26px"><span class="ico">▱</span>peaks.mat<span class="k">mat</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-07.jld2<span class="k">jld2</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-06.jld2<span class="k">jld2</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>peaks.jld2<span class="k">jld2</span></div>
       <div class="file" style="margin-top:8px"><span class="ico">▸</span>folders<span class="k">/</span></div>
       <div class="file" style="padding-left:26px"><span class="ico">▱</span>dynamics<span class="k">12</span></div>
       <div class="file" style="padding-left:26px"><span class="ico">▱</span>controls<span class="k">8</span></div>
@@ -39,21 +39,21 @@
 
   <main class="panel startpane">
     <div>
-      <div class="lock2"><span class="w">squero</span><span class="s">studio</span><span class="b">OCT</span></div>
-      <div class="tagline">Edit <span class="mono">.m</span> scripts, watch the workspace, chart the run.</div>
+      <div class="lock2"><span class="w">squero</span><span class="s">studio</span><span class="b">MX</span></div>
+      <div class="tagline">Edit <span class="mono">.jl</span> scripts, watch the workspace, chart the run.</div>
     </div>
 
     <div class="startgrid">
       <div class="startcard">
         <span class="ic">＋</span>
         <b>New script</b>
-        <span>A blank <span class="mono">.m</span> with a scratch line and a local Octave session.</span>
+        <span>A blank <span class="mono">.jl</span> with a scratch line and a local Julia session.</span>
         <kbd>⌘N</kbd>
       </div>
       <div class="startcard">
         <span class="ic">⌂</span>
         <b>Open file</b>
-        <span>Open <span class="mono">.m</span>, <span class="mono">.mat</span>, or a folder. Attach a backend to load its run.</span>
+        <span>Open <span class="mono">.jl</span>, <span class="mono">.jld2</span>, or a folder. Attach a backend to load its run.</span>
         <kbd>⌘O</kbd>
       </div>
     </div>
@@ -62,22 +62,22 @@
       <div class="rh"><span class="lbl">resume</span><span class="sp" style="flex:1"></span><span class="tag">workspace + last chart</span></div>
       <div class="recentrow">
         <div class="thumb"><canvas data-k="surface"></canvas></div>
-        <div><div class="nm">surface.m</div><div class="meta">A 512 × 512 · sel 1 × 1284 · run-07</div></div>
+        <div><div class="nm">surface.jl</div><div class="meta">A 512 × 512 · sel 1284 · run-07</div></div>
         <div class="go">resume →<br><span style="opacity:.6">2.40 s</span></div>
       </div>
       <div class="recentrow">
         <div class="thumb"><canvas data-k="heat"></canvas></div>
-        <div><div class="nm">lorenz.m</div><div class="meta">x, y, z 1 × 5000 · 3D line · run-05</div></div>
+        <div><div class="nm">lorenz.jl</div><div class="meta">x, y, z 5000 · 3D line · run-05</div></div>
         <div class="go">resume →<br><span style="opacity:.6">8.00 s</span></div>
       </div>
       <div class="recentrow">
         <div class="thumb"><canvas data-k="heat2"></canvas></div>
-        <div><div class="nm">chladni.m</div><div class="meta">mode 512 × 512 · heat · run-04</div></div>
+        <div><div class="nm">chladni.jl</div><div class="meta">mode 512 × 512 · heat · run-04</div></div>
         <div class="go">resume →<br><span style="opacity:.6">0.42 s</span></div>
       </div>
       <div class="recentrow">
         <div class="thumb"><canvas data-k="spark"></canvas></div>
-        <div><div class="nm">stories.m</div><div class="meta">start · fold · pin · 3 markers</div></div>
+        <div><div class="nm">stories.jl</div><div class="meta">start · fold · pin · 3 markers</div></div>
         <div class="go">resume →<br><span style="opacity:.6">1.10 s</span></div>
       </div>
     </div>
@@ -86,7 +86,7 @@
     <div style="margin-top:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--raised);display:grid;grid-template-columns:1fr 430px;overflow:hidden">
       <div style="padding:16px;display:flex;flex-direction:column;gap:5px">
         <div class="lbl">pick up where you left off</div>
-        <div style="font:500 14px var(--font-mono)">surface.m · run-07</div>
+        <div style="font:500 14px var(--font-mono)">surface.jl · run-07</div>
         <div class="tag">2.40 s · 4 views · A 512 × 512 · ghost run-06</div>
         <div style="display:flex;gap:6px;margin-top:8px"><button class="key small">Resume</button><button class="key small">Open fresh</button></div>
       </div>
@@ -103,8 +103,8 @@
     <div class="head"><b>session</b><span class="sp"></span><span class="tag">local</span></div>
     <div style="padding:11px 12px;display:flex;flex-direction:column;gap:11px;">
       <div>
-        <div class="lbl" style="margin-bottom:6px">octave</div>
-        <div class="attachrow"><span class="pip"></span><div><div class="nm">GNU Octave 10.3.0</div><div class="meta">/usr/bin/octave-cli</div></div><span class="k">found</span></div>
+        <div class="lbl" style="margin-bottom:6px">julia</div>
+        <div class="attachrow"><span class="pip"></span><div><div class="nm">Julia 1.11.5</div><div class="meta">/usr/bin/julia</div></div><span class="k">found</span></div>
       </div>
       <div>
         <div class="lbl" style="margin-bottom:6px">paperboat backend</div>
@@ -128,15 +128,15 @@
         <div class="attachrow" style="margin-bottom:5px"><span class="pip" style="background:var(--line-strong)"></span><div><div class="nm">pendulum-cpp</div><div class="meta">run-03 · 4.10 s</div></div><span class="k">Attach</span></div>
         <div class="attachrow"><span class="pip" style="background:var(--line-strong)"></span><div><div class="nm">airfoil</div><div class="meta">run-01 · 12.8 s</div></div><span class="k">Attach</span></div>
       </div>
-      <div class="hint2">Squero Studio Octave is a client. It attaches to the ecosystem; it does not generate a backend.</div>
+      <div class="hint2">Squero Studio MX is a client. It attaches to the ecosystem; it does not generate a backend.</div>
     </div>
-    <div class="foot">squero-studio-octave 0.1.0 · Apache-2.0</div>
+    <div class="foot">squero-studio-mx 1.11.5 · ui 0.1.0 · Apache-2.0</div>
   </aside>
 
   <section class="console">
     <div class="chead"><span class="ct on">console</span><span class="ct">messages</span><span class="sp"></span><span class="k2">no session</span></div>
     <div class="lines">
-      <div class="dim">squero studio octave 0.1.0 · octave 10.3.0 (x86_64-pc-linux-gnu)</div>
+      <div class="dim">squero studio mx 1.11.5 · ui 0.1.0 · julia 1.11.5 (x86_64-pc-linux-gnu)</div>
       <div class="dim">attach a backend to load a run, or open a script to start a local session.</div>
       <div class="cmd">_</div>
     </div>

@@ -1,16 +1,20 @@
-# pb#312 — Squero Studio Octave mockups
+# pb#312 — Squero Studio MX mockups
 
-Six design studies for `squero-studio-octave`. They use the real tokens from
-`@paperboat/shared/src/tokens.css` and the flat-mono shell of `squero-studio-om`, not a
-MATLAB/Octave clone. Each screen is a self-contained HTML page with a canvas height field
-(`chart.js`), rendered to JPEG with Playwright at 1600×1000, 1.5×.
+Six design studies for `squero-studio-mx`, the MATLAB-like workbench on a Julia kernel. They
+use the real tokens from `@paperboat/shared/src/tokens.css` and the flat-mono shell of
+`squero-studio-om`, not a MATLAB/Octave clone. Each screen is a self-contained HTML page with
+a canvas height field (`chart.js`), rendered to JPEG with Playwright at 1600×1000, 1.5×.
+
+The charts in these screens are placeholders for the **shared** `@paperboat/shared/plot`
+components (`Stage3D`, `Surface3D`, `Scatter3D`, `Line3D`, `Axes3D`, `ColorBar`, `Plot2D`,
+`Heatmap`) and the `dashboard/plot*` instruments. MX owns no chart renderer.
 
 ## Chart studies
 
 | File | Screen | Idea |
 | --- | --- | --- |
 | `a-bench.jpg` | **Bench** | Workspace-first: variables as live cards, tie a card to a chart axis, scratch line previews its answer, linked cursor slices. |
-| `b-split.jpg` | **Split** | Script-first: inline answer gutter, a chart lasso writes a line back into the `.m`, pinned views above the chart. |
+| `b-split.jpg` | **Split** | Script-first: inline answer gutter, a chart lasso writes a line back into the `.jl`, pinned views above the chart. |
 | `c-board.jpg` | **Board** | Run-first: 3D chart plus heat, scatter and line as Board instruments, a story ribbon, camera keys and ghost compare. |
 
 ## App surfaces
@@ -18,7 +22,7 @@ MATLAB/Octave clone. Each screen is a self-contained HTML page with a canvas hei
 | File | Screen | Idea |
 | --- | --- | --- |
 | `d-start.jpg` | **Start** | The app itself: resume cards that restore a session, attach-to-backend panel, recent backends, and a large "pick up where you left off" preview. |
-| `e-editor.jpg` | **Editor** | The script surface: per-line run ribbon, collapsible cell cards with costs, inline answer chips, hover peek, and a line-scoped workspace snapshot. |
+| `e-editor.jpg` | **Editor** | The script surface: per-line run ribbon, `#%%` cell cards with costs, inline answer chips, hover peek, and a line-scoped workspace snapshot. |
 | `f-variables.jpg` | **Variables** | The panel and lens: grouped list with live previews, a matrix lens (heatmap, profiles, histogram, stats, cell edit), and a tie board of variable → chart bindings. |
 
 ## The UX ideas
@@ -27,7 +31,7 @@ MATLAB/Octave clone. Each screen is a self-contained HTML page with a canvas hei
 2. **Tie, don't configure.** Drag a card's ring onto an axis or port; rebinding is a gesture.
 3. **Scratch with a preview.** Evaluate while typing; `↵ show` pins, `⇥ send to chart` binds.
 4. **Inline answer gutter.** Every assignment shows its shape and a micro-preview.
-5. **Lasso → variable.** A selection on the chart proposes the `.m` line that produces it.
+5. **Lasso → variable.** A selection on the chart proposes the `.jl` line that produces it.
 6. **Time curtain + linked slice.** A vertical plane at the run time cuts the surface; its
    profile mirrors in the inspector.
 7. **Pinned views.** A pin stores camera, curtain and series, not a screenshot.

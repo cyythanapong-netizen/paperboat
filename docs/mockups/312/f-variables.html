@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8" />
-<title>Squero Studio Octave — Variables</title>
+<title>Squero Studio MX — Variables</title>
 <link rel="stylesheet" href="mockup.css" />
 <style>
   .pgrid { display:grid; grid-template-columns:repeat(6,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:3px; overflow:hidden; }
@@ -12,9 +12,9 @@
 <body>
 <div class="app f">
   <header class="topbar">
-    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">OCT</span></div>
-    <div class="proj"><span class="dot"></span>surface.m</div>
-    <div class="status"><span class="pip"></span>octave 10.3 · run-07 2.40 s</div>
+    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">MX</span></div>
+    <div class="proj"><span class="dot"></span>surface.jl</div>
+    <div class="status"><span class="pip"></span>julia 1.11.5 · run-07 2.40 s</div>
     <div class="keys">
       <button class="key run">▶ Run</button>
       <button class="key">Console <span class="tag">1</span></button>
@@ -25,12 +25,12 @@
   <aside class="panel">
     <div class="head"><b>files</b><span class="sp"></span><button class="plain tag">+</button></div>
     <div style="padding:8px 0;">
-      <div class="file"><span class="ico">◇</span>lorenz.m<span class="k">m</span></div>
-      <div class="file on"><span class="ico">◇</span>surface.m<span class="k">m</span></div>
-      <div class="file"><span class="ico">◇</span>selection.m<span class="k">m</span></div>
-      <div class="file"><span class="ico">◇</span>chladni.m<span class="k">m</span></div>
+      <div class="file"><span class="ico">◇</span>lorenz.jl<span class="k">jl</span></div>
+      <div class="file on"><span class="ico">◇</span>surface.jl<span class="k">jl</span></div>
+      <div class="file"><span class="ico">◇</span>selection.jl<span class="k">jl</span></div>
+      <div class="file"><span class="ico">◇</span>chladni.jl<span class="k">jl</span></div>
       <div class="file" style="margin-top:6px"><span class="ico">▾</span>data<span class="k">/</span></div>
-      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-07.mat<span class="k">mat</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-07.jld2<span class="k">jld2</span></div>
     </div>
     <div class="foot">4 files · 1 data set</div>
   </aside>
@@ -46,35 +46,35 @@
 
     <div class="vrow on">
       <span class="nm"><span class="chg2"></span>A <i>· peaks</i></span>
-      <span class="sh2">512 × 512</span><span class="sh2">double</span>
+      <span class="sh2">512 × 512</span><span class="sh2">Float64</span>
       <span class="pv"><canvas data-k="heat"></canvas></span>
       <span><span class="chip2 sig">z</span></span><span class="sh2">2 s ago</span>
     </div>
     <div class="vrow">
-      <span class="nm"><span class="chg2"></span>sel <i>· logical</i></span>
-      <span class="sh2">1 × 1284</span><span class="sh2">logical</span>
+      <span class="nm"><span class="chg2"></span>sel <i>· selected</i></span>
+      <span class="sh2">1284</span><span class="sh2">Float64</span>
       <span class="pv"><canvas data-k="dots"></canvas></span>
       <span><span class="chip2 sig">color</span></span><span class="sh2">2 s ago</span>
     </div>
     <div class="vrow">
-      <span class="nm">x</span><span class="sh2">1 × 512</span><span class="sh2">double</span>
+      <span class="nm">x</span><span class="sh2">512</span><span class="sh2">Float64</span>
       <span class="pv"><canvas data-k="spark1"></canvas></span><span class="sh2">—</span><span class="sh2">1 m ago</span>
     </div>
     <div class="vrow">
-      <span class="nm">y</span><span class="sh2">1 × 512</span><span class="sh2">double</span>
+      <span class="nm">y</span><span class="sh2">512</span><span class="sh2">Float64</span>
       <span class="pv"><canvas data-k="spark2"></canvas></span><span class="sh2">—</span><span class="sh2">1 m ago</span>
     </div>
     <div class="vrow">
-      <span class="nm"><span class="chg2"></span>z</span><span class="sh2">1 × 500</span><span class="sh2">double</span>
+      <span class="nm"><span class="chg2"></span>z</span><span class="sh2">500</span><span class="sh2">Float64</span>
       <span class="pv"><canvas data-k="spark3"></canvas></span>
       <span><span class="chip2 sig">y</span></span><span class="sh2">2 s ago</span>
     </div>
     <div class="vrow">
-      <span class="nm">k</span><span class="sh2">1 × 1</span><span class="sh2">double</span>
+      <span class="nm">k</span><span class="sh2">1</span><span class="sh2">Float64</span>
       <span class="pv" style="display:grid;place-items:center;font:500 12px var(--font-mono)">0.42</span><span class="sh2">—</span><span class="sh2">1 m ago</span>
     </div>
     <div class="vrow">
-      <span class="nm">ghost</span><span class="sh2">512 × 512</span><span class="sh2">double</span>
+      <span class="nm">ghost</span><span class="sh2">512 × 512</span><span class="sh2">Float64</span>
       <span class="pv"><canvas data-k="ghost"></canvas></span>
       <span><span class="chip2">ghost</span></span><span class="sh2">4 m ago</span>
     </div>
@@ -82,7 +82,7 @@
   </section>
 
   <aside class="panel lens">
-    <div class="head"><b>A</b><span class="tag">512 × 512 · double</span><span class="sp"></span><button class="plain tag">Pin</button><button class="plain tag">Tie</button><button class="plain tag">Edit</button></div>
+    <div class="head"><b>A</b><span class="tag">512 × 512 · Matrix{Float64}</span><span class="sp"></span><button class="plain tag">Pin</button><button class="plain tag">Tie</button><button class="plain tag">Edit</button></div>
     <div class="body">
       <div style="display:flex;gap:6px;align-items:center"><span class="chip2">rows 1:512</span><span class="chip2">cols 1:512</span><span class="chip2">stride 1</span><span class="tag" style="margin-left:auto">row 128 · col 64 · 0.421</span></div>
       <canvas class="big" id="lensHeat"></canvas>
@@ -112,7 +112,7 @@
         <span class="tag" style="margin-left:auto">live · tied to surface.z</span>
       </div>
     </div>
-    <div class="foot">double · 2.0 MB · dense · no NaN</div>
+    <div class="foot">Matrix{Float64} · 2.0 MB · dense · no NaN</div>
   </aside>
 
   <section class="panel tieboard">

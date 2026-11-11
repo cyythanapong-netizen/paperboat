@@ -2,7 +2,7 @@
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8" />
-<title>Squero Studio Octave — Board</title>
+<title>Squero Studio MX — Board</title>
 <link rel="stylesheet" href="mockup.css" />
 <style>
   .left { display:flex; flex-direction:column; gap:14px; min-height:0; }
@@ -14,9 +14,9 @@
 <body>
 <div class="app c">
   <header class="topbar">
-    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">OCT</span></div>
-    <div class="proj"><span class="dot"></span>board.m</div>
-    <div class="status"><span class="pip"></span>octave 10.3 · running 2.40 s</div>
+    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">MX</span></div>
+    <div class="proj"><span class="dot"></span>board.jl</div>
+    <div class="status"><span class="pip"></span>julia 1.11.5 · running 2.40 s</div>
     <div class="keys">
       <button class="key run" style="border-color:var(--signal);color:var(--signal)">■ Stop</button>
       <button class="key">Console</button>
@@ -28,19 +28,19 @@
     <aside class="panel">
       <div class="head"><b>files</b><span class="sp"></span><button class="plain tag">+</button></div>
       <div style="padding:6px 0;">
-        <div class="file on"><span class="ico">◇</span>board.m<span class="k">m</span></div>
-        <div class="file"><span class="ico">◇</span>surface.m<span class="k">m</span></div>
-        <div class="file"><span class="ico">◇</span>scatter.m<span class="k">m</span></div>
-        <div class="file"><span class="ico">◇</span>stories.m<span class="k">m</span></div>
+        <div class="file on"><span class="ico">◇</span>board.jl<span class="k">jl</span></div>
+        <div class="file"><span class="ico">◇</span>surface.jl<span class="k">jl</span></div>
+        <div class="file"><span class="ico">◇</span>scatter.jl<span class="k">jl</span></div>
+        <div class="file"><span class="ico">◇</span>stories.jl<span class="k">jl</span></div>
       </div>
     </aside>
 
     <aside class="panel">
       <div class="head"><b>workspace</b><span class="sp"></span><span class="tag">live</span></div>
       <div class="ws">
-        <div class="varc on"><div><div class="nm">A</div><div class="sh">512 × 512 · double</div></div><canvas class="glyph" data-f="heat"></canvas><span class="tie"></span></div>
-        <div class="varc"><div><div class="nm">sel</div><div class="sh">1 × 1284 · logical</div></div><canvas class="glyph" data-f="dots"></canvas><span class="tie"></span></div>
-        <div class="varc"><div><div class="nm">z</div><div class="sh">1 × 500 · double</div></div><canvas class="glyph" data-f="spark"></canvas><span class="tie"></span></div>
+        <div class="varc on"><div><div class="nm">A</div><div class="sh">512 × 512 · Matrix{Float64}</div></div><canvas class="glyph" data-f="heat"></canvas><span class="tie"></span></div>
+        <div class="varc"><div><div class="nm">sel</div><div class="sh">1284 · Vector{Float64}</div></div><canvas class="glyph" data-f="dots"></canvas><span class="tie"></span></div>
+        <div class="varc"><div><div class="nm">z</div><div class="sh">500 · Vector{Float64}</div></div><canvas class="glyph" data-f="spark"></canvas><span class="tie"></span></div>
         <div class="varc dim"><div><div class="nm">ghost</div><div class="sh">run-06 · 512 × 512</div></div><canvas class="glyph" data-f="ghost"></canvas><span class="tie"></span></div>
       </div>
       <div style="padding:8px 10px;border-top:1px solid var(--line)">
@@ -61,8 +61,8 @@
 
   <main class="stage">
     <div class="docbar">
-      <span class="doctab on"><span class="dot"></span>board.m</span>
-      <span class="doctab">surface.m</span>
+      <span class="doctab on"><span class="dot"></span>board.jl</span>
+      <span class="doctab">surface.jl</span>
       <span class="tabs" style="margin-left:auto;padding-bottom:8px"><span class="on">board</span><span>code</span></span>
     </div>
     <div class="boardwrap">
@@ -111,11 +111,11 @@
   </main>
 
   <section class="console">
-    <div class="chead"><span class="ct on">console</span><span class="ct">messages</span><span class="sp"></span><span class="k2">octave 10.3 · run-07 · 2.40 s</span></div>
+    <div class="chead"><span class="ct on">console</span><span class="ct">messages</span><span class="sp"></span><span class="k2">julia 1.11.5 · run-07 · 2.40 s</span></div>
     <div class="lines">
-      <div class="cmd">[X, Y] = meshgrid(linspace(-3, 3, 512));</div>
-      <div class="cmd">A = sin(R * 3.4) ./ (R * 3.4);   <span class="dim">→ 512 × 512 · 31.2 MB</span></div>
-      <div class="cmd">sel = A(A &gt; 0.42);              <span class="dim">→ 1 × 1284 · 10.3 kB</span></div>
+      <div class="cmd">X, Y = meshgrid(range(-3, 3, length=512))</div>
+      <div class="cmd">A = @. sin(R * 3.4) / (R * 3.4)   <span class="dim">→ 512 × 512 · 31.2 MB</span></div>
+      <div class="cmd">sel = A[A .&gt; 0.42]              <span class="dim">→ 1284 · 10.3 kB</span></div>
       <div class="ok">board: 4 instruments · iso · ghost run-06 · step 120/500</div>
       <div class="dim">ready · 6 variables · 38.4 MB</div>
     </div>

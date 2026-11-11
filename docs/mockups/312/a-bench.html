@@ -2,15 +2,15 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8" />
-<title>Squero Studio Octave — Bench</title>
+<title>Squero Studio MX — Bench</title>
 <link rel="stylesheet" href="mockup.css" />
 </head>
 <body>
 <div class="app a">
   <header class="topbar">
-    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">OCT</span></div>
-    <div class="proj"><span class="dot"></span>lorenz.m</div>
-    <div class="status"><span class="pip"></span>octave 10.3 · ready</div>
+    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">MX</span></div>
+    <div class="proj"><span class="dot"></span>lorenz.jl</div>
+    <div class="status"><span class="pip"></span>julia 1.11.5 · ready</div>
     <div class="keys">
       <button class="key run">▶ Run</button>
       <button class="key">Console <span class="tag">2</span></button>
@@ -21,14 +21,14 @@
   <aside class="panel">
     <div class="head"><b>files</b><span class="sp"></span><button class="plain tag">+</button></div>
     <div style="padding:8px 0;">
-      <div class="file on"><span class="ico">◇</span>lorenz.m<span class="k">m</span></div>
-      <div class="file"><span class="ico">◇</span>pendulum.m<span class="k">m</span></div>
-      <div class="file"><span class="ico">◇</span>rossler.m<span class="k">m</span></div>
-      <div class="file"><span class="ico">◇</span>surface.m<span class="k">m</span></div>
-      <div class="file"><span class="ico">◇</span>chladni.m<span class="k">m</span></div>
+      <div class="file on"><span class="ico">◇</span>lorenz.jl<span class="k">jl</span></div>
+      <div class="file"><span class="ico">◇</span>pendulum.jl<span class="k">jl</span></div>
+      <div class="file"><span class="ico">◇</span>rossler.jl<span class="k">jl</span></div>
+      <div class="file"><span class="ico">◇</span>surface.jl<span class="k">jl</span></div>
+      <div class="file"><span class="ico">◇</span>chladni.jl<span class="k">jl</span></div>
       <div class="file" style="margin-top:6px;padding-left:10px"><span class="ico">▾</span>data<span class="k">/</span></div>
-      <div class="file" style="padding-left:26px"><span class="ico">▱</span>peaks.mat<span class="k">mat</span></div>
-      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-07.mat<span class="k">mat</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>peaks.jld2<span class="k">jld2</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-07.jld2<span class="k">jld2</span></div>
     </div>
     <div class="foot">6 files · 2 open</div>
   </aside>
@@ -36,12 +36,12 @@
   <aside class="panel">
     <div class="head"><b>workspace</b><span class="sp"></span><span class="tag">whos</span><button class="plain tag">⌕</button></div>
     <div class="ws">
-      <div class="varc on"><div><div class="nm">A</div><div class="sh">512 × 512 · double</div></div><canvas class="glyph" data-f="heat"></canvas><span class="tie"></span></div>
-      <div class="varc"><div><div class="nm">x</div><div class="sh">1 × 512 · double</div></div><canvas class="glyph" data-f="spark1"></canvas><span class="tie"></span></div>
-      <div class="varc"><div><div class="nm">y</div><div class="sh">1 × 512 · double</div></div><canvas class="glyph" data-f="spark2"></canvas><span class="tie"></span></div>
-      <div class="varc"><div><div class="nm">z</div><div class="sh">1 × 512 · double</div></div><canvas class="glyph" data-f="spark3"></canvas><span class="tie"></span></div>
-      <div class="varc"><div><div class="nm">sel</div><div class="sh">1 × 1284 · logical</div></div><canvas class="glyph" data-f="dots"></canvas><span class="tie"></span></div>
-      <div class="varc dim"><div><div class="nm">k</div><div class="sh">1 × 1 · double</div></div><div style="text-align:right;font:500 12px var(--font-mono);grid-column:2">0.42</div><span class="tie"></span></div>
+      <div class="varc on"><div><div class="nm">A</div><div class="sh">512 × 512 · Matrix{Float64}</div></div><canvas class="glyph" data-f="heat"></canvas><span class="tie"></span></div>
+      <div class="varc"><div><div class="nm">x</div><div class="sh">512 · Vector{Float64}</div></div><canvas class="glyph" data-f="spark1"></canvas><span class="tie"></span></div>
+      <div class="varc"><div><div class="nm">y</div><div class="sh">512 · Vector{Float64}</div></div><canvas class="glyph" data-f="spark2"></canvas><span class="tie"></span></div>
+      <div class="varc"><div><div class="nm">z</div><div class="sh">512 · Vector{Float64}</div></div><canvas class="glyph" data-f="spark3"></canvas><span class="tie"></span></div>
+      <div class="varc"><div><div class="nm">sel</div><div class="sh">1284 · Vector{Float64}</div></div><canvas class="glyph" data-f="dots"></canvas><span class="tie"></span></div>
+      <div class="varc dim"><div><div class="nm">k</div><div class="sh">Float64</div></div><div style="text-align:right;font:500 12px var(--font-mono);grid-column:2">0.42</div><span class="tie"></span></div>
     </div>
     <div class="scratch">
       <div class="lbl">scratch</div>
@@ -52,9 +52,9 @@
 
   <main class="stage">
     <div class="docbar">
-      <span class="doctab on"><span class="dot"></span>lorenz.m</span>
-      <span class="doctab">surface.m</span>
-      <span class="doctab">peaks.m</span>
+      <span class="doctab on"><span class="dot"></span>lorenz.jl</span>
+      <span class="doctab">surface.jl</span>
+      <span class="doctab">peaks.jl</span>
     </div>
     <div class="stagebar">
       <div class="tabs"><span class="on">3d</span><span>table</span><span>code</span></div>
@@ -109,12 +109,12 @@
   </aside>
 
   <section class="console">
-    <div class="chead"><span class="ct on">console</span><span class="ct">messages</span><span class="ct">workspace</span><span class="sp"></span><span class="k2">octave 10.3 · pid 4127</span></div>
+    <div class="chead"><span class="ct on">console</span><span class="ct">messages</span><span class="ct">workspace</span><span class="sp"></span><span class="k2">julia 1.11.5 · pid 4127</span></div>
     <div class="lines">
-      <div class="cmd">A = peaks(512);</div>
-      <div class="cmd">[X, Y] = meshgrid(linspace(-3, 3, 512));</div>
-      <div class="cmd">Z = sin(R) ./ R;   <span class="dim">→ 512 × 512 · 0.14 s</span></div>
-      <div class="cmd">sel = A(A &gt; 0.42);  <span class="dim">→ 1 × 1284 · logical</span></div>
+      <div class="cmd">A = peaks(512)</div>
+      <div class="cmd">X, Y = meshgrid(range(-3, 3, length=512))</div>
+      <div class="cmd">Z = @. sin(R) / R   <span class="dim">→ 512 × 512 · 0.14 s</span></div>
+      <div class="cmd">sel = A[A .&gt; 0.42]  <span class="dim">→ 1284 · Vector{Float64}</span></div>
       <div class="warn">warning: legend: ignoring extra labels</div>
       <div class="dim">ready · 6 variables · 38.4 MB</div>
     </div>

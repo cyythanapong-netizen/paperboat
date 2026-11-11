@@ -174,7 +174,7 @@ button.plain { border:0; background:none; padding:0; }
 .lines .err { color:#ff5c4d; }
 .lines .ok { color:#8ad19a; }
 .lines .cmd { color:#f2f2ee; }
-.lines .cmd::before { content:"octave> "; color:var(--signal); }
+.lines .cmd::before { content:"julia> "; color:var(--signal); }
 
 /* ---- editor ------------------------------------------------------------------------ */
 .editor { display:flex; flex-direction:column; }
