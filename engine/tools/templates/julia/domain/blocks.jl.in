@@ -1,0 +1,19 @@
+# The domain's blocks. Paperboat.jl calls `definition` once for the catalog, then `step` on
+# every clock step with the block's inputs; it never draws or speaks the protocol.
+
+struct Scale <: Paperboat.Block
+    gain::Float64
+end
+
+Scale(; gain = 1.0) = Scale(gain)
+
+Paperboat.definition(::Type{Scale}) = Paperboat.block(
+    "scale";
+    label = "Scale",
+    inputs = [Paperboat.port("u")],
+    outputs = [Paperboat.port("y")],
+    params = [Paperboat.param("gain", 1.0)],
+    description = "Multiplies its input by a gain",
+)
+
+Paperboat.step(block::Scale, ctx::Paperboat.Context, inputs) = Dict("y" => block.gain * get(inputs, "u", 0.0))

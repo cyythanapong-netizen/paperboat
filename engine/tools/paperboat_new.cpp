@@ -9,6 +9,8 @@
 #include <system_error>
 #include <utility>
 
+#include "paperboat/toolkit/installer.hpp"
+
 namespace paperboat::cli {
 
 namespace fs = std::filesystem;
@@ -43,8 +45,16 @@ std::string identifier(std::string name) {
   return name;
 }
 
+// The checkout's Paperboat.jl, the package a Julia backend's Project.toml points at.
+std::string julia_package_path() {
+  const std::filesystem::path root = paperboat::toolkit::find_repo_root();
+  if (!root.empty()) return (root / "julia" / "Paperboat").generic_string();
+  return "julia/Paperboat";
+}
+
 std::string render(std::string_view content, const NewOptions& o) {
   std::string text(content);
+  replace_all(text, "@paperboat_julia@", julia_package_path());
   replace_all(text, "@name@", o.name);
   replace_all(text, "@ident@", identifier(o.name));
   replace_all(text, "@target@", program_name(o.name));
@@ -85,7 +95,7 @@ NewResult new_backend(const NewOptions& options) {
     if (t.language == options.language) files.push_back(&t);
   }
   if (files.empty()) {
-    res.error = "unknown language \"" + options.language + "\" (cpp or python)";
+    res.error = "unknown language \"" + options.language + "\" (cpp, python or julia)";
     return res;
   }
 
@@ -126,13 +136,15 @@ NewResult new_backend(const NewOptions& options) {
 int cmd_new(const std::vector<std::string_view>& args) {
   NewOptions opts;
   std::string where;  // the folder as the user typed it, for `cd`
-  bool cpp = false, python = false;
+  bool cpp = false, python = false, julia = false;
   for (std::size_t i = 0; i < args.size(); ++i) {
     const auto a = args[i];
     if (a == "--cpp") {
       cpp = true;
     } else if (a == "--python") {
       python = true;
+    } else if (a == "--julia") {
+      julia = true;
     } else if (a == "--dir") {
       if (i + 1 >= args.size()) {
         std::cerr << "error: --dir needs a path\n";
@@ -140,7 +152,7 @@ int cmd_new(const std::vector<std::string_view>& args) {
       }
       where = std::string(args[++i]);
     } else if (a.starts_with("-")) {
-      std::cerr << "error: unknown option " << a << " (paperboat new <name> [--cpp | --python] [--dir <path>])\n";
+      std::cerr << "error: unknown option " << a << " (paperboat new <name> [--cpp | --python | --julia] [--dir <path>])\n";
       return 2;
     } else if (opts.name.empty()) {
       opts.name = std::string(a);
@@ -149,12 +161,12 @@ int cmd_new(const std::vector<std::string_view>& args) {
       return 2;
     }
   }
-  if (cpp && python) {
-    std::cerr << "error: --cpp or --python, not both\n";
+  if (static_cast<int>(cpp) + static_cast<int>(python) + static_cast<int>(julia) > 1) {
+    std::cerr << "error: pick one of --cpp, --python, --julia\n";
     return 2;
   }
   if (opts.name.empty()) {
-    std::cerr << "error: a name is required: paperboat new <name> [--cpp | --python] [--dir <path>]\n";
+    std::cerr << "error: a name is required: paperboat new <name> [--cpp | --python | --julia] [--dir <path>]\n";
     return 2;
   }
   // `paperboat new backends/my-backend`: the folder, named after its last part.
@@ -164,7 +176,7 @@ int cmd_new(const std::vector<std::string_view>& args) {
     if (opts.name.empty()) opts.name = fs::path(where).lexically_normal().parent_path().filename().string();
   }
   if (where.empty()) where = opts.name;
-  opts.language = python ? "python" : "cpp";
+  opts.language = julia ? "julia" : python ? "python" : "cpp";
   opts.dir = where;
 
   const NewResult res = new_backend(opts);
@@ -174,13 +186,17 @@ int cmd_new(const std::vector<std::string_view>& args) {
   }
 
   const bool is_cpp = opts.language == "cpp";
+  const bool is_julia = opts.language == "julia";
   const std::string url = "ws://localhost:" + std::to_string(kNewBackendPort);
-  std::cout << "[ok] created " << (is_cpp ? "C++" : "Python") << " backend \"" << opts.name << "\" in " << res.dir.string()
+  std::cout << "[ok] created " << (is_cpp ? "C++" : is_julia ? "Julia" : "Python") << " backend \"" << opts.name
+            << "\" in " << res.dir.string()
             << '\n';
   for (const auto& f : res.files) std::cout << "  " << f.generic_string() << '\n';
   std::cout << "\nNext steps:\n  cd " << shell_quote(where) << '\n';
   if (is_cpp) {
     std::cout << "  paperboat build     compile it (CMake; the first build compiles the engine too)\n";
+  } else if (is_julia) {
+    std::cout << "  paperboat deps install   create .julia and instantiate Project.toml (isolated from ~/.julia)\n";
   } else {
     std::cout << "  paperboat build     nothing to compile; it needs the paperboat Python module:\n"
                  "                      in a Paperboat checkout `npm run build:python`, else `pip install ./python`\n";

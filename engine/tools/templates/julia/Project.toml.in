@@ -1,0 +1,6 @@
+# The backend's Julia environment. `paperboat deps install` fills .julia and Manifest.toml.
+[deps]
+Paperboat = "6b1a5e90-6f3e-4b5e-9f3d-2a1c7d4b8e21"
+
+[sources]
+Paperboat = {path = "@paperboat_julia@"}

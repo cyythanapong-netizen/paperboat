@@ -1,0 +1,8 @@
+{
+  "run": "server.jl",
+  "status": "done",
+  "signals": {
+    "result": 6.0,
+    "plot": [0.0, 1e-9]
+  }
+}
