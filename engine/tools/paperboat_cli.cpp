@@ -12,6 +12,7 @@
 #include <fstream>
 #include <iomanip>
 #include <optional>
+#include <sstream>
 #include <iostream>
 #include <map>
 #include <string>
@@ -149,6 +150,11 @@ Updating:
                              when it changed, pull the sibling checkouts of the apps in apps.toml and
                              rebuild them, and refresh installed apps. --check only reports.
 
+Dependencies:
+  deps install [path]        Create the backend's isolated environment and install its
+                             requirements (Python: .venv + requirements.txt; Julia: .julia depot +
+                             Project.toml). C++ dependencies stay with CMake/toolkits.
+
 Packages (apps from other repositories, see apps.toml):
   pkg list [--json]          The programs and libraries, installed, a sibling checkout, or not (KIND column)
   pkg install <name>[@<V>]   Clone a release (default: newest, else main) and build it. Deps resolve
@@ -175,6 +181,125 @@ General:
 
 int cmd_start(const std::vector<std::string_view>& args);
 std::optional<tk::AppEntry> find_program(std::string_view target);
+
+namespace {
+
+std::string quote_word(std::string_view text) {
+  std::string out = "'";
+  for (const char c : text) {
+    if (c == '\'') out += "'\\''";
+    else out += c;
+  }
+  out += "'";
+  return out;
+}
+
+int run_deps(const std::vector<std::string>& args, const fs::path& cwd,
+             const std::vector<std::pair<std::string, std::string>>& env = {}) {
+  std::cout << "  $";
+  for (const auto& arg : args) std::cout << " " << quote_word(arg);
+  std::cout << "\n";
+  // Capture rather than stream: Julia's atexit writer can race a closed pipe.
+  const core::ProcessResult result = core::ProcessRunner::run_sync(args, cwd, env);
+  if (!result.stdout_text.empty()) std::cout << result.stdout_text;
+  if (!result.stderr_text.empty()) std::cerr << result.stderr_text;
+  if (result.timed_out) std::cerr << "  [error] command timed out\n";
+  return result.exit_code;
+}
+
+fs::path find_program_file(std::string_view name) {
+  const char* path_env = std::getenv("PATH");
+  if (!path_env) return {};
+  std::stringstream ss(path_env);
+  std::string dir;
+  std::error_code ec;
+  while (std::getline(ss, dir, ':')) {
+    const fs::path candidate = fs::path(dir) / std::string(name);
+    if (fs::is_regular_file(candidate, ec)) return candidate;
+  }
+  return {};
+}
+
+}  // namespace
+
+int cmd_deps(const std::vector<std::string_view>& args) {
+  std::string_view verb = args.empty() ? "" : args[0];
+  if (verb != "install") {
+    std::cerr << "error: usage: paperboat deps install [path]\n";
+    return 2;
+  }
+  std::string path;
+  bool force = false;
+  for (std::size_t i = 1; i < args.size(); ++i) {
+    if (args[i] == "--force") force = true;
+    else if (path.empty()) path = std::string(args[i]);
+    else {
+      std::cerr << "error: one path only\n";
+      return 2;
+    }
+  }
+  const fs::path dir = core::BackendManager::resolve_backend_dir(path.empty() ? fs::current_path() : fs::path(path));
+  if (!fs::is_directory(dir)) {
+    std::cerr << "error: backend directory not found: " << dir << "\n";
+    return 1;
+  }
+  const core::BackendKind kind = core::BackendManager::detect_backend_kind(dir);
+  std::cout << "deps: " << dir.filename().string() << "\n";
+  if (kind == core::BackendKind::Python) {
+    const fs::path requirements = dir / "requirements.txt";
+    const fs::path pyproject = dir / "pyproject.toml";
+    if (!fs::is_regular_file(requirements) && !fs::is_regular_file(pyproject)) {
+      std::cout << "  no requirements.txt or pyproject.toml: nothing to install\n";
+      return 0;
+    }
+    const fs::path venv = dir / ".venv";
+#ifdef _WIN32
+    const fs::path python = venv / "Scripts" / "python.exe";
+    const std::string base = "python";
+#else
+    const fs::path python = venv / "bin" / "python3";
+    const std::string base = "python3";
+#endif
+    if (!fs::is_regular_file(python) || force) {
+      std::error_code ec;
+      fs::remove_all(venv, ec);
+      std::cout << "  creating .venv (isolated from the host site-packages)\n";
+      if (run_deps({base, "-m", "venv", venv.string()}, dir) != 0) return 1;
+    }
+    std::vector<std::string> pip = {python.string(), "-m", "pip", "install", "--disable-pip-version-check"};
+    if (fs::is_regular_file(requirements)) { pip.push_back("-r"); pip.push_back(requirements.string()); }
+    else { pip.push_back("."); }
+    if (run_deps(pip, dir) != 0) return 1;
+    std::cout << "  [ok] Python environment ready: " << venv.string() << "\n";
+    return 0;
+  }
+  if (kind == core::BackendKind::Julia) {
+    const fs::path project = dir / "Project.toml";
+    if (!fs::is_regular_file(project)) {
+      std::cerr << "error: Julia backend needs Project.toml\n";
+      return 1;
+    }
+    fs::path julia = fs::path(std::getenv("PAPERBOAT_JULIA") ? std::getenv("PAPERBOAT_JULIA") : "");
+    if (julia.empty()) julia = find_program_file("julia");
+    if (julia.empty()) {
+      std::cerr << "error: no julia found (set PAPERBOAT_JULIA or put julia on PATH)\n";
+      return 1;
+    }
+    const fs::path depot = dir / ".julia";
+    std::error_code ec;
+    fs::create_directories(depot, ec);
+    std::cout << "  julia " << julia.string() << " · project " << project.string() << " · depot " << depot.string() << "\n";
+    return run_deps({julia.string(), "--project=" + project.string(), "-e", "using Pkg; Pkg.instantiate()"}, dir,
+                    {{"JULIA_PROJECT", project.string()}, {"JULIA_DEPOT_PATH", depot.string()},
+                     {"JULIA_LOAD_PATH", "@:@stdlib"}, {"JULIA_NUM_THREADS", "1"}});
+  }
+  if (kind == core::BackendKind::Cpp) {
+    std::cout << "  C++ dependencies are CMake packages or toolkits; see toolkit_requirements.toml\n";
+    return 0;
+  }
+  std::cerr << "error: cannot detect backend type in " << dir << "\n";
+  return 1;
+}
 
 int cmd_run(const std::vector<std::string_view>& args) {
   core::BackendRunOptions opts;
@@ -1365,6 +1490,8 @@ const std::vector<CommandSpec>& command_table() {
        {"--run", "--port", "--no-build", "--record"}, "project"},
       {"new", paperboat::cli::cmd_new, "Scaffold a new backend that passes check (C++ or Python)", {}, {},
        {"--cpp", "--python", "--dir"}},
+      {"deps", cmd_deps, "Create a backend's isolated environment and install its dependencies", {},
+       {"install"}, {"--force"}, "backend"},
       {"build", cmd_build, "Compile a C++ backend", {}, {}, {"--clean"}, "backend"},
       {"rebuild", cmd_rebuild, "Clean and compile a C++ backend", {}, {}, {}, "backend"},
       {"backends", cmd_backends, "List the backends you can run", {}, {}, {"--json"}},

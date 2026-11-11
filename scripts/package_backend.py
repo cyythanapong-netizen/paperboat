@@ -29,6 +29,8 @@ DEFAULT_IGNORES = [
     "*.pyo",
     ".venv",
     ".venv/**",
+    ".julia",
+    ".julia/**",
     "venv",
     "venv/**",
     ".git",
