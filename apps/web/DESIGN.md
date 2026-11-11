@@ -269,7 +269,7 @@ Squero Studio: OpenModelica (everyday **Squero Studio OM**, launched by `squero-
 `paperboat squero`) is a separate app for building the equipment models that Paperboat runs.
 Following the ISA-88 boundary (GUIDELINES §4): Studio builds equipment; Paperboat runs procedures
 (PID, step stories) and monitors them on the Board. Squero is a family of ecosystem apps, not a
-generator: OM can export a `<model>-cpp/` project as a feature, and Squero Studio Octave has no
+generator: OM can export a `<model>-cpp/` project as a feature, and Squero Studio MX has no
 generator at all. Studio's Simulate is a local check, never a second Flow page.
 
 The top bar shows the Squero Studio lockup (W3 Water wordmark: "squero" in bold ink over five signal dots that ripple every 5 s when idle and continuously while Simulate runs, light "studio", and the square B3 Mono "OM" product badge)

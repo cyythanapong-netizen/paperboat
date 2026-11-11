@@ -29,7 +29,9 @@
 #include <string_view>
 #include <vector>
 
-#include "paperboat/toolkit/block.hpp"
+namespace paperboat::toolkit {
+struct ParamDef;  // block.hpp; the helper's definition is toolkit-only (solve_param.cpp)
+}  // namespace paperboat::toolkit
 
 namespace paperboat::toolkit::solve {
 
@@ -121,6 +123,7 @@ void step(std::string_view solver, std::array<double, N>& x, double t, double dt
 }
 
 // An enum param or prop `solver` (choose one in the UI): "auto" (the run's) or one of names().
+// Defined in the toolkit (solve_param.cpp), not in paperboat::solvers.
 ParamDef param(std::string fallback = "auto");
 
 }  // namespace paperboat::toolkit::solve

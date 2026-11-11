@@ -20,7 +20,7 @@ set(PAPERBOAT_TOOLKIT_CORE_SOURCES
   src/platform.cpp
   src/update.cpp
   # For domain code: solvers, Model (a station object of ODEs), scene builders.
-  src/solve.cpp
+  src/solve_param.cpp
   src/model.cpp
   src/scene.cpp
 )
@@ -129,6 +129,22 @@ file(APPEND "${package_registry_cpp}" "}\n}  // namespace paperboat::toolkit\n")
 # New package source files are picked up on reconfigure. Manifests control registration;
 # each listed function owns the definitions for its files. Similar blocks may share a file.
 file(GLOB_RECURSE package_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*/*.cpp")
+# The solvers as their own library: no toolkit types, only the state, the derivative and the
+# options. A native tool or another backend can link paperboat::solvers without the toolkit.
+set(PAPERBOAT_SOLVER_SOURCES src/solve.cpp)
+if(PAPERBOAT_WITH_SUNDIALS)
+  list(APPEND PAPERBOAT_SOLVER_SOURCES src/implicit.cpp)
+endif()
+add_library(paperboat_solvers STATIC ${PAPERBOAT_SOLVER_SOURCES})
+add_library(paperboat::solvers ALIAS paperboat_solvers)
+target_include_directories(paperboat_solvers
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+set_target_properties(paperboat_solvers PROPERTIES EXPORT_NAME solvers)
+if(PAPERBOAT_WITH_SUNDIALS)
+  target_link_libraries(paperboat_solvers PRIVATE SUNDIALS::cvode SUNDIALS::ida paperboat_warnings)
+  set_property(SOURCE src/solve.cpp APPEND PROPERTY COMPILE_DEFINITIONS PAPERBOAT_WITH_SUNDIALS)
+endif()
+
 add_library(paperboat_toolkit ${PAPERBOAT_TOOLKIT_CORE_SOURCES} ${package_sources} ${package_definition_sources}
             "${package_registry_cpp}")
 add_library(paperboat::toolkit ALIAS paperboat_toolkit)
@@ -143,10 +159,5 @@ target_include_directories(paperboat_toolkit SYSTEM PRIVATE
 target_compile_definitions(paperboat_toolkit PRIVATE BOOST_MATH_STANDALONE=1)
 set_target_properties(paperboat_toolkit PROPERTIES EXPORT_NAME toolkit)
 target_link_libraries(paperboat_toolkit
-  PUBLIC nlohmann_json::nlohmann_json  # variables.hpp takes the protocol's JSON
+  PUBLIC nlohmann_json::nlohmann_json paperboat::solvers  # variables.hpp takes the protocol's JSON
   PRIVATE $<BUILD_INTERFACE:tomlplusplus::tomlplusplus> paperboat_warnings)
-if(PAPERBOAT_WITH_SUNDIALS)  # solve.cpp's cvode and ida; the SDK finds SUNDIALS (PaperboatConfig.cmake)
-  target_sources(paperboat_toolkit PRIVATE src/implicit.cpp)
-  target_link_libraries(paperboat_toolkit PRIVATE SUNDIALS::cvode SUNDIALS::ida)
-  set_property(SOURCE src/solve.cpp APPEND PROPERTY COMPILE_DEFINITIONS PAPERBOAT_WITH_SUNDIALS)
-endif()
