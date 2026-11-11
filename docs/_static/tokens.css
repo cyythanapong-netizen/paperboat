@@ -101,7 +101,7 @@
   --shadow-up: 0 -8px 24px rgb(0 0 0 / 0.2);
 
   /* On the screen, which is black in both themes: plot grid, and hairlines and selections. */
-  --grid-line: rgb(255 255 255 / 0.07);
+  --grid-line: rgb(255 255 255 / 0.18);
   --screen-line: rgb(255 255 255 / 0.12);
 
   --scene-bg: #e3e3df;            /* read by SceneView */

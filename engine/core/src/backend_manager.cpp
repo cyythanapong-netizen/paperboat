@@ -1714,7 +1714,17 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   // Dependencies: a declared manifest must have its isolated environment.
   const BackendKind dep_kind = detect_backend_kind(dir);
   if (dep_kind == BackendKind::Python && fs::is_regular_file(dir / "requirements.txt") && venv_python(dir).empty()) {
-    return fail(step_manifest, "Python dependencies are not installed: run `paperboat deps install`");
+    // Comments and blank lines are not dependencies: a scaffolded backend passes as it is.
+    std::ifstream requirements(dir / "requirements.txt");
+    bool has_package = false;
+    for (std::string line; std::getline(requirements, line);) {
+      const auto first = line.find_first_not_of(" \t\r");
+      if (first != std::string::npos && line[first] != '#') {
+        has_package = true;
+        break;
+      }
+    }
+    if (has_package) return fail(step_manifest, "Python dependencies are not installed: run `paperboat deps install`");
   }
   if (dep_kind == BackendKind::Julia && fs::is_regular_file(dir / "Project.toml") &&
       !fs::is_regular_file(dir / "Manifest.toml")) {
