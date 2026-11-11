@@ -54,6 +54,10 @@ export function ScopeInstrument({ name, state, settings, onSettings, size, sourc
   });
   const live = state.run?.status === "running";
   const wired = inputs.filter((i) => sources[i]).map((i) => sources[i].label);
+  const scopeSettings = (settings ?? {}) as ScopeSettings;
+  // The replay needle marks a time on the time axis; an FFT (or xy) Scope has no time axis.
+  const replay = state.replay;
+  const showNeedle = replay?.active === true && (scopeSettings.mode ?? "time") === "time";
   return (
     <div className="scope-replay" ref={needleHost}>
       <Scope
@@ -61,14 +65,14 @@ export function ScopeInstrument({ name, state, settings, onSettings, size, sourc
         channels={channels}
         version={state.traceVersion}
         live={live}
-        settings={(settings ?? {}) as ScopeSettings}
+        settings={scopeSettings}
         onSettings={onSettings}
         small={small}
         placeholder={wired.length ? `${wired.join(" · ")}: waits for a run` : `scope: wire outputs into ${inputs.join(", ") || "its inputs"}, or + tap`}
         taps={taps}
         onTap={onTap}
       />
-      {state.replay?.active && <Needle host={needleHost} time={state.replay.time} from={state.replay.from} to={state.replay.to} />}
+      {showNeedle && replay && <Needle host={needleHost} time={replay.time} from={replay.from} to={replay.to} />}
     </div>
   );
 }
