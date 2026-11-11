@@ -21,9 +21,10 @@
 namespace paperboat::core {
 
 struct Session::State {
-  State(const Backend& b, Send s)
+  State(const Backend& b, Send s, Session::Remote r)
       : backend(b),
         send(std::move(s)),
+        remote(std::move(r)),
         station(!b.initial_project.is_null() && b.initial_project.contains("station")
                     ? b.initial_project["station"]
                     : (b.catalog->station.empty() ? json() : json::parse(b.catalog->station))),
@@ -33,6 +34,7 @@ struct Session::State {
 
   const Backend& backend;
   Send send;
+  Session::Remote remote;  // variables.set from a live client (MX): the server shares them
   std::mutex mutex;  // guards keys, station and variables: the socket thread writes, the run thread reads
   toolkit::KeySet keys;
   toolkit::KeySet pressed;  // pressed since the run last read the keys: a short tap still shows for one pass
@@ -90,8 +92,8 @@ struct Session::State {
   }
 };
 
-Session::Session(const Backend& backend, Send send)
-    : state_(std::make_unique<State>(backend, std::move(send))) {
+Session::Session(const Backend& backend, Send send, Remote remote)
+    : state_(std::make_unique<State>(backend, std::move(send), std::move(remote))) {
   auto& s = *state_;
   const auto& catalog = *backend.catalog;
   json station_view = {{"view", catalog.station_view}};
@@ -124,6 +126,8 @@ Session::Session(const Backend& backend, Send send)
             {"project", backend.initial_project}});
   }
 }
+
+void Session::send_message(const json& message) { state_->send(message.dump()); }
 
 Session::~Session() = default;
 
@@ -237,6 +241,12 @@ void Session::on_message(const std::string& text) {
       s.log("error", std::string("invalid station: ") + err.what());
     }
   } else if (type == "variables.set") {
+    // Another client's live variables (Squero MX): share them through the server, not this
+    // session's project. They are read-only in the Variables sheet.
+    if (msg.value("source", "") == "mx") {
+      if (state_->remote) state_->remote(msg.value("variables", json::array()));
+      return;
+    }
     // The variables changed (#36): check them, keep them, and show the station they shape.
     try {
       const json variables = msg.at("variables");

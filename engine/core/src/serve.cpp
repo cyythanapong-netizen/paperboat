@@ -129,27 +129,80 @@ struct Server::State {
   ix::HttpServer server;  // also upgrades WebSocket connections, on the same port
   std::mutex mutex;
   std::map<std::string, std::unique_ptr<Session>> sessions;  // by connection id
+  // Live variables from a client that is not this project (Squero MX), shared by every session.
+  std::string remote_source;
+  json remote_variables = json::array();
+
+  void publish_remote(const std::string& source, const json& variables) {
+    std::vector<Session*> targets;
+    {
+      std::lock_guard lock(mutex);
+      remote_source = source;
+      remote_variables = variables;
+      for (auto& [id, session] : sessions) targets.push_back(session.get());
+    }
+    const json message = {{"type", "variables.remote"}, {"source", "mx"}, {"variables", variables}};
+    for (Session* session : targets) session->send_message(message);
+  }
+
+  void clear_remote(const std::string& source) {
+    std::vector<Session*> targets;
+    {
+      std::lock_guard lock(mutex);
+      if (remote_source != source) return;
+      remote_source.clear();
+      remote_variables = json::array();
+      for (auto& [id, session] : sessions) targets.push_back(session.get());
+    }
+    const json message = {{"type", "variables.remote"}, {"source", "mx"}, {"variables", json::array()}};
+    for (Session* session : targets) session->send_message(message);
+  }
 };
 
 Server::Server(const Backend& backend, int port) : state_(std::make_unique<State>(backend, port)) {
   ix::initNetSystem();
   auto& s = *state_;
   s.server.setOnConnectionCallback(
-      [&s](const ix::HttpRequestPtr& request, const std::shared_ptr<ix::ConnectionState>&) { return http(s.backend, request); });
+      [&s](const ix::HttpRequestPtr& request, const std::shared_ptr<ix::ConnectionState>&) {
+        const std::string path = decode(request->uri.substr(0, request->uri.find('?')));
+        if (path == "/variables.remote") {
+          json variables;
+          {
+            std::lock_guard lock(s.mutex);
+            variables = s.remote_variables;
+          }
+          auto response = respond(200, "application/json", json{{"source", "mx"}, {"variables", variables}}.dump());
+          response->headers["Access-Control-Allow-Origin"] = "*";
+          return response;
+        }
+        return http(s.backend, request);
+      });
   s.server.setOnClientMessageCallback(
       [&s](std::shared_ptr<ix::ConnectionState> conn, ix::WebSocket& ws, const ix::WebSocketMessagePtr& msg) {
         const std::string& id = conn->getId();
         if (msg->type == ix::WebSocketMessageType::Open) {
           // sendText is thread-safe in IXWebSocket, so runs can send from their own thread.
-          auto session = std::make_unique<Session>(s.backend, [&ws](const std::string& text) { ws.sendText(text); });
-          std::lock_guard lock(s.mutex);
-          s.sessions[id] = std::move(session);
+          auto session = std::make_unique<Session>(
+              s.backend, [&ws](const std::string& text) { ws.sendText(text); },
+              [&s, id](const json& variables) { s.publish_remote(id, variables); });
+          Session* created = nullptr;
+          json remote_snapshot;
+          {
+            std::lock_guard lock(s.mutex);
+            created = session.get();
+            s.sessions[id] = std::move(session);
+            remote_snapshot = s.remote_variables;
+          }
+          // A client that opens after MX sent its variables gets them too.
+          if (created && !remote_snapshot.empty())
+            created->send_message({{"type", "variables.remote"}, {"source", "mx"}, {"variables", remote_snapshot}});
         } else if (msg->type == ix::WebSocketMessageType::Close) {
           std::unique_ptr<Session> gone;  // destroyed outside the lock: joins its run
           {
             std::lock_guard lock(s.mutex);
             if (auto it = s.sessions.find(id); it != s.sessions.end()) gone = std::move(it->second), s.sessions.erase(it);
           }
+          s.clear_remote(id);
         } else if (msg->type == ix::WebSocketMessageType::Message) {
           Session* session = nullptr;
           {

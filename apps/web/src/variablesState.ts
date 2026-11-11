@@ -5,8 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type { EngineState } from "./engine";
 import type { ClientMsg, DashboardLayout, ParamValue, ServerMsg, Station, Variable, Variables } from "./protocol";
-import { emptyOf, freeName, inlineRef, merged, refersTo, renameInFormula, renameRef, usesOf, type Use } from "./bindings";
-import { inlineInText, mapTexts, renameInText, textUsing } from "./dashboardLayout";
+import { emptyOf, freeName, merged, refersTo, renameInFormula, renameRef, usesOf, type Use } from "./bindings";
+import { mapTexts, renameInText, textUsing } from "./dashboardLayout";
 import type { VarsApi } from "./VarsContext";
 import { isBlock, type FlowNode } from "./flowModel";
 
@@ -15,15 +15,24 @@ export function useVariables(state: EngineState, send: (m: ClientMsg) => void, s
   const [mine, setMine] = useState<Variables | undefined>(undefined);
   const engineKey = state.engine || "default";
   useEffect(() => setMine(undefined), [engineKey]); // another backend: its defaults; a project (or the restored session) brings the user's own
-  const variables = useMemo(() => merged(state.variables, mine), [state.variables, mine]);
+  const project = useMemo(() => merged(state.variables, mine), [state.variables, mine]);
+  // MX's live variables are shown beside the project's own; the project is what we send back.
+  const remote = state.remoteVariables;
+  const variables = useMemo(() => {
+    const names = new Set(remote.map((v) => v.name));
+    return [
+      ...project.filter((v) => !names.has(v.name)),
+      ...remote.map((v): Variable => ({ ...v, source: "mx", group: v.group ?? "Squero MX" })),
+    ];
+  }, [project, remote]);
   const varsHistory = useRef<{ past: Variables[]; future: Variables[] }>({ past: [], future: [] });
   const keepVars = setMine;
   const setVariables = useCallback(
     (next: Variables) => {
-      varsHistory.current = { past: [...varsHistory.current.past.slice(-50), variables], future: [] };
+      varsHistory.current = { past: [...varsHistory.current.past.slice(-50), project], future: [] };
       keepVars(next);
     },
-    [variables, keepVars],
+    [project, keepVars],
   );
   // A block set variables during a run (#166): keep them in the project, as if the user had. Not an undo step.
   useEffect(
@@ -41,17 +50,17 @@ export function useVariables(state: EngineState, send: (m: ClientMsg) => void, s
   }, [state.variables, state.engine]);
   useEffect(() => {
     if (state.connection !== "open") return;
-    const now = JSON.stringify(variables);
+    const now = JSON.stringify(project);
     if (now === backendVars.current) return;
     backendVars.current = now;
-    send({ type: "variables.set", variables });
-  }, [variables, state.variables, state.connection, send]);
+    send({ type: "variables.set", variables: project });
+  }, [project, state.connection, send]);
   const undoVars = (redo: boolean) => {
     const h = varsHistory.current;
     const from = redo ? h.future : h.past;
     const to = from.pop();
     if (!to) return;
-    (redo ? h.past : h.future).push(variables);
+    (redo ? h.past : h.future).push(project);
     keepVars(to);
   };
   return { variables, keepVars, setVariables, varsHistory, undoVars };
@@ -106,8 +115,9 @@ export function varsApiFor({
     error: state.varError,
     defaults: state.variables,
     locked: running,
-    setList: setVariables,
+    setList: (next) => setVariables(next.filter((v) => v.source !== "mx")),
     rename: (from, to) => {
+      if (variables.find((v) => v.name === from)?.source === "mx") return;
       setVariables(variables.map((v) => (v.name === from ? { ...v, name: to } : v.expr ? { ...v, expr: renameInFormula(v.expr, from, to) } : v)));
       rewrite((v) => refersTo(v, from), (v) => renameRef(v, from, to));
       rewriteLabels((t) => renameInText(t, from, to));
@@ -116,14 +126,10 @@ export function varsApiFor({
     },
     remove: (name) => {
       const gone = variables.find((v) => v.name === name);
-      const value = state.varValues[name] ?? gone?.value ?? 0;
-      rewrite((v) => refersTo(v, name), (v) => inlineRef(v, name, value));
-      rewriteLabels((t) => inlineInText(t, name, value));
-      setVariables(
-        variables
-          .filter((v) => v.name !== name)
-          .map((v) => (v.expr && refersTo({ expr: v.expr }, name) ? { ...v, expr: (inlineRef({ expr: v.expr }, name, value) as { expr: string }).expr } : v)),
-      );
+      if (!gone || gone.source === "mx") return;
+      // Keep the references: a field bound to a removed variable goes red ("No variable
+      // called …") instead of silently keeping the last number in its place.
+      setVariables(variables.filter((v) => v.name !== name && v.source !== "mx"));
       varsHistory.current = { past: [], future: [] };
       setOpenVar(null);
     },

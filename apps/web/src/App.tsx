@@ -530,7 +530,7 @@ export function App() {
           onClose={() => setVarsShown("closed")}
           onShow={showUse}
           onUndo={undoVars}
-          toml={() => toToml(variables)}
+          toml={() => toToml(variables.filter((v) => v.source !== "mx"))}
         />
         <Dock
           canRun={canRun}

@@ -20,12 +20,15 @@ namespace paperboat::core {
 class Session {
  public:
   using Send = std::function<void(const std::string& text)>;
-  Session(const Backend& backend, Send send);  // sends the handshake
+  using Remote = std::function<void(const json& variables)>;
+  Session(const Backend& backend, Send send, Remote remote = {});  // sends the handshake
   ~Session();
   Session(const Session&) = delete;
   Session& operator=(const Session&) = delete;
 
   void on_message(const std::string& text);
+  /** Send a server message to this connection (the server's shared variables use it). */
+  void send_message(const json& message);
 
  private:
   struct State;
