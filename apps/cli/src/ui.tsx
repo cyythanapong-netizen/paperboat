@@ -114,12 +114,13 @@ function Fact({label, value}: {label: string; value: string}) {
 /** What both the banner and `about` say about this install. */
 function installedFacts(): {label: string; value: string}[] {
   const toolkits = S.toolkits.filter(t => t.installed).length;
-  const apps = S.programs.filter(p => p.installed).length;
+  // A sibling checkout runs like an installed app (`paperboat start <name>`); count it too.
+  const apps = S.programs.filter(p => p.kind === 'program' && (p.installed || p.checkout)).length;
   return [
     {label: 'Paperboat CLI version', value: CLI_VERSION},
     {label: 'paperboat version', value: S.version || 'unknown'},
     {label: 'installed toolkits', value: `${toolkits} ${toolkits === 1 ? 'toolkit' : 'toolkits'}`},
-    {label: 'installed apps', value: `${apps} ${apps === 1 ? 'app' : 'apps'}`},
+    {label: 'apps', value: `${apps} ${apps === 1 ? 'app' : 'apps'}`},
   ];
 }
 
@@ -606,15 +607,19 @@ export function App({start}: {start?: string}) {
             {S.tasks.map(t => <TaskView key={t.id} task={t} frame={frame} now={now} />)}
           </Box>
         )}
-        {S.confirm && (
-          <Box flexShrink={0}>
-            <Panel grow={false} title={<Text><Text color={SIGNAL}>? </Text>{`stop ${S.jobs.filter(alive).map(j => j.name).join(', ')} and quit?`}</Text>}>
-              <Text>
-                <Text bold>y</Text><Text dimColor> stop and quit    </Text><Text bold>n</Text><Text dimColor> stay</Text>
-              </Text>
-            </Panel>
-          </Box>
-        )}
+        {S.confirm && (() => {
+          const names = [...S.jobs.filter(alive).map(j => j.name), ...S.external.filter(e => e.kind === 'backend').map(e => e.name)];
+          const label = names.length > 4 ? `${names.slice(0, 4).join(', ')} +${names.length - 4} more` : names.join(', ');
+          return (
+            <Box flexShrink={0}>
+              <Panel grow={false} title={<Text><Text color={SIGNAL}>? </Text>{`stop ${label || 'everything'} and quit?`}</Text>}>
+                <Text>
+                  <Text bold>y</Text><Text dimColor> stop and quit    </Text><Text bold>n</Text><Text dimColor> stay</Text>
+                </Text>
+              </Panel>
+            </Box>
+          );
+        })()}
       </Box>
       <Box flexDirection="column" flexShrink={0}>
         {S.mode === 'prompt' && !S.confirm && <Input menuRows={menuRows} />}

@@ -18,7 +18,7 @@ export function AboutWindow({ state, onClose }: { state: EngineState; onClose: (
   useFocusReturn(root);
   useDismiss(root, onClose);
 
-  const version = state.engine.replace(/^paperboat\s+/i, "") || "Not connected";
+  const version = state.version || "unknown";
   const toolkits = state.toolkits.filter((t) => t.installed).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
@@ -39,6 +39,8 @@ export function AboutWindow({ state, onClose }: { state: EngineState; onClose: (
           <dl className="about-facts">
             <dt>Version</dt>
             <dd className="mono">{version}</dd>
+            <dt>Backend</dt>
+            <dd className="mono">{state.engine || "Not connected"}</dd>
             <dt>Protocol</dt>
             <dd className="mono">paperboat/0</dd>
             <dt>License</dt>

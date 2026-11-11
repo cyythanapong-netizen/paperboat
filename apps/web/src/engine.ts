@@ -19,6 +19,8 @@ export type RunState = {
 export type EngineState = {
   connection: "connecting" | "open" | "closed";
   engine: string;
+  /** The Paperboat build serving the backend (hello.version); absent: an older backend. */
+  version?: string;
   /** How the Station page shows the station (from hello). */
   stationView: StationView;
   /** The backend's run defaults (from hello); empty if it didn't say. */
@@ -196,6 +198,7 @@ export function reduce(s: EngineState, m: Action): EngineState {
       return {
         ...s,
         engine: m.engine,
+        version: m.version,
         stationView: m.station ?? { view: "scene" },
         runDefaults: m.run ?? {},
         toolkits: m.toolkits ?? s.toolkits,

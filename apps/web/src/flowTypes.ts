@@ -19,8 +19,13 @@ export function flowsLabel(flows: readonly FlowType[]): string {
   return words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words.at(-1)}` : (words[0] ?? "every flow type");
 }
 
-/** Whether a block works on a sheet of type `flow`: one with no `flows` works in every one. */
-export const worksIn = (def: BlockDef, flow: FlowType) => !def.flows?.length || def.flows.includes(flow);
+/** Whether a block works on a sheet of type `flow`: one with no `flows` works in every one.
+ *  `mixed`: a signal/step sheet admits the other one too (step paths on a Signal flow, signal
+ *  helpers on a Step flow); a story passes false. */
+export const worksIn = (def: BlockDef, flow: FlowType, mixed = false) => {
+  if (!def.flows?.length || def.flows.includes(flow)) return true;
+  return mixed && (flow === "signal" || flow === "step") && def.flows.some((f) => f === "signal" || f === "step");
+};
 
 /**
  * The flow types a sheet may be: what the backend's hello says. An older backend doesn't say:
@@ -35,11 +40,23 @@ export function offeredFlows(hello: readonly FlowType[] | undefined, blocks: Blo
 
 /** A top-level sheet whose type wasn't chosen: a Step flow if a block on it has step ports or a story is on it, else a Signal flow. */
 export function inferFlow(nodes: FlowNode[]): FlowType {
+  return hasStepLayer(nodes) ? "step" : "signal";
+}
+
+/** A top-level block with step ports, or a story, is the step layer. */
+export function hasStepLayer(nodes: FlowNode[]): boolean {
   // Only the sheet's own level: a step block inside a subsystem is that subsystem's business.
   const top = nodes.filter((n) => !n.parentId);
-  const step = top.some((n) => (isBlock(n) ? !n.data.missing && hasStepPorts(inForm(n.data.def, n.data.params)) : isStory(n)));
-  return step ? "step" : "signal";
+  return top.some((n) => (isBlock(n) ? !n.data.missing && hasStepPorts(inForm(n.data.def, n.data.params)) : isStory(n)));
 }
+
+/** A top-level signal block is the always-on layer, beside any step paths. */
+export function hasSignalLayer(nodes: FlowNode[]): boolean {
+  return nodes.some((n) => !n.parentId && isBlock(n) && (n.data.missing || !hasStepPorts(inForm(n.data.def, n.data.params))));
+}
+
+/** A signal sheet with step paths, or a step sheet with signal helpers: label it as mixed. */
+export const hasMixedLayers = (nodes: FlowNode[]) => hasStepLayer(nodes) && hasSignalLayer(nodes);
 
 /**
  * The sheet open at `level` (a subsystem or story; null: the top level). A story runs its blocks
@@ -58,10 +75,10 @@ export function sheetFlow(top: FlowType, level: string | null, nodes: FlowNode[]
 }
 
 /** Palette items for a sheet: those that work in it, and the rest (shown apart, saying where they work). */
-export function byFlow<T extends { kind: string; def: object }>(items: T[], flow: FlowType): { fits: T[]; elsewhere: T[] } {
+export function byFlow<T extends { kind: string; def: object }>(items: T[], flow: FlowType, mixed = false): { fits: T[]; elsewhere: T[] } {
   const fits: T[] = [];
   const elsewhere: T[] = [];
-  for (const it of items) (it.kind !== "block" || worksIn(it.def as BlockDef, flow) ? fits : elsewhere).push(it);
+  for (const it of items) (it.kind !== "block" || worksIn(it.def as BlockDef, flow, mixed) ? fits : elsewhere).push(it);
   return { fits, elsewhere };
 }
 

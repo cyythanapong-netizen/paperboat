@@ -84,7 +84,7 @@ Backend → UI
 ------------
 
 =================  =====================================================================
-``hello``          ``protocol``, ``engine``, ``station: {view, page?}``, ``flows?``. On connect
+``hello``          ``protocol``, ``engine``, ``version`` (the Paperboat build), ``station: {view, page?}``, ``flows?``. On connect
 ``catalog``        ``blocks``, ``objects?``. On connect
 ``scene``          ``entities``, ``view?``. On connect, after a station edit, after a run-once
 ``graph.load``     ``graph``: the starter. On connect

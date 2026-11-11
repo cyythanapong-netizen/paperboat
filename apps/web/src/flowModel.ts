@@ -1,7 +1,7 @@
 // What the Flow canvas holds, and the model functions that make and mend it: blocks from the
 // catalog, wires between their ports, and keeping both in step with the station and the catalog.
 
-import { addEdge, MarkerType, type Connection, type Edge, type Node } from "@xyflow/react";
+import { addEdge, type Connection, type Edge, type Node } from "@xyflow/react";
 import { iconValid, type RotationDeg } from "@paperboat/shared";
 import { iconEnd, inForm, signalEnd, type PortSides, type WireEnd } from "./ports.ts";
 import type { GroupNode } from "./groups";
@@ -89,13 +89,11 @@ export function syncLinked(nodes: FlowNode[], station: Station | null, objects: 
 }
 
 export function makeWire(c: Connection, type: string): Wire {
-  const step = type === "step";
   return {
     id: `${c.source}.${c.sourceHandle}-${c.target}.${c.targetHandle}`,
     type: "wire",
     ...c,
     data: { type },
-    markerEnd: step ? { type: MarkerType.ArrowClosed } : undefined,
   };
 }
 

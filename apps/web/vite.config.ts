@@ -1,11 +1,41 @@
+import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineConfig, searchForWorkspaceRoot } from "vite";
+import { promisify } from "node:util";
+import { defineConfig, searchForWorkspaceRoot, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
+const run = promisify(execFile);
+
+/**
+ * Dev-server equivalent of the installed app's `/__paperboat/backends`: ask the CLI for what
+ * is running, so the Backend dialog can list it instead of asking for a port by hand.
+ */
+function backendList(): Plugin {
+  const handler = (_request: IncomingMessage, response: ServerResponse) => {
+    const root = join(here, "..", ".."); // apps/web → the checkout
+    const bin = process.env.PAPERBOAT_BIN || join(root, "bin", "paperboat");
+    response.setHeader("Content-Type", "application/json");
+    run(bin, ["list", "--json"], { cwd: root, timeout: 8000 })
+      .then(({ stdout }) => response.end(stdout || "[]"))
+      .catch(() => {
+        response.statusCode = 503;
+        response.end("[]");
+      });
+  };
+  const install = (server: { middlewares: { use: (path: string, fn: typeof handler) => void } }) => {
+    server.middlewares.use("/__paperboat/backends", handler);
+  };
+  return {
+    name: "paperboat-backends",
+    configureServer: install,
+    configurePreviewServer: install,
+  };
+}
 
 /** The folder holding a package's package.json, from a file `require` resolved inside it. */
 function packageRoot(file: string): string {
@@ -45,7 +75,7 @@ function sharedFolders(): string[] {
 }
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), backendList()],
   // @paperboat/shared is a linked sibling with its own node_modules; keep one React and Three.
   resolve: {
     dedupe: ["react", "react-dom", "@xyflow/react", "three"],

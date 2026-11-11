@@ -5,7 +5,7 @@ import { copySelection } from "./clipboard";
 import { useCanvasHotkeys } from "@paperboat/shared";
 import { CanvasHelp } from "@paperboat/shared/components";
 import { SNAP, WireDragContext } from "./wireSnap";
-import { arrangeFlowNodes, canArrangeFlow } from "./flowLayout";
+import { arrangeFlowNodes, canArrangeFlow, clearWireBends } from "./flowLayout";
 import type { WirePoint } from "./wireRouting.ts";
 import { Boundary, display, GroupActions, GroupBox, isFrame, type GroupData, type GroupNode } from "./groups";
 import type { BlockDef, Connectors, FlowType } from "./protocol";
@@ -52,6 +52,8 @@ type Props = {
   controls?: MutableRefObject<FlowControls | null>;
   /** The open sheet's flow type (#9): quick add offers the blocks that work in it. */
   sheetFlow?: FlowType;
+  /** A signal/step sheet admits the other layer too (step blocks on a Signal flow, signal on Step). */
+  mixed?: boolean;
   /** Room to leave round the whole flow, so the glass dock and the minimap don't cover its bottom. */
   fitPadding?: { top?: `${number}px`; right?: `${number}px`; bottom?: `${number}px`; left?: `${number}px` };
   /** Upload a record's samples into the replay (#284): what each monitor input carried at the playhead. */
@@ -94,7 +96,7 @@ export type FlowControls = {
 const NO_CONNECTORS: Connectors = {};
 
 /** Blocks by palette group, groups in catalog order. */
-export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls, sheetFlow, fitPadding, probes = null }: Props) {
+export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls, sheetFlow, mixed, fitPadding, probes = null }: Props) {
   const states = useContext(RunStates);
   // ---- Levels (#68): a subsystem or story opens on the canvas; the way back is the breadcrumb ----
   const { level, go, path } = useFlowLevels(wanted, setLevel, nodes, edges, setNodes, setEdges);
@@ -135,8 +137,11 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
       return h ? h.y + h.height / 2 : undefined;
     });
     if (next === current.nodes) return false;
-    latest.current = { ...current, nodes: next };
+    // The blocks moved under the wires: the bends dragged for their old places no longer fit.
+    const nextEdges = clearWireBends(current.edges);
+    latest.current = { ...current, nodes: next, edges: nextEdges };
     setNodes(next);
+    if (nextEdges !== current.edges) setEdges(nextEdges);
     window.setTimeout(() => fitView({ padding: 0.2, duration: 200, maxZoom: 1.2 }), 30);
     return true;
   };
@@ -405,6 +410,7 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
         <QuickAdd
           items={addable}
           flow={sheetFlow}
+          mixed={mixed}
           at={quick}
           onClose={() => setQuick(null)}
           onPick={(it) => {

@@ -3,6 +3,7 @@
 
 import type { EngineState } from "./engine";
 import type { Command } from "./commands";
+import type { Ref } from "react";
 import { ProjectLabel } from "./ProjectUI";
 import { StatusPill, Switch, ThemeToggle, Wordmark, type Mode, type Theme } from "./Shell";
 import { MenuBar } from "./Menus";
@@ -26,6 +27,8 @@ type Props = {
   solver?: string;
   projectTitle: string;
   dirty: boolean;
+  /** Double-click the name in the bar: the project's title and the next .ppj name. */
+  onRenameProject?: (name: string) => void;
   installToolkit: (name: string, version?: string) => void;
   uninstallToolkit: (name: string) => void;
   restartBackend: () => void;
@@ -33,6 +36,8 @@ type Props = {
   errors: number;
   consoleShown: boolean;
   onConsole: () => void;
+  /** The Console key: a press on it toggles, it does not dismiss and reopen the window. */
+  consoleRef?: Ref<HTMLButtonElement>;
   aboutShown: boolean;
   onAbout: () => void;
   mode: Mode;
@@ -46,7 +51,7 @@ type Props = {
   setThemeChoice: (t: Theme) => void;
 };
 
-export function AppHeader({ state, running, commands, solver, projectTitle, dirty, installToolkit, uninstallToolkit, restartBackend, toolkitVersions, errors, consoleShown, onConsole, aboutShown, onAbout, mode, setMode, allowedModes, projectLock, locked, onLock, onBackend, themeChoice, setThemeChoice }: Props) {
+export function AppHeader({ state, running, commands, solver, projectTitle, dirty, onRenameProject, installToolkit, uninstallToolkit, restartBackend, toolkitVersions, errors, consoleShown, onConsole, consoleRef, aboutShown, onAbout, mode, setMode, allowedModes, projectLock, locked, onLock, onBackend, themeChoice, setThemeChoice }: Props) {
   return (
     <header className="bar">
       <Wordmark running={running} />
@@ -61,7 +66,7 @@ export function AppHeader({ state, running, commands, solver, projectTitle, dirt
           About
         </button>
       </div>
-      <ProjectLabel name={projectTitle} dirty={dirty} />
+      <ProjectLabel name={projectTitle} dirty={dirty} onRename={onRenameProject} />
       <span className="spacer" />
       <ToolkitsButton
         toolkits={state.toolkits}
@@ -72,6 +77,7 @@ export function AppHeader({ state, running, commands, solver, projectTitle, dirt
         onVersions={toolkitVersions}
       />
       <button
+        ref={consoleRef}
         className={`key small${errors > 0 ? " err" : ""}${consoleShown ? " on" : ""}`}
         aria-pressed={consoleShown}
         title="Open the Console"

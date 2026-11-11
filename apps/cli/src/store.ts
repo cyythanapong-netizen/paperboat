@@ -107,6 +107,8 @@ export interface Program {
   launch: string;
   port: number;
   installed: boolean;
+  /** A sibling checkout of the app in the repository root's parent (not `pkg`-installed). */
+  checkout?: boolean;
   description: string;
 }
 
@@ -760,7 +762,9 @@ function ps(): void {
 }
 
 export function requestExit(): void {
-  if (S.jobs.some(alive)) S.confirm = true;
+  // Backends started outside the console (the workbench `paperboat start` auto-launches, an
+  // example from another terminal) are not jobs; ask to stop them too when quitting.
+  if (S.jobs.some(alive) || S.external.some(e => e.kind === 'backend')) S.confirm = true;
   else S.quit = true;
   changed();
 }
@@ -768,8 +772,13 @@ export function requestExit(): void {
 export async function exitNow(): Promise<void> {
   S.confirm = false;
   const live = S.jobs.filter(alive);
-  if (live.length) say([mu(`stopping ${live.map(j => j.name).join(', ')}…`)]);
+  const external = S.external.filter(e => e.kind === 'backend');
+  if (live.length || external.length) say([mu('stopping everything…')]);
   await Promise.all(live.map(j => stopJob(j, true)));
+  if (external.length) {
+    await plain(['stop', '--all']);
+    S.external = S.external.filter(e => e.kind !== 'backend');
+  }
   S.quit = true;
   changed();
 }
