@@ -1173,6 +1173,10 @@
         "engine": {
           "type": "string"
         },
+        "version": {
+          "type": "string",
+          "description": "The Paperboat build that serves this backend (PAPERBOAT_VERSION). Absent: an older backend."
+        },
         "station": {
           "$ref": "#/$defs/StationView"
         },

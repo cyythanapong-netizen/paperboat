@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useDismiss, useFocusReturn } from "@paperboat/shared/components";
 
 export { useFocusReturn };
@@ -70,8 +70,11 @@ function wrapped(row: HTMLElement): boolean {
  * than the spacer's room: centred while the bar has space, then sliding toward the menus, then truncating,
  * and never under the keys on the right. Once the bar wraps onto two lines it simply follows the menus.
  */
-export function ProjectLabel({ name, dirty }: { name: string; dirty: boolean }) {
+export function ProjectLabel({ name, dirty, onRename }: { name: string; dirty: boolean; onRename?: (name: string) => void }) {
   const ref = useRef<HTMLSpanElement>(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const cancelled = useRef(false);
   useLayoutEffect(() => {
     const el = ref.current, bar = el?.parentElement;
     if (!el || !bar) return;
@@ -102,8 +105,48 @@ export function ProjectLabel({ name, dirty }: { name: string; dirty: boolean }) 
     };
   }, []);
   return (
-    <span ref={ref} className="proj" title={dirty ? `${name}: unsaved changes (Ctrl+S saves)` : name}>
-      <span className="proj-name">{name}</span>
+    <span
+      ref={ref}
+      className={`proj${editing ? " editing" : ""}`}
+      title={editing ? undefined : `${dirty ? `${name}: unsaved changes (Ctrl+S saves)` : name} · double-click to rename`}
+      onDoubleClick={() => {
+        if (!onRename) return;
+        setDraft(name);
+        setEditing(true);
+      }}
+    >
+      {editing ? (
+        <input
+          className="proj-edit"
+          autoFocus
+          aria-label="Project name"
+          value={draft}
+          style={{ width: `${Math.max(8, draft.length + 2)}ch` }}
+          onChange={(e) => setDraft(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur(); // the blur below commits
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              cancelled.current = true;
+              e.currentTarget.blur();
+            }
+          }}
+          onBlur={() => {
+            const wasCancelled = cancelled.current;
+            cancelled.current = false;
+            setEditing(false);
+            if (wasCancelled) return;
+            const next = draft.trim();
+            if (next && next !== name) onRename?.(next);
+          }}
+        />
+      ) : (
+        <span className="proj-name">{name}</span>
+      )}
       {dirty && <i className="dirty" role="img" aria-label="Unsaved changes" />}
     </span>
   );

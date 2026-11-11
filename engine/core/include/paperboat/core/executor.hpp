@@ -65,6 +65,10 @@ class Run {
   // (signal messages, sent by frame()).
   json pass();
   json pass_over(const std::vector<std::string>& order);
+  // A Scope is an instrument: its samples go out on every pass, not once per frame. This
+  // sends those and returns the other monitors' samples for frame().
+  json emit_scope_samples(json samples);
+  bool is_scope_sample(const json& sample) const;
   // One block of a run that evaluates once: its outputs from the run's cache when nothing it
   // depends on changed since a run computed them (node.state "cached", the logs, metrics and
   // frame it sent shown again), else called like pass_over({id}) (node.state "running", then

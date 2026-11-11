@@ -33,6 +33,7 @@ struct AppEntry {
   std::string launch;              // what runs a program: a paperboat command or a binary path
   int port = 0;                    // where a running program listens (`stop` and `list` find it there)
   bool installed = false;
+  bool checkout = false;           // a sibling checkout of the app in the repository root's parent
   std::string version;             // installed: a release ("0.1.0") or "dev" (main)
   std::map<std::string, std::string> built_with;  // installed: the version of each dep it was built against
 };

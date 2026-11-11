@@ -21,11 +21,11 @@ test("free ids count up from 1", () => {
   assert.equal(freeId("sum", nodes), "sum-1");
 });
 
-test("step wires get an arrow; ids name both ends", () => {
+test("step wires carry their type; ids name both ends", () => {
   const w = makeWire({ source: "a", sourceHandle: "next", target: "b", targetHandle: "go" }, "step");
   assert.equal(w.id, "a.next-b.go");
-  assert.ok(w.markerEnd);
-  assert.equal(makeWire({ source: "a", sourceHandle: "out", target: "b", targetHandle: "in" }, "signal").markerEnd, undefined);
+  assert.equal(w.data?.type, "step"); // the arrow is drawn by WireEdge, outside the target port
+  assert.equal(makeWire({ source: "a", sourceHandle: "out", target: "b", targetHandle: "in" }, "signal").data?.type, "signal");
 });
 
 test("a signal input reads one wire; a step output leads to one block", () => {

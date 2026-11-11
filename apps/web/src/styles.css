@@ -95,6 +95,13 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .logo-live .logo-water .w4 { animation-delay: 0.36s; }
 .logo-live .logo-water .w5 { animation-delay: 0.48s; }
 .logo-live.logo { animation: logo-bob 1.4s var(--ease, cubic-bezier(.65,0,.25,1)) 1; }
+/* About: the mark is large, so its bob is raised to read; one calm up-and-back-down for each
+   wave that passes under it, in step with the live ripple's 1.4 s cycle. */
+.about-mark .logo { --lb: 4px !important; }
+.about-mark .logo.logo-live { animation: logo-bob-wave 1.4s var(--ease, cubic-bezier(.65,0,.25,1)) infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .about-mark .logo.logo-live { animation: none; }
+}
 @keyframes logo-ripple-idle {
   0%, 7%, 100% { transform: translateY(0); }
   3.5% { transform: translateY(calc(var(--lr, 4.5px) * -0.67)); }
@@ -104,6 +111,10 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
   30% { transform: translateY(calc(var(--lr, 4.5px) * -1)); }
   60% { transform: translateY(calc(var(--lr, 4.5px) * 0.33)); }
   100% { transform: translateY(0); }
+}
+@keyframes logo-bob-wave {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(calc(var(--lb, 1.5px) * -1)); }
 }
 @keyframes logo-bob {
   0% { transform: translateY(0); }
@@ -841,6 +852,14 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .mode-commander .pages:has(.drawer-bottom.closed) > .dock { bottom: calc(var(--panel-head-height) + 2px + var(--gutter) + var(--space-3)); }
 .backend-window { height: auto; width: min(520px, calc(100vw - 32px)); }
 .backend-form { display: flex; align-items: center; gap: var(--space-3); padding: var(--panel-pad) var(--panel-pad) var(--space-2); }
+.backend-running { display: flex; flex-direction: column; gap: 6px; padding: 0 var(--panel-pad) var(--space-3); }
+.backend-running-head { display: flex; align-items: center; justify-content: space-between; }
+.backend-running ul { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.backend-pick { display: flex; align-items: baseline; gap: var(--space-2); width: 100%; padding: 5px 8px; background: var(--surface-sunken); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--text); cursor: pointer; font: var(--size-2xs) var(--font-mono); text-align: left; }
+.backend-pick:hover { border-color: var(--line-ink); }
+.backend-pick.current { border-color: var(--line-ink); font-weight: 600; }
+.backend-pick .name { font-family: var(--font-sans); font-weight: 500; }
+.backend-pick .lbl { margin-left: auto; color: var(--text-muted); }
 .backend-presets { display: flex; align-items: center; gap: 6px; padding: 0 var(--panel-pad) var(--space-3); font-size: var(--size-2xs); }
 .backend-presets button { font-family: var(--font-mono); font-size: var(--size-2xs); }
 .backend-card { margin: 0 var(--panel-pad) var(--space-3); padding: var(--space-3); background: var(--surface-sunken); border: 1px solid var(--line); border-radius: var(--radius-md); font: var(--size-2xs) var(--font-sans); }
@@ -864,6 +883,8 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
   font: 400 var(--size-xs) var(--font-mono); color: var(--text-muted); cursor: default;
 }
 .proj-name { min-width: 0; max-width: min(300px, 24vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-edit { min-width: 8ch; max-width: min(300px, 24vw); height: 22px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: var(--surface-well); box-shadow: var(--well-shadow); color: var(--text); font: 400 var(--size-xs) var(--font-mono); }
+.proj-edit:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 .proj .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); }
 .notice { height: auto; width: min(480px, calc(100vw - 32px)); }
 .notice-body { padding: var(--panel-pad) var(--panel-pad) var(--space-2); }

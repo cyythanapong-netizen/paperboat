@@ -8,7 +8,8 @@ import { isBlock, type FlowNode, type Wire } from "./flowModel";
 import { fromGraph, toGraph, withBlock } from "./flowGraph";
 import { isFrame, levelOf } from "./groups";
 import type { DashboardLayout, FlowType, Project, RunSettings } from "./protocol";
-import { inferFlow, offeredFlows, sheetFlow } from "./flowTypes";
+import { hasMixedLayers, inferFlow, offeredFlows, sheetFlow } from "./flowTypes";
+import { canArrangeFlow } from "./flowLayout";
 import { SheetFlow } from "./SheetFlow";
 import { Notice } from "./ProjectUI";
 import { VariablesSheet } from "./Variables";
@@ -27,7 +28,7 @@ import { dockSettings, runBlocker, runClock, speedChange } from "./runStatus";
 import { useProjectSession } from "./projectSession";
 import { useToolkitInstall } from "./toolkitInstall";
 import { menuCommands, solverChoice } from "./menuCommands";
-import { solverShort } from "./solvers";
+import { settingsForScope, solverShort } from "./solvers";
 import { count } from "./words";
 import { AppHeader } from "./AppHeader";
 import { StationView } from "./StationView";
@@ -99,6 +100,7 @@ export function App() {
   const [varsShown, setVarsShown] = remembered<"open" | "closed">("paperboat.variables", "closed", ["open", "closed"]);
   const [openVar, setOpenVar] = useState<string | null>(null);
   const [consoleShown, setConsoleShown] = useState(false);
+  const consoleKey = useRef<HTMLButtonElement>(null);
   const [aboutShown, setAboutShown] = useState(false);
   useEffect(() => setRunSettings({}), [state.engine]); // another backend: its own defaults
 
@@ -187,6 +189,10 @@ export function App() {
   // The open sheet's flow type (#9): what the palette offers on it.
   const offered = useMemo(() => offeredFlows(state.flows, state.blocks), [state.flows, state.blocks]);
   const sheet = sheetFlow(flowChoice ?? inferFlow(nodes), flowLevel, nodes);
+  // A top-level Signal or Step sheet takes the other layer too; a story stays a Signal flow.
+  const canMix = !sheet.story && (sheet.flow === "signal" || sheet.flow === "step");
+  // Both layers are present: the head says so. The palette is open to both even before that.
+  const mixedSheet = !sheet.story && hasMixedLayers(nodes);
 
   // A Console line names a block: open the level it is on, select it and bring it into view.
   const showBlock = (id: string) => {
@@ -283,7 +289,9 @@ export function App() {
   };
   const arrangeKey = (which: "flow" | "station") => {
     if (which === "station" && view !== "graph") return null;
-    const available = !!(which === "flow" ? flow.current : stationCanvas.current)?.can.arrange;
+    // Read the canvas state directly for the Flow: the controls ref is written by the child
+    // during render, so after a run it still held the previous (locked) value for one render.
+    const available = which === "flow" ? canArrangeFlow(nodes, flowLevel) : !!(stationCanvas.current)?.can.arrange;
     const title = running ? "Stop the run to arrange blocks" : available ? "Arrange left to right, following the wires" : "There are no blocks to arrange";
     return (
       <button className="key small" disabled={running || !available} title={title} onClick={() => arrangeCanvas(which)}>
@@ -345,11 +353,14 @@ export function App() {
     }
     if (!canRun) return;
     if (mode === "commander") boardDrawer.setOpen(true); // a run is watched on the Board
+    // A Scope is an instrument: sample at the solver's resolution, not at a coarse clock.
+    const hasScope = Object.values(monitors).some((m) => m.kind === "scope");
+    const settings = settingsForScope(runSettings, state.runDefaults, hasScope);
     send({
       type: "graph.run",
       graph: toGraph(nodes, edges, flowChoice),
       ...(station ? { station } : {}),
-      ...(Object.keys(runSettings).length ? { settings: runSettings } : {}),
+      ...(Object.keys(settings).length ? { settings } : {}),
       variables,
     });
   };
@@ -385,7 +396,7 @@ export function App() {
     }
     requestAnimationFrame(() => fitView({ padding: FIT_PADDING }));
   };
-  const { projectTitle, dirty, notice, setNotice, undoOpen, recent, lastSession, restore, openProject, openFile, saveProject } = useProjectSession(
+  const { projectTitle, dirty, notice, setNotice, undoOpen, recent, lastSession, restore, openProject, openFile, saveProject, renameProject } = useProjectSession(
     state,
     subscribe,
     log,
@@ -417,6 +428,7 @@ export function App() {
         solver={usesSolvers ? solverShort(currentSolver) : undefined}
         projectTitle={projectTitle}
         dirty={dirty}
+        onRenameProject={renameProject}
         installToolkit={installToolkit}
         uninstallToolkit={uninstallToolkit}
         restartBackend={restartBackend}
@@ -424,6 +436,7 @@ export function App() {
         errors={errors}
         consoleShown={consoleShown}
         onConsole={() => setConsoleShown(!consoleShown)}
+        consoleRef={consoleKey}
         aboutShown={aboutShown}
         onAbout={() => setAboutShown(!aboutShown)}
         mode={mode}
@@ -464,7 +477,7 @@ export function App() {
           {...panel("flow")}
           actions={
             <>
-              <SheetFlow offered={offered} flow={sheet.flow} story={sheet.story} chosen={flowChoice !== null} disabled={running} onChoose={setFlowChoice} />
+              <SheetFlow offered={offered} flow={sheet.flow} story={sheet.story} chosen={flowChoice !== null} mixed={mixedSheet} disabled={running} onChoose={setFlowChoice} />
               {arrangeKey("flow")}
               {addKey("flow")}
             </>
@@ -488,6 +501,7 @@ export function App() {
               setLevel={setFlowLevel}
               locked={running}
               sheetFlow={sheet.flow}
+              mixed={canMix}
               probes={probes}
               fitPadding={mode === "navigator" && page === "flow" ? FIT_PADDING_MINIMAP : FIT_PADDING}
             />
@@ -566,7 +580,7 @@ export function App() {
           onClose={() => setBackendOpen(false)}
         />
       )}
-      {consoleShown && <ConsoleWindow logs={state.logs} errors={errors} onBlock={showBlock} onClose={() => setConsoleShown(false)} />}
+      {consoleShown && <ConsoleWindow logs={state.logs} errors={errors} onBlock={showBlock} onClose={() => setConsoleShown(false)} triggerRef={consoleKey} />}
       {aboutShown && <AboutWindow state={state} onClose={() => setAboutShown(false)} />}
       {browser === "flow" && (
         <BrowserWindow
@@ -575,6 +589,7 @@ export function App() {
           counts={counts(nodes.filter(isBlock).map((n) => ({ type: n.data.def.type })))}
           place="canvas"
           flow={sheet.flow}
+          mixed={canMix}
           onAdd={addBlock}
           onClose={() => setBrowser(null)}
         />

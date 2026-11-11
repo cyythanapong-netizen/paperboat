@@ -144,6 +144,18 @@ Wiring Ports
 - Wires run square (horizontal and vertical runs only). Select a wire and drag the handle on any
   of its segments to move that segment; the bends are saved with the project.
 
+Mixing Step and Signal Flow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A sheet can hold both layers; it is still one canvas. Signal blocks outside stories run every
+clock tick, in dependency order. Step paths advance from their hats (`Start`, `When`, or
+`Signal → Step`) and stop at `Wait`, `Join` or a condition. Add a step block to a Signal sheet
+and the sheet becomes a mixed flow; the Add browser offers both layers.
+
+A **story** is a state: its internal signal blocks run only while a path is at it. `reset`
+starts its blocks afresh on each entry; without it the state carries over. The `Signal → Step`
+block turns a 0/1 (boolean) signal into a step wire, starting a path when it rises (or falls).
+
 Configuring Block Parameters
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -217,7 +229,9 @@ Available Instrument Types
 - **Image Displays** (:code:`image`): Real-time visual streams, camera feeds, or generated plots.
 - **Scope** (:code:`scope`): The instrument to study signals with: several channels (a vector
   wire is one channel per component), an axis per unit, zoom and pan, cursors, a trigger, xy
-  and fft modes, CSV and PNG export. Drag to pan (this freezes it), :kbd:`Ctrl` + wheel to
+  and fft modes, CSV and PNG export. While a Scope is on the Board the run takes its
+  smallest solver step as the sampling step, so the plot and exports show those points.
+  Drag to pan (this freezes it), :kbd:`Ctrl` + wheel to
   zoom time, :kbd:`Shift` + :kbd:`Ctrl` + wheel to zoom values, :kbd:`Ctrl`-drag to zoom to a
   box, double-click to autoscale and follow the run again. With the Scope focused:
   :kbd:`F` freeze or follow, :kbd:`C` cursors, :kbd:`T` trigger, :kbd:`A` autoscale.
@@ -257,8 +271,14 @@ The Run Dock floats gracefully at the bottom of the canvas, rendered in semi-tra
 - **Solver**: the Run menu picks the run's solver (`RK4`, `RK45`, `RK2`, `Euler`,
   `Discrete`, and the implicit `CVODE` and `IDA` for stiff systems: chemistry, circuits,
   fast and slow dynamics together); **Run > Solver settings…** sets its options: tolerances
-  and the smallest and largest sub-step for `RK45`, `CVODE` and `IDA`, sub-steps per clock
-  step for the fixed-step solvers. Every
+  and the smallest and largest internal solver step for `RK45`, `CVODE` and `IDA`,
+  sub-steps per clock step for the fixed-step solvers, and the **clock step**. The clock
+  step is how often blocks run and monitors sample. A Scope is an instrument, not a
+  glance: while one is on the Board, the run uses the smallest solver step as its clock
+  (the max step, or the clock step divided by the fixed sub-steps) and sends the Scope a
+  sample on every pass, so the plot and its CSV/PNG export follow the solver's step, not the
+  coarse clock. The
+  Graph still draws one frame every few steps. Every
   block and station object whose own `solver` is `auto` (the default) uses it; the settings
   save with the project.
 
@@ -295,20 +315,21 @@ The Workbench (no domain)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Paperboat's engine includes a **workbench** backend with only the standard toolkits
-(`base`, `math`, `signal`, `control` and `dashboard`) and no domain. It listens on the
+(`base`, `math`, `signal` and `dashboard`), no domain, and every optional toolkit
+installed in the checkout (`control`, `opencv`, `optimization`…). It listens on the
 default backend port, so the web app connects to it as it is:
 
 .. code-block:: sh
 
-   npm run backend:workbench     # ws://localhost:8765
-   npm run dev                   # http://localhost:3047
+   ./bin/paperboat start         # web app on :3047, workbench on ws://localhost:8765
+   npm run backend:workbench     # or just the backend
+   npm run dev                   # or just the web app, http://localhost:3047
 
 The Flow opens with a Sine into a Graph; build any signal, mathematical or control model
 from the palette and run it. The Station page is hidden by default (View > Station shows
-it): a station belongs to a domain backend, and the workbench has none. The `control`
-blocks come from the optional control toolkit; install it with
-``paperboat toolkit install control`` to have them in the palette too. Connect a domain
-backend from **File > Backend…** to switch.
+it): a station belongs to a domain backend, and the workbench has none. The optional
+blocks are in the palette once their toolkit is installed in ``engine/toolkit``.
+Connect a domain backend from **File > Backend…** to switch.
 
 Project Management
 ------------------

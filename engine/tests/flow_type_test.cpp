@@ -55,6 +55,25 @@ flows = ["signal"]
   return catalog;
 }
 
+// The same, plus a block from another flow type, to show that a mixed signal/step sheet
+// still refuses a Model-only block.
+const tk::Catalog& with_model() {
+  static const tk::Catalog catalog = tk::load_descriptor(R"(domain = "mixed-model"
+import = ["step", "base", "signal", "math", "dashboard"]
+[[blocks]]
+use = "math/gain"
+type = "signal-only"
+label = "Signal only"
+flows = ["signal"]
+[[blocks]]
+use = "math/gain"
+type = "model-only"
+label = "Model only"
+flows = ["model"]
+)");
+  return catalog;
+}
+
 // Start → Wait, and a Signal-only block beside them.
 json step_graph() {
   return {{"nodes",
@@ -155,8 +174,8 @@ TEST_CASE("a starter graph's flow type is checked at load") {
   const auto ok = tk::load_descriptor(head + "flow = \"step\"\nnodes = [{ id = \"s\", type = \"start\" }, { id = \"c\", type = \"constant\" }]\n");
   CHECK(json::parse(ok.graph)["flow"] == "step");
   CHECK_FALSE(json::parse(tk::load_descriptor(head + "nodes = []\n").graph).contains("flow"));  // not chosen
-  CHECK_THROWS_WITH(tk::load_descriptor(head + "flow = \"signal\"\nnodes = [{ id = \"s\", type = \"start\" }]\n"),
-                    ContainsSubstring("graph: block s (Start) works only in a Step flow, not on this Signal flow sheet"));
+  // A Signal sheet may hold step paths: the sheet is mixed.
+  CHECK_NOTHROW(tk::load_descriptor(head + "flow = \"signal\"\nnodes = [{ id = \"s\", type = \"start\" }]\n"));
   CHECK_THROWS_WITH(tk::load_descriptor(head + "flow = \"model\"\nnodes = []\n"),
                     ContainsSubstring("this sheet is a Model flow, which this backend doesn't offer (it offers a Signal flow or Step flow)"));
   CHECK_THROWS_WITH(tk::load_descriptor(head + "flow = \"liquid\"\nnodes = []\n"), ContainsSubstring("graph.flow must be a flow type"));
@@ -168,24 +187,31 @@ TEST_CASE("the engine refuses a block on a sheet of a flow type it doesn't work 
   // Not chosen (a graph from before sheets had a type): nothing is refused.
   CHECK_NOTHROW(core::prepare_graph(step_graph(), catalog, none));
 
-  // A Step flow sheet: the Signal-only block is refused, naming it.
+  // A Step flow sheet mixes: a Signal-only block is taken, not refused.
   json g = step_graph();
   g["flow"] = "step";
   std::string node;
-  CHECK(refusal(g, catalog, &node) ==
-        "block pid (Signal only) works only in a Signal flow, not on this Step flow sheet: remove it, or make the sheet a Signal flow");
-  CHECK(node == "pid");
-  // …commented out, it isn't run, so it may stay.
-  g["nodes"][3]["commented"] = true;
   CHECK(refusal(g, catalog).empty());
-  // …and in a story (whose blocks run as a Signal flow) it works.
+
+  // A model-only block is still refused, naming it.
+  const auto& model_catalog = with_model();
+  g["nodes"].push_back({{"id", "model"}, {"type", "model-only"}});
+  CHECK(refusal(g, model_catalog, &node) ==
+        "block model (Model only) works only in a Model flow, not on this Step flow sheet: remove it, or make the sheet a Model flow");
+  CHECK(node == "model");
+  // …commented out, it isn't run, so it may stay.
+  g["nodes"].back()["commented"] = true;
+  CHECK(refusal(g, model_catalog).empty());
+  g["nodes"].erase(g["nodes"].size() - 1);
+
+  // …and in a story (whose blocks run as a Signal flow), the Signal-only block works.
   g = step_graph();
   g["flow"] = "step";
   g["edges"][0] = {{"from", {"start", "next"}}, {"to", {"tune", "in"}}};
   g["edges"].push_back({{"from", {"tune", "next"}}, {"to", {"wait", "in"}}});
   g["groups"] = {{{"id", "tune"}, {"kind", "story"}, {"nodes", {"one", "pid"}}}};
   CHECK(refusal(g, catalog).empty());
-  // A step block in a story is in a Signal flow there.
+  // A step block in a story is in a Signal flow there, and the story does not mix.
   g["groups"][0]["nodes"].push_back("wait");
   CHECK_THAT(refusal(g, catalog, &node), ContainsSubstring("block wait (Wait) works only in a Step flow, not in story tune: a story runs its blocks as a Signal flow"));
   CHECK(node == "wait");
@@ -194,19 +220,22 @@ TEST_CASE("the engine refuses a block on a sheet of a flow type it doesn't work 
   g["groups"].push_back({{"id", "inner"}, {"kind", "subsystem"}, {"parent", "tune"}, {"nodes", {"wait"}}});
   CHECK_THAT(refusal(g, catalog), ContainsSubstring("not in story tune"));
 
-  // A Signal flow sheet: step blocks are refused.
+  // A Signal flow sheet mixes the other way: step blocks are taken.
   g = step_graph();
   g["flow"] = "signal";
-  CHECK(refusal(g, catalog, &node) ==
-        "block start (Start) works only in a Step flow, not on this Signal flow sheet: remove it, or make the sheet a Step flow");
-  CHECK(node == "start");
+  CHECK(refusal(g, catalog).empty());
+  g["nodes"].push_back({{"id", "model"}, {"type", "model-only"}});
+  CHECK_THAT(refusal(g, model_catalog, &node), ContainsSubstring("block model (Model only) works only in a Model flow"));
+  CHECK(node == "model");
+  g["nodes"].erase(g["nodes"].size() - 1);
   g["nodes"] = {{{"id", "one"}, {"type", "constant"}}, {{"id", "pid"}, {"type", "signal-only"}}};
   g["edges"] = {{{"from", {"one", "y"}}, {"to", {"pid", "u"}}}};
   CHECK(refusal(g, catalog).empty());
 
   // A flow type the backend doesn't offer.
-  g["flow"] = "model";
-  CHECK_THAT(refusal(g, catalog, &node), ContainsSubstring("this sheet is a Model flow, which this backend doesn't offer"));
+  g["flow"] = "state";
+  node.clear();
+  CHECK_THAT(refusal(g, catalog, &node), ContainsSubstring("this sheet is a State flow, which this backend doesn't offer"));
   CHECK(node.empty());
 }
 

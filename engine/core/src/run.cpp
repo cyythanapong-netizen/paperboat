@@ -287,10 +287,12 @@ std::string Run::go(const json& graph_given, const json& station_given, const js
     ctx_.state = state_.get();
     g_ = prepare_graph(graph_json, *backend_.catalog, station_);
     for (auto& [gid, story] : g_.stories) {
-      // A story's pass: its blocks, once. Its monitors' latest samples wait for the next frame.
+      // A story's pass: its blocks, once. Its monitors' latest samples wait for the next frame,
+      // except Scopes, which are instruments and sample every pass.
       story.step->pass = [this, order = &story.order] {
+        const json rest = emit_scope_samples(pass_over(*order));
         std::map<std::string, std::vector<json>> latest;  // this pass's samples, by monitor
-        for (const auto& sample : pass_over(*order)) latest[sample["node"]].push_back(sample);
+        for (const auto& sample : rest) latest[sample["node"]].push_back(sample);
         for (auto& [node, list] : latest) story_samples_[node] = std::move(list);
       };
       if (!story.release.empty()) {
@@ -601,7 +603,22 @@ toolkit::Values Run::inputs_of(const Node& node) {
 json Run::pass() {
   json samples = pass_over(g_.order);
   commit_variables();  // between passes, so every block saw the same variables this one
-  return samples;
+  return emit_scope_samples(std::move(samples));
+}
+
+bool Run::is_scope_sample(const json& sample) const {
+  if (!sample.is_object() || sample.value("type", "") != "signal") return false;
+  const auto it = g_.nodes.find(sample.value("node", ""));
+  return it != g_.nodes.end() && it->second.def.instrument == "scope";
+}
+
+json Run::emit_scope_samples(json samples) {
+  json rest = json::array();
+  for (auto& sample : samples) {
+    if (is_scope_sample(sample)) emit_(sample);
+    else rest.push_back(std::move(sample));
+  }
+  return rest;
 }
 
 json Run::pass_over(const std::vector<std::string>& order) {

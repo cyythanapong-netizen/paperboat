@@ -26,6 +26,21 @@ export function canArrangeFlow(nodes: FlowNode[], level: string | null): boolean
   return nodes.some((n) => (n.parentId ?? null) === level);
 }
 
+/**
+ * Arrange moves the blocks a wire runs between, so the bends the user dragged are no longer
+ * where the wire must go: drop them and let the router draw the wire square again.
+ */
+export function clearWireBends(edges: Wire[]): Wire[] {
+  let changed = false;
+  const next = edges.map((e) => {
+    if (!e.data?.points) return e;
+    changed = true;
+    const { points: _points, ...data } = e.data;
+    return { ...e, data };
+  });
+  return changed ? next : edges;
+}
+
 export type PortOffsetResolver = (
   nodeId: string,
   handleId: string | null | undefined,
