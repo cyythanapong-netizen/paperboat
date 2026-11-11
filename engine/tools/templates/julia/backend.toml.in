@@ -1,0 +1,16 @@
+# @name@: a new Paperboat backend whose domain code is Julia.
+# Made by `paperboat new @name@ --julia`.
+[backend]
+format = 0
+name = "@name@"
+version = "0.1.0"
+engine = ">=0.1"
+language = "julia"
+run = "server.jl"
+# `paperboat run` serves ws://localhost:@port@ (`paperboat run --port N` for another).
+port = @port@
+descriptor = "descriptor.toml"
+
+[test]
+# `paperboat check` runs the starter graph headless and compares what it ends with to this.
+golden = "expected.json"

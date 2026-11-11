@@ -1,0 +1,16 @@
+# The backend's program: the domain's blocks on the C++ engine, through Paperboat.jl.
+#
+#   julia --project=. server.jl [--port N]   serve the protocol
+#   julia --project=. server.jl --run        run the starter graph once, headless
+
+using Paperboat
+
+include(joinpath(@__DIR__, "domain", "blocks.jl"))
+
+Paperboat.main(Paperboat.Backend(
+    name = "@name@",
+    descriptor = joinpath(@__DIR__, "descriptor.toml"),
+    blocks = [Scale],
+    duration = 5.0,
+    port = @port@,
+))
