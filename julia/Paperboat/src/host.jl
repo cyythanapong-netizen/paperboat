@@ -86,6 +86,10 @@ function handle(id::Int, event::String, payload)
   elseif event == "shared"
     return Dict("shared" => Bool(shared(instance)))
   elseif event == "read"
+    if instance isa Model
+      x = haskey(payload, "x") ? collect(Float64, plain(payload["x"])) : Float64[]
+      return Dict("outputs" => Dict{String, Any}(read(instance, x)), "log" => drain_logs(id))
+    end
     return Dict("outputs" => Dict{String, Any}(read(instance)), "log" => drain_logs(id))
   elseif event == "entities"
     if instance isa StationObject

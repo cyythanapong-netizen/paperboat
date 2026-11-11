@@ -38,6 +38,9 @@ restarts(::Step) = false
 shared(::Step) = false
 
 read(::StationObject) = Dict{String, Any}()
+# A model's outputs may depend on the state its solver holds: `read(model, x)` gets it, and the
+# engine calls this after each step. Never integrate again here; `derivatives` is all a model adds.
+read(object::StationObject, ::Vector{Float64}) = read(object)
 step(::StationObject, ::Context, inputs) = nothing
 entities(::StationObject, id::String) = Any[]
 link(::StationObject, slot::String) = nothing

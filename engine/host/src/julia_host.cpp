@@ -353,7 +353,9 @@ class HostModel final : public tk::Model {
       : tk::Model(std::move(initial), solver), runtime_(runtime), id_(id) {}
 
   tk::Values read() const override {
-    return values_from_json(parse_reply(runtime_.invoke(id_, "read", json::object()))
+    // A model's outputs come from the state the C++ solver holds now; pass it, as the Python
+    // adapter's `x` does, so the domain never keeps a second copy of the integration.
+    return values_from_json(parse_reply(runtime_.invoke(id_, "read", {{"x", x()}}))
                                 .value("outputs", json::object()));
   }
   tk::solve::State derivatives(double t, const tk::solve::State& x, const tk::Values& in) const override {

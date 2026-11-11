@@ -32,6 +32,8 @@ Paperboat.definition(::Type{Cart}) = Paperboat.model(
 
 Paperboat.initial(cart::Cart) = [0.0, 0.0]
 Paperboat.derivatives(cart::Cart, t::Float64, x::Vector{Float64}, inputs) = [x[2], get(inputs, "force", 0.0) / cart.mass]
+# A model reports the state its solver holds; the engine hands it to `read(model, x)`.
+Paperboat.read(cart::Cart, x::Vector{Float64}) = Dict("x" => x[1], "v" => x[2])
 
 @testset "definitions" begin
   gain = Paperboat.definition(Gain)
@@ -60,6 +62,7 @@ end
   cart = Cart(; mass = 2.0)
   @test Paperboat.initial(cart) == [0.0, 0.0]
   @test Paperboat.derivatives(cart, 0.0, [1.0, 0.5], Dict("force" => 4.0)) == [0.5, 2.0]
+  @test Paperboat.read(cart, [1.0, 0.5]) == Dict("x" => 1.0, "v" => 0.5)
 end
 
 @testset "json to plain Julia" begin
