@@ -6,11 +6,11 @@
 [[toolkits]]
 name = "optimization"
 repo = "https://github.com/paperboatlab/paperboat-toolkit-optimization.git"
-description = "Quadratic and linear programming blocks on OSQP."
+description = "Linear, quadratic and nonlinear programming blocks (OSQP, Ipopt)."
 optional = true
 prefix = "opt"
 engine = ">=0.1"
-blocks = ["qp", "lp"]
+blocks = ["qp", "lp", "nlp"]
 
 [[toolkits]]
 name = "control"
