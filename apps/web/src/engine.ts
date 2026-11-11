@@ -43,6 +43,8 @@ export type EngineState = {
   station: Station | null;
   /** The backend's default variables (#36), from variables.load. */
   variables: Variables;
+  /** Live variables from Squero MX (variables.remote); not part of the project. */
+  remoteVariables: Variables;
   /** What the variables come to (variables.values), and why not when they don't hold. */
   varValues: Record<string, number | boolean | string>;
   varError: { text: string; at?: string } | null;
@@ -93,6 +95,7 @@ export const initial: EngineState = {
   loaded: null,
   station: null,
   variables: [],
+  remoteVariables: [],
   varValues: {},
   varError: null,
   run: null,
@@ -218,6 +221,8 @@ export function reduce(s: EngineState, m: Action): EngineState {
       return { ...s, station: m.station };
     case "variables.load":
       return { ...s, variables: m.variables };
+    case "variables.remote":
+      return { ...s, remoteVariables: m.variables };
     case "project.load":
       return s;
     case "variables.values":
@@ -380,11 +385,31 @@ export function useEngine(url: string) {
       pending = [];
       dispatch({ type: "signals", list });
     };
+    // Live variables from Squero MX are shared by the backend across sessions. The WebSocket
+    // broadcast covers most cases; polling the small HTTP snapshot keeps an open tab current even
+    // when the broadcast races a reconnect.
+    const http = url.replace(/^ws/, "http").replace(/\/$/, "");
+    let remotePoll: number | undefined;
+    const pollRemote = async () => {
+      try {
+        const response = await fetch(`${http}/variables.remote`, { cache: "no-store" });
+        if (!response.ok) return;
+        const body = (await response.json()) as { variables?: Variables };
+        if (!stopped) dispatch({ type: "variables.remote", source: "mx", variables: body.variables ?? [] });
+      } catch {
+        // the backend is between restarts; the next tick tries again
+      }
+    };
     const connect = () => {
       const ws = new WebSocket(url);
       socket.current = ws;
       dispatch({ type: "connection", value: "connecting" });
-      ws.onopen = () => !stopped && dispatch({ type: "connection", value: "open" });
+      ws.onopen = () => {
+        if (stopped) return;
+        dispatch({ type: "connection", value: "open" });
+        void pollRemote();
+        remotePoll ??= window.setInterval(() => void pollRemote(), 1000);
+      };
       ws.onmessage = (e) => {
         if (stopped) return;
         try {

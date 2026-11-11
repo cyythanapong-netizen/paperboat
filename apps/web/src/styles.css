@@ -733,6 +733,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .var-row.open { outline: var(--select-outline); outline-offset: -2px; margin: var(--space-1); background: var(--surface-raised); }
 .var-name { font: 500 var(--size-xs) var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: grab; }
 .var-name:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.var-name .var-source { margin-left: 6px; padding: 0 3px; border: 1px solid var(--line-strong); border-radius: 2px; font: 600 8px var(--font-sans); color: var(--signal-text); vertical-align: 1px; }
 .var-type { font: var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .var-row .var-value { height: 24px; width: 100%; min-width: 0; padding: 0 6px; border: 0; text-align: right; font: var(--size-xs) var(--font-mono); color: var(--text); }
 .var-row .var-value.text { text-align: left; }

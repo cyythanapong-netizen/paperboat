@@ -13,10 +13,12 @@
         },
         "unit": {
           "type": "string",
-          "description": "The component's unit (m, rad…)."
+          "description": "The component's unit (m, rad\u2026)."
         }
       },
-      "required": ["id"],
+      "required": [
+        "id"
+      ],
       "additionalProperties": false
     },
     "PortDef": {
@@ -27,11 +29,11 @@
         },
         "type": {
           "type": "string",
-          "description": "signal (a value, the default), step (control in a Step flow), a value's shape (image, points, vector…), or any (any value but a step). A wire joins ports of one type; vector and legacy numbers are compatible."
+          "description": "signal (a value, the default), step (control in a Step flow), a value's shape (image, points, vector\u2026), or any (any value but a step). A wire joins ports of one type; vector and legacy numbers are compatible."
         },
         "unit": {
           "type": "string",
-          "description": "Its unit (N, m, rad, m/s…). A wire between two ports with units joins the same unit; a port without one takes any (#4)."
+          "description": "Its unit (N, m, rad, m/s\u2026). A wire between two ports with units joins the same unit; a port without one takes any (#4)."
         },
         "dimension": {
           "type": "integer",
@@ -79,7 +81,7 @@
             },
             "unit": {
               "type": "string",
-              "description": "Its unit (kg, N/rad…), shown next to the field; a variable bound to it must be in the same unit."
+              "description": "Its unit (kg, N/rad\u2026), shown next to the field; a variable bound to it must be in the same unit."
             }
           }
         },
@@ -223,7 +225,7 @@
       "description": "A point in the icon's 0..100 box, multiples of 5."
     },
     "Prim": {
-      "description": "One icon primitive (§3). Attribute values are tokens, never colours or paths.",
+      "description": "One icon primitive (\u00a73). Attribute values are tokens, never colours or paths.",
       "oneOf": [
         {
           "type": "object",
@@ -676,7 +678,7 @@
       "additionalProperties": {
         "$ref": "#/$defs/ConnectorDef"
       },
-      "description": "Connector classes the blocks' icon ports refer to (§4), by Modelica class short name."
+      "description": "Connector classes the blocks' icon ports refer to (\u00a74), by Modelica class short name."
     },
     "FlowType": {
       "enum": [
@@ -746,15 +748,15 @@
             },
             "glyph": {
               "type": "string",
-              "description": "The plate's glyph: a curve name (gain, plus, step, clamp, const) or a few characters drawn as text (&, ≥1, ¬)."
+              "description": "The plate's glyph: a curve name (gain, plus, step, clamp, const) or a few characters drawn as text (&, \u22651, \u00ac)."
             },
             "value": {
               "type": "string",
-              "description": "The caption's value, an expression of the block's params: {k}, {min}…{max}."
+              "description": "The caption's value, an expression of the block's params: {k}, {min}\u2026{max}."
             },
             "icon": {
               "$ref": "#/$defs/IconDef",
-              "description": "Additive icon definition (§3); absent means plain plate."
+              "description": "Additive icon definition (\u00a73); absent means plain plate."
             }
           }
         },
@@ -767,7 +769,7 @@
         },
         "ports_from": {
           "type": "string",
-          "description": "The id of a text param that decides the inputs: one per sign character in it (+ adds, - or − subtracts; at most 26; none reads as ++), ids a, b, c… of the first input's type. Sum's signs. A param called names gives one input per name instead (Mux), see outputs_from."
+          "description": "The id of a text param that decides the inputs: one per sign character in it (+ adds, - or \u2212 subtracts; at most 26; none reads as ++), ids a, b, c\u2026 of the first input's type. Sum's signs. A param called names gives one input per name instead (Mux), see outputs_from."
         },
         "inputs_from": {
           "type": "string",
@@ -910,6 +912,18 @@
         "values": {
           "$ref": "#/$defs/NumberArray",
           "description": "A field over a mesh, one number per vertex (a pressure, a stress), that the UI colours over range. Shape [n]."
+        },
+        "wireframe": {
+          "type": "boolean",
+          "description": "Draw the mesh's edges over its faces."
+        },
+        "wireframeColor": {
+          "type": "string",
+          "description": "The edge colour; absent: the theme's ink."
+        },
+        "overlay": {
+          "type": "boolean",
+          "description": "Draw through other geometry (chart axes at the origin, a coordinate cross)."
         },
         "range": {
           "type": "array",
@@ -1477,7 +1491,11 @@
           "type": "number"
         },
         "v": {
-          "type": ["number", "string", "array"],
+          "type": [
+            "number",
+            "string",
+            "array"
+          ],
           "items": {
             "type": "number"
           },
@@ -1492,7 +1510,7 @@
         },
         "port": {
           "type": "string",
-          "description": "The monitor's input this sample came in by, for one with several (a scope's a, b…). Absent: in."
+          "description": "The monitor's input this sample came in by, for one with several (a scope's a, b\u2026). Absent: in."
         }
       },
       "required": [
@@ -1621,6 +1639,12 @@
         },
         "variables": {
           "$ref": "#/$defs/Variables"
+        },
+        "source": {
+          "enum": [
+            "mx"
+          ],
+          "description": "Another client's live variables (Squero MX): share them, do not make them this session's project."
         }
       },
       "required": [
@@ -1642,7 +1666,7 @@
       "additionalProperties": false
     },
     "run.speed": {
-      "description": "Both ways (#219). UI → backend: the speed changed during a run; the run goes on from where it is at this speed (between runs it is ignored; one out of range is refused with a log error). Backend → UI: the run took it, from now on at this speed.",
+      "description": "Both ways (#219). UI \u2192 backend: the speed changed during a run; the run goes on from where it is at this speed (between runs it is ignored; one out of range is refused with a log error). Backend \u2192 UI: the run took it, from now on at this speed.",
       "type": "object",
       "properties": {
         "type": {
@@ -1655,7 +1679,7 @@
         },
         "run": {
           "type": "string",
-          "description": "The run that took it (backend → UI only)."
+          "description": "The run that took it (backend \u2192 UI only)."
         }
       },
       "required": [
@@ -1770,7 +1794,7 @@
       "additionalProperties": false
     },
     "toUI": {
-      "title": "Backend → UI",
+      "title": "Backend \u2192 UI",
       "type": "object",
       "required": [
         "type"
@@ -1785,6 +1809,7 @@
             "graph.load",
             "station.load",
             "variables.load",
+            "variables.remote",
             "project.load",
             "variables.values",
             "variables.patch",
@@ -1886,6 +1911,18 @@
           },
           "then": {
             "$ref": "#/$defs/variables.load"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "variables.remote"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/variables.remote"
           }
         },
         {
@@ -2072,7 +2109,7 @@
       "description": "Every message a backend sends."
     },
     "toBackend": {
-      "title": "UI → Backend",
+      "title": "UI \u2192 Backend",
       "type": "object",
       "required": [
         "type"
@@ -2258,7 +2295,12 @@
           "$ref": "#/$defs/PortSides"
         },
         "rotation": {
-          "enum": [0, 90, 180, 270]
+          "enum": [
+            0,
+            90,
+            180,
+            270
+          ]
         },
         "mirror": {
           "type": "boolean"
@@ -2533,10 +2575,16 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["side", "to"],
+            "required": [
+              "side",
+              "to"
+            ],
             "properties": {
               "side": {
-                "enum": ["in", "out"]
+                "enum": [
+                  "in",
+                  "out"
+                ]
               },
               "to": {
                 "type": "array",
@@ -2605,7 +2653,7 @@
           "properties": {
             "expr": {
               "type": "string",
-              "description": "A formula over number and boolean variables: + - * / ^ %, comparisons, && || ?:, sqrt, sin, min, clamp…"
+              "description": "A formula over number and boolean variables: + - * / ^ %, comparisons, && || ?:, sqrt, sin, min, clamp\u2026"
             }
           }
         }
@@ -2694,7 +2742,7 @@
       }
     },
     "FrameField": {
-      "description": "A small field image: w × h values row by row from the top (null: no value, such as a wall), drawn over the frame's view on a sequential scale from min to max (absent: the values' own range). At most 65536 cells.",
+      "description": "A small field image: w \u00d7 h values row by row from the top (null: no value, such as a wall), drawn over the frame's view on a sequential scale from min to max (absent: the values' own range). At most 65536 cells.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -2810,6 +2858,18 @@
           "$ref": "#/$defs/NumberArray",
           "description": "A field over a mesh, one number per vertex (a pressure, a stress), that the UI colours over range. Shape [n]."
         },
+        "wireframe": {
+          "type": "boolean",
+          "description": "Draw the mesh's edges over its faces."
+        },
+        "wireframeColor": {
+          "type": "string",
+          "description": "The edge colour; absent: the theme's ink."
+        },
+        "overlay": {
+          "type": "boolean",
+          "description": "Draw through other geometry (chart axes at the origin, a coordinate cross)."
+        },
         "range": {
           "type": "array",
           "items": {
@@ -2898,12 +2958,37 @@
           "type": "object",
           "description": "The run's solver options (#196); each left out keeps the backend's.",
           "properties": {
-            "rtol": { "type": "number", "exclusiveMinimum": 0, "description": "Relative tolerance (rk45, cvode, ida)." },
-            "atol": { "type": "number", "minimum": 0, "description": "Absolute tolerance (rk45, cvode, ida)." },
-            "min_step": { "type": "number", "minimum": 0, "description": "Smallest sub-step, s, before rk45, cvode or ida gives up (0: automatic)." },
-            "max_step": { "type": "number", "minimum": 0, "description": "Largest rk45, cvode or ida sub-step, s (0: the clock step)." },
-            "max_steps": { "type": "integer", "minimum": 1, "description": "rk45, cvode or ida sub-steps in one clock step before it gives up." },
-            "sub_steps": { "type": "integer", "minimum": 1, "maximum": 10000, "description": "Fixed sub-steps per clock step (rk4, rk2, euler)." }
+            "rtol": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Relative tolerance (rk45, cvode, ida)."
+            },
+            "atol": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Absolute tolerance (rk45, cvode, ida)."
+            },
+            "min_step": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Smallest sub-step, s, before rk45, cvode or ida gives up (0: automatic)."
+            },
+            "max_step": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Largest rk45, cvode or ida sub-step, s (0: the clock step)."
+            },
+            "max_steps": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "rk45, cvode or ida sub-steps in one clock step before it gives up."
+            },
+            "sub_steps": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000,
+              "description": "Fixed sub-steps per clock step (rk4, rk2, euler)."
+            }
           },
           "additionalProperties": false
         }
@@ -2949,7 +3034,7 @@
         },
         "x": {
           "type": "number",
-          "description": "The block's x (an iteration), or the series' next index (0, 1, 2…) when it gave none."
+          "description": "The block's x (an iteration), or the series' next index (0, 1, 2\u2026) when it gave none."
         },
         "y": {
           "type": "number"
@@ -3080,7 +3165,13 @@
         },
         "unit": {
           "type": "string",
-          "description": "A number's unit (m, N, rad…)."
+          "description": "A number's unit (m, N, rad\u2026)."
+        },
+        "source": {
+          "enum": [
+            "mx"
+          ],
+          "description": "UI only: a live variable broadcast by Squero Studio MX, not saved in the project."
         },
         "min": {
           "type": "number"
@@ -3111,7 +3202,7 @@
         },
         "group": {
           "type": "string",
-          "description": "Where it's listed (Cart-pole, Controller…)."
+          "description": "Where it's listed (Cart-pole, Controller\u2026)."
         },
         "exposed": {
           "type": "boolean",
@@ -3258,7 +3349,13 @@
       }
     },
     "DType": {
-      "enum": ["f32", "f64", "i32", "u32", "u8"],
+      "enum": [
+        "f32",
+        "f64",
+        "i32",
+        "u32",
+        "u8"
+      ],
       "description": "Binary frames (#18): an array's element type, little-endian. f32, f64: IEEE floats; i32, u32: 32-bit integers; u8: bytes."
     },
     "BinaryRef": {
@@ -3270,7 +3367,9 @@
           "description": "The binary frame's id (its descriptor's id), unique on this connection."
         }
       },
-      "required": ["binary"],
+      "required": [
+        "binary"
+      ],
       "additionalProperties": false
     },
     "NumberArray": {
@@ -3310,11 +3409,39 @@
           "description": "Where the reference sits in that message, as a JSON pointer (/entities/0/vertices); for logs and tools."
         },
         "compression": {
-          "enum": ["none"],
+          "enum": [
+            "none"
+          ],
           "description": "How the payload is packed; absent means none, the only one in layout 1. A decoder refuses one it doesn't know."
         }
       },
-      "required": ["id", "dtype", "shape"],
+      "required": [
+        "id",
+        "dtype",
+        "shape"
+      ],
+      "additionalProperties": false
+    },
+    "variables.remote": {
+      "type": "object",
+      "description": "Live variables from another client (Squero MX), shared across the backend's sessions.",
+      "properties": {
+        "type": {
+          "const": "variables.remote",
+          "description": "Live variables from another client (Squero MX), shared across the backend's sessions."
+        },
+        "source": {
+          "const": "mx"
+        },
+        "variables": {
+          "$ref": "#/$defs/Variables"
+        }
+      },
+      "required": [
+        "type",
+        "source",
+        "variables"
+      ],
       "additionalProperties": false
     }
   },

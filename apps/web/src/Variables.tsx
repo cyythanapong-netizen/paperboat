@@ -457,15 +457,16 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
   const vars = useContext(VarsContext)!;
   const uses = vars.uses(v.name);
   const formula = v.expr !== undefined;
+  const remote = v.source === "mx";
   return (
     <div className={`var-row${open ? " open" : ""}${bad ? " bad" : ""}`} data-var={v.name} role="listitem">
       <span
         className="var-name"
         draggable={!vars.locked}
         tabIndex={0}
-        title="Click to open; drag onto a field to bind it, or onto a Board label to show its value"
-        onClick={onOpen}
-        onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen())}
+        title={remote ? "A live variable from Squero MX: drag it onto a field to bind it" : "Click to open; drag onto a field to bind it, or onto a Board label to show its value"}
+        onClick={remote ? undefined : onOpen}
+        onKeyDown={(e) => !remote && (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen())}
         onDragStart={(e) => {
           dragged.current = v;
           e.dataTransfer.setData(VAR_DRAG, v.name);
@@ -479,16 +480,26 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
         }}
       >
         {v.name}
+        {remote && <span className="var-source" title="Live from Squero Studio MX — not saved in the project">MX</span>}
       </span>
-      <span className="var-type">{formula && v.type !== "number" ? "ƒ formula" : v.type}</span>
-      {formula && v.type !== "number" ? <output className="var-value out">{show(vars.values[v.name])}</output> : <ValueField v={v} onChange={onChange} disabled={vars.locked && !v.tunable} />}
+      <span className="var-type">{remote ? "MX · " : ""}{formula && v.type !== "number" ? "ƒ formula" : v.type}</span>
+      {remote ? (
+        <output className="var-value out" title="The value MX last broadcast">{show(vars.values[v.name] ?? v.value)}</output>
+      ) : formula && v.type !== "number" ? (
+        <output className="var-value out">{show(vars.values[v.name])}</output>
+      ) : (
+        <ValueField v={v} onChange={onChange} disabled={vars.locked && !v.tunable} />
+      )}
       <span className="var-unit" title={v.unit ?? undefined}>{v.unit ?? ""}</span>
-      <button className={`var-uses${uses.length ? "" : " none"}`} onClick={onOpen} tabIndex={-1}>
-        {uses.length ? count(uses.length, "use") : "unused"}
-      </button>
+      {!remote && (
+        <button className={`var-uses${uses.length ? "" : " none"}`} onClick={onOpen} tabIndex={-1}>
+          {uses.length ? count(uses.length, "use") : "unused"}
+        </button>
+      )}
+      {remote && <span className="var-uses none">live</span>}
       {formula && <div className="var-expr">= {v.expr}</div>}
       {bad && <div className="var-expr bad-text">{bad}</div>}
-      {open && <Detail v={v} uses={uses} onChange={onChange} onShow={onShow} />}
+      {open && !remote && <Detail v={v} uses={uses} onChange={onChange} onShow={onShow} />}
     </div>
   );
 }
