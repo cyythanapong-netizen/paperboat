@@ -1,6 +1,7 @@
 // Reading and writing a project file in the browser (#82). Where the File System Access API
 // exists (Chromium) Save writes back to the same file; elsewhere Save downloads a copy and Open
-// uses a file input. Both paths give the same results to the app.
+// uses a file input. Both paths give the same results to the app. The pickers start in
+// Documents and remember the last project folder by id (paperboat-project).
 
 /** The part of a file handle we use. */
 export type FileHandle = {
@@ -12,8 +13,8 @@ export type FileHandle = {
 type Types = { description: string; accept: Record<string, string[]> }[];
 declare global {
   interface Window {
-    showSaveFilePicker?: (o: { suggestedName?: string; types?: Types }) => Promise<FileHandle>;
-    showOpenFilePicker?: (o: { multiple?: boolean; types?: Types }) => Promise<FileHandle[]>;
+    showSaveFilePicker?: (o: { suggestedName?: string; types?: Types; id?: string; startIn?: string }) => Promise<FileHandle>;
+    showOpenFilePicker?: (o: { multiple?: boolean; types?: Types; id?: string; startIn?: string }) => Promise<FileHandle[]>;
   }
 }
 
@@ -27,7 +28,7 @@ const cancelled = (e: unknown) => e instanceof DOMException && e.name === "Abort
 export async function saveText(text: string, suggestedName: string, handle: FileHandle | null): Promise<{ name: string; handle?: FileHandle } | null> {
   if (window.showSaveFilePicker) {
     try {
-      const h = handle ?? (await window.showSaveFilePicker({ suggestedName, types: TYPES }));
+      const h = handle ?? (await window.showSaveFilePicker({ suggestedName, types: TYPES, id: "paperboat-project", startIn: "documents" }));
       const w = await h.createWritable();
       await w.write(text);
       await w.close();
@@ -52,7 +53,7 @@ export async function saveText(text: string, suggestedName: string, handle: File
 export async function pickText(): Promise<{ name: string; text: string } | null> {
   if (window.showOpenFilePicker) {
     try {
-      const [h] = await window.showOpenFilePicker({ multiple: false, types: TYPES });
+      const [h] = await window.showOpenFilePicker({ multiple: false, types: TYPES, id: "paperboat-project", startIn: "documents" });
       const file = await h.getFile();
       return { name: file.name, text: await file.text() };
     } catch (e) {
