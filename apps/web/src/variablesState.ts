@@ -10,6 +10,9 @@ import { mapTexts, renameInText, textUsing } from "./dashboardLayout";
 import type { VarsApi } from "./VarsContext";
 import { isBlock, type FlowNode } from "./flowModel";
 
+/** No live variables: one shared list, so a restored state without the field stays stable. */
+const NO_REMOTE: Variables = [];
+
 export function useVariables(state: EngineState, send: (m: ClientMsg) => void, subscribe: (f: (m: ServerMsg) => void) => () => void) {
   // Variables (#36): the backend's defaults, then the user's own (kept in the project, #34). The engine resolves them and says what they come to.
   const [mine, setMine] = useState<Variables | undefined>(undefined);
@@ -17,7 +20,8 @@ export function useVariables(state: EngineState, send: (m: ClientMsg) => void, s
   useEffect(() => setMine(undefined), [engineKey]); // another backend: its defaults; a project (or the restored session) brings the user's own
   const project = useMemo(() => merged(state.variables, mine), [state.variables, mine]);
   // MX's live variables are shown beside the project's own; the project is what we send back.
-  const remote = state.remoteVariables;
+  // A state restored before this field existed (or a message without a list) has none.
+  const remote = state.remoteVariables ?? NO_REMOTE;
   const variables = useMemo(() => {
     const names = new Set(remote.map((v) => v.name));
     return [
