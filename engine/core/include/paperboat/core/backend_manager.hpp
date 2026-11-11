@@ -42,6 +42,7 @@ struct BackendRunOptions {
 enum class BackendKind {
   Cpp,
   Python,
+  Julia,
   Unknown
 };
 

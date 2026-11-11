@@ -763,6 +763,7 @@ BackendKind BackendManager::detect_backend_kind(const fs::path& path) {
   }
   if (fs::is_directory(path)) {
     if (fs::is_regular_file(path / "server.py")) return BackendKind::Python;
+    if (fs::is_regular_file(path / "server.jl")) return BackendKind::Julia;
     if (fs::is_regular_file(path / "CMakeLists.txt")) return BackendKind::Cpp;
 
     const auto btoml = path / "backend.toml";
@@ -772,6 +773,7 @@ BackendKind BackendManager::detect_backend_kind(const fs::path& path) {
         std::string lang = tbl["backend"]["language"].value_or(tbl["language"].value_or(""));
         if (lang == "python") return BackendKind::Python;
         if (lang == "cpp") return BackendKind::Cpp;
+        if (lang == "julia") return BackendKind::Julia;
         std::string eng = tbl["backend"]["engine"].value_or(tbl["engine"].value_or(""));
         if (eng.find("python") != std::string::npos) return BackendKind::Python;
         if (eng.find("cpp") != std::string::npos) return BackendKind::Cpp;
@@ -1061,6 +1063,9 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
 
     std::cout << "paperboat running " << bin.filename().string() << " on " << ws_url(port) << std::endl;
     return ProcessRunner::run_stream(args, dir, run_env(manifest, opts), log_cb);
+  } else if (kind == BackendKind::Julia) {
+    std::cerr << "error: the Julia backend host is not built yet (pb#323); `paperboat deps install` prepared its environment\n";
+    return 1;
   } else {
     // Python backend
     const fs::path repo_root = toolkit::find_repo_root(dir);
@@ -1704,6 +1709,26 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   const fs::path desc_file = dir / manifest.descriptor;
   if (!fs::is_regular_file(desc_file)) {
     return fail(step_manifest, "descriptor file missing: " + manifest.descriptor);
+  }
+
+  // Dependencies: a declared manifest must have its isolated environment.
+  const BackendKind dep_kind = detect_backend_kind(dir);
+  if (dep_kind == BackendKind::Python && fs::is_regular_file(dir / "requirements.txt") && venv_python(dir).empty()) {
+    // Comments and blank lines are not dependencies: a scaffolded backend passes as it is.
+    std::ifstream requirements(dir / "requirements.txt");
+    bool has_package = false;
+    for (std::string line; std::getline(requirements, line);) {
+      const auto first = line.find_first_not_of(" \t\r");
+      if (first != std::string::npos && line[first] != '#') {
+        has_package = true;
+        break;
+      }
+    }
+    if (has_package) return fail(step_manifest, "Python dependencies are not installed: run `paperboat deps install`");
+  }
+  if (dep_kind == BackendKind::Julia && fs::is_regular_file(dir / "Project.toml") &&
+      !fs::is_regular_file(dir / "Manifest.toml")) {
+    return fail(step_manifest, "Julia dependencies are not installed: run `paperboat deps install`");
   }
 
   // Check build / entry point files

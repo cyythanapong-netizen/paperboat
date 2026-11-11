@@ -137,7 +137,7 @@ TEST_CASE("paperboat new writes a Python backend that check's manifest and catal
   const auto res = cli::new_backend({.name = "py-thing", .language = "python", .dir = tmp.path});
   REQUIRE(res.ok);
   CHECK(written(res) == std::set<std::string>{".gitignore", "backend.toml", "descriptor.toml", "domain/__init__.py",
-                                              "domain/blocks.py", "expected.json", "server.py"});
+                                              "domain/blocks.py", "expected.json", "requirements.txt", "server.py"});
   const auto m = core::BackendManager::load_manifest(tmp.path);
   REQUIRE(m.has_manifest);
   CHECK(m.language == "python");
