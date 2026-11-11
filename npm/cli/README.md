@@ -6,6 +6,7 @@ The [Paperboat](https://github.com/paperboatlab/paperboat) command line.
 npm install -g @paperboatlabs/cli
 paperboat --version
 paperboat start squero-studio-om  # Squero Studio OM
+paperboat start squero-studio-mx  # Squero Studio MX (Julia workbench)
 paperboat pkg list          # apps from other repositories
 paperboat update --check    # is a newer paperboat on npm?
 ```
