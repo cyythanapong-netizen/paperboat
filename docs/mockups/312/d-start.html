@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<title>Squero Studio Octave — Start</title>
+<link rel="stylesheet" href="mockup.css" />
+</head>
+<body>
+<div class="app d">
+  <header class="topbar">
+    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">OCT</span></div>
+    <div class="proj"><span class="dot" style="background:var(--line-strong)"></span>no script</div>
+    <div class="status"><span class="pip"></span>octave 10.3 · ready</div>
+    <div class="keys">
+      <button class="key">New <span class="tag">⌘N</span></button>
+      <button class="key">Open</button>
+      <button class="key small">☾</button>
+    </div>
+  </header>
+
+  <aside class="panel">
+    <div class="head"><b>recent</b><span class="sp"></span><button class="plain tag">⌕</button></div>
+    <div style="padding:8px 0;">
+      <div class="file on"><span class="ico">◇</span>surface.m<span class="k">2 m</span></div>
+      <div class="file"><span class="ico">◇</span>lorenz.m<span class="k">1 h</span></div>
+      <div class="file"><span class="ico">◇</span>chladni.m<span class="k">3 h</span></div>
+      <div class="file"><span class="ico">◇</span>stories.m<span class="k">1 d</span></div>
+      <div class="file" style="margin-top:6px"><span class="ico">▾</span>data<span class="k">/</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-07.mat<span class="k">mat</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-06.mat<span class="k">mat</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>peaks.mat<span class="k">mat</span></div>
+      <div class="file" style="margin-top:8px"><span class="ico">▸</span>folders<span class="k">/</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>dynamics<span class="k">12</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>controls<span class="k">8</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>charts<span class="k">4</span></div>
+    </div>
+    <div class="foot">~/lab/dynamics</div>
+  </aside>
+
+  <main class="panel startpane">
+    <div>
+      <div class="lock2"><span class="w">squero</span><span class="s">studio</span><span class="b">OCT</span></div>
+      <div class="tagline">Edit <span class="mono">.m</span> scripts, watch the workspace, chart the run.</div>
+    </div>
+
+    <div class="startgrid">
+      <div class="startcard">
+        <span class="ic">＋</span>
+        <b>New script</b>
+        <span>A blank <span class="mono">.m</span> with a scratch line and a local Octave session.</span>
+        <kbd>⌘N</kbd>
+      </div>
+      <div class="startcard">
+        <span class="ic">⌂</span>
+        <b>Open file</b>
+        <span>Open <span class="mono">.m</span>, <span class="mono">.mat</span>, or a folder. Attach a backend to load its run.</span>
+        <kbd>⌘O</kbd>
+      </div>
+    </div>
+
+    <div class="recent">
+      <div class="rh"><span class="lbl">resume</span><span class="sp" style="flex:1"></span><span class="tag">workspace + last chart</span></div>
+      <div class="recentrow">
+        <div class="thumb"><canvas data-k="surface"></canvas></div>
+        <div><div class="nm">surface.m</div><div class="meta">A 512 × 512 · sel 1 × 1284 · run-07</div></div>
+        <div class="go">resume →<br><span style="opacity:.6">2.40 s</span></div>
+      </div>
+      <div class="recentrow">
+        <div class="thumb"><canvas data-k="heat"></canvas></div>
+        <div><div class="nm">lorenz.m</div><div class="meta">x, y, z 1 × 5000 · 3D line · run-05</div></div>
+        <div class="go">resume →<br><span style="opacity:.6">8.00 s</span></div>
+      </div>
+      <div class="recentrow">
+        <div class="thumb"><canvas data-k="heat2"></canvas></div>
+        <div><div class="nm">chladni.m</div><div class="meta">mode 512 × 512 · heat · run-04</div></div>
+        <div class="go">resume →<br><span style="opacity:.6">0.42 s</span></div>
+      </div>
+      <div class="recentrow">
+        <div class="thumb"><canvas data-k="spark"></canvas></div>
+        <div><div class="nm">stories.m</div><div class="meta">start · fold · pin · 3 markers</div></div>
+        <div class="go">resume →<br><span style="opacity:.6">1.10 s</span></div>
+      </div>
+    </div>
+    <div class="hint2" style="margin-top:2px">A resume card restores the session: open files, the workspace, the pinned views and the run time. It is not a recent-files list.</div>
+
+    <div style="margin-top:10px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--raised);display:grid;grid-template-columns:1fr 430px;overflow:hidden">
+      <div style="padding:16px;display:flex;flex-direction:column;gap:5px">
+        <div class="lbl">pick up where you left off</div>
+        <div style="font:500 14px var(--font-mono)">surface.m · run-07</div>
+        <div class="tag">2.40 s · 4 views · A 512 × 512 · ghost run-06</div>
+        <div style="display:flex;gap:6px;margin-top:8px"><button class="key small">Resume</button><button class="key small">Open fresh</button></div>
+      </div>
+      <div style="position:relative;background:var(--screen);min-height:214px">
+        <canvas id="bigPreview" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+      </div>
+    </div>
+    <div style="margin-top:auto;display:flex;align-items:center;gap:7px;border-top:1px solid var(--line);padding-top:10px">
+      <span class="chip2">⌘N new</span><span class="chip2">⌘O open</span><span class="chip2">⌘K attach</span><span class="tag" style="margin-left:auto">a session is files + workspace + views + time</span>
+    </div>
+  </main>
+
+  <aside class="panel">
+    <div class="head"><b>session</b><span class="sp"></span><span class="tag">local</span></div>
+    <div style="padding:11px 12px;display:flex;flex-direction:column;gap:11px;">
+      <div>
+        <div class="lbl" style="margin-bottom:6px">octave</div>
+        <div class="attachrow"><span class="pip"></span><div><div class="nm">GNU Octave 10.3.0</div><div class="meta">/usr/bin/octave-cli</div></div><span class="k">found</span></div>
+      </div>
+      <div>
+        <div class="lbl" style="margin-bottom:6px">paperboat backend</div>
+        <div class="attachfield"><input value="ws://localhost:8780" /><button class="key small">Attach</button></div>
+        <div class="hint2" style="margin-top:6px">A running backend gives the session its run, variables and charts. No backend? <code>paperboat start dc-drive</code>.</div>
+      </div>
+      <div class="attachrow" style="border-color:var(--line-ink)">
+        <span class="pip"></span>
+        <div><div class="nm">dc-drive</div><div class="meta">ws://localhost:8780 · run-07</div></div>
+        <span class="k">Open →</span>
+      </div>
+      <div style="border-top:1px solid var(--line);padding-top:10px">
+        <div class="lbl" style="margin-bottom:6px">this session</div>
+        <div style="border:1px dashed var(--strong);border-radius:var(--r-md);padding:14px 12px;text-align:center;color:var(--muted);font-size:11.5px">
+          Open a script or attach a backend.<br />
+          <span style="font:400 10px var(--font-mono)">nothing is running</span>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--line);padding-top:9px">
+        <div class="lbl" style="margin-bottom:6px">recent backends</div>
+        <div class="attachrow" style="margin-bottom:5px"><span class="pip" style="background:var(--line-strong)"></span><div><div class="nm">pendulum-cpp</div><div class="meta">run-03 · 4.10 s</div></div><span class="k">Attach</span></div>
+        <div class="attachrow"><span class="pip" style="background:var(--line-strong)"></span><div><div class="nm">airfoil</div><div class="meta">run-01 · 12.8 s</div></div><span class="k">Attach</span></div>
+      </div>
+      <div class="hint2">Squero Studio Octave is a client. It attaches to the ecosystem; it does not generate a backend.</div>
+    </div>
+    <div class="foot">squero-studio-octave 0.1.0 · Apache-2.0</div>
+  </aside>
+
+  <section class="console">
+    <div class="chead"><span class="ct on">console</span><span class="ct">messages</span><span class="sp"></span><span class="k2">no session</span></div>
+    <div class="lines">
+      <div class="dim">squero studio octave 0.1.0 · octave 10.3.0 (x86_64-pc-linux-gnu)</div>
+      <div class="dim">attach a backend to load a run, or open a script to start a local session.</div>
+      <div class="cmd">_</div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { surface, heatmap, spark } from "./chart.js";
+surface(document.getElementById("bigPreview"), { ghost: true, curtain: 0.3 });
+document.querySelectorAll(".thumb canvas").forEach((cv) => {
+  const k = cv.dataset.k;
+  if (k === "surface") surface(cv, { n: 34 });
+  else if (k === "heat") heatmap(cv);
+  else if (k === "heat2") heatmap(cv, { cell: { i: 30, j: 10 } });
+  else spark(cv, { phase: 1.1 });
+});
+</script>
+</body>
+</html>

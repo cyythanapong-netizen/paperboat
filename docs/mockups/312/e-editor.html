@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<title>Squero Studio Octave — Editor</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .app.e .ln { height:22px; }
+  .app.e .code { font-size:12px; }
+</style>
+</head>
+<body>
+<div class="app e">
+  <header class="topbar">
+    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">OCT</span></div>
+    <div class="proj"><span class="dot"></span>surface.m</div>
+    <div class="status"><span class="pip"></span>octave 10.3 · ready</div>
+    <div class="keys">
+      <button class="key run">▶ Run</button>
+      <button class="key">Console <span class="tag">1</span></button>
+      <button class="key small">☾</button>
+    </div>
+  </header>
+
+  <aside class="panel">
+    <div class="head"><b>files</b><span class="sp"></span><button class="plain tag">+</button></div>
+    <div style="padding:8px 0;">
+      <div class="file"><span class="ico">◇</span>lorenz.m<span class="k">m</span></div>
+      <div class="file on"><span class="ico">◇</span>surface.m<span class="k">m</span></div>
+      <div class="file"><span class="ico">◇</span>selection.m<span class="k">m</span></div>
+      <div class="file"><span class="ico">◇</span>chladni.m<span class="k">m</span></div>
+      <div class="file" style="margin-top:6px"><span class="ico">▾</span>data<span class="k">/</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-06.mat<span class="k">mat</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-07.mat<span class="k">mat</span></div>
+    </div>
+    <div class="foot">5 files · 2 open</div>
+  </aside>
+
+  <section class="panel editor">
+    <div class="head" style="gap:10px">
+      <b>surface.m</b><span class="tag">Ln 8, Col 14</span><span class="sp"></span>
+      <span class="tag">changed 3 lines</span><button class="key small">Diff run-06</button><button class="key small">Run cell</button><button class="key small">▶</button>
+    </div>
+    <div class="code">
+      <div class="cellcard"><span class="caret">▾</span><b>%% setup</b><span class="stat">0 in → 3 out</span><span class="sp"></span><span class="stat">0.14 s</span></div>
+
+      <div class="ln"><span class="rb"><i class="on"></i></span><span class="no">1</span><span class="src tok-c">% a surface from a matrix; a selection back to the script</span></div>
+      <div class="ln"><span class="rb"><i class="on"></i></span><span class="no">2</span><span class="src"><span class="tok-v">n</span> <span class="tok-o">=</span> <span class="tok-n">512</span><span class="tok-o">;</span></span><span class="chg"></span></div>
+      <div class="ln"><span class="rb"><i class="on slow"></i></span><span class="no">3</span><span class="src"><span class="tok-o">[</span><span class="tok-v">X</span><span class="tok-o">,</span> <span class="tok-v">Y</span><span class="tok-o">]</span> <span class="tok-o">=</span> <span class="tok-f">meshgrid</span><span class="tok-o">(</span><span class="tok-f">linspace</span><span class="tok-o">(</span><span class="tok-o">-</span><span class="tok-n">3</span><span class="tok-o">,</span> <span class="tok-n">3</span><span class="tok-o">,</span> <span class="tok-v">n</span><span class="tok-o">));</span></span><span class="ans"><i data-heat></i>512 × 512</span></div>
+      <div class="ln"><span class="rb"><i class="on"></i></span><span class="no">4</span><span class="src"><span class="tok-v">R</span> <span class="tok-o">=</span> <span class="tok-f">hypot</span><span class="tok-o">(</span><span class="tok-v">X</span><span class="tok-o">,</span> <span class="tok-v">Y</span><span class="tok-o">)</span> <span class="tok-o">+</span> <span class="tok-f">eps</span><span class="tok-o">;</span></span><span class="ans"><i data-spark></i>512 × 512</span></div>
+      <div class="ln"><span class="rb"><i class="on slow"></i></span><span class="no">5</span><span class="src"><span class="tok-v">A</span> <span class="tok-o">=</span> <span class="tok-f">sin</span><span class="tok-o">(</span><span class="tok-v">R</span> <span class="tok-o">*</span> <span class="tok-n">3.4</span><span class="tok-o">)</span> <span class="tok-o">./</span> <span class="tok-o">(</span><span class="tok-v">R</span> <span class="tok-o">*</span> <span class="tok-n">3.4</span><span class="tok-o">);</span></span><span class="chg"></span><span class="ans"><i data-heat></i>512 × 512</span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">6</span><span class="src"> </span></div>
+      <div class="ln on"><span class="rb"><i class="cur"></i></span><span class="no">7</span><span class="src tok-c">% the chart lasso wrote this line</span></div>
+      <div class="ln on"><span class="rb"><i class="cur"></i></span><span class="no">8</span><span class="src"><span class="tok-v">sel</span> <span class="tok-o">=</span> <span class="tok-v">A</span><span class="tok-o">(</span><span class="tok-v">A</span> <span class="tok-o">&gt;</span> <span class="tok-n">0.42</span><span class="tok-o">);</span></span><span class="chg"></span><span class="ans"><i data-dots></i>1 × 1284</span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">9</span><span class="src"> </span></div>
+
+      <div class="cellcard"><span class="caret">▾</span><b>%% surface</b><span class="stat">2 in → 1 out</span><span class="sp"></span><span class="stat">0.24 s · 1 chart</span></div>
+
+      <div class="ln"><span class="rb"><i></i></span><span class="no">10</span><span class="src"><span class="tok-f">surf</span><span class="tok-o">(</span><span class="tok-v">X</span><span class="tok-o">,</span> <span class="tok-v">Y</span><span class="tok-o">,</span> <span class="tok-v">A</span><span class="tok-o">,</span> <span class="tok-s">"edgecolor"</span><span class="tok-o">,</span> <span class="tok-s">"none"</span><span class="tok-o">);</span></span><span class="ans"><i data-heat></i>→ chart</span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">11</span><span class="src"><span class="tok-f">colormap</span><span class="tok-o">(</span><span class="tok-f">viridis</span><span class="tok-o">(</span><span class="tok-n">256</span><span class="tok-o">));</span> <span class="tok-f">view</span><span class="tok-o">(-</span><span class="tok-n">37.5</span><span class="tok-o">,</span> <span class="tok-n">30</span><span class="tok-o">);</span></span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">12</span><span class="src"><span class="tok-f">set</span><span class="tok-o">(</span><span class="tok-f">gca</span><span class="tok-o">,</span> <span class="tok-s">"clim"</span><span class="tok-o">,</span> <span class="tok-o">[-</span><span class="tok-n">0.2</span> <span class="tok-n">1</span><span class="tok-o">]);</span></span><span class="ans"><i data-spark></i>ok</span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">13</span><span class="src"> </span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">14</span><span class="src tok-c">% compare against the previous run</span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">15</span><span class="src"><span class="tok-v">ghost</span> <span class="tok-o">=</span> <span class="tok-f">load</span><span class="tok-o">(</span><span class="tok-s">"data/run-06.mat"</span><span class="tok-o">).</span><span class="tok-v">A</span><span class="tok-o">;</span></span><span class="ans"><i data-heat></i>512 × 512</span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">16</span><span class="src"> </span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">17</span><span class="src tok-c">% pin: iso · curtain 0.42 · sel</span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">18</span><span class="src"> </span></div>
+
+      <div class="cellcard"><span class="caret">▾</span><b>%% export</b><span class="stat">1 in → 2 files</span><span class="sp"></span><span class="stat">0.08 s</span></div>
+
+      <div class="ln"><span class="rb"><i></i></span><span class="no">19</span><span class="src"><span class="tok-f">savefig</span><span class="tok-o">(</span><span class="tok-s">"surface.svg"</span><span class="tok-o">);</span></span><span class="ans"><i data-spark></i>svg</span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">20</span><span class="src"><span class="tok-f">writematrix</span><span class="tok-o">(</span><span class="tok-v">A</span><span class="tok-o">,</span> <span class="tok-s">"data/run-07.csv"</span><span class="tok-o">);</span></span><span class="ans"><i data-heat></i>csv</span></div>
+      <div class="ln"><span class="rb"><i></i></span><span class="no">21</span><span class="src"> </span></div>
+
+      <div class="peek" style="left:470px;top:118px">
+        <div class="ph"><b>A</b><span>512 × 512 · double</span><span class="sp"></span><span class="tag">peek</span></div>
+        <canvas id="peekHeat"></canvas>
+        <div class="kv"><span class="k">min / max</span><span class="v">−0.184 / 1.000</span><span class="k">mean</span><span class="v">0.227</span><span class="k">changed</span><span class="v">line 5</span></div>
+        <div class="acts" style="margin-top:7px"><button class="key small">Tie to chart</button><button class="key small">Pin</button></div>
+      </div>
+    </div>
+
+    <div class="runstrip">
+      <span>run-07</span><span class="track"><span class="f"></span><span class="k"></span></span><span>2.40 s</span><span>step 120 / 500</span><span style="margin-left:auto">← → step</span>
+    </div>
+  </section>
+
+  <aside class="panel echo">
+    <div class="head"><b>at cursor</b><span class="sp"></span><span class="tag">ln 8</span></div>
+    <div class="body">
+      <div class="lbl">workspace as of line 8</div>
+      <div class="snap"><span class="no">A</span><div><div class="nm">512 × 512 · double</div><div class="sh">min −0.184 · max 1.000</div></div></div>
+      <div class="snap" style="border-color:var(--signal)"><span class="no" style="border-color:var(--signal);color:var(--signal-text)">sel</span><div><div class="nm">1 × 1284 · logical</div><div class="sh">new at this line</div></div></div>
+      <canvas id="selDots"></canvas>
+      <div class="snap"><span class="no">z</span><div><div class="nm">1 × 500 · double</div><div class="sh">from run-07</div></div></div>
+      <button class="key small" style="align-self:flex-start">Snapshot to chart</button>
+      <div style="border-top:1px solid var(--line);padding-top:9px">
+        <div class="lbl" style="margin-bottom:6px">diff run-06 → run-07</div>
+        <div class="kv"><span class="k">sel</span><span class="v">1 284 → 1 284</span><span class="k">A(128,64)</span><span class="v">0.409 → 0.421</span><span class="k">runtime</span><span class="v">0.31 → 0.24 s</span></div>
+      </div>
+      <div class="hint2" style="margin-top:auto">The gutter shows where the run went: line bars are duration, the orange bar is the cursor. Hover any name for a peek.</div>
+    </div>
+    <div class="foot">state is line-scoped · rewind with ← →</div>
+  </aside>
+
+  <section class="console">
+    <div class="chead"><span class="ct on">console</span><span class="ct">messages</span><span class="sp"></span><span class="k2">2 lasso actions · 1 undo</span></div>
+    <div class="lines">
+      <div class="cmd">sel = A(A &gt; 0.42);  <span class="dim">← inserted from the chart lasso · 1 284 cells</span></div>
+      <div class="cmd">surf(X, Y, A, "edgecolor", "none");  <span class="dim">→ chart · 24.1 ms</span></div>
+      <div class="dim">run-07 finished · 2.40 s · 500 steps · 0 errors</div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { heatmap, spark, surface } from "./chart.js";
+heatmap(document.getElementById("peekHeat"));
+spark(document.getElementById("selDots"), { phase: 1.1, color: "#7ad151", width: 1 });
+
+document.querySelectorAll("[data-heat]").forEach((el) => {
+  const cv = document.createElement("canvas");
+  el.replaceWith(cv);
+  cv.width = 26; cv.height = 11;
+  const ctx = cv.getContext("2d");
+  for (let i = 0; i < 26; i++) for (let j = 0; j < 11; j++) {
+    const v = (Math.sin(i * 0.5) * Math.cos(j * 0.5) + 1) / 2;
+    ctx.fillStyle = `hsl(${250 - v * 190}, ${60 + v * 20}%, ${20 + v * 45}%)`;
+    ctx.fillRect(i, j, 1, 1);
+  }
+});
+document.querySelectorAll("[data-spark]").forEach((el) => {
+  const cv = document.createElement("canvas");
+  el.replaceWith(cv);
+  cv.width = 26; cv.height = 11;
+  const ctx = cv.getContext("2d");
+  ctx.strokeStyle = "#ff5a1f"; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < 26; i++) {
+    const y = 5.5 - Math.sin(i * 0.6) * 3.5;
+    i ? ctx.lineTo(i, y) : ctx.moveTo(i, y);
+  }
+  ctx.stroke();
+});
+document.querySelectorAll("[data-dots]").forEach((el) => {
+  const cv = document.createElement("canvas");
+  el.replaceWith(cv);
+  cv.width = 26; cv.height = 11;
+  const ctx = cv.getContext("2d");
+  ctx.fillStyle = "rgba(122,209,81,.9)";
+  for (let i = 0; i < 26; i++) ctx.fillRect(i, (i * 7) % 11, 1, 1);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<title>Squero Studio Octave — Variables</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .pgrid { display:grid; grid-template-columns:repeat(6,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:3px; overflow:hidden; }
+  .pgrid span { background:var(--raised); color:var(--text); font:400 9px var(--font-mono); padding:3px 4px; text-align:right; }
+</style>
+</head>
+<body>
+<div class="app f">
+  <header class="topbar">
+    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">OCT</span></div>
+    <div class="proj"><span class="dot"></span>surface.m</div>
+    <div class="status"><span class="pip"></span>octave 10.3 · run-07 2.40 s</div>
+    <div class="keys">
+      <button class="key run">▶ Run</button>
+      <button class="key">Console <span class="tag">1</span></button>
+      <button class="key small">☾</button>
+    </div>
+  </header>
+
+  <aside class="panel">
+    <div class="head"><b>files</b><span class="sp"></span><button class="plain tag">+</button></div>
+    <div style="padding:8px 0;">
+      <div class="file"><span class="ico">◇</span>lorenz.m<span class="k">m</span></div>
+      <div class="file on"><span class="ico">◇</span>surface.m<span class="k">m</span></div>
+      <div class="file"><span class="ico">◇</span>selection.m<span class="k">m</span></div>
+      <div class="file"><span class="ico">◇</span>chladni.m<span class="k">m</span></div>
+      <div class="file" style="margin-top:6px"><span class="ico">▾</span>data<span class="k">/</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-07.mat<span class="k">mat</span></div>
+    </div>
+    <div class="foot">4 files · 1 data set</div>
+  </aside>
+
+  <section class="panel listpane">
+    <div class="head"><b>workspace</b><span class="sp"></span><span class="tag">whos</span><button class="plain tag">+</button></div>
+    <div class="listtabs">
+      <span class="srch">⌕ filter name, shape, type…</span>
+      <span class="tag">[ type ]</span><span class="tag">size</span><span class="tag">recent</span>
+      <span class="tag" style="margin-left:auto">6</span>
+    </div>
+    <div class="vrow h"><span>variable</span><span>shape</span><span>type</span><span>preview</span><span>tied to</span><span>changed</span></div>
+
+    <div class="vrow on">
+      <span class="nm"><span class="chg2"></span>A <i>· peaks</i></span>
+      <span class="sh2">512 × 512</span><span class="sh2">double</span>
+      <span class="pv"><canvas data-k="heat"></canvas></span>
+      <span><span class="chip2 sig">z</span></span><span class="sh2">2 s ago</span>
+    </div>
+    <div class="vrow">
+      <span class="nm"><span class="chg2"></span>sel <i>· logical</i></span>
+      <span class="sh2">1 × 1284</span><span class="sh2">logical</span>
+      <span class="pv"><canvas data-k="dots"></canvas></span>
+      <span><span class="chip2 sig">color</span></span><span class="sh2">2 s ago</span>
+    </div>
+    <div class="vrow">
+      <span class="nm">x</span><span class="sh2">1 × 512</span><span class="sh2">double</span>
+      <span class="pv"><canvas data-k="spark1"></canvas></span><span class="sh2">—</span><span class="sh2">1 m ago</span>
+    </div>
+    <div class="vrow">
+      <span class="nm">y</span><span class="sh2">1 × 512</span><span class="sh2">double</span>
+      <span class="pv"><canvas data-k="spark2"></canvas></span><span class="sh2">—</span><span class="sh2">1 m ago</span>
+    </div>
+    <div class="vrow">
+      <span class="nm"><span class="chg2"></span>z</span><span class="sh2">1 × 500</span><span class="sh2">double</span>
+      <span class="pv"><canvas data-k="spark3"></canvas></span>
+      <span><span class="chip2 sig">y</span></span><span class="sh2">2 s ago</span>
+    </div>
+    <div class="vrow">
+      <span class="nm">k</span><span class="sh2">1 × 1</span><span class="sh2">double</span>
+      <span class="pv" style="display:grid;place-items:center;font:500 12px var(--font-mono)">0.42</span><span class="sh2">—</span><span class="sh2">1 m ago</span>
+    </div>
+    <div class="vrow">
+      <span class="nm">ghost</span><span class="sh2">512 × 512</span><span class="sh2">double</span>
+      <span class="pv"><canvas data-k="ghost"></canvas></span>
+      <span><span class="chip2">ghost</span></span><span class="sh2">4 m ago</span>
+    </div>
+    <div class="foot">6 variables · 38.4 MB · new at line 8: <span style="color:var(--signal-text)">sel</span></div>
+  </section>
+
+  <aside class="panel lens">
+    <div class="head"><b>A</b><span class="tag">512 × 512 · double</span><span class="sp"></span><button class="plain tag">Pin</button><button class="plain tag">Tie</button><button class="plain tag">Edit</button></div>
+    <div class="body">
+      <div style="display:flex;gap:6px;align-items:center"><span class="chip2">rows 1:512</span><span class="chip2">cols 1:512</span><span class="chip2">stride 1</span><span class="tag" style="margin-left:auto">row 128 · col 64 · 0.421</span></div>
+      <canvas class="big" id="lensHeat"></canvas>
+      <div class="row2">
+        <div><div class="lbl" style="margin-bottom:3px">row 128</div><canvas id="profR"></canvas></div>
+        <div><div class="lbl" style="margin-bottom:3px">column 64</div><canvas id="profC"></canvas></div>
+      </div>
+      <div class="stats2">
+        <div class="stat2"><b>−0.184</b><span>min</span></div>
+        <div class="stat2"><b>1.000</b><span>max</span></div>
+        <div class="stat2"><b>0.227</b><span>mean</span></div>
+        <div class="stat2"><b>0.201</b><span>std</span></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px"><span class="lbl">histogram · 64 bins</span><span class="tag" style="margin-left:auto">nnz 262 144 · symmetric</span></div>
+      <canvas id="hist" style="display:block;width:100%;height:52px;border:1px solid var(--line);border-radius:3px;background:var(--raised)"></canvas>
+      <div style="display:flex;align-items:center;gap:8px"><span class="lbl">cells around <span class="mono">A(128,64)</span></span><span class="tag" style="margin-left:auto">edit in place · ↵ commit · esc cancel</span></div>
+      <div class="pgrid">
+        <span>0.318</span><span>0.377</span><span>0.412</span><span>0.398</span><span>0.341</span><span>0.277</span>
+        <span>0.352</span><span>0.409</span><span>0.433</span><span>0.421</span><span>0.366</span><span>0.291</span>
+        <span>0.331</span><span>0.388</span><span>0.421</span><span>0.402</span><span>0.347</span><span>0.282</span>
+        <span>0.294</span><span>0.351</span><span>0.394</span><span>0.381</span><span>0.318</span><span>0.255</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="chip2">A(128,64)</span>
+        <input value="0.421" style="width:92px;height:26px;padding:0 8px;border:0;border-radius:3px;background:var(--well);box-shadow:inset 0 1px 2px rgb(0 0 0 / .12);font:400 11px var(--font-mono);color:var(--text)" />
+        <button class="key small">Set</button>
+        <span class="tag" style="margin-left:auto">live · tied to surface.z</span>
+      </div>
+    </div>
+    <div class="foot">double · 2.0 MB · dense · no NaN</div>
+  </aside>
+
+  <section class="panel tieboard">
+    <div class="th2"><b>tie board</b><span class="tag">4 bindings · drag a ring to rebind</span><span class="sp" style="flex:1"></span><span class="tag">solid = live · dashed = ghost</span></div>
+    <div style="display:flex;gap:22px;flex:1;min-height:0">
+      <div class="grid2">
+        <div class="tie"><span class="chip2 sig">A</span><span class="wire"></span><span class="end">surface · z</span></div>
+        <div class="tie"><span class="chip2 sig">sel</span><span class="wire"></span><span class="end">scatter · color</span></div>
+        <div class="tie"><span class="chip2 sig">z</span><span class="wire"></span><span class="end">line · y</span></div>
+        <div class="tie"><span class="chip2">ghost</span><span class="wire ghost"></span><span class="end">surface · ghost</span></div>
+      </div>
+      <div style="width:236px;display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;align-items:baseline;gap:6px"><span class="lbl">A(128,64) over runs</span><span class="tag" style="margin-left:auto">0.421</span></div>
+        <canvas id="histRuns" style="display:block;width:100%;height:52px;border:1px solid var(--line);border-radius:3px;background:var(--raised)"></canvas>
+        <div class="tag">run-03 … run-07 · +0.012 across 4 runs</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { heatmap, spark, surface } from "./chart.js";
+
+heatmap(document.getElementById("lensHeat"), { cell: { i: 20, j: 38 } });
+spark(document.getElementById("profR"), { phase: 0.4, color: "#ff5a1f", width: 1.3 });
+spark(document.getElementById("profC"), { phase: 2.1, color: "#7a7a73", width: 1.1 });
+
+const hist = document.getElementById("hist");
+{
+  const w = hist.clientWidth, h = hist.clientHeight;
+  hist.width = w * 2; hist.height = h * 2;
+  const ctx = hist.getContext("2d"); ctx.scale(2, 2);
+  const bars = 52;
+  for (let i = 0; i < bars; i++) {
+    const x = i / bars;
+    const v = Math.exp(-Math.pow((x - 0.42) / 0.16, 2)) * 0.9 + 0.05;
+    const bw = w / bars;
+    ctx.fillStyle = i > 28 && i < 34 ? "#ff5a1f" : "rgba(22,22,22,0.28)";
+    ctx.fillRect(i * bw + 0.5, h - v * (h - 8), bw - 1, v * (h - 8));
+  }
+}
+
+const histRuns = document.getElementById("histRuns");
+{
+  const w = histRuns.clientWidth, h = histRuns.clientHeight;
+  histRuns.width = w * 2; histRuns.height = h * 2;
+  const ctx = histRuns.getContext("2d"); ctx.scale(2, 2);
+  ctx.strokeStyle = "rgba(255,90,31,.9)"; ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  const vals = [0.401, 0.409, 0.404, 0.418, 0.421];
+  vals.forEach((v, i) => {
+    const x = 10 + i * ((w - 20) / (vals.length - 1));
+    const y = h - 8 - (v - 0.39) / 0.04 * (h - 16);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.stroke();
+  vals.forEach((v, i) => {
+    const x = 10 + i * ((w - 20) / (vals.length - 1));
+    const y = h - 8 - (v - 0.39) / 0.04 * (h - 16);
+    ctx.fillStyle = i === vals.length - 1 ? "#ff5a1f" : "rgba(255,255,255,.5)";
+    ctx.beginPath(); ctx.arc(x, y, i === vals.length - 1 ? 2.4 : 1.6, 0, Math.PI * 2); ctx.fill();
+  });
+}
+
+document.querySelectorAll(".vrow .pv canvas").forEach((cv) => {
+  const k = cv.dataset.k;
+  if (k === "heat") heatmap(cv);
+  else if (k === "dots") {
+    const w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = w * 2; cv.height = h * 2;
+    const ctx = cv.getContext("2d"); ctx.scale(2, 2);
+    ctx.fillStyle = "rgba(255,90,31,.85)";
+    for (let i = 0; i < 160; i++) {
+      const x = (Math.sin(i * 12.9898) * 43758.5453 % 1 + 1) % 1 * w;
+      const y = (Math.sin(i * 78.233) * 12345.678 % 1 + 1) % 1 * h;
+      ctx.fillRect(x, y, 1.2, 1.2);
+    }
+  } else if (k === "ghost") {
+    const w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = w * 2; cv.height = h * 2;
+    const ctx = cv.getContext("2d"); ctx.scale(2, 2);
+    ctx.strokeStyle = "rgba(22,22,22,.38)"; ctx.lineWidth = 0.7;
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 2) {
+        const y = h / 2 + Math.sin(x * 0.18 + i * 0.8) * 6;
+        x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+  } else spark(cv, { phase: k === "spark1" ? 0 : k === "spark2" ? 1.8 : 3.4, color: "#ff5a1f" });
+});
+</script>
+</body>
+</html>

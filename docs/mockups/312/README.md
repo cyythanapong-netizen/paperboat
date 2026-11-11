@@ -1,44 +1,50 @@
-# pb#312 — Squero Studio Octave, 3D chart mockups
+# pb#312 — Squero Studio Octave mockups
 
-Three design studies for the 3D chart surface in `squero-studio-octave`. They use the real
-tokens from `@paperboat/shared/src/tokens.css` and the flat-mono shell of `squero-studio-om`,
-not a MATLAB/Octave clone. Each screen is a self-contained HTML page with a canvas height
-field (`chart.js`), rendered to JPEG with Playwright at 1600×1000, 1.5×.
+Six design studies for `squero-studio-octave`. They use the real tokens from
+`@paperboat/shared/src/tokens.css` and the flat-mono shell of `squero-studio-om`, not a
+MATLAB/Octave clone. Each screen is a self-contained HTML page with a canvas height field
+(`chart.js`), rendered to JPEG with Playwright at 1600×1000, 1.5×.
+
+## Chart studies
 
 | File | Screen | Idea |
 | --- | --- | --- |
-| `a-bench.jpg` | **Bench** | Workspace-first: variables as live cards, tie a card to a chart axis, scratch line previews its answer before Enter, linked cursor slices. |
-| `b-split.jpg` | **Split** | Script-first: inline answer gutter on every assignment, a chart lasso writes a line back into the `.m`, pinned views above the chart. |
-| `c-board.jpg` | **Board** | Run-first: 3D chart plus heat, scatter and line as Board instruments, a scrubbable story ribbon, camera keys and ghost compare. |
+| `a-bench.jpg` | **Bench** | Workspace-first: variables as live cards, tie a card to a chart axis, scratch line previews its answer, linked cursor slices. |
+| `b-split.jpg` | **Split** | Script-first: inline answer gutter, a chart lasso writes a line back into the `.m`, pinned views above the chart. |
+| `c-board.jpg` | **Board** | Run-first: 3D chart plus heat, scatter and line as Board instruments, a story ribbon, camera keys and ghost compare. |
+
+## App surfaces
+
+| File | Screen | Idea |
+| --- | --- | --- |
+| `d-start.jpg` | **Start** | The app itself: resume cards that restore a session, attach-to-backend panel, recent backends, and a large "pick up where you left off" preview. |
+| `e-editor.jpg` | **Editor** | The script surface: per-line run ribbon, collapsible cell cards with costs, inline answer chips, hover peek, and a line-scoped workspace snapshot. |
+| `f-variables.jpg` | **Variables** | The panel and lens: grouped list with live previews, a matrix lens (heatmap, profiles, histogram, stats, cell edit), and a tie board of variable → chart bindings. |
 
 ## The UX ideas
 
-1. **Variable cards, not a table.** Each workspace variable is a card with its shape, type and
-   a live glyph: a heatmap for a matrix, a sparkline for a vector, a dot for a scalar. Hovering
-   gives the value; no separate variable editor.
-2. **Tie, don't configure.** A card's ring handle drags onto a chart axis or a port. The tie is
-   a wire in the ecosystem's own language, and the chart says `A tied to z`; rebinding is a
-   drag, not a dialog.
-3. **Scratch with a preview.** The scratch line evaluates as you type and shows the shape and a
-   micro-preview of the result before Enter. `↵ show` pins it; `⇥ send to chart` binds it.
-4. **Inline answer gutter.** Every assignment in the editor shows a right-edge chip with its
-   shape and a tiny preview. The script is the workspace; no context switch to `whos`.
-5. **Lasso → variable.** Lasso a region on the surface or a cluster in scatter, and the app
-   proposes the line that produces that selection (`sel = A(A > 0.42)`), with `Insert line` and
-   `New chart`. The chart becomes an input to the script.
-6. **Time curtain + linked slice.** A vertical plane at the current run time cuts the surface;
-   the intersection is drawn in signal orange and mirrored as a 2D profile in the inspector.
-   Dragging the plane scrubs the run.
-7. **Pinned views (plot shelf).** A pin stores the camera, the curtain and the visible series,
-   not just a screenshot. Flip between `iso`, `top` and `sel` like a storyboard; `+ pin view`
-   adds one.
-8. **Ghost compare.** A previous run is a translucent wireframe behind the current surface, with
-   a delta readout. Toggle it from the tile header, not a global menu.
-9. **Charts as Board instruments.** The 3D chart is a tile on the Board: drag, resize, tab,
-   section, like every other Paperboat instrument. No floating figure windows.
-10. **Camera keys and stories.** Saved viewpoints sit next to the grid; the ribbon marks
-    `start`, `fold`, `pin` and jumps the run when clicked. Same scrubber language as the
-    MultiBody viewport in Squero Studio OM.
+1. **Variable cards, not a table.** Each variable carries its shape, type and a live glyph.
+2. **Tie, don't configure.** Drag a card's ring onto an axis or port; rebinding is a gesture.
+3. **Scratch with a preview.** Evaluate while typing; `↵ show` pins, `⇥ send to chart` binds.
+4. **Inline answer gutter.** Every assignment shows its shape and a micro-preview.
+5. **Lasso → variable.** A selection on the chart proposes the `.m` line that produces it.
+6. **Time curtain + linked slice.** A vertical plane at the run time cuts the surface; its
+   profile mirrors in the inspector.
+7. **Pinned views.** A pin stores camera, curtain and series, not a screenshot.
+8. **Ghost compare.** The previous run is a translucent wireframe with a delta readout.
+9. **Charts as Board instruments.** Drag, resize, tab and section like every other Paperboat
+   instrument; no floating figure windows.
+10. **Camera keys and stories.** Saved viewpoints and run markers in one scrubber.
+11. **Resume cards.** The start screen restores files, workspace, views and time — a session,
+    not a recent-files list.
+12. **Run ribbon.** The editor gutter shows where the run went: bar length is duration, orange
+    is the cursor, a dot marks changed lines.
+13. **Peek any name.** Hovering an identifier shows shape, value and a micro-preview in place.
+14. **Line-scoped snapshot.** The workspace as of the cursor line, with a diff against the
+    previous run.
+15. **Lens, not a spreadsheet.** A matrix gets a heatmap, row/column profiles, a histogram,
+    stats and in-place cell editing.
+16. **Tie board.** A patch bay of variable → chart bindings, solid for live and dashed for ghost.
 
 ## Regenerate
 
