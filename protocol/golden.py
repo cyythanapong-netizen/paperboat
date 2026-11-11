@@ -53,6 +53,22 @@ def run(example: Path, expected: dict) -> list[str]:
         env = dict(os.environ)
         if (ROOT / "python" / "paperboat").is_dir():
             env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(ROOT / "python"), os.environ.get("PYTHONPATH")]))
+    elif target.endswith(".jl"):
+        # A Julia backend is served by Paperboat.jl; run it in its own depot and project.
+        julia = os.environ.get("PAPERBOAT_JULIA", "julia")
+        env = dict(os.environ)
+        env.setdefault("JULIA_DEPOT_PATH", str(example / ".julia"))
+        env.setdefault("JULIA_LOAD_PATH", "@:@stdlib")
+        env.setdefault("JULIA_NUM_THREADS", "1")
+        if "PAPERBOAT_HOST_LIB" not in env:
+            for name in ("libpaperboat_host.so", "libpaperboat_host.dylib", "paperboat_host.dll"):
+                host = ROOT / "engine" / "build" / "host" / name
+                if host.is_file():
+                    env["PAPERBOAT_HOST_LIB"] = str(host)
+                    break
+        cmd = [julia, "--startup-file=no", "--project=" + str(example), str(example / target), "--run"]
+        if "duration" in expected:
+            cmd += ["--duration", str(expected["duration"])]
     else:
         if os.name == "nt" and not Path(target).suffix:  # a C++ backend's run names it without .exe
             target += ".exe"

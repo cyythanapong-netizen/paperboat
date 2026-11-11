@@ -1,0 +1,18 @@
+name = "Paperboat"
+uuid = "6b1a5e90-6f3e-4b5e-9f3d-2a1c7d4b8e21"
+authors = ["PaperboatLab"]
+version = "0.1.0"
+
+[deps]
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
+
+[compat]
+JSON3 = "1"
+julia = "1.11"

@@ -2,13 +2,14 @@ Paperboat Documentation
 =======================
 
 Paperboat is an interactive framework for engineering systems, simulations, and data
-pipelines. Connect it to a **backend** (in C++ or Python) and it becomes an application for
+pipelines. Connect it to a **backend** (in C++, Python or Julia) and it becomes an application for
 that backend's domain across four pages: the **Station** (physical scene & equipment), the
 **Flow** (computation & signal graph), the **Board** (live instruments & telemetry), and the
 **Console** (event logs & diagnostics).
 
-The engine is C++. A backend is a small program on the engine's SDK, in C++ or in Python
-through the bindings; it adds only what its domain has and the toolkit doesn't.
+The engine is C++. A backend is a small program on the engine's SDK, in C++, in Python
+through the bindings, or in Julia through `Paperboat.jl`; it adds only what its domain has
+and the toolkit doesn't.
 
 .. toctree::
    :maxdepth: 2
@@ -38,6 +39,7 @@ through the bindings; it adds only what its domain has and the toolkit doesn't.
 
    cpp
    python
+   julia
    toolkit
    protocol
 

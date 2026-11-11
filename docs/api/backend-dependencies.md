@@ -45,8 +45,9 @@ paperboat deps install my-backend
 `JULIA_NUM_THREADS=1`. The host `~/.julia` and `@v1.11` environment are not used. `paperboat check`
 fails when `Project.toml` exists without `Manifest.toml`.
 
-The Julia backend host (C ABI pump, `Paperboat.jl` blocks) is tracked in pb#323; until it lands,
-`paperboat run` reports that the host is not built yet. `deps install` is ready for it.
+`paperboat run` starts `julia --startup-file=no --project=<backend> server.jl` with the same
+environment; `paperboat check` and `pack` work for a Julia backend. See
+`docs/api/julia.rst` for the block API and the host pump.
 
 ## C++
 

@@ -2,11 +2,17 @@
 // manage the web application, orchestrate examples, and install/browse toolkits.
 
 #ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
 #include <process.h>  // _spawnvp
 #else
-#include <unistd.h>  // execvp
+#include <fcntl.h>
+#include <unistd.h>  // execvp, dup2
 #endif
 #include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -33,6 +39,7 @@
 #include "paperboat/toolkit/opencv.hpp"
 #endif
 #ifdef PAPERBOAT_HAS_OPTIMIZATION
+#include "paperboat/toolkit/expression.hpp"
 #include "paperboat/toolkit/optimization.hpp"
 #endif
 #ifdef PAPERBOAT_HAS_CONTROL
@@ -105,11 +112,12 @@ Start and stop (the web app, backends and programs):
   run [path | pkg.ppk]       Start a backend (the same options as start)
 
 Backends:
-  new <name> [--cpp | --python] [--dir <path>]
+  new <name> [--cpp | --python | --julia] [--dir <path>]
                              Scaffold a new backend in ./<name> (or --dir) that passes `check` as it is:
-                             a block, a starter graph and its expected.json. C++ by default.
+                             a block, a starter graph and its expected.json. C++ by default;
+                             a Julia one needs `paperboat deps install` first.
   backends [--json]          List the backends you can run (examples, installed)
-  build [path] [--clean]     Compile a C++ backend (a Python one has nothing to compile)
+  build [path] [--clean]     Compile a C++ backend (Python and Julia ones have nothing to compile)
   rebuild [path]             Clean and compile a C++ backend (build --clean)
   open <file.ppj> [--run] [--port <N>] [--no-build] [--record <dir>]
                              Open a saved project file with its backend (--run: headless);
@@ -143,7 +151,16 @@ Verification & Packaging:
   unpack <pkg> [--dir <dir>] [--json-stream]
                              Unpack and verify .ppk archive
                              --json-stream prints one JSON event per line as work goes
-
+)";
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+  std::cout << R"(
+Optimization:
+  optimize <problem.json> [--json] [--grid <N>]
+                             Solve a fmincon-shaped problem (LP, QP or NLP) with the optimization
+                             toolkit; --grid adds a 2-variable preview of the objective
+)";
+#endif
+  std::cout << R"(
 Updating:
   update [--check] [--no-build]
                              Pull this repository (fast-forward only), rebuild the engine and console
@@ -301,6 +318,258 @@ int cmd_deps(const std::vector<std::string_view>& args) {
   return 1;
 }
 
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+// The solvers print through both std::cout (the toolkit) and C stdio (Ipopt, MUMPS). Catch the
+// process's stdout file descriptor while a solve runs, so `--json` prints exactly one object
+// and the trace can travel with the result.
+class StdoutCapture {
+ public:
+  StdoutCapture() {
+    static std::atomic<int> serial{0};
+    path_ = fs::temp_directory_path() /
+            ("pb_trace_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "_" +
+             std::to_string(serial.fetch_add(1)) + ".log");
+  }
+
+  bool begin() {
+    flush();
+#ifdef _WIN32
+    saved_ = _dup(_fileno(stdout));
+    file_ = _open(path_.string().c_str(), _O_CREAT | _O_TRUNC | _O_WRONLY | _O_BINARY, _S_IREAD | _S_IWRITE);
+    if (saved_ < 0 || file_ < 0) return false;
+    return _dup2(file_, _fileno(stdout)) == 0;
+#else
+    saved_ = dup(STDOUT_FILENO);
+    file_ = open(path_.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0600);
+    if (saved_ < 0 || file_ < 0) return false;
+    return dup2(file_, STDOUT_FILENO) >= 0;
+#endif
+  }
+
+  std::string end() {
+    flush();
+    if (saved_ >= 0) {
+#ifdef _WIN32
+      _dup2(saved_, _fileno(stdout));
+      _close(saved_);
+      if (file_ >= 0) _close(file_);
+#else
+      dup2(saved_, STDOUT_FILENO);
+      close(saved_);
+      if (file_ >= 0) close(file_);
+#endif
+    }
+    saved_ = -1;
+    file_ = -1;
+    std::ifstream in(path_);
+    std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    std::error_code ec;
+    fs::remove(path_, ec);
+    return text;
+  }
+
+ private:
+  static void flush() {
+    std::cout.flush();
+    std::cerr.flush();
+    std::fflush(nullptr);
+  }
+
+  fs::path path_;
+  int saved_ = -1;
+  int file_ = -1;
+};
+
+// `paperboat optimize <problem.json> [--json]`: one fmincon-shaped problem through the
+// optimization toolkit, the same reader and solver the `lp`, `qp` and `nlp` blocks use.
+int cmd_optimize(const std::vector<std::string_view>& args) {
+  std::string path;
+  bool json_out = false;
+  int grid_points = 0;
+  for (std::size_t i = 0; i < args.size(); ++i) {
+    const auto arg = args[i];
+    if (arg == "--json") {
+      json_out = true;
+    } else if (arg == "--grid" && i + 1 < args.size()) {
+      grid_points = std::atoi(std::string(args[++i]).c_str());
+    } else if (!arg.starts_with("-") && path.empty()) {
+      path = std::string(arg);
+    } else {
+      std::cerr << "error: usage: paperboat optimize <problem.json> [--json] [--grid N]\n";
+      return 2;
+    }
+  }
+  if (path.empty()) {
+    std::cerr << "error: usage: paperboat optimize <problem.json> [--json] [--grid N]\n";
+    return 2;
+  }
+
+  std::ifstream file(path);
+  if (!file) {
+    std::cerr << "error: cannot read " << path << "\n";
+    return 1;
+  }
+  const std::string text((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+
+  nlohmann::json doc;
+  try {
+    doc = nlohmann::json::parse(text);
+  } catch (const std::exception& e) {
+    std::cerr << "error: " << path << " is not JSON: " << e.what() << "\n";
+    return 1;
+  }
+
+  const bool nonlinear = doc.contains("fun");
+  const bool quadratic = !nonlinear && doc.contains("H") && !doc["H"].is_null();
+  const std::string kind = nonlinear ? "nlp" : quadratic ? "qp" : "lp";
+
+  tk::optimization::Options options;
+  if (doc.contains("options") && doc["options"].is_object()) {
+    const auto& opts = doc["options"];
+    if (opts.contains("display") && opts["display"].is_string()) {
+      options.display = opts["display"].get<std::string>();
+    }
+    if (opts.contains("tol") && opts["tol"].is_number()) {
+      options.eps_abs = opts["tol"].get<double>();
+      options.eps_rel = opts["tol"].get<double>();
+    }
+    if (opts.contains("max_iter") && opts["max_iter"].is_number_integer()) {
+      options.max_iter = opts["max_iter"].get<int>();
+    }
+  }
+
+  // The readers take a file; hand them the text the app already has.
+  const fs::path temp = fs::temp_directory_path() /
+                        ("pb_optimize_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".json");
+  {
+    std::ofstream out(temp);
+    out << text;
+  }
+
+  StdoutCapture capture;
+  capture.begin();
+  tk::optimization::Result result;
+  std::string error;
+  std::optional<tk::optimization::NlpProblem> nlp_problem;
+  try {
+    if (nonlinear) {
+      if (!tk::optimization::has_nlp()) {
+        error = "the NLP solver needs Ipopt; build Paperboat with the Ipopt toolkit";
+      } else {
+        nlp_problem = tk::optimization::read_nlp_problem(temp.string());
+        tk::optimization::NlpWorkspace workspace(options);
+        result = workspace.solve(temp.string());
+      }
+    } else {
+      tk::optimization::Workspace workspace(options);
+      result = workspace.solve(temp.string(), quadratic);
+    }
+  } catch (const std::exception& e) {
+    error = e.what();
+  }
+  const std::string trace = capture.end();
+  std::error_code ec;
+  fs::remove(temp, ec);
+
+  std::vector<std::string> lines;
+  {
+    std::istringstream reader(trace);
+    for (std::string line; std::getline(reader, line);) {
+      if (!line.empty()) lines.push_back(line);
+    }
+  }
+
+  nlohmann::json out;
+  out["ok"] = error.empty();
+  out["kind"] = kind;
+  out["status"] = result.status;
+  out["objective"] = result.objective;
+  out["iterations"] = result.iterations;
+  out["x"] = result.x;
+  out["trace"] = lines;
+  if (!error.empty()) out["error"] = error;
+
+  // A 2-variable preview of the objective on a grid, so the app can draw the surface without
+  // a second expression parser. It is the same reader and evaluation the solver uses.
+  const std::size_t count = result.x.empty() ? 0 : result.x.size();
+  if (grid_points >= 2 && count == 2 && error.empty()) {
+    const auto bound = [&](const char* key, std::size_t index, double fallback) {
+      if (!doc.contains(key) || !doc[key].is_array()) return fallback;
+      const auto& values = doc[key];
+      if (index >= values.size() || !values[index].is_number()) return fallback;
+      return values[index].get<double>();
+    };
+    std::vector<double> lo(2), hi(2);
+    for (std::size_t i = 0; i < 2; ++i) {
+      const double span = std::max(1.0, std::abs(result.x[i]));
+      lo[i] = bound("lb", i, result.x[i] - span);
+      hi[i] = bound("ub", i, result.x[i] + span);
+      if (!(hi[i] > lo[i])) {
+        lo[i] = result.x[i] - span;
+        hi[i] = result.x[i] + span;
+      }
+    }
+
+    std::unique_ptr<tk::Expression> nlp_expression;
+    if (nonlinear) {
+      nlp_expression = std::make_unique<tk::Expression>(nlp_problem->objective,
+                                                        std::vector<std::string>{"x1", "x2"});
+    }
+
+    const auto value_at = [&](const std::vector<double>& at) {
+      if (nlp_expression) return (*nlp_expression)(at);
+      double value = 0.0;
+      if (quadratic) {
+        const auto& H = doc["H"];
+        for (std::size_t i = 0; i < 2; ++i) {
+          for (std::size_t j = 0; j < 2; ++j) {
+            if (H[i][j].is_number()) value += 0.5 * H[i][j].get<double>() * at[i] * at[j];
+          }
+        }
+      }
+      if (doc.contains("f") && doc["f"].is_array()) {
+        const auto& f = doc["f"];
+        for (std::size_t i = 0; i < 2 && i < f.size(); ++i) {
+          if (f[i].is_number()) value += f[i].get<double>() * at[i];
+        }
+      }
+      return value;
+    };
+
+    nlohmann::json gx = nlohmann::json::array();
+    nlohmann::json gy = nlohmann::json::array();
+    for (int i = 0; i < grid_points; ++i) {
+      const double u = static_cast<double>(i) / static_cast<double>(grid_points - 1);
+      gx.push_back(lo[0] + u * (hi[0] - lo[0]));
+      gy.push_back(lo[1] + u * (hi[1] - lo[1]));
+    }
+    nlohmann::json gz = nlohmann::json::array();
+    for (int row = 0; row < grid_points; ++row) {
+      nlohmann::json zrow = nlohmann::json::array();
+      for (int col = 0; col < grid_points; ++col) {
+        zrow.push_back(value_at({gx[col].get<double>(), gy[row].get<double>()}));
+      }
+      gz.push_back(zrow);
+    }
+    out["grid"] = {{"x", gx}, {"y", gy}, {"z", gz}};
+  }
+
+  if (json_out) {
+    std::cout << out.dump() << '\n';
+  } else {
+    for (const auto& line : lines) std::cout << line << '\n';
+    if (!error.empty()) {
+      std::cerr << "error: " << error << '\n';
+    } else {
+      std::cout << "  " << kind << " · " << result.status << " · objective " << result.objective << " · x = [";
+      for (std::size_t i = 0; i < result.x.size(); ++i) std::cout << (i ? ", " : "") << result.x[i];
+      std::cout << "]\n";
+    }
+  }
+  return error.empty() ? 0 : 1;
+}
+#endif
+
 int cmd_run(const std::vector<std::string_view>& args) {
   core::BackendRunOptions opts;
   std::string path;
@@ -309,6 +578,8 @@ int cmd_run(const std::vector<std::string_view>& args) {
     auto a = args[i];
     if (a == "--port" && i + 1 < args.size()) {
       opts.port = std::stoi(std::string(args[++i]));
+    } else if (a == "--run") {
+      opts.run = true;  // headless: the starter graph once, as `paperboat check` reads it
     } else if (a == "--no-build") {
       opts.build = false;
     } else if (a == "--clean") {
@@ -355,6 +626,8 @@ int cmd_open(const std::vector<std::string_view>& args) {
       run_headless = true;
     } else if (a == "--port" && i + 1 < args.size()) {
       port = std::stoi(std::string(args[++i]));
+    } else if (a == "--run") {
+      opts.run = true;  // headless: the starter graph once, as `paperboat check` reads it
     } else if (a == "--no-build") {
       opts.build = false;
     } else if (a == "--record") {
@@ -1485,13 +1758,17 @@ const std::vector<CommandSpec>& command_table() {
        "target"},
       {"restart", cmd_restart, "Restart the web app, or a backend or program", {}, {}, {"--port"}, "target"},
       {"run", cmd_run, "Build and run a backend (or .ppk) in the foreground", {}, {},
-       {"--port", "--no-build", "--clean", "--time", "--verbose", "--var", "--record"}, "backend"},
+       {"--port", "--run", "--no-build", "--clean", "--time", "--verbose", "--var", "--record"}, "backend"},
       {"open", cmd_open, "Open a saved project file (.ppj, .paperboat.json)", {}, {},
        {"--run", "--port", "--no-build", "--record"}, "project"},
-      {"new", paperboat::cli::cmd_new, "Scaffold a new backend that passes check (C++ or Python)", {}, {},
+      {"new", paperboat::cli::cmd_new, "Scaffold a new backend that passes check (C++, Python or Julia)", {}, {},
        {"--cpp", "--python", "--dir"}},
       {"deps", cmd_deps, "Create a backend's isolated environment and install its dependencies", {},
        {"install"}, {"--force"}, "backend"},
+#ifdef PAPERBOAT_HAS_OPTIMIZATION
+      {"optimize", cmd_optimize, "Solve a fmincon-shaped problem JSON (LP, QP or NLP)", {}, {},
+       {"--json", "--grid"}, "problem"},
+#endif
       {"build", cmd_build, "Compile a C++ backend", {}, {}, {"--clean"}, "backend"},
       {"rebuild", cmd_rebuild, "Clean and compile a C++ backend", {}, {}, {}, "backend"},
       {"backends", cmd_backends, "List the backends you can run", {}, {}, {"--json"}},

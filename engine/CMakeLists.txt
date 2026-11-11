@@ -124,8 +124,12 @@ if(PAPERBOAT_INSTALL)
           DESTINATION "${CMAKE_INSTALL_DOCDIR}/pocketfft" COMPONENT runtime)
 endif()
 
+# The host library is a shared object (Julia dlopens it), so the engine's archives it links
+# must be position independent; the Python module already builds them that way.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(toolkit)
 add_subdirectory(core)
+add_subdirectory(host)
 
 # Apple's libc++ up to the macOS 15 SDK (Xcode 16) still ships <stop_token> and std::jthread as
 # experimental, off unless _LIBCPP_ENABLE_EXPERIMENTAL is defined; from the macOS 26 SDK they are on.

@@ -103,6 +103,36 @@ std::vector<std::pair<std::string, std::string>> run_env(const BackendManifest& 
   return env;
 }
 
+// The Julia a backend runs with: $PAPERBOAT_JULIA, else `julia` on PATH.
+std::string julia_binary() {
+  if (const char* named = std::getenv("PAPERBOAT_JULIA"); named && *named) return named;
+  return "julia";
+}
+
+// Julia is isolated per backend: its own depot, project and load path (#322). The host
+// library is the checkout's build unless the caller names one.
+std::vector<std::pair<std::string, std::string>> julia_env(const fs::path& dir) {
+  std::vector<std::pair<std::string, std::string>> env;
+  env.emplace_back("JULIA_PROJECT", dir.string());
+  env.emplace_back("JULIA_DEPOT_PATH", (dir / ".julia").string());
+  env.emplace_back("JULIA_LOAD_PATH", "@:@stdlib");
+  env.emplace_back("JULIA_NUM_THREADS", "1");
+  if (!std::getenv("PAPERBOAT_HOST_LIB")) {
+    const fs::path root = toolkit::find_repo_root(dir);
+    for (const char* name : {"libpaperboat_host.so", "libpaperboat_host.dylib", "paperboat_host.dll"}) {
+      for (const fs::path& base : {root / "engine" / "build" / "host", root / "engine" / "build" / "bundle-install" / "lib"}) {
+        if (base.empty()) continue;
+        const fs::path candidate = base / name;
+        if (fs::is_regular_file(candidate)) {
+          env.emplace_back("PAPERBOAT_HOST_LIB", candidate.string());
+          return env;
+        }
+      }
+    }
+  }
+  return env;
+}
+
 // The installed SDK next to this binary: <prefix>/bin/paperboat, <prefix>/lib*/cmake/Paperboat (pb#177).
 fs::path sdk_dir() {
   const fs::path exe = platform::exe_path();
@@ -1064,8 +1094,26 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     std::cout << "paperboat running " << bin.filename().string() << " on " << ws_url(port) << std::endl;
     return ProcessRunner::run_stream(args, dir, run_env(manifest, opts), log_cb);
   } else if (kind == BackendKind::Julia) {
-    std::cerr << "error: the Julia backend host is not built yet (pb#323); `paperboat deps install` prepared its environment\n";
-    return 1;
+    fs::path server = dir / "server.jl";
+    if (manifest.has_manifest && !manifest.run.empty() && fs::is_regular_file(dir / manifest.run)) {
+      server = dir / manifest.run;
+    } else if (!fs::is_regular_file(server)) {
+      std::cerr << "error: server.jl not found in " << dir << '\n';
+      return 1;
+    }
+    std::vector<std::string> args = {julia_binary(), "--startup-file=no", "--project=" + dir.string(),
+                                     server.filename().string(), "--port", std::to_string(port)};
+    if (opts.run) args.emplace_back("--run");
+    if (!opts.project_file.empty()) {
+      args.emplace_back("--project");
+      args.emplace_back(opts.project_file);
+    }
+    append_vars(args, opts);
+
+    std::vector<std::pair<std::string, std::string>> env = julia_env(dir);
+    for (auto& entry : run_env(manifest, opts)) env.push_back(std::move(entry));
+    std::cout << "paperboat running server.jl on " << ws_url(port) << std::endl;
+    return ProcessRunner::run_stream(args, dir, env, log_cb);
   } else {
     // Python backend
     const fs::path repo_root = toolkit::find_repo_root(dir);
@@ -1577,8 +1625,8 @@ BackendManifest BackendManager::load_manifest(const fs::path& backend_dir, std::
       if (error_msg) *error_msg = "backend.toml: missing required field 'name'";
       return m;
     }
-    if (m.language != "cpp" && m.language != "python") {
-      if (error_msg) *error_msg = "backend.toml: invalid or missing 'language' (must be 'cpp' or 'python')";
+    if (m.language != "cpp" && m.language != "python" && m.language != "julia") {
+      if (error_msg) *error_msg = "backend.toml: invalid or missing 'language' (must be 'cpp', 'python' or 'julia')";
       return m;
     }
     if (m.run.empty()) {
@@ -1740,6 +1788,10 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
     if (!fs::is_regular_file(dir / manifest.run) && !fs::is_regular_file(dir / "server.py")) {
       return fail(step_manifest, "Python entrypoint missing (" + manifest.run + " or server.py) in " + dir.string());
     }
+  } else if (manifest.language == "julia") {
+    if (!fs::is_regular_file(dir / manifest.run) && !fs::is_regular_file(dir / "server.jl")) {
+      return fail(step_manifest, "Julia entrypoint missing (" + manifest.run + " or server.jl) in " + dir.string());
+    }
   }
 
   // Check golden file if declared
@@ -1848,7 +1900,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
           for (const auto& entry : fs::recursive_directory_iterator(dir, ec)) {
             if (entry.is_regular_file()) {
               auto ext = entry.path().extension().string();
-              if (ext == ".cpp" || ext == ".hpp" || ext == ".h" || ext == ".py") {
+              if (ext == ".cpp" || ext == ".hpp" || ext == ".h" || ext == ".py" || ext == ".jl") {
                 std::ifstream ifs(entry.path());
                 std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
                 if (content.find("\"" + type_name + "\"") != std::string::npos ||
@@ -1928,7 +1980,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
     for (const auto& entry : fs::recursive_directory_iterator(dir, ec)) {
       if (!entry.is_regular_file()) continue;
       const auto ext = entry.path().extension().string();
-      if (ext != ".cpp" && ext != ".hpp" && ext != ".h" && ext != ".py") continue;
+      if (ext != ".cpp" && ext != ".hpp" && ext != ".h" && ext != ".py" && ext != ".jl") continue;
       const auto pstr = entry.path().string();
       if (pstr.find("/build/") != std::string::npos || pstr.find("/.") != std::string::npos) continue;
       std::ifstream in(entry.path());
@@ -2004,6 +2056,11 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
       return fail(step_smoke, "executable not found: " + bin.string());
     }
     launch_cmd = {bin.string(), "--port", std::to_string(smoke_port)};
+  } else if (manifest.language == "julia") {
+    fs::path script = dir / manifest.run;
+    if (!fs::is_regular_file(script)) return fail(step_smoke, "server.jl not found: " + script.string());
+    launch_cmd = {julia_binary(), "--startup-file=no", "--project=" + dir.string(), script.string(),
+                  "--port", std::to_string(smoke_port)};
   } else {
     fs::path script = dir / manifest.run;
     launch_cmd = {py_env.python_bin.string(), script.string(), "--port", std::to_string(smoke_port)};
@@ -2012,7 +2069,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   fs::path log_path = runtime_dir() / ("smoke-" + std::to_string(smoke_port) + ".log");
   fs::create_directories(runtime_dir());
 
-  auto smoke_env = py_env.env;
+  auto smoke_env = manifest.language == "julia" ? julia_env(dir) : py_env.env;
   for (auto& e : run_env(manifest, {})) smoke_env.push_back(std::move(e));
   int backend_pid = ProcessRunner::run_detached(launch_cmd, dir, smoke_env, log_path);
   if (backend_pid <= 0) {
