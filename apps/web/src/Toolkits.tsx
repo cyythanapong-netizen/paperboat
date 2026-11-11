@@ -183,9 +183,11 @@ export function ToolkitsButton({
                 </div>
                 {t.description && <p className="toolkit-desc">{t.description}</p>}
                 <div className="toolkit-actions">
-                  <a className="toolkit-repo" href={t.repo.replace(/\.git$/, "")} target="_blank" rel="noreferrer">
-                    Repository
-                  </a>
+                  {!t.builtin && (
+                    <a className="toolkit-repo" href={t.repo.replace(/\.git$/, "")} target="_blank" rel="noreferrer">
+                      Repository
+                    </a>
+                  )}
                   <span className="spacer" />
                   <select
                     className="toolkit-version-select"
@@ -235,26 +237,26 @@ export function ToolkitsButton({
                           "Install selected"
                         )}
                       </button>
-                      <button
-                        className="key small"
-                        disabled={!connected || !!busy || !!t.builtin || !!t.required}
-                        title={
-                          t.builtin
-                            ? "Builtin: it ships with the engine"
-                            : t.required
-                              ? "Required by this backend: it can't be removed"
-                              : `Remove ${t.name} and rebuild`
-                        }
-                        onClick={() => onUninstall(t.name)}
-                      >
-                        {busy === "uninstalling" ? (
-                          <>
-                            <Spinner /> Uninstalling…
-                          </>
-                        ) : (
-                          "Uninstall"
-                        )}
-                      </button>
+                      {!t.builtin && (
+                        <button
+                          className="key small"
+                          disabled={!connected || !!busy || !!t.required}
+                          title={
+                            t.required
+                                ? "Required by this backend: it can't be removed"
+                                : `Remove ${t.name} and rebuild`
+                          }
+                          onClick={() => onUninstall(t.name)}
+                        >
+                          {busy === "uninstalling" ? (
+                            <>
+                              <Spinner /> Uninstalling…
+                            </>
+                          ) : (
+                            "Uninstall"
+                          )}
+                        </button>
+                      )}
                     </>
                   )}
                 </div>
