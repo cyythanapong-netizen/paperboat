@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<title>Squero Studio Octave — Bench</title>
+<link rel="stylesheet" href="mockup.css" />
+</head>
+<body>
+<div class="app a">
+  <header class="topbar">
+    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">OCT</span></div>
+    <div class="proj"><span class="dot"></span>lorenz.m</div>
+    <div class="status"><span class="pip"></span>octave 10.3 · ready</div>
+    <div class="keys">
+      <button class="key run">▶ Run</button>
+      <button class="key">Console <span class="tag">2</span></button>
+      <button class="key small">☾</button>
+    </div>
+  </header>
+
+  <aside class="panel">
+    <div class="head"><b>files</b><span class="sp"></span><button class="plain tag">+</button></div>
+    <div style="padding:8px 0;">
+      <div class="file on"><span class="ico">◇</span>lorenz.m<span class="k">m</span></div>
+      <div class="file"><span class="ico">◇</span>pendulum.m<span class="k">m</span></div>
+      <div class="file"><span class="ico">◇</span>rossler.m<span class="k">m</span></div>
+      <div class="file"><span class="ico">◇</span>surface.m<span class="k">m</span></div>
+      <div class="file"><span class="ico">◇</span>chladni.m<span class="k">m</span></div>
+      <div class="file" style="margin-top:6px;padding-left:10px"><span class="ico">▾</span>data<span class="k">/</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>peaks.mat<span class="k">mat</span></div>
+      <div class="file" style="padding-left:26px"><span class="ico">▱</span>run-07.mat<span class="k">mat</span></div>
+    </div>
+    <div class="foot">6 files · 2 open</div>
+  </aside>
+
+  <aside class="panel">
+    <div class="head"><b>workspace</b><span class="sp"></span><span class="tag">whos</span><button class="plain tag">⌕</button></div>
+    <div class="ws">
+      <div class="varc on"><div><div class="nm">A</div><div class="sh">512 × 512 · double</div></div><canvas class="glyph" data-f="heat"></canvas><span class="tie"></span></div>
+      <div class="varc"><div><div class="nm">x</div><div class="sh">1 × 512 · double</div></div><canvas class="glyph" data-f="spark1"></canvas><span class="tie"></span></div>
+      <div class="varc"><div><div class="nm">y</div><div class="sh">1 × 512 · double</div></div><canvas class="glyph" data-f="spark2"></canvas><span class="tie"></span></div>
+      <div class="varc"><div><div class="nm">z</div><div class="sh">1 × 512 · double</div></div><canvas class="glyph" data-f="spark3"></canvas><span class="tie"></span></div>
+      <div class="varc"><div><div class="nm">sel</div><div class="sh">1 × 1284 · logical</div></div><canvas class="glyph" data-f="dots"></canvas><span class="tie"></span></div>
+      <div class="varc dim"><div><div class="nm">k</div><div class="sh">1 × 1 · double</div></div><div style="text-align:right;font:500 12px var(--font-mono);grid-column:2">0.42</div><span class="tie"></span></div>
+    </div>
+    <div class="scratch">
+      <div class="lbl">scratch</div>
+      <div class="box"><span class="prompt">≫</span><span class="expr">A(128, 64) / max(A(:))</span><span class="caret"></span></div>
+      <div class="preview"><span class="v num">0.871</span><span class="tag">scalar</span><span class="k">↵ show · ⇥ send to chart</span></div>
+    </div>
+  </aside>
+
+  <main class="stage">
+    <div class="docbar">
+      <span class="doctab on"><span class="dot"></span>lorenz.m</span>
+      <span class="doctab">surface.m</span>
+      <span class="doctab">peaks.m</span>
+    </div>
+    <div class="stagebar">
+      <div class="tabs"><span class="on">3d</span><span>table</span><span>code</span></div>
+      <span class="sp"></span>
+      <span class="tag">A · rows × columns</span>
+      <button class="key small">iso</button><button class="key small">top</button><button class="key small">grid</button><button class="key small">ghost</button>
+    </div>
+    <div class="chart">
+      <canvas class="surf" id="surfA"></canvas>
+      <div class="vignette"></div>
+      <div class="ax z">z</div>
+      <div class="ax y">col →</div>
+      <div class="ax x">row ↓</div>
+      <div class="chip readout"><span class="sw"></span><b>row 128 · col 64</b><span class="sig num">0.421</span></div>
+      <div class="chip" style="left:18px;bottom:58px"><span class="sig">◈</span>A tied to z<span style="opacity:.55">· drag to rebind</span></div>
+      <div class="cube">
+        <svg viewBox="0 0 74 64">
+          <polygon points="37,4 68,20 37,36 6,20" fill="rgba(255,255,255,.10)" stroke="rgba(255,255,255,.35)" />
+          <polygon points="6,20 37,36 37,58 6,42" fill="rgba(255,255,255,.05)" stroke="rgba(255,255,255,.25)" />
+          <polygon points="68,20 37,36 37,58 68,42" fill="rgba(255,255,255,.07)" stroke="rgba(255,255,255,.25)" />
+          <text x="37" y="24" text-anchor="middle" font-size="7" fill="#f2f2ee" font-family="Geist Mono">TOP</text>
+          <text x="18" y="43" text-anchor="middle" font-size="6" fill="#8a8a84" font-family="Geist Mono">L</text>
+          <text x="57" y="43" text-anchor="middle" font-size="6" fill="#8a8a84" font-family="Geist Mono">R</text>
+        </svg>
+      </div>
+      <div class="cbar"><span class="num">1.0</span><div class="grad"></div><span class="num">0.0</span><span class="unit">z</span></div>
+      <div class="timeline">
+        <span class="play">▶</span>
+        <span class="t num">2.40 s</span>
+        <div class="track"><div class="rail"></div><div class="fill"></div><div class="knob"></div><i class="mark" style="left:18%"></i><i class="mark" style="left:72%"></i></div>
+        <span class="lbl2">step 120 / 500</span>
+        <span class="lbl2">loop</span>
+      </div>
+    </div>
+  </main>
+
+  <aside class="panel insp">
+    <div class="head"><b>linked cursor</b><span class="sp"></span><button class="plain tag">pin view</button></div>
+    <div class="body">
+      <div class="bigval"><span class="v num">0.421</span><span class="u">A(128, 64)</span></div>
+      <div class="kv">
+        <span class="k">shape</span><span class="v">512 × 512</span>
+        <span class="k">min / max</span><span class="v">−0.184 / 1.000</span>
+        <span class="k">mean</span><span class="v">0.227</span>
+        <span class="k">source</span><span class="v">peaks(512)</span>
+      </div>
+      <div class="slice"><div class="t">row <b>128</b> · 512 samples</div><canvas id="sl1"></canvas></div>
+      <div class="slice"><div class="t">column <b>64</b> · 512 samples</div><canvas id="sl2"></canvas></div>
+      <div class="slice" style="border-style:dashed"><div class="t">selection <b>1 284</b> cells</div><canvas id="sl3"></canvas></div>
+      <div class="pinkey"><button class="key small">Pin view</button><button class="key small">Compare</button></div>
+    </div>
+  </aside>
+
+  <section class="console">
+    <div class="chead"><span class="ct on">console</span><span class="ct">messages</span><span class="ct">workspace</span><span class="sp"></span><span class="k2">octave 10.3 · pid 4127</span></div>
+    <div class="lines">
+      <div class="cmd">A = peaks(512);</div>
+      <div class="cmd">[X, Y] = meshgrid(linspace(-3, 3, 512));</div>
+      <div class="cmd">Z = sin(R) ./ R;   <span class="dim">→ 512 × 512 · 0.14 s</span></div>
+      <div class="cmd">sel = A(A &gt; 0.42);  <span class="dim">→ 1 × 1284 · logical</span></div>
+      <div class="warn">warning: legend: ignoring extra labels</div>
+      <div class="dim">ready · 6 variables · 38.4 MB</div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { surface, heatmap, spark, linechart } from "./chart.js";
+
+surface(document.getElementById("surfA"), { curtain: 0.34 });
+document.querySelectorAll("canvas.glyph").forEach((cv) => {
+  const k = cv.dataset.f;
+  if (k === "heat") heatmap(cv);
+  else if (k === "dots") {
+    const { ctx, w, h } = { ctx: cv.getContext("2d"), w: cv.clientWidth, h: cv.clientHeight };
+    cv.width = w * 2; cv.height = h * 2; ctx.scale(2, 2);
+    ctx.fillStyle = "rgba(255,90,31,.8)";
+    for (let i = 0; i < 120; i++) {
+      const x = (Math.sin(i * 12.9898) * 43758.5453 % 1 + 1) % 1 * w;
+      const y = (Math.sin(i * 78.233) * 12345.678 % 1 + 1) % 1 * h;
+      ctx.fillRect(x, y, 1.2, 1.2);
+    }
+  } else {
+    spark(cv, { phase: k === "spark1" ? 0 : k === "spark2" ? 1.8 : 3.4, color: "#ff5a1f" });
+  }
+});
+spark(document.getElementById("sl1"), { phase: 0.4, color: "#ff5a1f", width: 1.2 });
+spark(document.getElementById("sl2"), { phase: 2.2, color: "#f0f0eb", width: 1 });
+spark(document.getElementById("sl3"), { phase: 1.1, color: "#7ad151", width: 1 });
+</script>
+</body>
+</html>

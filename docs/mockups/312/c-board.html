@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<title>Squero Studio Octave — Board</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .left { display:flex; flex-direction:column; gap:14px; min-height:0; }
+  .left > .panel:first-child { flex:none; }
+  .left > .panel:last-child { flex:1; }
+  .board { grid-template-columns:1.05fr 1fr 1fr; }
+</style>
+</head>
+<body>
+<div class="app c">
+  <header class="topbar">
+    <div class="brand">squero <span class="studio">studio</span><span class="wave"><i></i><i></i><i></i><i></i><i></i></span><span class="badge">OCT</span></div>
+    <div class="proj"><span class="dot"></span>board.m</div>
+    <div class="status"><span class="pip"></span>octave 10.3 · running 2.40 s</div>
+    <div class="keys">
+      <button class="key run" style="border-color:var(--signal);color:var(--signal)">■ Stop</button>
+      <button class="key">Console</button>
+      <button class="key small">☀</button>
+    </div>
+  </header>
+
+  <div class="left">
+    <aside class="panel">
+      <div class="head"><b>files</b><span class="sp"></span><button class="plain tag">+</button></div>
+      <div style="padding:6px 0;">
+        <div class="file on"><span class="ico">◇</span>board.m<span class="k">m</span></div>
+        <div class="file"><span class="ico">◇</span>surface.m<span class="k">m</span></div>
+        <div class="file"><span class="ico">◇</span>scatter.m<span class="k">m</span></div>
+        <div class="file"><span class="ico">◇</span>stories.m<span class="k">m</span></div>
+      </div>
+    </aside>
+
+    <aside class="panel">
+      <div class="head"><b>workspace</b><span class="sp"></span><span class="tag">live</span></div>
+      <div class="ws">
+        <div class="varc on"><div><div class="nm">A</div><div class="sh">512 × 512 · double</div></div><canvas class="glyph" data-f="heat"></canvas><span class="tie"></span></div>
+        <div class="varc"><div><div class="nm">sel</div><div class="sh">1 × 1284 · logical</div></div><canvas class="glyph" data-f="dots"></canvas><span class="tie"></span></div>
+        <div class="varc"><div><div class="nm">z</div><div class="sh">1 × 500 · double</div></div><canvas class="glyph" data-f="spark"></canvas><span class="tie"></span></div>
+        <div class="varc dim"><div><div class="nm">ghost</div><div class="sh">run-06 · 512 × 512</div></div><canvas class="glyph" data-f="ghost"></canvas><span class="tie"></span></div>
+      </div>
+      <div style="padding:8px 10px;border-top:1px solid var(--line)">
+        <div class="lbl" style="margin-bottom:6px">views</div>
+        <div style="display:flex;gap:6px"><button class="key small">iso</button><button class="key small">top</button><button class="key small">front</button><button class="key small">+</button></div>
+      </div>
+      <div style="padding:8px 10px;border-top:1px solid var(--line)">
+        <div class="lbl" style="margin-bottom:6px">history</div>
+        <div class="kv" style="gap:5px 10px">
+          <span class="k">run-07</span><span class="v">2.40 s · live</span>
+          <span class="k">run-06</span><span class="v">ghost · pinned</span>
+          <span class="k">run-05</span><span class="v">archived</span>
+        </div>
+      </div>
+      <div class="foot">6 variables · 38.4 MB · 0 errors</div>
+    </aside>
+  </div>
+
+  <main class="stage">
+    <div class="docbar">
+      <span class="doctab on"><span class="dot"></span>board.m</span>
+      <span class="doctab">surface.m</span>
+      <span class="tabs" style="margin-left:auto;padding-bottom:8px"><span class="on">board</span><span>code</span></span>
+    </div>
+    <div class="boardwrap">
+      <div class="board">
+        <div class="tile big">
+          <div class="th"><span class="grip">⠿</span><b>A</b><span class="kind">surface · rows × columns</span><span class="sp"></span><span class="mini">512 × 512</span><span class="mini">⌄</span></div>
+          <div class="cv">
+            <canvas id="surfC"></canvas>
+            <div class="camkeys"><span class="ck on">iso</span><span class="ck">top</span><span class="ck">front</span><span class="ck sig">ghost on</span></div>
+            <div class="chip readout" style="left:auto;right:64px;top:10px;padding:4px 8px"><span class="sw"></span><b>row 128 · col 64</b><span class="sig num">0.421</span></div>
+            <div class="cbar" style="top:48px;bottom:58px"><span class="num">1.0</span><div class="grad"></div><span class="num">0.0</span><span class="unit">z</span></div>
+            <div class="timeline" style="left:12px;right:64px;bottom:9px;padding:6px 9px">
+              <span class="play">▶</span><span class="t num">2.40 s</span>
+              <div class="track"><div class="rail"></div><div class="fill"></div><div class="knob"></div><i class="mark" style="left:12%"></i><i class="mark" style="left:46%"></i><i class="mark" style="left:80%"></i></div>
+              <span class="lbl2">step 120 / 500</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="th"><span class="grip">⠿</span><b>A</b><span class="kind">heat</span><span class="sp"></span><span class="mini">⌄</span></div>
+          <div class="cv"><canvas id="heatC"></canvas><div class="legend"><span><i style="background:#440154"></i>−0.18</span><span><i style="background:#7ad151"></i>0.41</span><span><i style="background:#fde725"></i>1.00</span></div></div>
+        </div>
+
+        <div class="tile">
+          <div class="th"><span class="grip">⠿</span><b>sel</b><span class="kind">scatter · 1 284</span><span class="sp"></span><span class="mini">⌄</span></div>
+          <div class="cv"><canvas id="scatC"></canvas><div class="legend"><span><i style="background:#ff5a1f"></i>selected</span><span><i style="background:#8a8a84"></i>all 262 144</span></div></div>
+        </div>
+
+        <div class="tile">
+          <div class="th"><span class="grip">⠿</span><b>z</b><span class="kind">line · t</span><span class="sp"></span><span class="mini">⌄</span></div>
+          <div class="cv"><canvas id="lineC"></canvas><div class="legend"><span><i style="background:#ff5a1f"></i>run-07</span><span><i style="background:#f0f0eb"></i>run-06</span></div></div>
+        </div>
+      </div>
+
+      <div class="ribbon2">
+        <span class="lbl3">run-07 · 500 steps · drag to scrub, click a story to jump</span>
+        <canvas id="ribC"></canvas>
+        <div class="tick" style="left:12%"></div><div class="tick" style="left:46%"></div><div class="tick" style="left:80%"></div>
+        <span class="story" style="left:12%">start</span>
+        <span class="story on" style="left:46%">fold</span>
+        <span class="story" style="left:80%">pin</span>
+        <div class="now" style="left:46%"></div>
+      </div>
+    </div>
+  </main>
+
+  <section class="console">
+    <div class="chead"><span class="ct on">console</span><span class="ct">messages</span><span class="sp"></span><span class="k2">octave 10.3 · run-07 · 2.40 s</span></div>
+    <div class="lines">
+      <div class="cmd">[X, Y] = meshgrid(linspace(-3, 3, 512));</div>
+      <div class="cmd">A = sin(R * 3.4) ./ (R * 3.4);   <span class="dim">→ 512 × 512 · 31.2 MB</span></div>
+      <div class="cmd">sel = A(A &gt; 0.42);              <span class="dim">→ 1 × 1284 · 10.3 kB</span></div>
+      <div class="ok">board: 4 instruments · iso · ghost run-06 · step 120/500</div>
+      <div class="dim">ready · 6 variables · 38.4 MB</div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { surface, heatmap, scatter, linechart, spark, ribbon } from "./chart.js";
+
+surface(document.getElementById("surfC"), { ghost: true, n: 88 });
+heatmap(document.getElementById("heatC"), { cell: { i: 20, j: 38 } });
+scatter(document.getElementById("scatC"));
+linechart(document.getElementById("lineC"));
+ribbon(document.getElementById("ribC"));
+
+document.querySelectorAll("canvas.glyph").forEach((cv) => {
+  const k = cv.dataset.f;
+  if (k === "heat") heatmap(cv);
+  else if (k === "ghost") {
+    const ctx = cv.getContext("2d");
+    const w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = w * 2; cv.height = h * 2; ctx.scale(2, 2);
+    ctx.strokeStyle = "rgba(233,233,228,.35)";
+    ctx.lineWidth = 0.6;
+    for (let i = 0; i < 6; i++) {
+      ctx.beginPath();
+      for (let x = 0; x <= w; x += 2) {
+        const y = h / 2 + Math.sin(x * 0.14 + i * 0.7) * 5 + Math.cos(x * 0.05) * 3;
+        x ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+    }
+  } else if (k === "dots") {
+    const ctx = cv.getContext("2d");
+    const w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = w * 2; cv.height = h * 2; ctx.scale(2, 2);
+    ctx.fillStyle = "rgba(255,90,31,.85)";
+    for (let i = 0; i < 140; i++) {
+      const x = (Math.sin(i * 12.9898) * 43758.5453 % 1 + 1) % 1 * w;
+      const y = (Math.sin(i * 78.233) * 12345.678 % 1 + 1) % 1 * h;
+      ctx.fillRect(x, y, 1.2, 1.2);
+    }
+  } else spark(cv, { phase: 1.4, color: "#ff5a1f" });
+});
+</script>
+</body>
+</html>
