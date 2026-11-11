@@ -12,6 +12,8 @@
 #include <sstream>
 #include <thread>
 
+#include <nlohmann/json.hpp>
+
 #include <ixwebsocket/IXHttpServer.h>
 #include <ixwebsocket/IXNetSystem.h>
 
@@ -87,6 +89,18 @@ int serve_files(const fs::path& dir, int port, const std::string& host) {
   ix::HttpServer server(port, host);
   server.setOnConnectionCallback([&root](const ix::HttpRequestPtr& request, const std::shared_ptr<ix::ConnectionState>&) {
     std::string path = decode(request->uri.substr(0, request->uri.find('?')));
+    // The Backend dialog lists what is running, like `paperboat list --json` does.
+    if (path == "/__paperboat/backends") {
+      nlohmann::json out = nlohmann::json::array();
+      for (const auto& b : BackendManager::list_running_backends()) {
+        out.push_back({{"name", b.domain.empty() ? b.engine : b.domain},
+                       {"engine", b.engine},
+                       {"domain", b.domain},
+                       {"port", b.port},
+                       {"url", b.ws_url.empty() ? "ws://localhost:" + std::to_string(b.port) : b.ws_url}});
+      }
+      return respond(200, "application/json", out.dump());
+    }
     std::error_code e;
     fs::path file = fs::weakly_canonical(root / (path.size() > 1 ? path.substr(1) : "index.html"), e);
     const auto inside = file.lexically_relative(root);

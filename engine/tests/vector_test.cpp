@@ -271,6 +271,11 @@ TEST_CASE("a Scope sends one sample per wired input, tagged with it; a vector st
   // Setting inputs to 1 gives a single input "a" (pb#189)
   const auto* sc = catalog().find("scope");
   REQUIRE(sc != nullptr);
+  // A Scope plots numbers: an image wire is refused, a vector (whole, or broadcast) is taken.
+  CHECK(sc->def.inputs[0].type == "signal");
+  CHECK(sc->def.inputs[0].broadcast);
+  CHECK(tk::wire_mismatch(tk::PortDef{.id = "img", .type = "image"}, sc->def.inputs[0]).has_value());
+  CHECK_FALSE(tk::wire_mismatch(tk::PortDef{.id = "v", .type = "vector"}, sc->def.inputs[0]).has_value());
   const auto def1 = tk::with_dynamic_ports(sc->def, {{"inputs", 1.0}}, {});
   REQUIRE(def1.inputs.size() == 1);
   CHECK(def1.inputs[0].id == "a");

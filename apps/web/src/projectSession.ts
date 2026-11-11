@@ -36,6 +36,8 @@ export function useProjectSession(
   // that, as text, a moment after the last change; it is "unsaved" while it differs from `baseline`, which is
   // what the backend started with, or what was last saved or opened.
   const [projectTitle, setProjectTitle] = useState("Untitled");
+  /** The name last loaded or saved; a rename is unsaved until the next save. */
+  const [savedTitle, setSavedTitle] = useState("Untitled");
   const fileHandle = useRef<FileHandle | null>(null); // where Save writes, once the user chose a file (Chromium)
   const [notice, setNotice] = useState<NoticeSpec | null>(null);
   const [undoOpen, setUndoOpen] = useState<(() => void) | null>(null); // Edit ▸ Undo open project
@@ -55,7 +57,7 @@ export function useProjectSession(
       ui: projectLock ? { lock: projectLock } : undefined,
     });
   const latestProject = useRef<Project | null>(null);
-  const dirty = baseline !== null && projectKey !== "" && projectKey !== baseline;
+  const dirty = baseline !== null && projectKey !== "" && (projectKey !== baseline || projectTitle !== savedTitle);
   const live = useRef({ snapshot, projectTitle, baseline, dirty, state });
   live.current = { snapshot, projectTitle, baseline, dirty, state };
 
@@ -71,6 +73,7 @@ export function useProjectSession(
   // Another backend: a new, unnamed project.
   useEffect(() => {
     setProjectTitle("Untitled");
+    setSavedTitle("Untitled");
     fileHandle.current = null;
     setBaseline(null);
     setRestoreChecked(false);
@@ -93,6 +96,7 @@ export function useProjectSession(
   const applyProject = (p: Project, name: string, rebase: string | null = null) => {
     load(p);
     setProjectTitle(name);
+    setSavedTitle(name);
     setBaseline(rebase);
   };
   // The backend can send an initial project on connect (#126).
@@ -162,6 +166,7 @@ export function useProjectSession(
       fileHandle.current = r.handle ?? null;
       const name = projectName(r.name);
       setProjectTitle(name);
+      setSavedTitle(name);
       setBaseline(JSON.stringify(p));
       remember(p, name);
       clearAutosave(state.engine);
@@ -169,6 +174,14 @@ export function useProjectSession(
     } catch (e) {
       fail("Can't save", e);
     }
+  };
+  // A rename is a project change: next Save writes the new .ppj name (and asks for it, since
+  // an existing file handle still points at the old file).
+  const renameProject = (name: string) => {
+    const next = name.trim();
+    if (!next || next === projectTitle) return;
+    setProjectTitle(next);
+    fileHandle.current = null;
   };
   // Dropping a project file on the window opens it (the app's own cards are not files).
   const openTextNow = useRef(openText);
@@ -215,5 +228,5 @@ export function useProjectSession(
     else if (!lastSession) clearAutosave(state.engine);
   }, [projectKey, dirty, restoreChecked]); // eslint-disable-line react-hooks/exhaustive-deps -- when the project changes
 
-  return { projectTitle, dirty, notice, setNotice, undoOpen, recent, lastSession, restore, openProject, openFile, saveProject };
+  return { projectTitle, dirty, notice, setNotice, undoOpen, recent, lastSession, restore, openProject, openFile, saveProject, renameProject };
 }

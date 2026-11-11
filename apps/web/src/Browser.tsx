@@ -156,6 +156,7 @@ export function BrowserWindow({
   counts,
   place,
   flow,
+  mixed,
   onAdd,
   onClose,
 }: {
@@ -166,10 +167,15 @@ export function BrowserWindow({
   place: string;
   /** The open sheet's flow type: only blocks that work in it can be added. */
   flow?: FlowType;
+  /** A signal/step sheet admits both layers: step blocks on a Signal flow, signal blocks on a Step flow. */
+  mixed?: boolean;
   onAdd: (item: Item) => void;
   onClose: () => void;
 }) {
-  const { fits: items, elsewhere } = useMemo(() => (flow ? byFlow(all, flow) : { fits: all, elsewhere: [] as Item[] }), [all, flow]);
+  const { fits: items, elsewhere } = useMemo(
+    () => (flow ? byFlow(all, flow, mixed) : { fits: all, elsewhere: [] as Item[] }),
+    [all, flow, mixed],
+  );
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState("all");
   const [group, setGroup] = useState("");
@@ -192,12 +198,15 @@ export function BrowserWindow({
   }, [at, place, setAt]);
 
   const kinds = useMemo(() => ["all", ...new Set(items.map((i) => card(i).filter))], [items]);
-  const groups = useMemo(() => [...new Set(items.map((i) => card(i).group))], [items]);
+  // Every package the catalog has, including one whose blocks only work in another flow type:
+  // otherwise an installed toolkit disappears from the list on a sheet it can't join.
+  const groups = useMemo(() => [...new Set(all.map((i) => card(i).group))], [all]);
   const found = search(items, query).filter((i) => kind === "all" || card(i).filter === kind);
   const shown = found.filter((i) => !group || card(i).group === group);
   const byGroup = groups.map((g) => [g, shown.filter((i) => card(i).group === g)] as const).filter(([, list]) => list.length);
   // What this sheet can't take, under the same search and filters.
-  const away = search(elsewhere, query).filter((i) => (kind === "all" || card(i).filter === kind) && (!group || card(i).group === group));
+  const awayAll = search(elsewhere, query).filter((i) => kind === "all" || card(i).filter === kind);
+  const away = awayAll.filter((i) => !group || card(i).group === group);
 
   // Move by the head; keep it on screen.
   const drag = (e: ReactPointerEvent) => {
@@ -233,7 +242,7 @@ export function BrowserWindow({
           ))}
           <GlideBrackets />
         </div>
-        <span className="lbl found">{found.length} {found.length === 1 ? "match" : "matches"}</span>
+        <span className="lbl found">{found.length + awayAll.length} {found.length + awayAll.length === 1 ? "match" : "matches"}</span>
         <button className="key small" title="Close (Esc)" onClick={onClose}>
           Close
         </button>
@@ -241,9 +250,16 @@ export function BrowserWindow({
       <div className="browser-body">
         <nav className="browser-groups" aria-label="Packages">
           {["", ...groups].map((g) => {
-            const n = found.filter((i) => !g || card(i).group === g).length;
+            const fits = found.filter((i) => !g || card(i).group === g).length;
+            const off = awayAll.filter((i) => !g || card(i).group === g).length;
+            const n = fits + off;
             return (
-              <button key={g || "all"} className={group === g ? "current" : undefined} onClick={() => setGroup(g)}>
+              <button
+                key={g || "all"}
+                className={group === g ? "current" : undefined}
+                title={fits === 0 && off > 0 && flow ? `Works only in a ${flowLabel(flow)}` : undefined}
+                onClick={() => setGroup(g)}
+              >
                 <span>{g ? g[0].toUpperCase() + g.slice(1) : "All"}</span>
                 <span className="lbl">{n}</span>
               </button>
@@ -261,9 +277,9 @@ export function BrowserWindow({
               </div>
             </section>
           ))}
-          {shown.length === 0 && <p className="empty">{query ? `Nothing matches “${query}”` : "Nothing here"}{flow ? ` in this ${flowLabel(flow)}` : ""}.</p>}
+          {shown.length === 0 && away.length === 0 && <p className="empty">{query ? `Nothing matches “${query}”` : "Nothing here"}{flow ? ` in this ${flowLabel(flow)}` : ""}.</p>}
           {flow && away.length > 0 && (
-            <details className="browser-elsewhere">
+            <details className="browser-elsewhere" open={shown.length === 0}>
               <summary className="lbl">
                 Not in this {flowLabel(flow)} · {away.length}
               </summary>
@@ -287,6 +303,7 @@ export function BrowserWindow({
 export function QuickAdd({
   items: all,
   flow,
+  mixed,
   at,
   onPick,
   onClose,
@@ -294,6 +311,8 @@ export function QuickAdd({
   items: Item[];
   /** The open sheet's flow type (#9): blocks that don't work in it are only named, muted, below. */
   flow?: FlowType;
+  /** A signal/step sheet admits both layers. */
+  mixed?: boolean;
   at: { x: number; y: number };
   onPick: (item: Item) => void;
   onClose: () => void;
@@ -301,7 +320,10 @@ export function QuickAdd({
   const [query, setQuery] = useState("");
   const [i, setI] = useState(0);
   const box = useRef<HTMLDivElement>(null);
-  const { fits: items, elsewhere } = useMemo(() => (flow ? byFlow(all, flow) : { fits: all, elsewhere: [] as Item[] }), [all, flow]);
+  const { fits: items, elsewhere } = useMemo(
+    () => (flow ? byFlow(all, flow, mixed) : { fits: all, elsewhere: [] as Item[] }),
+    [all, flow, mixed],
+  );
   const list = search(items, query).slice(0, 7);
   const away = query.trim() && flow ? search(elsewhere, query).slice(0, 3) : [];
   const pick = list[Math.min(i, list.length - 1)];

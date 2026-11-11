@@ -14,6 +14,10 @@
 #include <paperboat/toolkit/platform.hpp>
 #include <paperboat/toolkit/variables.hpp>
 
+#ifndef PAPERBOAT_VERSION  // set by engine/core/CMakeLists.txt from the project version
+#define PAPERBOAT_VERSION "0.0.0-dev"
+#endif
+
 namespace paperboat::core {
 
 struct Session::State {
@@ -96,6 +100,7 @@ Session::Session(const Backend& backend, Send send)
   json hello = {{"type", "hello"},
                 {"protocol", "paperboat/0"},
                 {"engine", backend.engine},
+                {"version", PAPERBOAT_VERSION},
                 {"station", station_view},
                 {"run", settings_json(backend.run)},
                 {"flows", catalog.flows}};  // the flow types a sheet may be (#9)

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { byFlow, flowLabel, flowsLabel, inferFlow, notHere, offeredFlows, sheetFlow, worksIn } from "../src/flowTypes.ts";
+import { byFlow, flowLabel, flowsLabel, hasMixedLayers, inferFlow, notHere, offeredFlows, sheetFlow, worksIn } from "../src/flowTypes.ts";
 import { makeNode, type FlowNode } from "../src/flowModel.ts";
 import type { BlockDef } from "../src/protocol.ts";
 import type { GroupNode } from "../src/groups.tsx";
@@ -35,6 +35,10 @@ test("a block works in the flow types it names; one that names none (an older ca
   assert.ok(worksIn(pid, "signal"));
   assert.ok(!worksIn(pid, "step"));
   assert.ok(worksIn(wait, "step") && !worksIn(wait, "signal"));
+  // A mixed signal/step sheet takes the other layer too; a model-only block stays apart.
+  assert.ok(worksIn(wait, "signal", true));
+  assert.ok(worksIn(pid, "step", true));
+  assert.ok(!worksIn(resistor, "signal", true) && !worksIn(resistor, "step", true));
   assert.equal(flowLabel("step"), "Step flow");
   assert.equal(flowsLabel(["signal", "step"]), "Signal flow or Step flow");
   assert.equal(flowsLabel(["signal", "step", "model"]), "Signal flow, Step flow or Model flow");
@@ -49,6 +53,12 @@ test("the palette on a sheet: blocks that work in it, and the rest apart; statio
   const step = byFlow(items, "step");
   assert.deepEqual(step.fits.map((i) => i.def.type), ["gain", "wait"]);
   assert.deepEqual(step.elsewhere.map((i) => i.def.type), ["pid", "resistor"]);
+  const stepMixed = byFlow(items, "step", true);
+  assert.deepEqual(stepMixed.fits.map((i) => i.def.type), ["gain", "pid", "wait"]);
+  assert.deepEqual(stepMixed.elsewhere.map((i) => i.def.type), ["resistor"]);
+  const signalMixed = byFlow(items, "signal", true);
+  assert.deepEqual(signalMixed.fits.map((i) => i.def.type), ["gain", "pid", "wait"]);
+  assert.deepEqual(signalMixed.elsewhere.map((i) => i.def.type), ["resistor"]);
   const objects = byFlow([{ kind: "object", def: { type: "cart" } }], "model");
   assert.equal(objects.fits.length, 1);
 });
@@ -65,6 +75,9 @@ test("a sheet whose type wasn't chosen: a Step flow if a block on it has step po
   assert.equal(inferFlow([]), "signal");
   assert.equal(inferFlow([makeNode(gain, "g", 0, 0), makeNode(pid, "p", 0, 0)]), "signal");
   assert.equal(inferFlow([makeNode(gain, "g", 0, 0), makeNode(wait, "w", 0, 0)]), "step");
+  assert.equal(hasMixedLayers([makeNode(gain, "g", 0, 0), makeNode(wait, "w", 0, 0)]), true);
+  assert.equal(hasMixedLayers([makeNode(wait, "w", 0, 0)]), false);
+  assert.equal(hasMixedLayers([makeNode(gain, "g", 0, 0)]), false);
   assert.equal(inferFlow([makeNode(magicIf, "if", 0, 0)]), "signal"); // in its signal form
   assert.equal(inferFlow([makeNode(magicIf, "if", 0, 0, { form: "step" })]), "step");
   assert.equal(inferFlow([frame("s", "story")]), "step");

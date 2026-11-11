@@ -43,13 +43,32 @@ The Workbench Backend
 ~~~~~~~~~~~~~~~~~~~~~
 
 `engine/workbench` is a backend made only of the first two layers: it embeds a descriptor
-that imports `base`, `math`, `signal`, `control` and `dashboard` and defines no domain
-blocks. It serves on 8765, the default backend port the web app connects to, so Flow and
-Dashboard work with no domain; the Station page is hidden (there is no scene to draw).
-`control` is optional (the external control toolkit): the workbench loads without it, and
-offers its blocks when it is installed. It is an ordinary `paperboat::core::Backend`; a
-domain backend differs only in its catalog and starters. Start it with
+that imports `base`, `math`, `signal`, `dashboard` and every optional toolkit installed in
+the checkout, and defines no domain blocks. It serves on 8765, the default backend port the
+web app connects to, so Flow and Dashboard work with no domain; the Station page is hidden
+(there is no scene to draw). Each optional toolkit is linked and registered when it is
+installed, so its blocks join the palette; the workbench loads without any of them. It is an
+ordinary `paperboat::core::Backend`; a domain backend differs only in its catalog and
+starters. `paperboat start` launches it with the web app; run it alone with
 `npm run backend:workbench` (or the installed `paperboat-workbench` binary).
+
+Mixed Step and Signal Flow
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A top-level sheet may carry both layers; it remains one sheet. Per clock step:
+
+1. Every signal block outside a story is evaluated in dependency order.
+2. Step paths advance from their hats; each step block reads its signal inputs when it
+   runs. Its outputs are visible to the next step block on the path in the same tick.
+3. A story on an active path runs its internal signal blocks; it is a state, active only
+   while the path is at it. `reset` recreates its blocks on entry.
+4. Outside signal blocks and monitors see step/story outputs on the next tick. This is the
+   same one-tick boundary linked blocks have, and keeps ordering deterministic.
+
+`flow_mismatch` accepts a step block on a Signal sheet and a signal-only block on a Step
+sheet at the top level; a story still runs only signal blocks. The engine selects the step
+executor from the presence of step ports/stories, not from the sheet's label. `step/signal_step`
+is the explicit 0/1-signal → step converter.
 
 Fault Containment Principle
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -82,7 +101,7 @@ strict, ordered sequence:
      │                                                  │
      │ ────────────── WebSocket Connect ───────────────▶│
      │                                                  │
-     │ ◀───────────── hello ────────────────────────────│ (engine name, protocol version, view mode)
+     │ ◀───────────── hello ────────────────────────────│ (engine name, Paperboat version, protocol, view mode)
      │ ◀───────────── catalog ──────────────────────────│ (available block & object definitions)
      │ ◀───────────── graph.load ───────────────────────│ (starter graph topology)
      │ ◀───────────── station.load ─────────────────────│ (starter station objects)
@@ -102,7 +121,7 @@ When the user initiates a run, the client serializes the graph and active statio
      │ ────────────── graph.run ───────────────────────▶│ (nodes, edges, groups, station overrides)
      │ ◀───────────── run.started ──────────────────────│ (acknowledgement with run ID)
      │                                                  │
-     │ ◀─ stream ─── signal (monitor telemetry) ────────│ (emitted per clock tick)
+     │ ◀─ stream ─── signal (monitor telemetry) ────────│ (per clock tick; every pass for a Scope)
      │ ◀─ stream ─── scene.patch (entity transforms) ───│ (emitted per clock tick)
      │ ◀─ stream ─── node.state (running / done) ───────│ (step flow transitions)
      │ ◀─ stream ─── run.progress (fraction 0..1) ──────│ (periodic progress update)
@@ -216,7 +235,9 @@ Paperboat supports three distinct execution models:
    - Evaluate signal blocks in topological dependency order.
    - For each station object, invoke `step(ctx, in)` using inputs gathered from linked blocks.
    - Evaluate domain-level state `DomainState::step(ctx)`.
-   - Sample Monitor blocks and dispatch `signal` packets.
+   - Sample Monitor blocks and dispatch `signal` packets. A Scope gets one on every pass
+     (the Graph and readouts wait for its frame); with a Scope in the graph the run's
+     clock is the smallest solver step, so those packets are the solver's points.
    - Compute scene differential changes and dispatch `scene.patch`.
 
 2. **Step Flow (`StepRun`)**:

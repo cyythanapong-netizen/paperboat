@@ -857,7 +857,12 @@ std::optional<FlowMismatch> flow_mismatch(const nlohmann::json& graph, const Cat
     const auto id = n.value("id", std::string{});
     const auto story = story_around(id);
     const std::string sheet = story.empty() ? flow : "signal";
-    if (works_in(entry->def, sheet)) continue;
+    // A signal/step sheet is mixed: it takes the other layer too (step paths on a Signal flow,
+    // signal helpers on a Step flow). A story is its own Signal flow and does not.
+    const bool mixed = story.empty() &&
+                       ((flow == "signal" && std::ranges::find(entry->def.flows, "step") != entry->def.flows.end()) ||
+                        (flow == "step" && std::ranges::find(entry->def.flows, "signal") != entry->def.flows.end()));
+    if (works_in(entry->def, sheet) || mixed) continue;
     const auto& works = entry->def.flows;
     const std::string what = "block " + id + " (" + entry->def.label + ") works only in a " + flows_label(works);
     if (!story.empty())

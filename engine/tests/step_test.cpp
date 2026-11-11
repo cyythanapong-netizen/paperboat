@@ -69,6 +69,22 @@ TEST_CASE("step/when options: on a fall (a key released), and restarting its pat
   CHECK(on.options == std::vector<std::string>{"rise", "fall"});
 }
 
+TEST_CASE("step/signal_step turns a 0/1 signal into a step wire") {
+  auto on_signal = make("step/signal_step");
+  CHECK(on_signal->may_start());
+  CHECK(on_signal->tick({}, {}).empty());  // unwired: never
+  CHECK(on_signal->tick({}, {{"signal", 1}}) == "next");
+  CHECK(on_signal->tick({}, {{"signal", 1}}).empty());  // held: no second path
+  CHECK(on_signal->tick({}, {{"signal", 0}}).empty());
+  CHECK(on_signal->tick({}, {{"signal", 1}}) == "next");
+  const auto& on = builtins().find("step/signal_step")->def.params.at(0);
+  CHECK(on.id == "on");
+  CHECK(on.options == std::vector<std::string>{"rise", "fall"});
+  auto falling = make("step/signal_step", {{"on", 1}});  // fall (by index)
+  CHECK(falling->tick({}, {{"signal", 1}}).empty());
+  CHECK(falling->tick({}, {{"signal", 0}}) == "next");
+}
+
 TEST_CASE("step/while loops while its condition holds") {
   auto loop = make("step/while");
   CHECK(loop->tick({}, {{"cond", 1}}) == "loop");

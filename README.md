@@ -110,7 +110,7 @@ Or manage backends, toolkits, and the web app with the unified `paperboat` CLI:
 ```sh
 ./bin/paperboat start cart-pole     # builds and runs the cart-pole backend (run is the same)
 ./bin/paperboat list                # everything running, with a KIND: backend or app
-./bin/paperboat start               # starts the web app on port 3047 (stop / restart: the same, no target)
+./bin/paperboat start               # the web app on 3047, and the workbench backend on 8765
 ./bin/paperboat examples start      # launches all example backends (ports 8765-8773)
 ./bin/paperboat run cart-pole       # no paperboat-examples checkout? fetched to ~/.paperboat/examples (PAPERBOAT_EXAMPLES_REPO: another URL), built, run
 ./bin/paperboat examples fetch     # clone or pull ~/.paperboat/examples

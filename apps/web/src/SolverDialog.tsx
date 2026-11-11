@@ -7,25 +7,27 @@ type SolverOptions = NonNullable<RunSettings["solver_options"]>;
 
 // The engine's own defaults (solve::Options), for a backend that doesn't announce them.
 const ENGINE: Required<SolverOptions> = { rtol: 1e-6, atol: 1e-9, min_step: 0, max_step: 0, max_steps: 100000, sub_steps: 1 };
+const ENGINE_DT = 0.01;
 
-const ADAPTIVE = ["rtol", "atol", "max_step", "min_step", "max_steps"];
+const ADAPTIVE = ["rtol", "atol", "max_step", "min_step", "max_steps", "dt"];
 const INFO: SolverInfo[] = [
   { id: "rk45", label: SOLVER_LABELS.rk45, family: "adaptive", blurb: "Dormand–Prince 4(5): steps to meet the tolerances", options: ADAPTIVE },
-  { id: "rk4", label: SOLVER_LABELS.rk4, family: "explicit", blurb: "Fourth order, fixed sub-steps per clock step", options: ["sub_steps"], recommended: true },
-  { id: "rk2", label: SOLVER_LABELS.rk2, family: "explicit", blurb: "Second order, cheaper and rougher", options: ["sub_steps"] },
-  { id: "euler", label: SOLVER_LABELS.euler, family: "explicit", blurb: "First order; gains energy on oscillators", options: ["sub_steps"] },
+  { id: "rk4", label: SOLVER_LABELS.rk4, family: "explicit", blurb: "Fourth order, fixed sub-steps per clock step", options: ["sub_steps", "dt"], recommended: true },
+  { id: "rk2", label: SOLVER_LABELS.rk2, family: "explicit", blurb: "Second order, cheaper and rougher", options: ["sub_steps", "dt"] },
+  { id: "euler", label: SOLVER_LABELS.euler, family: "explicit", blurb: "First order; gains energy on oscillators", options: ["sub_steps", "dt"] },
   { id: "cvode", label: SOLVER_LABELS.cvode, family: "implicit", blurb: "SUNDIALS CVODE: variable-order BDF for stiff systems", options: ADAPTIVE },
   { id: "ida", label: SOLVER_LABELS.ida, family: "implicit", blurb: "SUNDIALS IDA: BDF on the residual x' − f(x), as for DAEs", options: ADAPTIVE },
-  { id: "discrete", label: SOLVER_LABELS.discrete, family: "discrete", blurb: "A difference equation per clock step", options: [] },
+  { id: "discrete", label: SOLVER_LABELS.discrete, family: "discrete", blurb: "A difference equation per clock step", options: ["dt"] },
 ];
 
 const OPTIONS: SolverOptionInfo[] = [
   { key: "rtol", label: "Relative tolerance", hint: "Error allowed per step, relative to each value.", group: "Accuracy", valid: (v) => v > 0 },
   { key: "atol", label: "Absolute tolerance", hint: "Error allowed near zero.", group: "Accuracy", valid: (v) => v >= 0 },
-  { key: "max_step", label: "Max step", unit: "s", hint: "Largest internal step.", zero: "the clock step", group: "Steps", valid: (v) => v >= 0 },
+  { key: "max_step", label: "Max step", unit: "s", hint: "Largest internal solver step; only adaptive solvers use it. A run with a Scope samples at this step.", zero: "the clock step", group: "Steps", valid: (v) => v >= 0 },
   { key: "min_step", label: "Min step", unit: "s", hint: "It gives up below this.", zero: "automatic", group: "Steps", valid: (v) => v >= 0 },
   { key: "max_steps", label: "Max sub-steps", hint: "Per clock step, before it gives up.", group: "Steps", whole: true, valid: (v) => v >= 1 },
-  { key: "sub_steps", label: "Sub-steps per clock step", hint: "Steps of dt / n: more is closer and slower.", group: "Steps", whole: true, valid: (v) => v >= 1 && v <= 10000 },
+  { key: "sub_steps", label: "Sub-steps per clock step", hint: "Internal steps of dt / n for blocks with state; a run with a Scope samples at dt / n.", group: "Steps", whole: true, valid: (v) => v >= 1 && v <= 10000 },
+  { key: "dt", label: "Clock step", unit: "s", hint: "How often blocks run and monitors sample; a Scope lowers it to the solver's step.", group: "Time", valid: (v) => v > 0 },
 ];
 
 /**
@@ -40,21 +42,26 @@ export function SolverDialog({ defaults, value, onChange, onClose }: { defaults:
   const asked = (value.solver ?? defaults.solver ?? "rk4") as Solver;
   const solver = available.includes(asked) ? asked : (available[0] ?? "rk4");
   const set = (change: RunSettings) => onChange(changed({ ...value, ...change }, defaults));
+  const values = { ...((value.solver_options ?? {}) as Record<string, number | undefined>), dt: value.dt };
   return (
     <SolverSettings
-      intro="The run's solver: every block and station object whose own solver is auto uses it. Applies to the next run. A Modelica FMU object keeps the solver it was exported with."
+      intro="The run's solver: every block and station object whose own solver is auto uses it. The clock step controls how often blocks run and monitors sample; a Scope lowers it to the solver's step (max step, or dt / sub-steps) so it plots every solver point. Applies to the next run."
       solvers={solvers}
       options={OPTIONS}
       solver={solver}
-      values={(value.solver_options ?? {}) as Record<string, number | undefined>}
-      defaults={{ ...ENGINE, ...defaults.solver_options }}
+      values={values}
+      defaults={{ ...ENGINE, ...defaults.solver_options, dt: defaults.dt ?? ENGINE_DT }}
       onSolver={(id) => set({ solver: id as Solver })}
       onOption={(key, v) => {
+        if (key === "dt") {
+          set({ dt: v });
+          return;
+        }
         const next = { ...value.solver_options, [key]: v } as Record<string, number | undefined>;
         if (v === undefined) delete next[key];
         set({ solver_options: next as SolverOptions });
       }}
-      onReset={() => onChange(changed({ ...value, solver: undefined, solver_options: undefined }, defaults))}
+      onReset={() => onChange(changed({ ...value, solver: undefined, solver_options: undefined, dt: undefined }, defaults))}
       onClose={onClose}
     />
   );

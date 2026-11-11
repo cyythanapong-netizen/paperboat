@@ -83,7 +83,8 @@ Usage:
   paperboat <command> [arguments...]
 
 Start and stop (the web app, backends and programs):
-  start [target] [options]   Without a target: the web app (dev server, port 3047).
+  start [target] [options]   Without a target: the web app (dev server, port 3047) and,
+                             in a checkout, the workbench backend (port 8765).
                              A backend (folder, name or .ppk): build it and run it in the foreground.
                              A program from apps.toml (e.g. squero-studio-om): run it.
                                --port <N>      Listen port (backend 8765, web app 3047, squero-studio-om 59201)
@@ -149,7 +150,7 @@ Updating:
                              rebuild them, and refresh installed apps. --check only reports.
 
 Packages (apps from other repositories, see apps.toml):
-  pkg list [--json]          The programs and libraries, installed or not (KIND column)
+  pkg list [--json]          The programs and libraries, installed, a sibling checkout, or not (KIND column)
   pkg install <name>[@<V>]   Clone a release (default: newest, else main) and build it. Deps resolve
                              in their apps.toml range (paperboat-shared@0.1); one installed outside it
                              fails the install, or with --force is reinstalled in range
@@ -502,6 +503,7 @@ int cmd_list(const std::vector<std::string_view>& args) {
 }
 
 int cmd_app(const std::vector<std::string_view>& args);
+void start_workbench();
 Command find_command(std::string_view name);
 
 // `start`, `stop` and `restart` with no target are for the main app (the web app); `app <verb>` is the same.
@@ -728,10 +730,12 @@ int cmd_app(const std::vector<std::string_view>& args) {
   }
 
   if (sub == "start") {
+    start_workbench();
     return core::BackendManager::start_app(port, host, daemon) ? 0 : 1;
   } else if (sub == "stop") {
     return core::BackendManager::stop_app(port) ? 0 : 1;
   } else if (sub == "restart") {
+    start_workbench();
     return core::BackendManager::restart_app(port, host) ? 0 : 1;
   } else if (sub == "build") {
     return core::BackendManager::build_app() ? 0 : 1;
@@ -929,7 +933,7 @@ int cmd_pkg(const std::vector<std::string_view>& args) {
           if (!d.range.empty()) ranges[d.name] = d.range;
         }
         arr.push_back({{"name", a.name}, {"repo", a.repo}, {"description", a.description},
-                       {"installed", a.installed}, {"version", a.version}, {"deps", deps}, {"dep_ranges", ranges},
+                       {"installed", a.installed}, {"checkout", a.checkout}, {"version", a.version}, {"deps", deps}, {"dep_ranges", ranges},
                        {"built_with", a.built_with}, {"kind", a.kind}, {"launch", a.launch}, {"port", a.port}});
       }
       std::cout << arr.dump(2) << '\n';
@@ -939,7 +943,7 @@ int cmd_pkg(const std::vector<std::string_view>& args) {
     std::cout << std::left << std::setw(20) << "NAME" << std::setw(9) << "KIND" << std::setw(15) << "VERSION" << "DESCRIPTION\n";
     for (const auto& a : list) {
       std::cout << std::left << std::setw(20) << a.name << std::setw(9) << a.kind << std::setw(15)
-                << (a.installed ? a.version : "not installed") << a.description << '\n';
+                << (a.installed ? a.version : a.checkout ? "checkout" : "not installed") << a.description << '\n';
       if (!a.installed) continue;
       for (const auto& d : a.deps) {  // what it was built against, and whether the dep installed now still pairs
         const auto it = std::ranges::find(list, d.name, &tk::AppEntry::name);
@@ -1479,33 +1483,36 @@ void print_interactive_help() {
             << "  " << std::setw(18) << "exit, quit" << "Leave the prompt\n";
 }
 
+/**
+ * The workbench is the default backend of a checkout: start it on 8765 when nothing is
+ * listening and the checkout has one. Installed packages without a checkout have none.
+ */
+void start_workbench() {
+  const fs::path root = tk::find_repo_root();
+  if (core::BackendManager::is_port_listening(8765) || root.empty() || !fs::is_directory(root / "engine" / "workbench")) return;
+  std::string err;
+  if (!core::BackendManager::ensure_built(root / "engine" / "workbench", false, false, &err)) return;
+  const fs::path bin = root / "engine" / "build" / "workbench" / "paperboat-workbench";
+  if (!fs::is_regular_file(bin)) return;
+  const fs::path log_path = platform::shared_tmp_dir() / "backend-8765.log";
+  const int pid = core::ProcessRunner::run_detached({bin.string(), "--port", "8765"}, root / "engine" / "workbench", {}, log_path);
+  if (pid <= 0) return;
+  core::RunningBackend rb;
+  rb.port = 8765;
+  rb.pid = pid;
+  rb.engine = "workbench";
+  rb.domain = "workbench";
+  rb.cwd = root / "engine" / "workbench";
+  rb.executable = bin.string();
+  rb.ws_url = "ws://localhost:8765";
+  rb.started_at = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+  core::BackendManager::register_running_backend(rb);
+  std::cout << "  \033[32m●\033[0m workbench running on ws://localhost:8765 (PID " << pid << ")\n\n";
+}
+
 int run_interactive_prompt() {
   tui::render_banner(true);
-  const fs::path root = tk::find_repo_root();
-  if (!core::BackendManager::is_port_listening(8765) && !root.empty() && fs::is_directory(root / "engine" / "workbench")) {
-    std::string err;
-    if (core::BackendManager::ensure_built(root / "engine" / "workbench", false, false, &err)) {
-      const fs::path bin = root / "engine" / "build" / "workbench" / "paperboat-workbench";
-      if (fs::is_regular_file(bin)) {
-        const fs::path log_path = platform::shared_tmp_dir() / "backend-8765.log";
-        int pid = core::ProcessRunner::run_detached({bin.string(), "--port", "8765"}, root / "engine" / "workbench", {}, log_path);
-        if (pid > 0) {
-          core::RunningBackend rb;
-          rb.port = 8765;
-          rb.pid = pid;
-          rb.engine = "workbench";
-          rb.domain = "workbench";
-          rb.cwd = root / "engine" / "workbench";
-          rb.executable = bin.string();
-          rb.ws_url = "ws://localhost:8765";
-          rb.started_at = std::chrono::duration_cast<std::chrono::seconds>(
-              std::chrono::system_clock::now().time_since_epoch()).count();
-          core::BackendManager::register_running_backend(rb);
-          std::cout << "  \033[32m●\033[0m workbench running on ws://localhost:8765 (PID " << pid << ")\n\n";
-        }
-      }
-    }
-  }
+  start_workbench();
   std::cout << "Interactive prompt. Type 'help' for commands, or 'exit' to quit.\n\n";
 
   std::string line;

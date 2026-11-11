@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { arrangeFlowNodes, canArrangeFlow } from "../src/flowLayout.ts";
+import { arrangeFlowNodes, canArrangeFlow, clearWireBends } from "../src/flowLayout.ts";
 import type { FlowNode, Wire } from "../src/flowModel.ts";
 import type { GroupNode } from "../src/groups.tsx";
 
@@ -123,4 +123,15 @@ test("empty levels are no-ops", () => {
   const nodes = [group("empty", "subsystem")];
   assert.equal(canArrangeFlow(nodes, "empty"), false);
   assert.equal(arrangeFlowNodes(nodes, [], "empty"), nodes);
+});
+
+test("arranging drops the bends dragged for the blocks' old places", () => {
+  const bent: Wire = { ...wire("a", "b"), data: { type: "signal", points: [[10, 10], [20, 20]] } };
+  const edges = [wire("b", "c"), bent];
+  const next = clearWireBends(edges);
+  assert.notEqual(next, edges, "a changed list is a new array");
+  assert.deepEqual(next[1].data, { type: "signal" }, "the wire routes itself again");
+  assert.deepEqual(edges[1].data?.points, [[10, 10], [20, 20]], "the input was not mutated");
+  const plain = [wire("a", "b")];
+  assert.equal(clearWireBends(plain), plain, "nothing to drop returns the same list");
 });

@@ -211,10 +211,13 @@ std::vector<AppEntry> parse_apps_manifest(std::string_view toml_text) {
 std::vector<AppEntry> list_apps(const fs::path& repo_root) {
   std::string error;
   auto list = load(repo_root, error);
+  const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
   for (auto& e : list) {
     const json m = read_marker(apps_dir() / e.name);
     e.installed = !m.empty();
     e.version = m.value("version", "");
+    std::error_code ec;
+    e.checkout = !root.empty() && fs::is_directory(root.parent_path() / e.name, ec);
     if (const auto it = m.find("deps"); it != m.end() && it->is_object())
       for (const auto& [dep, v] : it->items())
         if (v.is_string()) e.built_with[dep] = v.get<std::string>();
