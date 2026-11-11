@@ -84,7 +84,9 @@ errors, a connection status pill (which opens File > Backend…) and the theme k
 engine name never shifts the keys beside it. Everything else
 you can do is a **command** in one registry (`src/commands.ts`); the menu bar, the command
 search and the registry's own shortcuts all read it, so a label, a shortcut and whether
-something is available can't drift between them.
+something is available can't drift between them. Shortcuts are written once, as on Windows and
+Linux (`Ctrl+Shift+S`, `Alt+1`); on a Mac every label shows them the Mac's way (`⇧⌘S`, `⌥1`), and
+an Alt chord answers to its physical key, since Option types another character there (#281).
 
 - **Menus** (`Menus.tsx`): File, Edit, View, Run, and only items for things the app does.
   An ARIA menubar: Tab enters it once, ←/→ move between menus, ↓ or Enter opens one, Esc
@@ -150,7 +152,7 @@ readable at 4.5:1 on a panel), `--focus`, `--text-on-signal` (text on a signal f
 | **Choice** (view, theme) | Options in monospace; the chosen one in brackets and bold ink, the rest grey. The brackets are reserved for every option, so nothing shifts. Click one, or use the arrow keys |
 | **Remove** (round ×) | 16px or 18px circle, grid-centred, with the × drawn as two SVG strokes (`RemoveIcon`) in the button's colour. Never a text glyph: a glyph centres on its font's line box and drifts with the font |
 | **Minimap** | Bottom-right of the Flow canvas, Navigator mode on the Flow page only (never in Commander). A sunken grey well with a 1px outline: blocks in grey, groups as outlines, running in the signal colour, failed red; the view is the clear window in the mask. Click or drag to move the view, scroll to zoom. Kinds are not coloured |
-| **Well** | A recessed grey field for input (address, run length, speed); ink text, no spinners |
+| **Well** | A recessed grey field for input (address, run length, speed); ink text, no spinners. A select draws its own chevron in the text colour, 8px from the right edge, never the platform's (#281) |
 | **Display** | Black, 5px radius; light monospace text; the signal colour for traces and live values. For output only |
 | **Bar** | The wordmark (the logo mark and the name), the backend (a well with the address and engine name; Connect), the run (Run, length, speed, Cancel, status in words), view and theme, divided by a hairline |
 | **Rail** | The pages share the rail's full height on sunken grey, each an icon over its name in monospace (no numbers). The current one sits in 2px square ink brackets, like a chosen switch option; it is ink, the others grey, its icon lifted a little. On a change the pair glides to the new key as one, on the page column's curve and time (`--slide`), so rail and page move together; the icons and names ease in step. Placed from the key's face plus 8px, so they never touch the name |

@@ -962,3 +962,25 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 
 /* The bar's menus and the About title sit as one row, the same 2px apart. */
 .menubar-group { display: flex; align-items: center; gap: 2px; }
+
+/* Selects draw their own chevron (#281). The native one sits a fixed 3–4 px from the right edge
+   (Chromium on macOS), whatever the padding, while the text starts 8–12 px in. This one is drawn
+   in currentColor, 8 px in, so it follows the theme and the screens. The list names every select
+   rule that sets a background or padding, so this one comes after them and wins. */
+select,
+.screen select, .well select, .run-options select, .param select, .popover .param select,
+.var-row select.var-value, .var-control select.var-value, .toolkit-version-select, .scope-row select.well {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 22px;
+  background-image:
+    linear-gradient(45deg, transparent calc(50% - 0.6px), currentColor calc(50% - 0.6px), currentColor calc(50% + 0.6px), transparent calc(50% + 0.6px)),
+    linear-gradient(-45deg, transparent calc(50% - 0.6px), currentColor calc(50% - 0.6px), currentColor calc(50% + 0.6px), transparent calc(50% + 0.6px));
+  background-size: 5px 5px, 5px 5px;
+  background-position: calc(100% - 13px) 50%, calc(100% - 8px) 50%;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+select:disabled { cursor: default; opacity: 0.55; }
+/* A param's value reads left in a select: right-aligned, it ran into the chevron. */
+.param select { text-align: left; }
