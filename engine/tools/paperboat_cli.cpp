@@ -1043,10 +1043,13 @@ int start_program(const tk::AppEntry& app, std::vector<std::string_view> rest) {
   if (is_daemon) rest.erase(daemon);
   std::vector<std::string> argv = {bin.string()};
   for (auto a : rest) argv.emplace_back(a);
+  // The app calls back into this paperboat (squero-mx: `paperboat list`, `paperboat optimize`) without
+  // having to find it, as the console does.
+  const std::vector<std::pair<std::string, std::string>> env = {{"PAPERBOAT_BIN", platform::exe_path().string()}};
 
   if (is_daemon) {
     const fs::path log = platform::shared_tmp_dir() / ("paperboat-" + app.name + ".log");
-    const int pid = core::ProcessRunner::run_detached(argv, {}, {}, log);
+    const int pid = core::ProcessRunner::run_detached(argv, {}, env, log);
     if (pid <= 0) {
       std::cerr << "error: could not start " << app.name << '\n';
       return 1;
@@ -1055,7 +1058,7 @@ int start_program(const tk::AppEntry& app, std::vector<std::string_view> rest) {
     return 0;
   }
 
-  return core::ProcessRunner::run_stream(argv, {}, {}, [](std::string_view stream, std::string_view line) {
+  return core::ProcessRunner::run_stream(argv, {}, env, [](std::string_view stream, std::string_view line) {
     if (stream == "stderr") std::cerr << line << '\n';
     else std::cout << line << '\n';
   });
@@ -1853,7 +1856,10 @@ bool launch_console(const std::vector<std::string>& args) {
   owned.insert(owned.end(), args.begin(), args.end());
 #ifdef _WIN32
   _putenv_s("PAPERBOAT_BIN", exe.string().c_str());
-  // no exec on Windows: node runs in this console as a child, and its exit code is ours
+  // no exec on Windows: node runs in this console as a child, and its exit code is ours.
+  // _spawnvp joins argv with spaces unquoted, so each is quoted, or a script under
+  // "C:\Users\Jane Doe" reached node as "C:\Users\Jane" (and ran whatever file has that name).
+  for (auto& a : owned) a = core::quote_command_arg(a);
   std::vector<const char*> argv;
   for (auto& a : owned) argv.push_back(a.c_str());
   argv.push_back(nullptr);
@@ -1896,8 +1902,8 @@ void start_workbench() {
   if (core::BackendManager::is_port_listening(8765) || root.empty() || !fs::is_directory(root / "engine" / "workbench")) return;
   std::string err;
   if (!core::BackendManager::ensure_built(root / "engine" / "workbench", false, false, &err)) return;
-  const fs::path bin = root / "engine" / "build" / "workbench" / "paperboat-workbench";
-  if (!fs::is_regular_file(bin)) return;
+  const fs::path bin = core::BackendManager::workbench_binary(root);
+  if (bin.empty()) return;
   const fs::path log_path = platform::shared_tmp_dir() / "backend-8765.log";
   const int pid = core::ProcessRunner::run_detached({bin.string(), "--port", "8765"}, root / "engine" / "workbench", {}, log_path);
   if (pid <= 0) return;

@@ -10,7 +10,10 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cwctype>
+#include <fstream>
 #include <map>
+#include <sstream>
 #include <mutex>
 #include <thread>
 
@@ -29,31 +32,34 @@ std::wstring widen(std::string_view s) {
 }
 
 // One argument as CommandLineToArgvW reads it back ("Everyone quotes command line arguments the wrong way").
-void append_quoted(std::wstring& out, const std::wstring& arg) {
-  if (!arg.empty() && arg.find_first_of(L" \t\n\v\"") == std::wstring::npos) {
+template <class Ch>
+void append_quoted(std::basic_string<Ch>& out, const std::basic_string<Ch>& arg) {
+  constexpr Ch quote = '"', backslash = '\\';
+  constexpr Ch special[] = {' ', '\t', '\n', '\v', '"', 0};
+  if (!arg.empty() && arg.find_first_of(special) == std::basic_string<Ch>::npos) {
     out += arg;
     return;
   }
-  out += L'"';
+  out += quote;
   for (auto it = arg.begin();; ++it) {
     std::size_t backslashes = 0;
-    while (it != arg.end() && *it == L'\\') {
+    while (it != arg.end() && *it == backslash) {
       ++it;
       ++backslashes;
     }
     if (it == arg.end()) {
-      out.append(backslashes * 2, L'\\');
+      out.append(backslashes * 2, backslash);
       break;
     }
-    if (*it == L'"') {
-      out.append(backslashes * 2 + 1, L'\\');
-      out += L'"';
+    if (*it == quote) {
+      out.append(backslashes * 2 + 1, backslash);
+      out += quote;
     } else {
-      out.append(backslashes, L'\\');
+      out.append(backslashes, backslash);
       out += *it;
     }
   }
-  out += L'"';
+  out += quote;
 }
 
 bool on_path(const std::wstring& name, const wchar_t* ext) {
@@ -61,8 +67,59 @@ bool on_path(const std::wstring& name, const wchar_t* ext) {
   return SearchPathW(nullptr, name.c_str(), ext, MAX_PATH, found, nullptr) != 0;
 }
 
-// npm, npx and friends are .cmd files, which CreateProcess runs only through cmd.exe.
+// Git for Windows' bash: bash.exe next to git's cmd\ (..\bin\bash.exe). Not the bash.exe in
+// System32, which is WSL's and would run the script inside Linux.
+std::string git_bash() {
+  wchar_t git[MAX_PATH];
+  if (SearchPathW(nullptr, L"git", L".exe", MAX_PATH, git, nullptr) == 0) return {};
+  // <Git>\cmd\git.exe from a Windows PATH, <Git>\mingw64\bin\git.exe from Git Bash's own: walk up to <Git>
+  for (fs::path root = fs::path(git).parent_path().parent_path(); root.has_relative_path(); root = root.parent_path()) {
+    for (const fs::path& bash : {root / "bin" / "bash.exe", root / "usr" / "bin" / "bash.exe"}) {
+      std::error_code ec;
+      if (fs::is_regular_file(bash, ec)) return bash.string();
+    }
+  }
+  return {};
+}
+
+// A script with a #! line (bin/squero-mx: `#!/usr/bin/env node`), which CreateProcess cannot run:
+// its interpreter and the script. node, python3 and the like by name from PATH; sh and bash
+// through Git for Windows' bash. Empty when `path` is not such a script.
+std::vector<std::string> shebang_command(const std::string& path) {
+  const fs::path p(widen(path));
+  std::error_code ec;
+  if (!fs::is_regular_file(p, ec)) return {};
+  std::wstring ext = p.extension().wstring();
+  std::ranges::transform(ext, ext.begin(), ::towlower);
+  if (ext == L".exe" || ext == L".com" || ext == L".cmd" || ext == L".bat") return {};
+  std::ifstream in(p, std::ios::binary);
+  std::string line;
+  if (!std::getline(in, line) || !line.starts_with("#!")) return {};
+  if (!line.empty() && line.back() == '\r') line.pop_back();
+  std::vector<std::string> words;
+  std::istringstream split(line.substr(2));
+  for (std::string w; split >> w;) words.push_back(w);
+  if (!words.empty() && fs::path(words[0]).filename() == "env") words.erase(words.begin());  // #!/usr/bin/env node
+  if (!words.empty() && words[0] == "-S") words.erase(words.begin());                          // #!/usr/bin/env -S node --flag
+  if (words.empty()) return {};
+  std::string interpreter = fs::path(words[0]).filename().string();  // /bin/bash -> bash
+  if (interpreter == "sh" || interpreter == "bash") {
+    interpreter = git_bash();
+    if (interpreter.empty()) return {};
+  }
+  std::vector<std::string> command = {interpreter};
+  command.insert(command.end(), words.begin() + 1, words.end());
+  command.push_back(path);
+  return command;
+}
+
+// npm, npx and friends are .cmd files, which CreateProcess runs only through cmd.exe; a #! script
+// runs through its interpreter.
 std::vector<std::string> with_cmd_for_scripts(const std::vector<std::string>& args) {
+  if (auto command = shebang_command(args[0]); !command.empty()) {
+    command.insert(command.end(), args.begin() + 1, args.end());
+    return with_cmd_for_scripts(command);  // the interpreter may itself be a .cmd
+  }
   const std::wstring name = widen(args[0]);
   if (on_path(name, L".exe")) return args;
   if (on_path(name, L".cmd") || on_path(name, L".bat")) {
@@ -146,21 +203,43 @@ HANDLE open_nul(DWORD access) {
 }
 
 // Start `args` with the given standard handles (all inheritable). Returns false on failure.
+// The child inherits those three handles and nothing else (PROC_THREAD_ATTRIBUTE_HANDLE_LIST): with plain
+// bInheritHandles it would get every inheritable handle we hold, such as our own redirected stdout, so a
+// detached server kept a CI step's output pipe open, or another thread's pipe ends, so that pipe never closed.
 bool create(const std::vector<std::string>& args, const fs::path& cwd, const Env& env, HANDLE in, HANDLE out, HANDLE err,
             DWORD flags, bool in_job, Child& child) {
   const std::wstring dir = cwd.empty() ? std::wstring{} : cwd.wstring();
   std::wstring line = command_line(with_cmd_for_scripts(args));
   const std::wstring block = environment_block(env);
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  si.dwFlags = STARTF_USESTDHANDLES;
-  si.hStdInput = in;
-  si.hStdOutput = out;
-  si.hStdError = err;
+
+  std::vector<HANDLE> inherit;  // each once: the list refuses duplicates (out and err are often the same)
+  for (HANDLE h : {in, out, err})
+    if (h && h != INVALID_HANDLE_VALUE && std::find(inherit.begin(), inherit.end(), h) == inherit.end()) inherit.push_back(h);
+  SIZE_T size = 0;
+  InitializeProcThreadAttributeList(nullptr, 1, 0, &size);
+  std::vector<char> storage(size);
+  auto* attrs = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(storage.data());
+  if (!InitializeProcThreadAttributeList(attrs, 1, 0, &size)) return false;
+  struct Cleanup {
+    LPPROC_THREAD_ATTRIBUTE_LIST a;
+    ~Cleanup() { DeleteProcThreadAttributeList(a); }
+  } cleanup{attrs};
+  if (!inherit.empty() &&
+      !UpdateProcThreadAttribute(attrs, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherit.data(), inherit.size() * sizeof(HANDLE), nullptr, nullptr))
+    return false;
+
+  STARTUPINFOEXW si{};
+  si.StartupInfo.cb = sizeof(si);
+  si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+  si.StartupInfo.hStdInput = in;
+  si.StartupInfo.hStdOutput = out;
+  si.StartupInfo.hStdError = err;
+  si.lpAttributeList = attrs;
   PROCESS_INFORMATION pi{};
   if (in_job) flags |= CREATE_SUSPENDED;  // joins its job before running a line of code
-  if (!CreateProcessW(nullptr, line.data(), nullptr, nullptr, TRUE, flags | CREATE_UNICODE_ENVIRONMENT, const_cast<wchar_t*>(block.c_str()),
-                      dir.empty() ? nullptr : dir.c_str(), &si, &pi))
+  if (!CreateProcessW(nullptr, line.data(), nullptr, nullptr, !inherit.empty(),
+                      flags | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT, const_cast<wchar_t*>(block.c_str()),
+                      dir.empty() ? nullptr : dir.c_str(), &si.StartupInfo, &pi))
     return false;
   child.process = pi.hProcess;
   child.pid = pi.dwProcessId;
@@ -283,6 +362,12 @@ bool wait_gone(int pid, int timeout_ms) {
 }
 
 }  // namespace
+
+std::string quote_command_arg(const std::string& arg) {
+  std::string out;
+  append_quoted(out, arg);
+  return out;
+}
 
 ProcessResult ProcessRunner::run_sync(const std::vector<std::string>& args, const fs::path& cwd, const Env& env,
                                       std::chrono::milliseconds timeout) {

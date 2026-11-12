@@ -7,6 +7,11 @@ CLI="$REPO_ROOT/engine/build/dev/tools/paperboat"
 if [ ! -x "$CLI" ]; then
   CLI="$REPO_ROOT/engine/build/tools/paperboat"
 fi
+# Git Bash on Windows: the Visual Studio generator's build (bin/paperboat.cmd is the cmd/PowerShell launcher)
+for config in Release RelWithDebInfo Debug; do
+  [ -x "$CLI" ] && break
+  CLI="$REPO_ROOT/engine/build/tools/$config/paperboat.exe"
+done
 
 if [ ! -x "$CLI" ]; then
   if command -v paperboat >/dev/null 2>&1; then

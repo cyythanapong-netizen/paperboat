@@ -132,6 +132,36 @@ const ToolkitEntry* find_entry(const std::vector<ToolkitEntry>& list, std::strin
   return it == list.end() ? nullptr : &*it;
 }
 
+#ifdef _WIN32
+// The .exe files under `build` (not its dependencies' or CMake's own) that a running process holds,
+// renamed to <name>.exe.old; returns (program, where it went). A stale .old from an earlier
+// install is removed first, unless that one still runs too.
+std::vector<std::pair<fs::path, fs::path>> move_running_programs_aside(const fs::path& build) {
+  std::vector<std::pair<fs::path, fs::path>> moved;
+  std::error_code ec;
+  for (auto it = fs::recursive_directory_iterator(build, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+    const fs::path& p = it->path();
+    if (it->is_directory(ec)) {
+      const std::string name = p.filename().string();
+      if (name == "_deps" || name == "CMakeFiles") it.disable_recursion_pending();
+      continue;
+    }
+    if (p.extension() != ".exe") continue;
+    // a program that runs is open without FILE_SHARE_WRITE: opening it for writing fails
+    if (std::FILE* f = nullptr; _wfopen_s(&f, p.c_str(), L"r+b") == 0 && f) {
+      std::fclose(f);
+      continue;
+    }
+    fs::path aside = p;
+    aside += ".old";
+    std::error_code rm;
+    fs::remove(aside, rm);
+    if (std::error_code mv; fs::rename(p, aside, mv), !mv) moved.emplace_back(p, aside);
+  }
+  return moved;
+}
+#endif
+
 ToolkitResult rebuild_host(const HostBuild& host, const fs::path& root, const ToolkitLog& log) {
   if (host.skip_rebuild) return {true, "rebuild skipped"};
   fs::path src = host.source_dir;
@@ -154,7 +184,28 @@ ToolkitResult rebuild_host(const HostBuild& host, const fs::path& root, const To
     return {false, "cmake configure failed" + (last.empty() ? "" : ": " + last)};
   }
   if (log) log("info", "building…");
-  if (run_cmd({"cmake", "--build", bld.string()}, root, log, &last) != 0) {
+  std::vector<std::string> build = {"cmake", "--build", bld.string()};
+#ifdef _WIN32
+  // Programs of this build that are running (this paperboat.exe, the workbench the console
+  // started) cannot be overwritten on Windows, but they can be renamed: move them aside so the
+  // link can write the new ones. Build the configuration this paperboat came from (Visual
+  // Studio's default is Debug).
+  std::error_code ec;
+  const fs::path self = platform::exe_path();
+  const auto moved = move_running_programs_aside(bld);
+  std::string config = "Release";
+  if (!self.empty()) {
+    const std::string dir = self.parent_path().filename().string();
+    if (dir == "Debug" || dir == "Release" || dir == "RelWithDebInfo" || dir == "MinSizeRel") config = dir;
+  }
+  build.insert(build.end(), {"--config", config});
+#endif
+  if (run_cmd(build, root, log, &last) != 0) {
+#ifdef _WIN32
+    // whatever was not linked again: put the program we moved aside back
+    for (const auto& [program, aside] : moved)
+      if (!fs::exists(program, ec)) fs::rename(aside, program, ec);
+#endif
     return {false, "cmake build failed" + (last.empty() ? "" : ": " + last)};
   }
   return {true, "build succeeded"};

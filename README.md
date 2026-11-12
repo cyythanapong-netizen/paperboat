@@ -18,6 +18,7 @@ what they send.<br><br>
 | Python | the bindings and the protocol schema | [![python](https://github.com/paperboatlab/paperboat/actions/workflows/python.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/python.yml?query=branch%3Adev) |
 | Web and console | typecheck, tests and build of `apps/web` and `apps/cli` | [![web](https://github.com/paperboatlab/paperboat/actions/workflows/web.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/web.yml?query=branch%3Adev) |
 | End to end | the web app in headless Chromium against a real engine backend | [![e2e](https://github.com/paperboatlab/paperboat/actions/workflows/e2e.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/e2e.yml?query=branch%3Adev) |
+| Journey | the CLI as a user drives it: `bin/paperboat`, the workbench, an example, a toolkit and its example (Linux, Windows, macOS) | [![journey](https://github.com/paperboatlab/paperboat/actions/workflows/journey.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/journey.yml?query=branch%3Adev) |
 | Release | `.deb`, `.rpm`, `.tar.gz`, `.zip` and the npm packages, built on a `v<version>` tag | [![release](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml/badge.svg)](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml) [![latest release](https://img.shields.io/github/v/release/paperboatlab/paperboat?include_prereleases&label=latest)](https://github.com/paperboatlab/paperboat/releases) |
 | Docs | the [API reference](https://paperboatlab.github.io/paperboat/), warnings as errors | [![docs](https://github.com/paperboatlab/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
 
@@ -168,10 +169,11 @@ Versions order by SemVer (`0.1.0-alpha.2 < 0.1.0-alpha.10 < 0.1.0`); `pkg update
 ### Install
 
 ```sh
-npm install -g @paperboatlabs/cli        # Linux x64 and macOS arm64 (Apple Silicon); Windows x64 is being brought up. The native binary is an optional dependency
+npm install -g @paperboatlabs/cli        # Linux x64, macOS arm64 (Apple Silicon) and Windows x64. The native binary is an optional dependency
 sudo apt install ./paperboat_<version>_amd64.deb   # Debian / Ubuntu, from the GitHub release
 sudo dnf install ./paperboat-<version>.x86_64.rpm  # Fedora / RHEL
 tar xzf paperboat-<version>-Darwin-arm64.tar.gz      # macOS 13+ on Apple Silicon, from the GitHub release
+Expand-Archive paperboat-<version>-Windows-AMD64.zip  # Windows x64 (PowerShell), from the GitHub release
 ```
 
 A package install is the CLI and the apps: `paperboat` opens the console (needs `node`),

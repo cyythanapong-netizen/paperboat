@@ -66,4 +66,11 @@ class ProcessRunner {
   static std::string read_cmdline(int pid);
 };
 
+#ifdef _WIN32
+// One argument quoted so the C runtime (CommandLineToArgvW) reads it back unchanged. For the CRT's
+// _spawn*/_exec*, which join their arguments with spaces and quote nothing: a path with a space
+// ("C:\Users\Jane Doe\...") arrives as two arguments otherwise.
+std::string quote_command_arg(const std::string& arg);
+#endif
+
 }  // namespace paperboat::core

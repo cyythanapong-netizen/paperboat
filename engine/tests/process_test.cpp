@@ -12,6 +12,14 @@
 
 #include "paperboat/core/process.hpp"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <shellapi.h>  // CommandLineToArgvW
+#pragma comment(lib, "shell32.lib")
+#endif
+
 using paperboat::core::ProcessRunner;
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
@@ -147,6 +155,68 @@ TEST_CASE("process: run_detached logs to a file, and a detached process can be f
   CHECK(wait_for([&] { return !ProcessRunner::is_alive(group); }));
   fs::remove(log);
 }
+
+#ifdef _WIN32
+// `paperboat start --daemon` in a CI step: the step's output is an inheritable pipe, and a detached server that
+// inherited it kept it open, so the step never saw the end of its output. A child gets its three handles only.
+TEST_CASE("process: a detached process does not inherit our other handles") {
+  SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
+  HANDLE read_end = nullptr, write_end = nullptr;
+  REQUIRE(CreatePipe(&read_end, &write_end, &sa, 0));  // both ends inheritable, like a redirected stdout
+
+  const int pid = daemon_sleeper(false);
+  REQUIRE(pid > 0);
+  CloseHandle(write_end);
+  // With no writer left the pipe reports broken; a child holding a copy would keep it open for 30 s.
+  CHECK(wait_for([&] {
+    DWORD avail = 0;
+    return !PeekNamedPipe(read_end, nullptr, 0, nullptr, &avail, nullptr) && GetLastError() == ERROR_BROKEN_PIPE;
+  }));
+  CloseHandle(read_end);
+  CHECK(ProcessRunner::kill_pid(pid, 15, 3000));
+}
+
+// The console launch (_spawnvp "node <main.js>") under C:\Users\<name with a space>: node got the path cut
+// at the space. Each argument, quoted and joined, must read back as itself.
+TEST_CASE("process: quote_command_arg survives the Windows command-line parser") {
+  const std::vector<std::string> args = {
+      "node", R"(C:\Users\Jane Doe\paperboat\apps\cli\dist\main.js)", "plain", "", R"(ends in a backslash\)",
+      R"(say "hi")", R"(C:\dir with space\\)", "tab\there"};
+  std::string line;
+  for (const auto& a : args) line += (line.empty() ? "" : " ") + paperboat::core::quote_command_arg(a);
+  const int n = MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, nullptr, 0);
+  std::wstring wide(static_cast<std::size_t>(n), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, wide.data(), n);
+  int argc = 0;
+  LPWSTR* argv = CommandLineToArgvW(wide.c_str(), &argc);
+  REQUIRE(argv);
+  REQUIRE(argc == static_cast<int>(args.size()));
+  for (int i = 0; i < argc; ++i) {
+    const std::wstring expected(args[static_cast<std::size_t>(i)].begin(), args[static_cast<std::size_t>(i)].end());
+    CHECK(std::wstring(argv[i]) == expected);
+  }
+  LocalFree(argv);
+}
+
+// `paperboat start squero-studio-mx` launches bin/squero-mx, a `#!/usr/bin/env node` script, and
+// squero-om's bin/squero-om is bash: CreateProcess runs neither, so the #! line names the program.
+TEST_CASE("process: a #! script runs through its interpreter") {
+  const fs::path dir = fs::temp_directory_path() / "pb process shebang";  // a space, as under C:\Users\Jane Doe
+  fs::create_directories(dir);
+  const fs::path node_script = dir / "hello-node";
+  std::ofstream(node_script, std::ios::binary) << "#!/usr/bin/env node\nconsole.log('node ' + process.argv[2]);\n";
+  const fs::path sh_script = dir / "hello-sh";
+  std::ofstream(sh_script, std::ios::binary) << "#!/bin/sh\necho \"sh $1\"\n";
+
+  const auto node = ProcessRunner::run_sync({node_script.string(), "arg one"});
+  CHECK(node.exit_code == 0);
+  CHECK(trimmed(node.stdout_text) == "node arg one");
+  const auto sh = ProcessRunner::run_sync({sh_script.string(), "arg two"});
+  CHECK(sh.exit_code == 0);
+  CHECK(trimmed(sh.stdout_text) == "sh arg two");
+  fs::remove_all(dir);
+}
+#endif
 
 TEST_CASE("process: is_alive is false for nothing") {
   CHECK_FALSE(ProcessRunner::is_alive(0));

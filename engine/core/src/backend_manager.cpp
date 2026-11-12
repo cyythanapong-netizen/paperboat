@@ -165,16 +165,56 @@ void add_unique(std::vector<std::string>& list, const std::string& item) {
 }
 
 // The executable a C++ backend's build made: the first `paperboat-*` file in `build_dir`
-// that isn't an object or an archive.
+// that isn't an object or an archive. A multi-config generator (Visual Studio) puts it a folder
+// down, per configuration; on Windows only the .exe counts (next to it are .pdb, .ilk, ...).
 fs::path built_binary(const fs::path& build_dir) {
   std::error_code ec;
-  for (const auto& entry : fs::directory_iterator(build_dir, ec)) {
-    if (!entry.is_regular_file()) continue;
-    const auto name = entry.path().filename().string();
-    if (name.starts_with("paperboat-") && !name.ends_with(".o") && !name.ends_with(".a")) return entry.path();
+  for (const fs::path& dir : {build_dir, build_dir / "Release", build_dir / "RelWithDebInfo", build_dir / "MinSizeRel",
+                              build_dir / "Debug"}) {
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+      if (!entry.is_regular_file()) continue;
+      const auto name = entry.path().filename().string();
+      if (!name.starts_with("paperboat-")) continue;
+#ifdef _WIN32
+      if (entry.path().extension() == ".exe") return entry.path();
+#else
+      if (!name.ends_with(".o") && !name.ends_with(".a")) return entry.path();
+#endif
+    }
   }
   return {};
 }
+
+#ifdef _WIN32
+bool is_junction(const fs::path& p) {
+  std::error_code ec;
+  return fs::symlink_status(p, ec).type() == fs::file_type::junction;
+}
+
+// Where cmake builds a backend on Windows. Its tools stop at 260 characters (MSBuild's file
+// tracker, the linker), and a backend in a checkout builds the engine's dependencies under
+// <backend>/build/_deps/sundials-build/src/... (a toolkit's example sits five folders deep in the
+// engine already). So when <backend>/build would be long, the build lives in
+// %LOCALAPPDATA%\paperboat\b\<hash>, and <backend>/build is a junction to it: everything that
+// looks in <backend>/build still finds it. A junction needs no administrator rights.
+fs::path cmake_build_dir(const fs::path& backend_dir, const fs::path& build_dir) {
+  std::error_code ec;
+  if (is_junction(build_dir)) {
+    const fs::path target = fs::canonical(build_dir, ec);
+    return ec ? build_dir : target;
+  }
+  if (fs::exists(build_dir, ec) || build_dir.string().size() < 80) return build_dir;
+  const char* local = std::getenv("LOCALAPPDATA");
+  if (!local || !*local) return build_dir;
+  char name[17];
+  std::snprintf(name, sizeof name, "%016zx", std::hash<std::string>{}(fs::weakly_canonical(backend_dir, ec).string()));
+  const fs::path target = fs::path(local) / "paperboat" / "b" / std::string(name, 10);
+  fs::create_directories(target, ec);
+  if (ec) return build_dir;
+  const auto link = ProcessRunner::run_sync({"cmd", "/c", "mklink", "/J", build_dir.string(), target.string()});
+  return link.ok() && is_junction(build_dir) ? target : build_dir;
+}
+#endif
 
 // `name.pkk` is a common typo for `name.ppk`: take the .ppk when only it exists.
 fs::path fix_pkk_typo(fs::path p) {
@@ -579,6 +619,10 @@ bool BackendManager::needs_rebuild(const fs::path& backend_dir, const fs::path& 
   return false;
 }
 
+fs::path BackendManager::workbench_binary(const fs::path& root) {
+  return built_binary(root / "engine" / "build" / "workbench");
+}
+
 bool BackendManager::ensure_built(const fs::path& backend_dir,
                                   bool clean,
                                   bool verbose,
@@ -592,9 +636,9 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
 
   if (backend_dir.filename() == "workbench" && !root.empty() && fs::is_regular_file(root / "engine" / "CMakeLists.txt")) {
     const fs::path engine_build = root / "engine" / "build";
-    const fs::path bin = engine_build / "workbench" / "paperboat-workbench";
+    const fs::path bin = workbench_binary(root);
     std::error_code ec;
-    bool needs_build = clean || !fs::is_regular_file(bin);
+    bool needs_build = clean || bin.empty();
     if (!needs_build) {
       const auto bin_time = fs::last_write_time(bin, ec);
       for (const auto& entry : fs::recursive_directory_iterator(backend_dir, ec)) {
@@ -610,9 +654,11 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
       return true;
     }
     if (verbose) std::cout << "[build] building paperboat-workbench…" << std::endl;
-    auto res = ProcessRunner::run_sync({"cmake", "--build", engine_build.string(), "--target", "paperboat-workbench"});
+    // --config: a multi-config generator (Visual Studio) would build Debug; single-config ones ignore it.
+    auto res = ProcessRunner::run_sync(
+        {"cmake", "--build", engine_build.string(), "--target", "paperboat-workbench", "--config", "Release"});
     if (!res.ok()) {
-      if (error_msg) *error_msg = res.stderr_text.empty() ? res.stdout_text : res.stderr_text;
+      if (error_msg) *error_msg = cmake_failure(res);
       return false;
     }
     if (elapsed_seconds) *elapsed_seconds = seconds_since(start_time);
@@ -623,8 +669,22 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
   std::error_code ec;
 
   if (clean) {
-    fs::remove_all(build_dir, ec);
+#ifdef _WIN32
+    if (is_junction(build_dir)) {  // empty the short folder it points to; keep the link
+      const fs::path target = fs::canonical(build_dir, ec);
+      if (!ec) {
+        fs::remove_all(target, ec);
+        fs::create_directories(target, ec);
+      }
+    } else
+#endif
+      fs::remove_all(build_dir, ec);
   }
+#ifdef _WIN32
+  const fs::path cmake_dir = cmake_build_dir(backend_dir, build_dir);
+#else
+  const fs::path& cmake_dir = build_dir;
+#endif
 
   if (!needs_rebuild(backend_dir, build_dir)) {
     if (verbose) std::cout << "[build] up to date (skipped)" << std::endl;
@@ -634,7 +694,12 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
 
   if (!fs::exists(build_dir / "CMakeCache.txt")) {
     if (verbose) std::cout << "[build] configuring with cmake…" << std::endl;
-    std::vector<std::string> config_cmd = {"cmake", "-S", backend_dir.string(), "-B", build_dir.string()};
+    std::vector<std::string> config_cmd = {"cmake", "-S", backend_dir.string(), "-B", cmake_dir.string()};
+#ifdef _WIN32
+    // Visual Studio puts a program under build/Release/; backend.toml's `run` names build/<program>, as
+    // on Linux. The per-configuration variable takes no configuration folder: the program lands there.
+    config_cmd.push_back("-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE=" + cmake_dir.string());
+#endif
     if (!root.empty() && fs::is_regular_file(root / "engine" / "CMakeLists.txt")) {
       config_cmd.push_back("-DPAPERBOAT_ENGINE_DIR=" + (root / "engine").string());
     } else if (const fs::path sdk = sdk_dir(); !sdk.empty()) {
@@ -650,7 +715,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
   }
 
   if (verbose) std::cout << "[build] compiling backend…" << std::endl;
-  auto build_res = ProcessRunner::run_sync({"cmake", "--build", build_dir.string(), "--config", "Release"});
+  auto build_res = ProcessRunner::run_sync({"cmake", "--build", cmake_dir.string(), "--config", "Release"});
   if (!build_res.ok()) {
     if (error_msg) *error_msg = "cmake build failed: " + cmake_failure(build_res);
     return false;
@@ -1082,10 +1147,7 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
                              : built_binary(dir / "build");
     if (bin.empty() && dir.filename() == "workbench") {
       const fs::path root = toolkit::find_repo_root(dir);
-      if (!root.empty()) {
-        const fs::path candidate = root / "engine" / "build" / "workbench" / "paperboat-workbench";
-        if (fs::is_regular_file(candidate)) bin = candidate;
-      }
+      if (!root.empty()) bin = workbench_binary(root);
     }
     if (bin.empty()) {
       std::cerr << "error: compiled binary not found in " << (dir / "build") << '\n';
