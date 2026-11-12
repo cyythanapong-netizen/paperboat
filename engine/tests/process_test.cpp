@@ -12,6 +12,12 @@
 
 #include "paperboat/core/process.hpp"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#endif
+
 using paperboat::core::ProcessRunner;
 using namespace std::chrono_literals;
 namespace fs = std::filesystem;
@@ -147,6 +153,27 @@ TEST_CASE("process: run_detached logs to a file, and a detached process can be f
   CHECK(wait_for([&] { return !ProcessRunner::is_alive(group); }));
   fs::remove(log);
 }
+
+#ifdef _WIN32
+// `paperboat start --daemon` in a CI step: the step's output is an inheritable pipe, and a detached server that
+// inherited it kept it open, so the step never saw the end of its output. A child gets its three handles only.
+TEST_CASE("process: a detached process does not inherit our other handles") {
+  SECURITY_ATTRIBUTES sa{sizeof(sa), nullptr, TRUE};
+  HANDLE read_end = nullptr, write_end = nullptr;
+  REQUIRE(CreatePipe(&read_end, &write_end, &sa, 0));  // both ends inheritable, like a redirected stdout
+
+  const int pid = daemon_sleeper(false);
+  REQUIRE(pid > 0);
+  CloseHandle(write_end);
+  // With no writer left the pipe reports broken; a child holding a copy would keep it open for 30 s.
+  CHECK(wait_for([&] {
+    DWORD avail = 0;
+    return !PeekNamedPipe(read_end, nullptr, 0, nullptr, &avail, nullptr) && GetLastError() == ERROR_BROKEN_PIPE;
+  }));
+  CloseHandle(read_end);
+  CHECK(ProcessRunner::kill_pid(pid, 15, 3000));
+}
+#endif
 
 TEST_CASE("process: is_alive is false for nothing") {
   CHECK_FALSE(ProcessRunner::is_alive(0));

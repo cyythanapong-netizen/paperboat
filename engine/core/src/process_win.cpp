@@ -146,21 +146,43 @@ HANDLE open_nul(DWORD access) {
 }
 
 // Start `args` with the given standard handles (all inheritable). Returns false on failure.
+// The child inherits those three handles and nothing else (PROC_THREAD_ATTRIBUTE_HANDLE_LIST): with plain
+// bInheritHandles it would get every inheritable handle we hold, such as our own redirected stdout, so a
+// detached server kept a CI step's output pipe open, or another thread's pipe ends, so that pipe never closed.
 bool create(const std::vector<std::string>& args, const fs::path& cwd, const Env& env, HANDLE in, HANDLE out, HANDLE err,
             DWORD flags, bool in_job, Child& child) {
   const std::wstring dir = cwd.empty() ? std::wstring{} : cwd.wstring();
   std::wstring line = command_line(with_cmd_for_scripts(args));
   const std::wstring block = environment_block(env);
-  STARTUPINFOW si{};
-  si.cb = sizeof(si);
-  si.dwFlags = STARTF_USESTDHANDLES;
-  si.hStdInput = in;
-  si.hStdOutput = out;
-  si.hStdError = err;
+
+  std::vector<HANDLE> inherit;  // each once: the list refuses duplicates (out and err are often the same)
+  for (HANDLE h : {in, out, err})
+    if (h && h != INVALID_HANDLE_VALUE && std::find(inherit.begin(), inherit.end(), h) == inherit.end()) inherit.push_back(h);
+  SIZE_T size = 0;
+  InitializeProcThreadAttributeList(nullptr, 1, 0, &size);
+  std::vector<char> storage(size);
+  auto* attrs = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(storage.data());
+  if (!InitializeProcThreadAttributeList(attrs, 1, 0, &size)) return false;
+  struct Cleanup {
+    LPPROC_THREAD_ATTRIBUTE_LIST a;
+    ~Cleanup() { DeleteProcThreadAttributeList(a); }
+  } cleanup{attrs};
+  if (!inherit.empty() &&
+      !UpdateProcThreadAttribute(attrs, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inherit.data(), inherit.size() * sizeof(HANDLE), nullptr, nullptr))
+    return false;
+
+  STARTUPINFOEXW si{};
+  si.StartupInfo.cb = sizeof(si);
+  si.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+  si.StartupInfo.hStdInput = in;
+  si.StartupInfo.hStdOutput = out;
+  si.StartupInfo.hStdError = err;
+  si.lpAttributeList = attrs;
   PROCESS_INFORMATION pi{};
   if (in_job) flags |= CREATE_SUSPENDED;  // joins its job before running a line of code
-  if (!CreateProcessW(nullptr, line.data(), nullptr, nullptr, TRUE, flags | CREATE_UNICODE_ENVIRONMENT, const_cast<wchar_t*>(block.c_str()),
-                      dir.empty() ? nullptr : dir.c_str(), &si, &pi))
+  if (!CreateProcessW(nullptr, line.data(), nullptr, nullptr, !inherit.empty(),
+                      flags | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT, const_cast<wchar_t*>(block.c_str()),
+                      dir.empty() ? nullptr : dir.c_str(), &si.StartupInfo, &pi))
     return false;
   child.process = pi.hProcess;
   child.pid = pi.dwProcessId;
