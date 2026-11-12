@@ -18,7 +18,8 @@ repo = "https://github.com/paperboatlab/paperboat-toolkit-control.git"
 description = "Control blocks: pid, integrator, lag, delay, and per-step mpc, lp_step, nmpc (needs optimization)."
 optional = true
 engine = ">=0.1"
-blocks = ["pid", "integrator", "lag", "delay", "mpc", "lp_step", "nmpc"]
+blocks = ["pid", "integrator", "lag", "delay", "mpc", "lp_step", "nmpc",
+          "transfer_fn", "state_space", "bode", "controllability", "observability"]
 
 [[toolkits]]
 name = "opencv"
@@ -40,4 +41,4 @@ repo = "https://github.com/paperboatlab/paperboat-toolkit-meshop.git"
 description = "Triangle mesh blocks on VCGlib (GPL-3.0): load, save, stats and a print check."
 optional = true
 engine = ">=0.1"
-blocks = ["load", "save", "stats", "check", "mesh"]
+blocks = ["load", "import", "save", "stats", "check", "mesh"]

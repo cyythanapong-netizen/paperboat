@@ -142,7 +142,8 @@ initializers may leave any out.
        ``"points"``, ``"vector"``… A wire joins ports of one type. Lists (#24): ``"numbers"`` is a
        list of numbers (any length; it joins ``"vector"`` ports, a vector being a list of fixed
        length) and ``"points"`` a list of points (a ``Table``, one row per point). Make them with
-       :cpp:func:`numbers_port` and :cpp:func:`points_port`; see :ref:`pkg-list`.
+       :cpp:func:`numbers_port` and :cpp:func:`points_port`; see :ref:`pkg-list`. ``"matrix"`` is
+       a rectangular ``Table`` (rows of columns); make one with :cpp:func:`matrix_port`.
 
     .. cpp:member:: std::string unit
 
@@ -184,11 +185,13 @@ initializers may leave any out.
 
 .. cpp:function:: PortDef numbers_port(std::string id, std::string unit = {})
 .. cpp:function:: PortDef points_port(std::string id, std::vector<VectorComponent> coordinates = {})
+.. cpp:function:: PortDef matrix_port(std::string id)
 
    Make a list port (#24): ``"numbers"``, a list of numbers in one ``unit``, or ``"points"``, a
    list of points; ``points_port("profile", {{"x", "m"}, {"z", "m"}})`` fixes each point's
    coordinates and their units. A block gives a list of numbers as a ``Vector`` and a list of
-   points as a ``Table``.
+   points as a ``Table``. ``matrix_port("a")`` carries a rectangular ``Table``; the math package's
+   matrix blocks check its shape.
 
 .. cpp:struct:: ParamDef
 
