@@ -3,7 +3,7 @@ import { useDismiss } from "@paperboat/shared/components";
 import { parseNumber } from "./NumberField";
 import type { ParamDef, ParamValue, Variable } from "./protocol";
 import { VarsContext } from "./VarsContext";
-import { badName, emptyOf, fits, freeName, isRef, matrixLiteral, type Ref, type Use } from "./bindings";
+import { badName, emptyOf, fits, freeName, isRef, type Ref, type Use } from "./bindings";
 
 
 /** A variable being dragged from the sheet onto a field (dataTransfer can't be read on dragover). */
@@ -13,6 +13,8 @@ export const draggedVariable = () => dragged.current?.name;
 export const VAR_DRAG = "application/x-paperboat-variable";
 
 const show = (v: unknown) => (typeof v === "number" ? String(+v.toPrecision(6)) : typeof v === "boolean" ? (v ? "on" : "off") : String(v ?? "–"));
+/** A live MX variable's value in full (the row's hover), or why MX sent none. */
+const live = (v: Variable) => (v.value === undefined ? (v.note ?? "–") : typeof v.value === "boolean" ? show(v.value) : String(v.value));
 
 // ---------------------------------------------------------------------------------------
 // Fields: a bound field's chip, "=" in a number field, and dropping a variable on a field.
@@ -25,8 +27,7 @@ export function Bindable({ def, value, set, disabled, children }: { def: ParamDe
   const vars = useContext(VarsContext);
   const [over, setOver] = useState(false);
   if (!vars) return <>{children}</>;
-  const matrixDrop = () => def.type === "text" && dragged.current?.type === "matrix";
-  const ok = () => !disabled && !!dragged.current && (fits(dragged.current, def) || matrixDrop());
+  const ok = () => !disabled && !!dragged.current && fits(dragged.current, def);
   return (
     <span
       className={`bindable${over ? " drop-on" : ""}`}
@@ -41,10 +42,8 @@ export function Bindable({ def, value, set, disabled, children }: { def: ParamDe
         setOver(false);
         if (!ok()) return;
         e.preventDefault();
-        const v = dragged.current!;
-        // A live matrix is a value, not a project variable: put its literal rows in a text
-        // field (the matrix blocks parse that) instead of an unresolvable {var: name}.
-        set(matrixDrop() ? matrixLiteral(vars.values[v.name] ?? v.value) : { var: v.name });
+        // A live MX variable binds like any other; the run puts its value in place (inlineLive).
+        set({ var: dragged.current!.name });
       }}
     >
       {isRef(value) ? <Bound def={def} value={value} set={set} disabled={disabled} /> : children}
@@ -61,7 +60,7 @@ function Bound({ def, value, set, disabled }: { def: ParamDef; value: Ref; set: 
   const isVar = "var" in value;
   const v = isVar ? vars.list.find((x) => x.name === value.var) : undefined;
   const missing = isVar && !v;
-  const now = isVar ? vars.values[value.var] : undefined;
+  const now = isVar ? (v?.source === "mx" ? v.value : vars.values[value.var]) : undefined;
   const fallback = def.default as ParamValue;
   const keep = now !== undefined ? now : fallback;
   return (
@@ -84,7 +83,7 @@ function Bound({ def, value, set, disabled }: { def: ParamDef; value: Ref; set: 
                 <div className="row">
                   <code>{v.name}</code>
                   <span className="grey">=</span>
-                  {v.expr !== undefined && v.type !== "number" ? <output>{show(now)}</output> : <ValueField v={v} onChange={(x) => vars.setList(vars.list.map((y) => (y.name === v.name ? x : y)))} disabled={vars.locked && !v.tunable} />}
+                  {v.source === "mx" ? <output className="bound-live">{live(v)}</output> : v.expr !== undefined && v.type !== "number" ? <output>{show(now)}</output> : <ValueField v={v} onChange={(x) => vars.setList(vars.list.map((y) => (y.name === v.name ? x : y)))} disabled={vars.locked && !v.tunable} />}
                   {v.unit && <span className="grey mono">{v.unit}</span>}
                 </div>
                 <span className="grey small">
@@ -467,7 +466,7 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
       className={`var-row${remote ? " remote" : ""}${open ? " open" : ""}${bad ? " bad" : ""}`}
       data-var={v.name}
       role="listitem"
-      title={remote ? `${v.name}: ${show(vars.values[v.name] ?? v.value)}` : undefined}
+      title={remote ? `${v.name} (${v.type}) = ${live(v)}` : undefined}
     >
       <span
         className="var-name"
@@ -493,7 +492,7 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
       </span>
       <span className="var-type">{formula && v.type !== "number" ? "ƒ formula" : v.type}</span>
       {remote ? (
-        <output className="var-value out" title={show(vars.values[v.name] ?? v.value)}>{show(vars.values[v.name] ?? v.value)}</output>
+        <output className="var-value out">{live(v)}</output>
       ) : formula && v.type !== "number" ? (
         <output className="var-value out">{show(vars.values[v.name])}</output>
       ) : (
