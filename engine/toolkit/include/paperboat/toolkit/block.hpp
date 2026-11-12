@@ -40,7 +40,8 @@ struct VectorComponent {
 // ports, a vector being a list of fixed length) and "points" a list of points (a Table, one
 // row per point). On a points port, `dimension` and `components` describe each point, not the
 // list: [x, z] is 2 coordinates, and their units are checked by position as a vector's are.
-// A list's own length is never declared.
+// A list's own length is never declared. "matrix" is a rectangular Table (rows of columns),
+// e.g. [[1, 2], [3, 4]]; blocks that consume one check its shape.
 struct PortDef {
   std::string id = {};
   std::string type = "signal";
@@ -55,6 +56,8 @@ std::optional<std::string> wire_mismatch(const PortDef& from, const PortDef& to)
 bool is_vector_type(std::string_view type);
 // "numbers" or "points": a port that carries a list (#24).
 bool is_list_type(std::string_view type);
+// True for a "matrix" port: a rectangular Table, rows of columns.
+bool is_matrix_type(std::string_view type);
 // A vector port's length, or a points port's coordinates per point, when declared.
 std::optional<std::size_t> vector_dimension(const PortDef& port);
 
@@ -68,6 +71,8 @@ PortDef vector_port(std::string id, std::vector<VectorComponent> components);
 // points' `coordinates`, if given, fix how many each point has and label them ([x, z]).
 PortDef numbers_port(std::string id, std::string unit = {});
 PortDef points_port(std::string id, std::vector<VectorComponent> coordinates = {});
+// A matrix port: a rectangular Table on the wire (rows of columns).
+PortDef matrix_port(std::string id);
 
 // A setting on a block or a station object, edited in the UI. Number types reach a block
 // as numbers (default_value): "number", and "boolean" (1 or 0, a checkbox). Text types

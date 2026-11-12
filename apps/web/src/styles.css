@@ -611,11 +611,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 /* Lists on the wires (#24): a wire that carries a list of numbers or of points is drawn heavier, a
    bundle of values (points' broken into points), and a list port's dot is a double ring. Dashed
    stays image's, a square step's. The wire's class is its source port's type. */
-.react-flow__edge-path.wire-numbers, .react-flow__edge-path.wire-points { stroke-width: 2.6px; }
-.react-flow__edge-path.wire-points { stroke-dasharray: 9 2; }
-.react-flow__edge:has(.wire-numbers, .wire-points) .wire-casing { stroke-width: 7px; }
-.port-numbers .react-flow__handle, .port-points .react-flow__handle,
-.react-flow__handle.t-numbers, .react-flow__handle.t-points { border: 3px double var(--line-ink); }
+.react-flow__edge-path.wire-numbers, .react-flow__edge-path.wire-points, .react-flow__edge-path.wire-matrix { stroke-width: 2.6px; }
+.react-flow__edge-path.wire-points, .react-flow__edge-path.wire-matrix { stroke-dasharray: 9 2; }
+.react-flow__edge:has(.wire-numbers, .wire-points, .wire-matrix) .wire-casing { stroke-width: 7px; }
+.port-numbers .react-flow__handle, .port-points .react-flow__handle, .port-matrix .react-flow__handle,
+.react-flow__handle.t-numbers, .react-flow__handle.t-points, .react-flow__handle.t-matrix { border: 3px double var(--line-ink); }
 .react-flow__edge-path.drop-target { stroke-width: 3.5px !important; }
 .drop-hint { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 .drop-outline { position: absolute; width: 156px; height: 64px; border: 1.5px dashed var(--line-ink); border-radius: var(--radius-md); }

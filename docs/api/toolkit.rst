@@ -362,6 +362,20 @@ Pointwise arithmetic and math operations on signals. All but the two random bloc
 - ``bessel`` (``u`` → ``y``; ``order``, ``kind``: ``J``, ``Y``, ``I``, ``K``)
 - ``distribution`` (``u`` → ``y``; ``family``: ``normal``/``uniform``/``exponential``, ``function``: ``pdf``/``cdf``/``quantile``, ``a``, ``b``: mean and standard deviation, bounds, or rate)
 
+Matrices on ``matrix`` ports (a rectangular ``Table``; not elementwise):
+
+- ``matrix_constant`` (→ ``y``; ``values``: ``"1 2; 3 4"``, MATLAB style)
+- ``transpose`` (``a`` → ``y``: Aᵀ)
+- ``inverse`` (``a`` → ``y``: A⁻¹; a singular or non-square matrix fails)
+- ``determinant`` (``a`` → ``det``)
+- ``multiply`` (``a``, ``b`` → ``y``: A·B; inner dimensions must agree)
+- ``solve`` (``a``, ``b`` → ``x``: A·x = B, MATLAB's ``A \ B``; A square and non-singular)
+- ``scale`` (``a`` → ``y``; ``k``: k·A)
+- ``identity`` (→ ``y``; ``n``: the n × n identity)
+- ``size`` (``a`` → ``rows``, ``cols``)
+
+The matrix blocks use Eigen (MPL-2.0, header-only; a private dependency of the toolkit).
+
 .. _elementwise:
 
 Elementwise blocks

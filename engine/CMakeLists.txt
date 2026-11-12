@@ -104,6 +104,23 @@ if(PAPERBOAT_INSTALL)
           DESTINATION "${CMAKE_INSTALL_DOCDIR}/boost_math" COMPONENT runtime)
 endif()
 
+# Eigen (MPL-2.0, header-only): the math package's matrix blocks. A private dependency of the
+# toolkit: nothing in the installed headers includes it, so the SDK does not have to find it.
+find_package(Eigen3 3.3 QUIET NO_MODULE)
+if(Eigen3_FOUND)
+  add_library(paperboat_eigen INTERFACE)
+  target_link_libraries(paperboat_eigen INTERFACE Eigen3::Eigen)
+else()
+  FetchContent_Declare(eigen
+    URL https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz
+    URL_HASH SHA256=e9c326dc8c05cd1e044c71f30f1b2e34a6161a3b6ecf445d56b53ff1669e3dec
+    DOWNLOAD_EXTRACT_TIMESTAMP ON
+    SOURCE_SUBDIR "cmake/do-not-build")
+  FetchContent_MakeAvailable(eigen)
+  add_library(paperboat_eigen INTERFACE)
+  target_include_directories(paperboat_eigen INTERFACE "${eigen_SOURCE_DIR}")
+endif()
+
 # pocketfft (BSD-3): the signal package's FFT. A single header; nothing to build or install.
 set(pocketfft_include "${CMAKE_BINARY_DIR}/third_party/pocketfft")
 set(pocketfft_header "${pocketfft_include}/pocketfft_hdronly.h")
