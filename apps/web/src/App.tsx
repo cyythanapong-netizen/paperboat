@@ -14,7 +14,7 @@ import { SheetFlow } from "./SheetFlow";
 import { Notice } from "./ProjectUI";
 import { VariablesSheet } from "./Variables";
 import { VarsContext } from "./VarsContext";
-import { toToml, type Use } from "./bindings";
+import { isRef, matrixLiteral, toToml, type Use } from "./bindings";
 import { ConsoleWindow } from "@paperboat/shared/components";
 import { AboutWindow } from "./About";
 import { Dashboard } from "./Dashboard";
@@ -356,9 +356,23 @@ export function App() {
     // A Scope is an instrument: sample at the solver's resolution, not at a coarse clock.
     const hasScope = Object.values(monitors).some((m) => m.kind === "scope");
     const settings = settingsForScope(runSettings, state.runDefaults, hasScope);
+    const graph = toGraph(nodes, edges, flowChoice);
+    // An existing text param that still says {var: "A"} for a live matrix is the inline
+    // matrix's text, not a project variable: repair it for this run.
+    for (const node of graph.nodes) {
+      const def = state.blocks.find((block) => block.type === node.type);
+      if (!def) continue;
+      for (const [id, param] of Object.entries(node.params ?? {})) {
+        if (!isRef(param) || !("var" in param)) continue;
+        const pdef = def.params.find((p) => p.id === id);
+        const live = variables.find((v) => v.name === param.var);
+        if (pdef?.type === "text" && live?.type === "matrix")
+          node.params = { ...node.params, [id]: matrixLiteral(live.value) };
+      }
+    }
     send({
       type: "graph.run",
-      graph: toGraph(nodes, edges, flowChoice),
+      graph,
       ...(station ? { station } : {}),
       ...(Object.keys(settings).length ? { settings } : {}),
       variables: projectVars,
