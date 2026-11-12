@@ -148,6 +148,10 @@ endif()
 add_library(paperboat_toolkit ${PAPERBOAT_TOOLKIT_CORE_SOURCES} ${package_sources} ${package_definition_sources}
             "${package_registry_cpp}")
 add_library(paperboat::toolkit ALIAS paperboat_toolkit)
+# The headers are C++20. CMAKE_CXX_STANDARD covers only this directory tree, so say it as a usage
+# requirement: a toolkit built beside the engine (add_subdirectory) or on the installed SDK gets it too.
+# MSVC otherwise compiles such a toolkit as C++14 (GCC's default C++17 hid it).
+target_compile_features(paperboat_toolkit PUBLIC cxx_std_20)
 
 target_include_directories(paperboat_toolkit
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
