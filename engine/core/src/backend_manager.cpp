@@ -205,6 +205,15 @@ const std::string& output_of(const ProcessResult& r) {
   return !r.stdout_text.empty() ? r.stdout_text : r.stderr_text;
 }
 
+// Why a cmake step failed: what it wrote to stderr, else stdout. With neither it most likely never
+// started (a package install with no CMake on PATH), which used to print an empty reason.
+std::string cmake_failure(const ProcessResult& r) {
+  if (!r.stderr_text.empty()) return r.stderr_text;
+  if (!r.stdout_text.empty()) return r.stdout_text;
+  return "cmake gave no output (exit " + std::to_string(r.exit_code) +
+         "); is CMake 3.25+ installed and on PATH?";
+}
+
 }  // namespace
 
 void BackendManager::set_registry_extension(std::function<void(toolkit::Registry&)> extension) {
@@ -635,7 +644,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
     }
     auto config_res = ProcessRunner::run_sync(config_cmd);
     if (!config_res.ok()) {
-      if (error_msg) *error_msg = "cmake configure failed: " + config_res.stderr_text;
+      if (error_msg) *error_msg = "cmake configure failed: " + cmake_failure(config_res);
       return false;
     }
   }
@@ -643,7 +652,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
   if (verbose) std::cout << "[build] compiling backend…" << std::endl;
   auto build_res = ProcessRunner::run_sync({"cmake", "--build", build_dir.string(), "--config", "Release"});
   if (!build_res.ok()) {
-    if (error_msg) *error_msg = "cmake build failed: " + build_res.stderr_text;
+    if (error_msg) *error_msg = "cmake build failed: " + cmake_failure(build_res);
     return false;
   }
 
