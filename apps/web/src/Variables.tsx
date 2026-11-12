@@ -3,7 +3,7 @@ import { useDismiss } from "@paperboat/shared/components";
 import { parseNumber } from "./NumberField";
 import type { ParamDef, ParamValue, Variable } from "./protocol";
 import { VarsContext } from "./VarsContext";
-import { badName, emptyOf, fits, freeName, isRef, type Ref, type Use } from "./bindings";
+import { badName, emptyOf, fits, freeName, isRef, matrixLiteral, type Ref, type Use } from "./bindings";
 
 
 /** A variable being dragged from the sheet onto a field (dataTransfer can't be read on dragover). */
@@ -25,7 +25,8 @@ export function Bindable({ def, value, set, disabled, children }: { def: ParamDe
   const vars = useContext(VarsContext);
   const [over, setOver] = useState(false);
   if (!vars) return <>{children}</>;
-  const ok = () => !disabled && !!dragged.current && fits(dragged.current, def);
+  const matrixDrop = () => def.type === "text" && dragged.current?.type === "matrix";
+  const ok = () => !disabled && !!dragged.current && (fits(dragged.current, def) || matrixDrop());
   return (
     <span
       className={`bindable${over ? " drop-on" : ""}`}
@@ -40,7 +41,10 @@ export function Bindable({ def, value, set, disabled, children }: { def: ParamDe
         setOver(false);
         if (!ok()) return;
         e.preventDefault();
-        set({ var: dragged.current!.name });
+        const v = dragged.current!;
+        // A live matrix is a value, not a project variable: put its literal rows in a text
+        // field (the matrix blocks parse that) instead of an unresolvable {var: name}.
+        set(matrixDrop() ? matrixLiteral(vars.values[v.name] ?? v.value) : { var: v.name });
       }}
     >
       {isRef(value) ? <Bound def={def} value={value} set={set} disabled={disabled} /> : children}
