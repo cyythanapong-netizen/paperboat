@@ -63,7 +63,8 @@ export function useVariables(state: EngineState, send: (m: ClientMsg) => void, s
     (redo ? h.past : h.future).push(project);
     keepVars(to);
   };
-  return { variables, keepVars, setVariables, varsHistory, undoVars };
+  // `variables` is what the sheet shows (project + live MX); `project` is what a run and a project file take.
+  return { variables, project, keepVars, setVariables, varsHistory, undoVars };
 }
 
 /** What the Variables sheet and every bound field use. */

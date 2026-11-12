@@ -774,7 +774,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .mode-commander .var-row .var-type, .mode-lookout .var-row .var-type { display: none; }
 /* MX's live variables: the source badge already says MX, and a long array text gets the
    value column instead of spilling over the name and type. */
-.var-row.remote { grid-template-columns: minmax(0, 1fr) 52px minmax(0, 1.7fr) 46px; }
+.var-row.remote { grid-template-columns: minmax(0, 1fr) 52px minmax(0, 2.2fr); }
 .var-row.remote .var-unit { display: none; }
 .var-row.remote .var-value.out { text-align: left; }
 

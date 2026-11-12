@@ -87,7 +87,7 @@ export function App() {
   const { fitView, screenToFlowPosition } = useReactFlow();
   const [runSettings, setRunSettings] = useState<RunSettings>({});
   // Variables (#36): the backend's defaults, then the user's own, kept in the project (#34).
-  const { variables, keepVars, setVariables, varsHistory, undoVars } = useVariables(state, send, subscribe);
+  const { variables, project: projectVars, keepVars, setVariables, varsHistory, undoVars } = useVariables(state, send, subscribe);
   const engineKey = state.engine || "default";
   // The Dashboard's layout is kept here, so renaming or deleting a variable can rewrite the labels that use it (#86).
   const [dashSaved, setDashSaved] = useState(() => loadSaved(engineKey));
@@ -361,7 +361,7 @@ export function App() {
       graph: toGraph(nodes, edges, flowChoice),
       ...(station ? { station } : {}),
       ...(Object.keys(settings).length ? { settings } : {}),
-      variables,
+      variables: projectVars,
     });
   };
 
@@ -400,7 +400,7 @@ export function App() {
     state,
     subscribe,
     log,
-    { nodes, edges, station, variables, dashSaved, runSettings, projectLock, flowChoice },
+    { nodes, edges, station, variables: projectVars, dashSaved, runSettings, projectLock, flowChoice },
     loadProject,
   );
 
