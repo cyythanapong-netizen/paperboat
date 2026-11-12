@@ -10,7 +10,10 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cwctype>
+#include <fstream>
 #include <map>
+#include <sstream>
 #include <mutex>
 #include <thread>
 
@@ -64,8 +67,57 @@ bool on_path(const std::wstring& name, const wchar_t* ext) {
   return SearchPathW(nullptr, name.c_str(), ext, MAX_PATH, found, nullptr) != 0;
 }
 
-// npm, npx and friends are .cmd files, which CreateProcess runs only through cmd.exe.
+// Git for Windows' bash: bash.exe next to git's cmd\ (..\bin\bash.exe). Not the bash.exe in
+// System32, which is WSL's and would run the script inside Linux.
+std::string git_bash() {
+  wchar_t git[MAX_PATH];
+  if (SearchPathW(nullptr, L"git", L".exe", MAX_PATH, git, nullptr) == 0) return {};
+  const fs::path root = fs::path(git).parent_path().parent_path();  // <Git>\cmd\git.exe -> <Git>
+  for (const fs::path& bash : {root / "bin" / "bash.exe", root / "usr" / "bin" / "bash.exe"}) {
+    std::error_code ec;
+    if (fs::is_regular_file(bash, ec)) return bash.string();
+  }
+  return {};
+}
+
+// A script with a #! line (bin/squero-mx: `#!/usr/bin/env node`), which CreateProcess cannot run:
+// its interpreter and the script. node, python3 and the like by name from PATH; sh and bash
+// through Git for Windows' bash. Empty when `path` is not such a script.
+std::vector<std::string> shebang_command(const std::string& path) {
+  const fs::path p(widen(path));
+  std::error_code ec;
+  if (!fs::is_regular_file(p, ec)) return {};
+  std::wstring ext = p.extension().wstring();
+  std::ranges::transform(ext, ext.begin(), ::towlower);
+  if (ext == L".exe" || ext == L".com" || ext == L".cmd" || ext == L".bat") return {};
+  std::ifstream in(p, std::ios::binary);
+  std::string line;
+  if (!std::getline(in, line) || !line.starts_with("#!")) return {};
+  if (!line.empty() && line.back() == '\r') line.pop_back();
+  std::vector<std::string> words;
+  std::istringstream split(line.substr(2));
+  for (std::string w; split >> w;) words.push_back(w);
+  if (!words.empty() && fs::path(words[0]).filename() == "env") words.erase(words.begin());  // #!/usr/bin/env node
+  if (!words.empty() && words[0] == "-S") words.erase(words.begin());                          // #!/usr/bin/env -S node --flag
+  if (words.empty()) return {};
+  std::string interpreter = fs::path(words[0]).filename().string();  // /bin/bash -> bash
+  if (interpreter == "sh" || interpreter == "bash") {
+    interpreter = git_bash();
+    if (interpreter.empty()) return {};
+  }
+  std::vector<std::string> command = {interpreter};
+  command.insert(command.end(), words.begin() + 1, words.end());
+  command.push_back(path);
+  return command;
+}
+
+// npm, npx and friends are .cmd files, which CreateProcess runs only through cmd.exe; a #! script
+// runs through its interpreter.
 std::vector<std::string> with_cmd_for_scripts(const std::vector<std::string>& args) {
+  if (auto command = shebang_command(args[0]); !command.empty()) {
+    command.insert(command.end(), args.begin() + 1, args.end());
+    return with_cmd_for_scripts(command);  // the interpreter may itself be a .cmd
+  }
   const std::wstring name = widen(args[0]);
   if (on_path(name, L".exe")) return args;
   if (on_path(name, L".cmd") || on_path(name, L".bat")) {

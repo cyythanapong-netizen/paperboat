@@ -197,6 +197,25 @@ TEST_CASE("process: quote_command_arg survives the Windows command-line parser")
   }
   LocalFree(argv);
 }
+
+// `paperboat start squero-studio-mx` launches bin/squero-mx, a `#!/usr/bin/env node` script, and
+// squero-om's bin/squero-om is bash: CreateProcess runs neither, so the #! line names the program.
+TEST_CASE("process: a #! script runs through its interpreter") {
+  const fs::path dir = fs::temp_directory_path() / "pb process shebang";  // a space, as under C:\Users\Jane Doe
+  fs::create_directories(dir);
+  const fs::path node_script = dir / "hello-node";
+  std::ofstream(node_script, std::ios::binary) << "#!/usr/bin/env node\nconsole.log('node ' + process.argv[2]);\n";
+  const fs::path sh_script = dir / "hello-sh";
+  std::ofstream(sh_script, std::ios::binary) << "#!/bin/sh\necho \"sh $1\"\n";
+
+  const auto node = ProcessRunner::run_sync({node_script.string(), "arg one"});
+  CHECK(node.exit_code == 0);
+  CHECK(trimmed(node.stdout_text) == "node arg one");
+  const auto sh = ProcessRunner::run_sync({sh_script.string(), "arg two"});
+  CHECK(sh.exit_code == 0);
+  CHECK(trimmed(sh.stdout_text) == "sh arg two");
+  fs::remove_all(dir);
+}
 #endif
 
 TEST_CASE("process: is_alive is false for nothing") {

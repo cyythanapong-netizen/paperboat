@@ -1043,10 +1043,13 @@ int start_program(const tk::AppEntry& app, std::vector<std::string_view> rest) {
   if (is_daemon) rest.erase(daemon);
   std::vector<std::string> argv = {bin.string()};
   for (auto a : rest) argv.emplace_back(a);
+  // The app calls back into this paperboat (squero-mx: `paperboat list`, `paperboat optimize`) without
+  // having to find it, as the console does.
+  const std::vector<std::pair<std::string, std::string>> env = {{"PAPERBOAT_BIN", platform::exe_path().string()}};
 
   if (is_daemon) {
     const fs::path log = platform::shared_tmp_dir() / ("paperboat-" + app.name + ".log");
-    const int pid = core::ProcessRunner::run_detached(argv, {}, {}, log);
+    const int pid = core::ProcessRunner::run_detached(argv, {}, env, log);
     if (pid <= 0) {
       std::cerr << "error: could not start " << app.name << '\n';
       return 1;
@@ -1055,7 +1058,7 @@ int start_program(const tk::AppEntry& app, std::vector<std::string_view> rest) {
     return 0;
   }
 
-  return core::ProcessRunner::run_stream(argv, {}, {}, [](std::string_view stream, std::string_view line) {
+  return core::ProcessRunner::run_stream(argv, {}, env, [](std::string_view stream, std::string_view line) {
     if (stream == "stderr") std::cerr << line << '\n';
     else std::cout << line << '\n';
   });
