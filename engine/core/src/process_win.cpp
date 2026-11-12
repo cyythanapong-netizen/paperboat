@@ -72,10 +72,12 @@ bool on_path(const std::wstring& name, const wchar_t* ext) {
 std::string git_bash() {
   wchar_t git[MAX_PATH];
   if (SearchPathW(nullptr, L"git", L".exe", MAX_PATH, git, nullptr) == 0) return {};
-  const fs::path root = fs::path(git).parent_path().parent_path();  // <Git>\cmd\git.exe -> <Git>
-  for (const fs::path& bash : {root / "bin" / "bash.exe", root / "usr" / "bin" / "bash.exe"}) {
-    std::error_code ec;
-    if (fs::is_regular_file(bash, ec)) return bash.string();
+  // <Git>\cmd\git.exe from a Windows PATH, <Git>\mingw64\bin\git.exe from Git Bash's own: walk up to <Git>
+  for (fs::path root = fs::path(git).parent_path().parent_path(); root.has_relative_path(); root = root.parent_path()) {
+    for (const fs::path& bash : {root / "bin" / "bash.exe", root / "usr" / "bin" / "bash.exe"}) {
+      std::error_code ec;
+      if (fs::is_regular_file(bash, ec)) return bash.string();
+    }
   }
   return {};
 }
