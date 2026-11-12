@@ -1899,8 +1899,8 @@ void start_workbench() {
   if (core::BackendManager::is_port_listening(8765) || root.empty() || !fs::is_directory(root / "engine" / "workbench")) return;
   std::string err;
   if (!core::BackendManager::ensure_built(root / "engine" / "workbench", false, false, &err)) return;
-  const fs::path bin = root / "engine" / "build" / "workbench" / "paperboat-workbench";
-  if (!fs::is_regular_file(bin)) return;
+  const fs::path bin = core::BackendManager::workbench_binary(root);
+  if (bin.empty()) return;
   const fs::path log_path = platform::shared_tmp_dir() / "backend-8765.log";
   const int pid = core::ProcessRunner::run_detached({bin.string(), "--port", "8765"}, root / "engine" / "workbench", {}, log_path);
   if (pid <= 0) return;

@@ -165,13 +165,22 @@ void add_unique(std::vector<std::string>& list, const std::string& item) {
 }
 
 // The executable a C++ backend's build made: the first `paperboat-*` file in `build_dir`
-// that isn't an object or an archive.
+// that isn't an object or an archive. A multi-config generator (Visual Studio) puts it a folder
+// down, per configuration; on Windows only the .exe counts (next to it are .pdb, .ilk, ...).
 fs::path built_binary(const fs::path& build_dir) {
   std::error_code ec;
-  for (const auto& entry : fs::directory_iterator(build_dir, ec)) {
-    if (!entry.is_regular_file()) continue;
-    const auto name = entry.path().filename().string();
-    if (name.starts_with("paperboat-") && !name.ends_with(".o") && !name.ends_with(".a")) return entry.path();
+  for (const fs::path& dir : {build_dir, build_dir / "Release", build_dir / "RelWithDebInfo", build_dir / "MinSizeRel",
+                              build_dir / "Debug"}) {
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+      if (!entry.is_regular_file()) continue;
+      const auto name = entry.path().filename().string();
+      if (!name.starts_with("paperboat-")) continue;
+#ifdef _WIN32
+      if (entry.path().extension() == ".exe") return entry.path();
+#else
+      if (!name.ends_with(".o") && !name.ends_with(".a")) return entry.path();
+#endif
+    }
   }
   return {};
 }
@@ -579,6 +588,10 @@ bool BackendManager::needs_rebuild(const fs::path& backend_dir, const fs::path& 
   return false;
 }
 
+fs::path BackendManager::workbench_binary(const fs::path& root) {
+  return built_binary(root / "engine" / "build" / "workbench");
+}
+
 bool BackendManager::ensure_built(const fs::path& backend_dir,
                                   bool clean,
                                   bool verbose,
@@ -592,9 +605,9 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
 
   if (backend_dir.filename() == "workbench" && !root.empty() && fs::is_regular_file(root / "engine" / "CMakeLists.txt")) {
     const fs::path engine_build = root / "engine" / "build";
-    const fs::path bin = engine_build / "workbench" / "paperboat-workbench";
+    const fs::path bin = workbench_binary(root);
     std::error_code ec;
-    bool needs_build = clean || !fs::is_regular_file(bin);
+    bool needs_build = clean || bin.empty();
     if (!needs_build) {
       const auto bin_time = fs::last_write_time(bin, ec);
       for (const auto& entry : fs::recursive_directory_iterator(backend_dir, ec)) {
@@ -610,9 +623,16 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
       return true;
     }
     if (verbose) std::cout << "[build] building paperboat-workbench…" << std::endl;
-    auto res = ProcessRunner::run_sync({"cmake", "--build", engine_build.string(), "--target", "paperboat-workbench"});
+    // --config: a multi-config generator (Visual Studio) would build Debug; single-config ones ignore it.
+    auto res = ProcessRunner::run_sync(
+        {"cmake", "--build", engine_build.string(), "--target", "paperboat-workbench", "--config", "Release"});
     if (!res.ok()) {
-      if (error_msg) *error_msg = res.stderr_text.empty() ? res.stdout_text : res.stderr_text;
+      if (error_msg) {
+        *error_msg = !res.stderr_text.empty()   ? res.stderr_text
+                     : !res.stdout_text.empty() ? res.stdout_text
+                                                : "cmake gave no output (exit " + std::to_string(res.exit_code) +
+                                                      "); is CMake 3.25+ installed and on PATH?";
+      }
       return false;
     }
     if (elapsed_seconds) *elapsed_seconds = seconds_since(start_time);
@@ -1082,10 +1102,7 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
                              : built_binary(dir / "build");
     if (bin.empty() && dir.filename() == "workbench") {
       const fs::path root = toolkit::find_repo_root(dir);
-      if (!root.empty()) {
-        const fs::path candidate = root / "engine" / "build" / "workbench" / "paperboat-workbench";
-        if (fs::is_regular_file(candidate)) bin = candidate;
-      }
+      if (!root.empty()) bin = workbench_binary(root);
     }
     if (bin.empty()) {
       std::cerr << "error: compiled binary not found in " << (dir / "build") << '\n';

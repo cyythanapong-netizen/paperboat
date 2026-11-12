@@ -153,6 +153,9 @@ class BackendManager {
                            bool verbose = false,
                            std::string* error_msg = nullptr,
                            double* elapsed_seconds = nullptr);
+  // A checkout's built workbench (engine/build/workbench/paperboat-workbench, or under Release/ etc.
+  // with a multi-config generator, .exe on Windows); empty when not built.
+  static std::filesystem::path workbench_binary(const std::filesystem::path& root);
 
   // Python environment resolution & C++ binding builder
   struct PythonEnv {
