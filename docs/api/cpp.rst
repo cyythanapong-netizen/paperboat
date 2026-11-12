@@ -142,8 +142,9 @@ initializers may leave any out.
        ``"points"``, ``"vector"``… A wire joins ports of one type. Lists (#24): ``"numbers"`` is a
        list of numbers (any length; it joins ``"vector"`` ports, a vector being a list of fixed
        length) and ``"points"`` a list of points (a ``Table``, one row per point). Make them with
-       :cpp:func:`numbers_port` and :cpp:func:`points_port`; see :ref:`pkg-list`. ``"matrix"`` is
-       a rectangular ``Table`` (rows of columns); make one with :cpp:func:`matrix_port`.
+       :cpp:func:`numbers_port` and :cpp:func:`points_port`; see :ref:`pkg-list`. A matrix is a
+       rectangular ``Table`` (rows of columns) on an ordinary ``"signal"`` port with the
+       ``matrix`` flag set; make one with :cpp:func:`matrix_port`.
 
     .. cpp:member:: std::string unit
 

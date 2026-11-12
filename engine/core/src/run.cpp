@@ -673,7 +673,7 @@ json Run::pass_over(const std::vector<std::string>& order) {
           samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", i}, {"v", (*vector)[i]}});
       }
     } else if (const auto* points = toolkit::get_if<toolkit::Table>(shown, "in")) {
-      if (port != nullptr && toolkit::is_matrix_type(port->type)) {
+      if (port != nullptr && port->matrix) {
         samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", matrix_text(*points)}});
       } else if (!node.def.whole_vector && settings_.mode == RunSettings::Mode::Once) {
         // A Graph in a run-once plots a list of points as a curve: the second coordinate over
