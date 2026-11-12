@@ -133,6 +133,27 @@ std::string points_text(const toolkit::Table& points) {
   return out;
 }
 
+// A matrix as a readout: its shape and the first few values (a display, not a plot).
+std::string matrix_text(const toolkit::Table& matrix) {
+  const auto number = [](double v) {
+    char buf[32];
+    std::snprintf(buf, sizeof buf, "%.4g", v);
+    return std::string(buf);
+  };
+  const std::size_t columns = matrix.empty() ? 0 : matrix.front().size();
+  std::string out = std::to_string(matrix.size()) + " × " + std::to_string(columns) + " matrix";
+  constexpr std::size_t kShown = 6;
+  std::size_t shown = 0;
+  for (const auto& row : matrix)
+    for (const double value : row) {
+      if (shown == kShown) { out += ", …"; return out; }
+      out += shown == 0 ? ": " : ", ";
+      out += number(value);
+      ++shown;
+    }
+  return out;
+}
+
 void validate_vector_outputs(const Node& node, const toolkit::Values& values) {
   for (const auto& port : node.def.outputs) {
     const auto value = values.find(port.id);
@@ -652,7 +673,9 @@ json Run::pass_over(const std::vector<std::string>& order) {
           samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", i}, {"v", (*vector)[i]}});
       }
     } else if (const auto* points = toolkit::get_if<toolkit::Table>(shown, "in")) {
-      if (!node.def.whole_vector && settings_.mode == RunSettings::Mode::Once) {
+      if (port != nullptr && toolkit::is_matrix_type(port->type)) {
+        samples.push_back({{"type", "signal"}, {"node", node.id}, {"t", t}, {"v", matrix_text(*points)}});
+      } else if (!node.def.whole_vector && settings_.mode == RunSettings::Mode::Once) {
         // A Graph in a run-once plots a list of points as a curve: the second coordinate over
         // the first (a point of one coordinate over its index).
         for (std::size_t i = 0; i < points->size(); ++i) {

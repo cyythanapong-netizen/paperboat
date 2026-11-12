@@ -160,4 +160,4 @@ target_compile_definitions(paperboat_toolkit PRIVATE BOOST_MATH_STANDALONE=1)
 set_target_properties(paperboat_toolkit PROPERTIES EXPORT_NAME toolkit)
 target_link_libraries(paperboat_toolkit
   PUBLIC nlohmann_json::nlohmann_json paperboat::solvers  # variables.hpp takes the protocol's JSON
-  PRIVATE $<BUILD_INTERFACE:tomlplusplus::tomlplusplus> paperboat_warnings)
+  PRIVATE $<BUILD_INTERFACE:tomlplusplus::tomlplusplus> $<BUILD_INTERFACE:paperboat_eigen> paperboat_warnings)

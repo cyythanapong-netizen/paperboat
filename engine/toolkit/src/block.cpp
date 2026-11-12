@@ -383,6 +383,8 @@ bool is_vector_type(std::string_view type) { return type == "vector" || type == 
 
 bool is_list_type(std::string_view type) { return type == "numbers" || type == "points"; }
 
+bool is_matrix_type(std::string_view type) { return type == "matrix"; }
+
 std::optional<std::size_t> vector_dimension(const PortDef& port) {
   if (port.dimension) return port.dimension;
   if (!port.components.empty()) return port.components.size();
@@ -410,7 +412,20 @@ PortDef points_port(std::string id, std::vector<VectorComponent> coordinates) {
   return {.id = std::move(id), .type = "points", .dimension = dimension, .components = std::move(coordinates)};
 }
 
+PortDef matrix_port(std::string id) { return {.id = std::move(id), .type = "matrix"}; }
+
 std::optional<std::string> vector_value_mismatch(const PortDef& port, const Value& value) {
+  if (port.type == "matrix") {
+    const auto* table = std::get_if<Table>(&value);
+    if (!table) return "expects a matrix (rows of numbers)";
+    if (table->empty()) return std::nullopt;
+    const std::size_t columns = table->front().size();
+    for (std::size_t i = 0; i < table->size(); ++i)
+      if ((*table)[i].size() != columns)
+        return "has row " + std::to_string(i) + " of " + std::to_string((*table)[i].size()) +
+               " columns, expected " + std::to_string(columns);
+    return std::nullopt;
+  }
   if (port.type == "points") {
     if (const auto* list = std::get_if<Vector>(&value); list && list->empty()) return std::nullopt;  // no points
     const auto* table = std::get_if<Table>(&value);

@@ -41,6 +41,7 @@ add_executable(paperboat_tests
   connection_test.cpp
   toolkit_phase1_test.cpp
   math_signal_test.cpp
+  matrix_test.cpp
   vector_test.cpp
   list_test.cpp
   flow_type_test.cpp
