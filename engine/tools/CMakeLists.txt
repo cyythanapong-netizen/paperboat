@@ -34,7 +34,7 @@ include(new_templates.cmake)
 paperboat_embed_templates(${CMAKE_CURRENT_BINARY_DIR}/new_templates.cpp)
 add_library(paperboat_new STATIC paperboat_new.cpp ${CMAKE_CURRENT_BINARY_DIR}/new_templates.cpp)
 target_include_directories(paperboat_new PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(paperboat_new PRIVATE paperboat_warnings)
+target_link_libraries(paperboat_new PRIVATE paperboat::toolkit paperboat_warnings)
 
 add_executable(paperboat paperboat_cli.cpp)
 target_compile_definitions(paperboat PRIVATE PAPERBOAT_VERSION="${PAPERBOAT_VERSION}")
