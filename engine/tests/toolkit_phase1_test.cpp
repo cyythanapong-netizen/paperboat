@@ -551,3 +551,17 @@ TEST_CASE("String Toolkit: All Blocks") {
     CHECK(step_b->tick(ctx, {{"text", std::string("prefix_val")}, {"test", std::string("val")}}) == "no");
   }
 }
+
+TEST_CASE("dashboard/view3d is a 3D station instrument on the Board") {
+  const Registry reg = builtins();
+  const Template* t = reg.find("dashboard/view3d");
+  REQUIRE(t != nullptr);
+  CHECK(t->def.kind == Kind::Monitor);
+  CHECK(t->def.instrument == "view3d");
+  CHECK(t->def.inputs.empty());
+  CHECK(t->def.outputs.empty());
+  CHECK(t->def.params.size() == 1);
+  CHECK(t->def.params[0].id == "grid");
+  auto block = t->make({{"grid", 1.0}}, {});
+  CHECK(block->step(Context{}, {}).empty());
+}
