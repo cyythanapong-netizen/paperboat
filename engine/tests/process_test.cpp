@@ -16,6 +16,8 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
+#include <shellapi.h>  // CommandLineToArgvW
+#pragma comment(lib, "shell32.lib")
 #endif
 
 using paperboat::core::ProcessRunner;
@@ -172,6 +174,28 @@ TEST_CASE("process: a detached process does not inherit our other handles") {
   }));
   CloseHandle(read_end);
   CHECK(ProcessRunner::kill_pid(pid, 15, 3000));
+}
+
+// The console launch (_spawnvp "node <main.js>") under C:\Users\<name with a space>: node got the path cut
+// at the space. Each argument, quoted and joined, must read back as itself.
+TEST_CASE("process: quote_command_arg survives the Windows command-line parser") {
+  const std::vector<std::string> args = {
+      "node", R"(C:\Users\Jane Doe\paperboat\apps\cli\dist\main.js)", "plain", "", R"(ends in a backslash\)",
+      R"(say "hi")", R"(C:\dir with space\\)", "tab\there"};
+  std::string line;
+  for (const auto& a : args) line += (line.empty() ? "" : " ") + paperboat::core::quote_command_arg(a);
+  const int n = MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, nullptr, 0);
+  std::wstring wide(static_cast<std::size_t>(n), L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, line.c_str(), -1, wide.data(), n);
+  int argc = 0;
+  LPWSTR* argv = CommandLineToArgvW(wide.c_str(), &argc);
+  REQUIRE(argv);
+  REQUIRE(argc == static_cast<int>(args.size()));
+  for (int i = 0; i < argc; ++i) {
+    const std::wstring expected(args[static_cast<std::size_t>(i)].begin(), args[static_cast<std::size_t>(i)].end());
+    CHECK(std::wstring(argv[i]) == expected);
+  }
+  LocalFree(argv);
 }
 #endif
 

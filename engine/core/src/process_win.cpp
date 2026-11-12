@@ -29,31 +29,34 @@ std::wstring widen(std::string_view s) {
 }
 
 // One argument as CommandLineToArgvW reads it back ("Everyone quotes command line arguments the wrong way").
-void append_quoted(std::wstring& out, const std::wstring& arg) {
-  if (!arg.empty() && arg.find_first_of(L" \t\n\v\"") == std::wstring::npos) {
+template <class Ch>
+void append_quoted(std::basic_string<Ch>& out, const std::basic_string<Ch>& arg) {
+  constexpr Ch quote = '"', backslash = '\\';
+  constexpr Ch special[] = {' ', '\t', '\n', '\v', '"', 0};
+  if (!arg.empty() && arg.find_first_of(special) == std::basic_string<Ch>::npos) {
     out += arg;
     return;
   }
-  out += L'"';
+  out += quote;
   for (auto it = arg.begin();; ++it) {
     std::size_t backslashes = 0;
-    while (it != arg.end() && *it == L'\\') {
+    while (it != arg.end() && *it == backslash) {
       ++it;
       ++backslashes;
     }
     if (it == arg.end()) {
-      out.append(backslashes * 2, L'\\');
+      out.append(backslashes * 2, backslash);
       break;
     }
-    if (*it == L'"') {
-      out.append(backslashes * 2 + 1, L'\\');
-      out += L'"';
+    if (*it == quote) {
+      out.append(backslashes * 2 + 1, backslash);
+      out += quote;
     } else {
-      out.append(backslashes, L'\\');
+      out.append(backslashes, backslash);
       out += *it;
     }
   }
-  out += L'"';
+  out += quote;
 }
 
 bool on_path(const std::wstring& name, const wchar_t* ext) {
@@ -305,6 +308,12 @@ bool wait_gone(int pid, int timeout_ms) {
 }
 
 }  // namespace
+
+std::string quote_command_arg(const std::string& arg) {
+  std::string out;
+  append_quoted(out, arg);
+  return out;
+}
 
 ProcessResult ProcessRunner::run_sync(const std::vector<std::string>& args, const fs::path& cwd, const Env& env,
                                       std::chrono::milliseconds timeout) {

@@ -1853,7 +1853,10 @@ bool launch_console(const std::vector<std::string>& args) {
   owned.insert(owned.end(), args.begin(), args.end());
 #ifdef _WIN32
   _putenv_s("PAPERBOAT_BIN", exe.string().c_str());
-  // no exec on Windows: node runs in this console as a child, and its exit code is ours
+  // no exec on Windows: node runs in this console as a child, and its exit code is ours.
+  // _spawnvp joins argv with spaces unquoted, so each is quoted, or a script under
+  // "C:\Users\Jane Doe" reached node as "C:\Users\Jane" (and ran whatever file has that name).
+  for (auto& a : owned) a = core::quote_command_arg(a);
   std::vector<const char*> argv;
   for (auto& a : owned) argv.push_back(a.c_str());
   argv.push_back(nullptr);
