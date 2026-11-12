@@ -459,7 +459,12 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
   const formula = v.expr !== undefined;
   const remote = v.source === "mx";
   return (
-    <div className={`var-row${remote ? " remote" : ""}${open ? " open" : ""}${bad ? " bad" : ""}`} data-var={v.name} role="listitem">
+    <div
+      className={`var-row${remote ? " remote" : ""}${open ? " open" : ""}${bad ? " bad" : ""}`}
+      data-var={v.name}
+      role="listitem"
+      title={remote ? `${v.name}: ${show(vars.values[v.name] ?? v.value)}` : undefined}
+    >
       <span
         className="var-name"
         draggable={!vars.locked}
@@ -484,7 +489,7 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
       </span>
       <span className="var-type">{formula && v.type !== "number" ? "ƒ formula" : v.type}</span>
       {remote ? (
-        <output className="var-value out" title="The value MX last broadcast">{show(vars.values[v.name] ?? v.value)}</output>
+        <output className="var-value out" title={show(vars.values[v.name] ?? v.value)}>{show(vars.values[v.name] ?? v.value)}</output>
       ) : formula && v.type !== "number" ? (
         <output className="var-value out">{show(vars.values[v.name])}</output>
       ) : (
@@ -496,7 +501,6 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
           {uses.length ? count(uses.length, "use") : "unused"}
         </button>
       )}
-      {remote && <span className="var-uses none">live</span>}
       {formula && <div className="var-expr">= {v.expr}</div>}
       {bad && <div className="var-expr bad-text">{bad}</div>}
       {open && !remote && <Detail v={v} uses={uses} onChange={onChange} onShow={onShow} />}

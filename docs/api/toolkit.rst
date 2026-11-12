@@ -362,7 +362,7 @@ Pointwise arithmetic and math operations on signals. All but the two random bloc
 - ``bessel`` (``u`` → ``y``; ``order``, ``kind``: ``J``, ``Y``, ``I``, ``K``)
 - ``distribution`` (``u`` → ``y``; ``family``: ``normal``/``uniform``/``exponential``, ``function``: ``pdf``/``cdf``/``quantile``, ``a``, ``b``: mean and standard deviation, bounds, or rate)
 
-Matrices on ``matrix`` ports (a rectangular ``Table``; not elementwise):
+Matrices on signal ports (a rectangular ``Table``; not elementwise):
 
 - ``matrix_constant`` (→ ``y``; ``values``: ``"1 2; 3 4"``, MATLAB style)
 - ``transpose`` (``a`` → ``y``: Aᵀ)

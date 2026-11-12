@@ -383,8 +383,6 @@ bool is_vector_type(std::string_view type) { return type == "vector" || type == 
 
 bool is_list_type(std::string_view type) { return type == "numbers" || type == "points"; }
 
-bool is_matrix_type(std::string_view type) { return type == "matrix"; }
-
 std::optional<std::size_t> vector_dimension(const PortDef& port) {
   if (port.dimension) return port.dimension;
   if (!port.components.empty()) return port.components.size();
@@ -412,10 +410,10 @@ PortDef points_port(std::string id, std::vector<VectorComponent> coordinates) {
   return {.id = std::move(id), .type = "points", .dimension = dimension, .components = std::move(coordinates)};
 }
 
-PortDef matrix_port(std::string id) { return {.id = std::move(id), .type = "matrix"}; }
+PortDef matrix_port(std::string id) { return {.id = std::move(id), .type = "signal", .matrix = true}; }
 
 std::optional<std::string> vector_value_mismatch(const PortDef& port, const Value& value) {
-  if (port.type == "matrix") {
+  if (port.matrix) {
     const auto* table = std::get_if<Table>(&value);
     if (!table) return "expects a matrix (rows of numbers)";
     if (table->empty()) return std::nullopt;

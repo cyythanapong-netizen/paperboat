@@ -1,4 +1,4 @@
-// The math package's matrix blocks: a matrix is a rectangular Table on a "matrix" port.
+// The math package's matrix blocks: a matrix is a rectangular Table on a signal port.
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
@@ -72,14 +72,13 @@ TEST_CASE("math matrix blocks: constant, transpose, determinant, inverse, multip
   check_matrix(scaled, {{-2, -4}, {-6, -8}});
 }
 
-TEST_CASE("matrix ports are their own type; values must be rectangular tables") {
+TEST_CASE("matrix ports travel on signal wires; values must be rectangular tables") {
   const PortDef matrix = matrix_port("a");
-  CHECK(matrix.type == "matrix");
-  CHECK(is_matrix_type(matrix.type));
-  CHECK_FALSE(is_list_type(matrix.type));
+  CHECK(matrix.type == "signal");
+  CHECK(matrix.matrix);
   CHECK_FALSE(wire_mismatch(matrix, matrix_port("b")).has_value());
-  CHECK(wire_mismatch(matrix, points_port("p")).value() == "joins a matrix port to a points port");
-  CHECK(wire_mismatch(matrix, {.id = "u"}).value() == "joins a matrix port to a signal port");
+  CHECK_FALSE(wire_mismatch(matrix, {.id = "u"}).has_value());
+  CHECK(wire_mismatch(matrix, points_port("p")).value() == "joins a signal port to a points port");
   CHECK_FALSE(vector_value_mismatch(matrix, Value{Table{{1, 2}, {3, 4}}}));
   CHECK(vector_value_mismatch(matrix, Value{Table{{1, 2}, {3}}}).value() ==
         "has row 1 of 1 columns, expected 2");
