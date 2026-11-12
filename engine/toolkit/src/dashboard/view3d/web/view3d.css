@@ -1,0 +1,21 @@
+.view3d .view3d-screen {
+  position: relative;
+  overflow: hidden;
+  background: var(--scene-bg, #e3e3df);
+}
+
+.view3d .view3d-screen .scene {
+  position: absolute;
+  inset: 0;
+}
+
+.view3d-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font: 400 var(--size-2xs) var(--font-sans);
+}

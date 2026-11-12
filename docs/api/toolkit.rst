@@ -459,6 +459,8 @@ Indicator: ``lamp`` (``in`` → ``y``, 0 or 1), lit while ``in`` passes ``thresh
 ``latch`` it stays on from its first trip until the run ends. ``label`` is its text on the
 Dashboard and ``color`` its colour when lit: ``signal`` or ``danger``. Its output can end a run
 (a Step flow's ``when`` → ``stop``).
+3D: ``view3d`` has no wire of its own; its Board instrument draws the Station's scene — its
+objects and meshes — with the same ``SceneView`` as the Station (``grid`` toggles the floor).
 
 .. _pkg-step:
 
