@@ -459,7 +459,7 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
   const formula = v.expr !== undefined;
   const remote = v.source === "mx";
   return (
-    <div className={`var-row${open ? " open" : ""}${bad ? " bad" : ""}`} data-var={v.name} role="listitem">
+    <div className={`var-row${remote ? " remote" : ""}${open ? " open" : ""}${bad ? " bad" : ""}`} data-var={v.name} role="listitem">
       <span
         className="var-name"
         draggable={!vars.locked}
@@ -482,7 +482,7 @@ function Row({ v, open, bad, onOpen, onChange, onShow }: { v: Variable; open: bo
         {v.name}
         {remote && <span className="var-source" title="Live from Squero Studio MX — not saved in the project">MX</span>}
       </span>
-      <span className="var-type">{remote ? "MX · " : ""}{formula && v.type !== "number" ? "ƒ formula" : v.type}</span>
+      <span className="var-type">{formula && v.type !== "number" ? "ƒ formula" : v.type}</span>
       {remote ? (
         <output className="var-value out" title="The value MX last broadcast">{show(vars.values[v.name] ?? v.value)}</output>
       ) : formula && v.type !== "number" ? (
