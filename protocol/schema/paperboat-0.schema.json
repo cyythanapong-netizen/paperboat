@@ -3148,8 +3148,10 @@
             "boolean",
             "enum",
             "text",
-            "file"
-          ]
+            "file",
+            "matrix"
+          ],
+          "description": "matrix: only a live Squero MX variable (source mx), its value the rows (\"1 2; 3 4\"); never a project variable."
         },
         "value": {
           "type": [
@@ -3157,7 +3159,7 @@
             "boolean",
             "string"
           ],
-          "description": "Of its type: a number, true / false, or text (enum: one of options)."
+          "description": "Of its type: a number, true / false, or text (enum: one of options). A live matrix too large to share has none and says why in note."
         },
         "expr": {
           "type": "string",
