@@ -1,0 +1,94 @@
+# A user's first hour, on every OS: scripts/journey.py drives a built checkout through the CLI.
+# 1 bin/paperboat runs; 2 `paperboat start` serves the web app and starts the workbench; 3 an example
+# checks, starts and passes the smoke test; 4 an optional toolkit installs; 5 its example checks.
+# The Squero apps (squero-studio-om, squero-studio-mx) check their own `paperboat start` in their repos.
+name: journey
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    paths:
+      - "bin/**"
+      - "engine/core/**"
+      - "engine/tools/**"
+      - "engine/toolkit/src/installer.cpp"
+      - "engine/workbench/**"
+      - "apps/cli/**"
+      - "python/**"
+      - "protocol/smoke_test.py"
+      - "toolkits.toml"
+      - "scripts/journey.py"
+      - ".github/workflows/journey.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: paperboat
+
+jobs:
+  journey:
+    name: Journey on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false  # each OS is its own answer
+      matrix:
+        # macOS runners cost about ten Linux minutes: on pushes to dev and main, or a PR labelled `ci:macos`.
+        # (A job's `if` cannot see the matrix, so the list itself is chosen here.)
+        os: ${{ fromJSON((github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:macos')) && '["ubuntu-24.04","windows-2022","macos-15"]' || '["ubuntu-24.04","windows-2022"]') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: paperboat
+      - uses: actions/checkout@v4
+        with:
+          repository: paperboatlab/paperboat-shared
+          path: paperboat-shared
+          token: ${{ secrets.DOWNSTREAM_TOKEN || github.token }}
+      - uses: actions/checkout@v4
+        with:
+          repository: paperboatlab/paperboat-examples
+          path: paperboat-examples
+          token: ${{ secrets.DOWNSTREAM_TOKEN || github.token }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tools
+        run: |
+          pip install websockets jsonschema numpy
+          case "$RUNNER_OS" in
+            Linux) sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build g++-14 ;;
+            macOS) brew list ninja >/dev/null 2>&1 || brew install ninja ;;
+          esac
+      - name: Web app and console
+        run: |
+          (cd ../paperboat-shared && npm ci --no-audit --no-fund)
+          npm ci --no-audit --no-fund && npm run build
+      - name: Engine and Python bindings (Release)
+        run: |
+          py="$(python -c 'import sys; print(sys.executable)')"
+          if [ "$RUNNER_OS" = Windows ]; then
+            cmake -S engine -B engine/build -G "Visual Studio 17 2022" -A x64
+            cmake --build engine/build --config Release --parallel
+            cmake -S python -B python/build -A x64 -DPython_EXECUTABLE="$py"
+            cmake --build python/build --config Release --parallel
+          else
+            [ "$RUNNER_OS" = Linux ] && export CXX=g++-14 CC=gcc-14
+            cmake -S engine -B engine/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+            cmake --build engine/build
+            cmake -S python -B python/build -DCMAKE_BUILD_TYPE=Release -DPython_EXECUTABLE="$py"
+            cmake --build python/build -j 4
+          fi
+      - name: The journey
+        run: |
+          [ "$RUNNER_OS" = Linux ] && export CXX=g++-14 CC=gcc-14
+          python scripts/journey.py --examples "$GITHUB_WORKSPACE/paperboat-examples" --keep
