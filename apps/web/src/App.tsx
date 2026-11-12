@@ -14,7 +14,7 @@ import { SheetFlow } from "./SheetFlow";
 import { Notice } from "./ProjectUI";
 import { VariablesSheet } from "./Variables";
 import { VarsContext } from "./VarsContext";
-import { toToml, type Use } from "./bindings";
+import { inlineLive, toToml, type Use } from "./bindings";
 import { ConsoleWindow } from "@paperboat/shared/components";
 import { AboutWindow } from "./About";
 import { Dashboard } from "./Dashboard";
@@ -356,10 +356,21 @@ export function App() {
     // A Scope is an instrument: sample at the solver's resolution, not at a coarse clock.
     const hasScope = Object.values(monitors).some((m) => m.kind === "scope");
     const settings = settingsForScope(runSettings, state.runDefaults, hasScope);
+    // Squero MX's live variables are not project variables: the run gets their values in place.
+    const live = state.remoteVariables ?? [];
+    const graph = toGraph(nodes, edges, flowChoice);
+    let runStation = station;
+    try {
+      graph.nodes = graph.nodes.map((n) => (n.params ? { ...n, params: inlineLive(n.params, live) } : n));
+      if (runStation) runStation = { ...runStation, objects: runStation.objects.map((o) => (o.props ? { ...o, props: inlineLive(o.props, live) } : o)) };
+    } catch (err) {
+      log("error", `cannot run: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
     send({
       type: "graph.run",
-      graph: toGraph(nodes, edges, flowChoice),
-      ...(station ? { station } : {}),
+      graph,
+      ...(runStation ? { station: runStation } : {}),
       ...(Object.keys(settings).length ? { settings } : {}),
       variables: projectVars,
     });
