@@ -658,12 +658,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
     auto res = ProcessRunner::run_sync(
         {"cmake", "--build", engine_build.string(), "--target", "paperboat-workbench", "--config", "Release"});
     if (!res.ok()) {
-      if (error_msg) {
-        *error_msg = !res.stderr_text.empty()   ? res.stderr_text
-                     : !res.stdout_text.empty() ? res.stdout_text
-                                                : "cmake gave no output (exit " + std::to_string(res.exit_code) +
-                                                      "); is CMake 3.25+ installed and on PATH?";
-      }
+      if (error_msg) *error_msg = cmake_failure(res);
       return false;
     }
     if (elapsed_seconds) *elapsed_seconds = seconds_since(start_time);
