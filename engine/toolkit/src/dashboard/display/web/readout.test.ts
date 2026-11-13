@@ -14,16 +14,15 @@ test("a vector shows its size and values, with labels when it has them", () => {
   assert.deepEqual(readout([]), { dims: "0", type: "vector", values: "" });
 });
 
-test("a long vector shows its first values and its full size", () => {
-  const { dims, values } = readout(Array.from({ length: 100 }, (_, i) => i / 10));
-  assert.equal(dims, "100");
-  assert.equal(values, "0, 0.1, 0.2, 0.3, 0.4, 0.5, …");
-  assert.equal(values.split(",").length, SHOWN + 1);
+test("a long vector shows its full size and its stats", () => {
+  const { dims, values } = readout(Array.from({ length: SHOWN + 5 }, (_, i) => i));
+  assert.equal(dims, String(SHOWN + 5));
+  assert.equal(values, `min 0, max ${SHOWN + 4}, mean ${(SHOWN + 4) / 2}`);
 });
 
 test("a matrix or point list keeps its size and shown values, however big", () => {
   assert.deepEqual(readout("2 × 2 matrix: 0, 1, -2, -3"), { dims: "2 × 2", type: "matrix", values: "0, 1, -2, -3" });
-  assert.deepEqual(readout("1000 × 1000 matrix: 1, 2, 3, 4, 5, 6, …"), { dims: "1000 × 1000", type: "matrix", values: "1, 2, 3, 4, 5, 6, …" });
+  assert.deepEqual(readout("1000 × 1000 matrix: min -3, max 5, mean 0.2"), { dims: "1000 × 1000", type: "matrix", values: "min -3, max 5, mean 0.2" });
   assert.deepEqual(readout("5 points: (0, 1), (1, 2), …"), { dims: "5", type: "points", values: "(0, 1), (1, 2), …" });
   assert.deepEqual(readout("1 point: (0, 1)"), { dims: "1", type: "points", values: "(0, 1)" });
 });

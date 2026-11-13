@@ -133,7 +133,7 @@ std::string points_text(const toolkit::Table& points) {
   return out;
 }
 
-// A matrix as a readout: its shape and the first few values (a display, not a plot).
+// A matrix as a readout: its shape and its values, or for a big one (more than kShown) min, max and mean.
 std::string matrix_text(const toolkit::Table& matrix) {
   const auto number = [](double v) {
     char buf[32];
@@ -143,14 +143,20 @@ std::string matrix_text(const toolkit::Table& matrix) {
   const std::size_t columns = matrix.empty() ? 0 : matrix.front().size();
   std::string out = std::to_string(matrix.size()) + " × " + std::to_string(columns) + " matrix";
   constexpr std::size_t kShown = 6;
+  std::size_t count = 0;
+  double lo = 0, hi = 0, sum = 0;
+  for (const auto& row : matrix)
+    for (const double v : row) {
+      lo = count == 0 ? v : std::min(lo, v);
+      hi = count == 0 ? v : std::max(hi, v);
+      sum += v;
+      ++count;
+    }
+  if (count == 0) return out;
+  if (count > kShown) return out + ": min " + number(lo) + ", max " + number(hi) + ", mean " + number(sum / static_cast<double>(count));
   std::size_t shown = 0;
   for (const auto& row : matrix)
-    for (const double value : row) {
-      if (shown == kShown) { out += ", …"; return out; }
-      out += shown == 0 ? ": " : ", ";
-      out += number(value);
-      ++shown;
-    }
+    for (const double v : row) out += (shown++ == 0 ? ": " : ", ") + number(v);
   return out;
 }
 
