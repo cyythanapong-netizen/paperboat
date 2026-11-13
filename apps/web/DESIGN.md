@@ -276,7 +276,7 @@ Following the ISA-88 boundary (GUIDELINES §4): Studio builds equipment; Paperbo
 generator: OM can export a `<model>-cpp/` project as a feature, and Squero Studio MX has no
 generator at all. Studio's Simulate is a local check, never a second Flow page.
 
-The top bar shows the Squero Studio lockup (W3 Water wordmark: "squero" in bold ink over five signal dots that ripple every 5 s when idle and continuously while Simulate runs, light "studio", and the square B3 Mono "OM" product badge)
+The top bar shows the Squero Studio lockup, `squero [om]` (`[mx]` in MX): "squero" in bold ink over five signal dots that ripple every 5 s when idle and continuously while Simulate runs, then the product code in Geist Mono, lowercase, in bold ink brackets, the way every chosen option is shown (no "studio" and no filled tile),
 along with the project name and an `omc <ver> · ready | checking | failed` status pill (the same `StatusPill`) and the theme key on the right.
 Studio has no modal dialogs; refusals and notices appear in plain words.
 
