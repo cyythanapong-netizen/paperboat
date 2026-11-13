@@ -107,6 +107,11 @@ TEST_CASE("pkg lifecycle: deps first, versions from tags, update, uninstall guar
   CHECK(tk::install_app("lib", "main", root).ok);
   CHECK(tk::install_app("lib", {}, root).ok);
   CHECK(tk::list_apps(root)[0].version == "dev");
+  // A main install tracks the remote's default branch, whatever it is called: a new commit there is an update.
+  CHECK_FALSE(tk::app_outdated("lib", root));
+  std::ofstream(lib / "b.txt") << "b";
+  CHECK(sh("git -C '" + lib.string() + "' add -A && git -C '" + lib.string() + "' commit -qm two"));
+  CHECK(tk::app_outdated("lib", root));
   CHECK(tk::install_app("lib", "latest", root).ok);
   CHECK(tk::list_apps(root)[0].version == "0.1.0");
 

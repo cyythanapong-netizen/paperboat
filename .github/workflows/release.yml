@@ -120,7 +120,7 @@ jobs:
             cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend
             cd /tmp && paperboat new demo && paperboat build demo && paperboat check demo
             python3 --version && cp -r /src-py /tmp/py-backend && paperboat check /tmp/py-backend'
-      - name: "SDK: the .tar.gz on Fedora builds and checks a backend, checks a Python backend, and installs a toolkit"
+      - name: "SDK: the .tar.gz on Fedora builds and checks a backend, and checks a Python backend"
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" \
               -v "$PWD/engine/tests/sdk-backend-python:/src-py:ro" fedora:latest sh -ec '
@@ -128,10 +128,24 @@ jobs:
             pip install -q websockets jsonschema
             mkdir /opt/pb && tar xzf /dist/paperboat-*.tar.gz -C /opt/pb --strip-components=1
             cp -r /src /tmp/sdk-backend && /opt/pb/bin/paperboat build /tmp/sdk-backend && /opt/pb/bin/paperboat check /tmp/sdk-backend
-            cp -r /src-py /tmp/py-backend && cd /tmp && /opt/pb/bin/paperboat check /tmp/py-backend
-            # A toolkit on a release install: built as a plugin against the SDK, loaded with no engine rebuild (pb#354).
-            /opt/pb/bin/paperboat toolkit install control
-            /opt/pb/bin/paperboat toolkit list control | grep -q "control/pid"'
+            cp -r /src-py /tmp/py-backend && cd /tmp && /opt/pb/bin/paperboat check /tmp/py-backend'
+      # The promise (pb#358): one install, then paperboat manages the rest. On a clean machine with only the
+      # usual tools: install.sh puts paperboat in ~/.local, and from there a toolkit (built as a plugin
+      # against the SDK, no engine rebuild), its example, a library app and the update check.
+      - name: "One install: install.sh, then paperboat installs a toolkit, checks its example, installs an app, checks for updates"
+        run: |
+          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/scripts/install.sh:/install.sh:ro" fedora:latest sh -ec '
+            dnf install -y -q cmake gcc-c++ make git tar gzip curl nodejs npm python3-pip >/dev/null
+            pip install -q websockets jsonschema
+            sh /install.sh --archive /dist/paperboat-*-Linux-x86_64.tar.gz
+            export PATH="$HOME/.local/bin:$PATH" && cd /tmp
+            paperboat --version
+            paperboat toolkit install optimization
+            paperboat toolkit list optimization | grep -q "optimization/qp"
+            paperboat check opt-01
+            paperboat pkg install paperboat-shared
+            paperboat pkg list | grep paperboat-shared | grep -vq "not installed"
+            paperboat update --check'
       - name: "The wheel installs with pip and runs a Python backend"
         run: |
           python -m venv "$RUNNER_TEMP/whl" && "$RUNNER_TEMP/whl/bin/pip" install -q dist/paperboat-*-cp312-abi3-*.whl

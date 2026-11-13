@@ -412,8 +412,8 @@ bool app_outdated(std::string_view name, const fs::path& repo_root) {
     const auto have = parse_version(version), best = newest ? parse_version(*newest) : std::nullopt;
     return have && best && *best > *have;
   }
-  std::string out;  // a dev install tracks main: outdated when the remote's main moved on
-  if (run_command({"git", "ls-remote", repo_url(*e), "main"}, {}, {}, nullptr, &out) != 0) return false;
+  std::string out;  // a dev install tracks the default branch: outdated when it moved on
+  if (run_command({"git", "ls-remote", repo_url(*e), "HEAD"}, {}, {}, nullptr, &out) != 0) return false;
   return !out.empty() && out.rfind(m.value("commit", ""), 0) != 0;
 }
 

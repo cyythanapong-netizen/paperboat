@@ -747,8 +747,8 @@ bool toolkit_outdated(const ToolkitEntry& entry, const fs::path& repo_root) {
     const auto have = parse_version(version), best = releases.empty() ? std::nullopt : parse_version(releases.front());
     return have && best && *best > *have;
   }
-  std::string out;  // a dev install tracks main: outdated when the remote's main moved on
-  if (run_cmd({"git", "ls-remote", resolve_repo_url(entry, {}), "main"}, root, {}, nullptr, &out) != 0) return false;
+  std::string out;  // a dev install tracks the default branch: outdated when it moved on
+  if (run_cmd({"git", "ls-remote", resolve_repo_url(entry, {}), "HEAD"}, root, {}, nullptr, &out) != 0) return false;
   return !out.empty() && out.rfind(m.value("commit", ""), 0) != 0;
 }
 
