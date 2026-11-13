@@ -783,7 +783,8 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .bound { display: inline-flex; align-items: center; gap: 6px; height: auto; padding: 0; border: 0; background: none; white-space: nowrap; }
 .bound .ref { font: 500 var(--size-2xs) var(--font-mono); color: var(--text); border: 1px solid var(--line-ink); border-radius: var(--radius-sm); padding: 0 4px; line-height: 16px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; }
 .bound .ref.f::before { content: "ƒ "; color: var(--text-muted); }
-.bound .val { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); min-width: 18px; text-align: right; }
+.bound .val { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); min-width: 18px; max-width: 90px; overflow: hidden; text-overflow: ellipsis; text-align: right; }
+.bound-live { display: block; max-height: 160px; overflow: auto; white-space: pre; font: var(--size-2xs) var(--font-mono); }
 .bound.hot .ref { outline: 2px solid var(--line-ink); outline-offset: 2px; }
 .bound.bad .ref { border-color: var(--danger); color: var(--danger-text); }
 .formula-box { position: relative; display: inline-flex; }
