@@ -1445,7 +1445,7 @@ int cmd_update(const std::vector<std::string_view>& args) {
     (level == "error" ? std::cerr : std::cout) << "  " << text << '\n';
   };
   const auto say = [](const std::string& name, const std::string& text) {
-    std::cout << std::left << std::setw(20) << name << text << '\n';
+    std::cout << std::left << std::setw(19) << name << ' ' << text << '\n';
   };
   int failed = 0;
   bool pulled = false;
