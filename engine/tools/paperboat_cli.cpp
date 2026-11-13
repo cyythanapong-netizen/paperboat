@@ -1492,13 +1492,24 @@ int cmd_update(const std::vector<std::string_view>& args) {
   // 1. this repository, then what it builds on
   std::vector<std::string> changed;
   const std::string exe = platform::exe_path().string();
-  const bool managed = exe.starts_with(tk::apps_dir().parent_path().string() + "/");  // made by install.sh
+  const auto under_home = fs::path(exe).lexically_relative(tk::apps_dir().parent_path());
+  const bool managed = !under_home.empty() && *under_home.begin() != "..";  // made by install.sh / install.ps1
   const bool checkout = !managed && fs::exists(root / ".git");
   if (managed || (!channel.empty() && !checkout)) {
-    // install.sh is in the checkout's scripts/ and in a package's share/paperboat/scripts/.
+    // install.sh (install.ps1 on Windows) is in the checkout's scripts/ and in a package's share/paperboat/scripts/.
+#ifdef _WIN32
+    if (!channel.empty() && channel != "release") {
+      say("paperboat", "on Windows paperboat updates from releases only (the source and main channels need scripts/install.sh)");
+      return 1;
+    }
+    std::vector<std::string> cmd = {"powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                                    (root / "scripts" / "install.ps1").string()};
+    if (check_only) cmd.emplace_back("-Check");
+#else
     std::vector<std::string> cmd = {"sh", (root / "scripts" / "install.sh").string()};
     if (check_only) cmd.emplace_back("--check");
     if (!channel.empty()) cmd.push_back("--" + channel);
+#endif
     std::cout << "paperboat\n";
     if (const int rc = tk::run_command(cmd, {}, [](std::string_view, std::string_view t) { std::cout << "  " << t << '\n'; });
         rc != 0) {
@@ -2010,7 +2021,8 @@ int run_interactive_prompt() {
 
 }  // namespace
 
-extern const char* const kInstallSh;  // scripts/install.sh (install_sh.cpp, generated)
+extern const char* const kInstallSh;   // scripts/install.sh (install_sh.cpp, generated)
+extern const char* const kInstallPs1;  // scripts/install.ps1
 
 namespace {
 
@@ -2021,15 +2033,34 @@ namespace {
 // local release archive instead of downloading it (offline, CI).
 std::optional<int> bootstrap(int argc, char** argv) {
   if (!tk::find_repo_root().empty()) return std::nullopt;  // a checkout or an installed paperboat
-#ifdef _WIN32
-  std::cerr << "paperboat: no runtime beside this binary; unpack the paperboat .zip from the GitHub release\n";
-  return 1;
-#else
   std::cout << "paperboat " << tui::kVersion << ": first run, installing paperboat for this user…\n";
+  const char* archive = std::getenv("PAPERBOAT_ARCHIVE");
+#ifdef _WIN32
+  const fs::path script = fs::temp_directory_path() / ("paperboat-install-" + std::to_string(_getpid()) + ".ps1");
+  std::ofstream(script) << kInstallPs1;
+  std::string cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File \"" + script.string() + "\"";
+  if (archive && *archive) cmd += " -Archive \"" + std::string(archive) + "\"";
+  else cmd += " -Version " + std::string(tui::kVersion);
+  const int rc = std::system(("\"" + cmd + "\"").c_str());  // cmd.exe strips one pair of outer quotes
+  std::error_code ec;
+  fs::remove(script, ec);
+  if (rc != 0) {
+    std::cerr << "paperboat: the install failed; this file is unchanged, run it again to retry\n";
+    return 1;
+  }
+  const fs::path root = tk::apps_dir().parent_path();
+  const char* bin = std::getenv("PAPERBOAT_BIN");
+  std::cout << "paperboat is installed: open a new terminal and run `paperboat` (this downloaded file can be deleted)\n";
+  if (argc < 2) return 0;
+  // The command you gave, by the installed paperboat (through its shim: the version folder is its own).
+  std::string run = "\"\"" + ((bin && *bin ? fs::path(bin) : root / "bin") / "paperboat.cmd").string() + "\"";
+  for (int i = 1; i < argc; ++i) run += " \"" + std::string(argv[i]) + "\"";
+  return std::system((run + "\"").c_str());
+#else
   const fs::path script = fs::temp_directory_path() / ("paperboat-install-" + std::to_string(::getpid()) + ".sh");
   std::ofstream(script) << kInstallSh;
   std::string cmd = "sh '" + script.string() + "'";
-  if (const char* a = std::getenv("PAPERBOAT_ARCHIVE"); a && *a) cmd += " --archive '" + std::string(a) + "'";
+  if (archive && *archive) cmd += " --archive '" + std::string(archive) + "'";
   else cmd += " --version " + std::string(tui::kVersion);
   const int rc = std::system(cmd.c_str());
   std::error_code ec;

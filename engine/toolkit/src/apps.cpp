@@ -165,6 +165,10 @@ std::string label(std::string_view name, std::string_view version) {
 
 fs::path apps_dir() {
   if (const char* v = std::getenv("PAPERBOAT_HOME"); v && *v) return fs::path(v) / "apps";
+#ifdef _WIN32
+  // %LOCALAPPDATA%\paperboat, where scripts/install.ps1 installs paperboat itself
+  if (const char* v = std::getenv("LOCALAPPDATA"); v && *v) return fs::path(v) / "paperboat" / "apps";
+#endif
   if (const char* v = std::getenv("XDG_DATA_HOME"); v && *v) return fs::path(v) / "paperboat" / "apps";
   const char* home = std::getenv("HOME");
   return fs::path(home && *home ? home : ".") / ".local" / "share" / "paperboat" / "apps";

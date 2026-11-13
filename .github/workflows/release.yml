@@ -1,4 +1,4 @@
-# Release packages on a GitHub release: the one-file paperboat (Linux x86_64, macOS arm64), which installs the rest
+# Release packages on a GitHub release: the one-file paperboat (Linux x86_64, macOS arm64, Windows x64), which installs the rest
 # on its first run; the .tar.gz it installs (and that scripts/install.sh downloads); the .zip (Windows x64); the
 # Python wheels. scripts/install.sh and `paperboat update` download the .tar.gz; one format per platform, one update path (pb#357).
 # Every package ships the Python bindings (pb#223) in lib/paperboat/python, so a Python backend runs
@@ -321,10 +321,22 @@ jobs:
           "$exe" commands | grep -q pkg
           "$exe" pkg versions squero-studio-om || true   # git over the pipe layer
           "$exe" < /dev/null                              # the prompt: its banner runs git through the process layer
-      - name: Package (.zip)
+      - name: Package (.zip, and the one-file paperboat.exe)
         run: |
           (cd engine/build && cpack -G ZIP -C Release -B "$GITHUB_WORKSPACE/dist")
           cmake --install engine/build --config Release --prefix "$RUNNER_TEMP/root"
+          # The Windows build is static already (no shared libraries, the static MSVC runtime): its exe is the one file.
+          cp engine/build/tools/Release/paperboat.exe "dist/paperboat-${{ steps.version.outputs.version }}-Windows-AMD64.exe"
+      - name: The one-file paperboat.exe installs itself and runs
+        run: |
+          cd "$RUNNER_TEMP"
+          one="$RUNNER_TEMP/one"   # Windows paths for PowerShell (install.ps1), POSIX ones for this shell
+          export PAPERBOAT_HOME=$(cygpath -w "$one/home") PAPERBOAT_BIN=$(cygpath -w "$one/bin")
+          PAPERBOAT_ARCHIVE=$(cygpath -w "$(ls "$GITHUB_WORKSPACE"/dist/paperboat-*.zip)") \
+            "$GITHUB_WORKSPACE"/dist/paperboat-*-Windows-AMD64.exe pkg list
+          exe=$(ls "$one"/home/self/*/bin/paperboat.exe)
+          "$exe" --version
+          "$exe" update --check
       - name: No optional toolkit is bundled
         run: |
           python scripts/check_bundle.py --self-test
@@ -374,4 +386,4 @@ jobs:
           shopt -s nullglob
           case "$GITHUB_REF_NAME" in *-*) pre=--prerelease;; esac   # v0.1.0-alpha.1
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes $pre \
-            dist/*.tar.gz dist/*.zip dist/*.whl dist/paperboat-*-Linux-x86_64 dist/paperboat-*-Darwin-arm64
+            dist/*.tar.gz dist/*.zip dist/*.whl dist/paperboat-*-Linux-x86_64 dist/paperboat-*-Darwin-arm64 dist/paperboat-*-Windows-AMD64.exe

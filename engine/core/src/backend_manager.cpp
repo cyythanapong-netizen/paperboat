@@ -683,6 +683,10 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
   if (!fs::exists(build_dir / "CMakeCache.txt")) {
     if (verbose) std::cout << "[build] configuring with cmake…" << std::endl;
     std::vector<std::string> config_cmd = {platform::cmake_command(cmake_dir), "-S", backend_dir.string(), "-B", cmake_dir.string()};
+#ifndef _WIN32
+    // Ninja when it is there, as the toolkit plugins build: faster, and a machine may have it and no make.
+    if (ProcessRunner::run_sync({"ninja", "--version"}).ok()) config_cmd.push_back("-GNinja");
+#endif
 #ifdef _WIN32
     // Visual Studio puts a program under build/Release/; backend.toml's `run` names build/<program>, as
     // on Linux. The per-configuration variable takes no configuration folder: the program lands there.

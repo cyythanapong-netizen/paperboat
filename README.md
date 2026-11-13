@@ -169,8 +169,9 @@ from main (`@main`, recorded as `dev`) stays on main through `pkg update`; `@lat
 
 ### Install
 
-Download one file, `paperboat-<version>-Linux-x86_64` or `paperboat-<version>-Darwin-arm64`, from the
-[latest release](https://github.com/paperboatlab/paperboat/releases), and run it. Everything else is `paperboat`:
+Download one file, `paperboat-<version>-Linux-x86_64`, `paperboat-<version>-Darwin-arm64` or
+`paperboat-<version>-Windows-AMD64.exe`, from the [latest release](https://github.com/paperboatlab/paperboat/releases),
+and run it. Everything else is `paperboat`:
 
 ```sh
 chmod +x paperboat-*-Linux-x86_64 && ./paperboat-*-Linux-x86_64   # first run: installs paperboat for you
@@ -178,11 +179,14 @@ paperboat pkg install squero-studio-om                            # then any app
 ```
 
 On its first run the file installs the runtime of its version (engine, web app, SDK) and hands over to the
-installed `paperboat`; the downloaded file can then be deleted. Or with one line, which does the same:
+installed `paperboat`; the downloaded file can then be deleted. On Windows it installs into
+`%LOCALAPPDATA%\paperboat` and puts `paperboat` on your PATH (`scripts/install.ps1`); it takes releases
+only, and toolkits there still need a source build (#222). Or with one line, which does the same:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/paperboatlab/paperboat/HEAD/scripts/install.sh | sh             # newest release, prebuilt
 curl -fsSL https://raw.githubusercontent.com/paperboatlab/paperboat/HEAD/scripts/install.sh | sh -s -- --main  # the dev branch, built from source
+irm https://raw.githubusercontent.com/paperboatlab/paperboat/HEAD/scripts/install.ps1 | iex                    # Windows (PowerShell)
 ```
 
 It installs into `~/.local/share/paperboat` (or `$PAPERBOAT_HOME`) and links `~/.local/bin/paperboat`.
@@ -202,7 +206,7 @@ An app or toolkit stays on the channel it was installed on: `update` moves a rel
 release and a `main` install to the newest commit of main.
 
 Or unpack a release archive by hand (it does not update itself; `paperboat update --channel release` moves
-it to the per-user install above). Windows has only this for now (#222):
+it to the per-user install above):
 
 ```sh
 tar xzf paperboat-<version>-Linux-x86_64.tar.gz       # Linux x86_64 (glibc, libstdc++ of gcc 12 or newer)

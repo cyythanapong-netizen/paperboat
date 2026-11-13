@@ -900,6 +900,11 @@ ToolkitResult install_toolkit(std::string_view name,
   if (entry->builtin) return {false, "cannot install built-in toolkit"};
   // A checkout compiles toolkits into its engine; an installed paperboat builds each as a plugin (pb#354).
   const bool checkout = toolkits_dir(root) == root / "engine" / "toolkit";
+#ifdef _WIN32
+  // A plugin needs the engine as shared libraries; the Windows build is static for now (#222).
+  if (!checkout && host.source_dir.empty())
+    return {false, "toolkits install as plugins on Linux and macOS; on Windows they need paperboat built from source for now (#222)"};
+#endif
 
   // The toolkit and what it requires, each requirement first: control cannot be built without
   // optimization, and asking for that build step by hand is a trap.
