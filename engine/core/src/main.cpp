@@ -10,7 +10,11 @@
 #include <string>
 #include <vector>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#else
 #include <unistd.h>
 #endif
 
@@ -52,7 +56,28 @@ void exec_remembered_args() {
     args = g_restart_args;
   }
   if (args.empty()) return;
-#if !defined(_WIN32)
+#if defined(_WIN32)
+  // Windows has no exec: start the same program again, detached, and end this one, so the binary
+  // that serves the port next is the one just rebuilt (a toolkit install asks for this).
+  std::string command;
+  for (const auto& arg : args) {
+    if (!command.empty()) command += ' ';
+    command += '"';
+    for (char c : arg) {
+      if (c == '"') command += '\\';
+      command += c;
+    }
+    command += '"';
+  }
+  STARTUPINFOA startup{};
+  startup.cb = sizeof(startup);
+  PROCESS_INFORMATION process{};
+  if (CreateProcessA(nullptr, command.data(), nullptr, nullptr, FALSE, DETACHED_PROCESS, nullptr, nullptr, &startup, &process)) {
+    CloseHandle(process.hThread);
+    CloseHandle(process.hProcess);
+  }
+  std::exit(0);
+#else
   std::vector<char*> argv;
   argv.reserve(args.size() + 1);
   for (auto& a : args) argv.push_back(a.data());

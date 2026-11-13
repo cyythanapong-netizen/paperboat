@@ -6,7 +6,9 @@
 #include <charconv>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
+#include <functional>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -176,15 +178,16 @@ ToolkitResult rebuild_host(const HostBuild& host, const fs::path& root, const To
   }
   if (!src.empty() && !fs::is_directory(src)) return {false, "source directory not found at " + src.string()};
   if (log) log("info", "reconfiguring build at " + bld.string() + "…");
+  const std::string cmake = platform::cmake_command(bld);
   std::string last;
   // Only a build folder (a running backend's): reconfigure it from its own cache.
-  const std::vector<std::string> configure = src.empty() ? std::vector<std::string>{"cmake", bld.string()}
-                                                         : std::vector<std::string>{"cmake", "-S", src.string(), "-B", bld.string()};
+  const std::vector<std::string> configure = src.empty() ? std::vector<std::string>{cmake, bld.string()}
+                                                         : std::vector<std::string>{cmake, "-S", src.string(), "-B", bld.string()};
   if (run_cmd(configure, root, log, &last) != 0) {
     return {false, "cmake configure failed" + (last.empty() ? "" : ": " + last)};
   }
   if (log) log("info", "building…");
-  std::vector<std::string> build = {"cmake", "--build", bld.string()};
+  std::vector<std::string> build = {cmake, "--build", bld.string()};
 #ifdef _WIN32
   // Programs of this build that are running (this paperboat.exe, the workbench the console
   // started) cannot be overwritten on Windows, but they can be renamed: move them aside so the
@@ -429,6 +432,12 @@ std::vector<ToolkitEntry> parse_toolkits_manifest(std::string_view toml_text) {
         if (auto v = b.value<std::string>()) e.blocks.push_back(*v);
       }
     }
+    // Another optional toolkit this one links: installing this one installs that first.
+    if (const auto* needed = (*tbl)["requires"].as_array()) {
+      for (const auto& r : *needed) {
+        if (auto v = r.value<std::string>()) e.needs.push_back(*v);
+      }
+    }
     // `repo` is a suggested source only: a user may install the toolkit from any repository
     // or local folder. The manifest is a catalog, not an installer.
     if (e.name.empty()) {
@@ -574,32 +583,16 @@ std::string toolkits_json(const std::vector<ToolkitEntry>& list,
   return arr.dump();
 }
 
-ToolkitResult install_toolkit(std::string_view name,
-                              std::string_view requested_version,
-                              const fs::path& repo_root,
-                              const HostBuild& host,
-                              const ToolkitLog& log,
-                              std::string_view source) {
-  if (name == "builtin") {
-    return {false, "cannot install built-in toolkit"};
-  }
-  const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
-  if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) {
-    return {false, "cannot find toolkits.toml in repository root"};
-  }
-  const auto entries = load_toolkits_manifest(root / "toolkits.toml");
-  const ToolkitEntry* entry = find_entry(entries, name);
-  if (!entry) return {false, "unknown toolkit \"" + std::string(name) + "\""};
-  if (entry->builtin) return {false, "cannot install built-in toolkit"};
-  if (!host.skip_rebuild && host.source_dir.empty() && !fs::is_regular_file(root / "engine" / "CMakeLists.txt"))
-    return {false, "toolkits are compiled into the engine: build paperboat from source to install one"};
-
+// One toolkit's files on disk: the repository cloned (or the folder copied) into
+// engine/toolkit/<name>. No build: install_toolkit() builds once after the whole set.
+ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requested_version, std::string_view source,
+                            const fs::path& root, const ToolkitLog& log) {
   // The source is explicit (--repo/--path), an env override, or the manifest's suggestion.
-  const std::string source_text = resolve_repo_url(*entry, source);
+  const std::string source_text = resolve_repo_url(entry, source);
   if (source_text.empty()) {
-    std::string upper = entry->name;
+    std::string upper = entry.name;
     std::ranges::transform(upper, upper.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-    return {false, "no source for toolkit \"" + entry->name +
+    return {false, "no source for toolkit \"" + entry.name +
                        "\": pass --repo <url> or --path <dir>, or set PAPERBOAT_TOOLKIT_REPO_" + upper};
   }
   const fs::path source_path(source_text);
@@ -614,7 +607,7 @@ ToolkitResult install_toolkit(std::string_view name,
     version = version.empty() ? "local" : version;
     git_ref = "local";
   } else if (version.empty()) {
-    ToolkitEntry probe = *entry;
+    ToolkitEntry probe = entry;
     probe.repo = source_text;
     const auto available = list_releases(probe, log);
     if (!available.empty()) {
@@ -633,10 +626,10 @@ ToolkitResult install_toolkit(std::string_view name,
     version = version.starts_with('v') ? version.substr(1) : version;
   }
 
-  if (log) log("info", "installing toolkit \"" + entry->name + "\" version " + version + " (" + git_ref + ") from " + source_text + "…");
+  if (log) log("info", "installing toolkit \"" + entry.name + "\" version " + version + " (" + git_ref + ") from " + source_text + "…");
 
-  const fs::path target_dir = root / "engine" / "toolkit" / entry->name;
-  const fs::path stage_dir = root / ".toolkit-cache" / ("stage-" + entry->name);
+  const fs::path target_dir = root / "engine" / "toolkit" / entry.name;
+  const fs::path stage_dir = root / ".toolkit-cache" / ("stage-" + entry.name);
   std::error_code ec;
   fs::remove_all(stage_dir, ec);
   fs::create_directories(stage_dir.parent_path(), ec);
@@ -678,13 +671,13 @@ ToolkitResult install_toolkit(std::string_view name,
   }
 
   // Backup existing install if present
-  const fs::path prev_backup = root / ".toolkit-cache" / ("prev-" + entry->name);
+  const fs::path prev_backup = root / ".toolkit-cache" / ("prev-" + entry.name);
   fs::remove_all(prev_backup, ec);
   if (fs::exists(target_dir)) {
     fs::rename(target_dir, prev_backup, ec);
   }
 
-  const auto mat = materialize_toolkit(stage_dir, entry->name, target_dir);
+  const auto mat = materialize_toolkit(stage_dir, entry.name, target_dir);
   if (!mat.ok) {
     std::error_code restore_ec;
     fs::remove_all(target_dir, restore_ec);  // a partial copy; rename cannot replace it
@@ -694,13 +687,70 @@ ToolkitResult install_toolkit(std::string_view name,
   fs::remove_all(prev_backup, ec);
 
   write_marker(target_dir, version, git_ref, commit);
+  return {true, {}};
+}
+
+ToolkitResult install_toolkit(std::string_view name,
+                              std::string_view requested_version,
+                              const fs::path& repo_root,
+                              const HostBuild& host,
+                              const ToolkitLog& log,
+                              std::string_view source) {
+  if (name == "builtin") {
+    return {false, "cannot install built-in toolkit"};
+  }
+  const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
+  if (root.empty() || !fs::is_regular_file(root / "toolkits.toml")) {
+    return {false, "cannot find toolkits.toml in repository root"};
+  }
+  const auto entries = load_toolkits_manifest(root / "toolkits.toml");
+  const ToolkitEntry* entry = find_entry(entries, name);
+  if (!entry) return {false, "unknown toolkit \"" + std::string(name) + "\""};
+  if (entry->builtin) return {false, "cannot install built-in toolkit"};
+  if (!host.skip_rebuild && host.source_dir.empty() && !fs::is_regular_file(root / "engine" / "CMakeLists.txt"))
+    return {false, "toolkits are compiled into the engine: build paperboat from source to install one"};
+
+  // The toolkit and what it requires, each requirement first: control cannot be built without
+  // optimization, and asking for that build step by hand is a trap.
+  const auto installed = [&](const ToolkitEntry& e) {
+    return fs::is_regular_file(root / "engine" / "toolkit" / e.name / "toolkit.toml");
+  };
+  std::vector<const ToolkitEntry*> order;
+  std::set<std::string> seen;
+  std::string error;
+  std::function<void(const ToolkitEntry&)> add = [&](const ToolkitEntry& e) {
+    if (!error.empty() || seen.contains(e.name)) return;
+    seen.insert(e.name);
+    for (const auto& req : e.needs) {
+      const ToolkitEntry* dependency = find_entry(entries, req);
+      if (!dependency) {
+        error = "toolkit \"" + e.name + "\" requires \"" + req + "\", which toolkits.toml does not list";
+        return;
+      }
+      if (!dependency->builtin && !installed(*dependency)) add(*dependency);
+      if (!error.empty()) return;
+    }
+    if (e.name != name && installed(e)) return;  // already on disk: leave it as it is
+    order.push_back(&e);
+  };
+  add(*entry);
+  if (!error.empty()) return {false, error};
+
+  std::string names;
+  for (const ToolkitEntry* e : order) {
+    const bool asked = e->name == name;
+    const auto res = install_files(*e, asked ? requested_version : std::string_view{}, asked ? source : std::string_view{}, root, log);
+    if (!res.ok) return res;
+    if (!names.empty()) names += ", ";
+    names += e->name;
+  }
 
   const auto rb = rebuild_host(host, root, log);
   if (!rb.ok) {
-    return {false, "toolkit installed but rebuild failed: " + rb.message};
+    return {false, "toolkit" + std::string(order.size() > 1 ? "s " : " ") + names + " installed but rebuild failed: " + rb.message};
   }
 
-  const std::string msg = "installed toolkit \"" + entry->name + "\" (" + version + "); restart backend to load changes";
+  const std::string msg = "installed toolkit" + std::string(order.size() > 1 ? "s " : " ") + names + "; restart backend to load changes";
   if (log) log("info", msg);
   return {true, msg};
 }
@@ -725,6 +775,14 @@ ToolkitResult uninstall_toolkit(std::string_view name,
   if (!fs::exists(target_dir)) {
     if (log) log("info", "toolkit \"" + entry->name + "\" is not installed");
     return {true, "toolkit \"" + entry->name + "\" is not installed"};
+  }
+
+  // One that another installed toolkit requires goes last: the build would fail without it.
+  for (const auto& other : entries) {
+    if (other.name == entry->name || other.builtin) continue;
+    if (std::ranges::find(other.needs, entry->name) == other.needs.end()) continue;
+    if (fs::is_regular_file(root / "engine" / "toolkit" / other.name / "toolkit.toml"))
+      return {false, "toolkit \"" + entry->name + "\" is required by \"" + other.name + "\": uninstall that first"};
   }
 
   if (log) log("info", "uninstalling toolkit \"" + entry->name + "\"…");

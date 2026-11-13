@@ -1,6 +1,8 @@
 #include "paperboat/toolkit/platform.hpp"
 
 #include <cstdlib>
+#include <fstream>
+#include <string_view>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -81,6 +83,33 @@ fs::path shared_tmp_dir() {
 #else
   return "/tmp";
 #endif
+}
+
+std::string cmake_command(const fs::path& build_dir) {
+  const auto from_cache = [](const fs::path& dir, std::string& out) {
+    std::ifstream in(dir / "CMakeCache.txt");
+    if (!in) return false;
+    static constexpr std::string_view key = "CMAKE_COMMAND:INTERNAL=";
+    for (std::string line; std::getline(in, line);) {
+      if (!line.starts_with(key)) continue;
+      std::string path = line.substr(key.size());
+      while (!path.empty() && (path.back() == '\r' || path.back() == ' ' || path.back() == '\t')) path.pop_back();
+      std::error_code ec;
+      if (!path.empty() && fs::is_regular_file(path, ec)) out = std::move(path);
+      return !out.empty();
+    }
+    return false;
+  };
+  std::string found;
+  for (fs::path dir = build_dir; !dir.empty(); dir = dir.parent_path()) {
+    if (from_cache(dir, found)) return found;
+    if (dir == dir.parent_path()) break;
+  }
+  for (fs::path dir = exe_path().parent_path(); !dir.empty(); dir = dir.parent_path()) {
+    if (from_cache(dir, found)) return found;
+    if (dir == dir.parent_path()) break;
+  }
+  return "cmake";
 }
 
 }  // namespace paperboat::platform

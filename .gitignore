@@ -23,8 +23,11 @@ python/paperboat/_engine*.so
 *.a
 *.tsbuildinfo
 .toolkit-cache/
+# Optional toolkits installed into the tree (`paperboat toolkit install`), one folder each.
 engine/toolkit/opencv/
 engine/toolkit/optimization/
+engine/toolkit/control/
+engine/toolkit/meshop/
 
 # --- Dependencies and environments ---
 node_modules/

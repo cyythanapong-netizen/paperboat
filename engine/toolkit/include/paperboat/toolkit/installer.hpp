@@ -30,6 +30,7 @@ struct ToolkitEntry {
   std::vector<std::string> versions;
   std::string default_version;
   std::vector<std::string> blocks;  // block types it provides, from toolkits.toml
+  std::vector<std::string> needs;  // toolkits it requires built first, from toolkits.toml (`requires`)
 };
 
 struct ToolkitInspectBlock {

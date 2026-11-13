@@ -656,7 +656,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
     if (verbose) std::cout << "[build] building paperboat-workbench…" << std::endl;
     // --config: a multi-config generator (Visual Studio) would build Debug; single-config ones ignore it.
     auto res = ProcessRunner::run_sync(
-        {"cmake", "--build", engine_build.string(), "--target", "paperboat-workbench", "--config", "Release"});
+        {platform::cmake_command(engine_build), "--build", engine_build.string(), "--target", "paperboat-workbench", "--config", "Release"});
     if (!res.ok()) {
       if (error_msg) *error_msg = cmake_failure(res);
       return false;
@@ -694,7 +694,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
 
   if (!fs::exists(build_dir / "CMakeCache.txt")) {
     if (verbose) std::cout << "[build] configuring with cmake…" << std::endl;
-    std::vector<std::string> config_cmd = {"cmake", "-S", backend_dir.string(), "-B", cmake_dir.string()};
+    std::vector<std::string> config_cmd = {platform::cmake_command(cmake_dir), "-S", backend_dir.string(), "-B", cmake_dir.string()};
 #ifdef _WIN32
     // Visual Studio puts a program under build/Release/; backend.toml's `run` names build/<program>, as
     // on Linux. The per-configuration variable takes no configuration folder: the program lands there.
@@ -715,7 +715,7 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
   }
 
   if (verbose) std::cout << "[build] compiling backend…" << std::endl;
-  auto build_res = ProcessRunner::run_sync({"cmake", "--build", cmake_dir.string(), "--config", "Release"});
+  auto build_res = ProcessRunner::run_sync({platform::cmake_command(cmake_dir), "--build", cmake_dir.string(), "--config", "Release"});
   if (!build_res.ok()) {
     if (error_msg) *error_msg = "cmake build failed: " + cmake_failure(build_res);
     return false;
@@ -852,8 +852,8 @@ BackendManager::PythonEnv BackendManager::prepare_python_env(const fs::path& rep
 
     if (need_bindings_build) {
       fs::path py_build = root / "python" / "build";
-      ProcessRunner::run_sync({"cmake", "-S", (root / "python").string(), "-B", py_build.string()});
-      ProcessRunner::run_sync({"cmake", "--build", py_build.string(), "--config", "Release"});
+      ProcessRunner::run_sync({platform::cmake_command(py_build), "-S", (root / "python").string(), "-B", py_build.string()});
+      ProcessRunner::run_sync({platform::cmake_command(py_build), "--build", py_build.string(), "--config", "Release"});
     }
   }
 
