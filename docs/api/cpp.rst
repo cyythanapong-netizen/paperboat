@@ -1044,6 +1044,25 @@ Registering
    ``paperboat::toolkit::opencv::register_opencv``
    and ``paperboat::toolkit::optimization::register_optimization``.
 
+Toolkit plugins
+~~~~~~~~~~~~~~~
+
+With the engine built as shared libraries (``-DPAPERBOAT_SHARED_LIBS=ON``), a toolkit can also be a
+plugin that a host loads at runtime, so installing it needs no engine rebuild (pb#352). A plugin is a
+shared library named ``libpaperboat_plugin_<name>`` with one line of C++:
+
+.. code-block:: cpp
+
+   #include <paperboat/toolkit/plugin.hpp>
+   PAPERBOAT_TOOLKIT_PLUGIN(paperboat::toolkit::opencv::register_opencv)
+
+The engine build makes one for every toolkit under ``engine/toolkit/<name>``. A host calls
+``paperboat::toolkit::load_plugins(registry)`` after ``builtins()``; the CLI and the workbench do. It
+searches ``$PAPERBOAT_TOOLKIT_PATH``, ``$PAPERBOAT_HOME/toolkits``, the running binary's build tree and
+an installed ``lib/paperboat/plugins``, skips a package the registry already has, and refuses a plugin
+built for another paperboat version or C++ standard library (``PAPERBOAT_PLUGIN_ABI``) with a message
+instead of loading it.
+
 Loading
 -------
 

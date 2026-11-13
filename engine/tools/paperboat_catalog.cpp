@@ -5,6 +5,7 @@
 //   paperboat-catalog --starters <descriptor.toml>
 //                                          print {catalog, graph, station} as JSON
 
+#include "paperboat/toolkit/plugin.hpp"
 #include <iostream>
 #include <string_view>
 
@@ -38,6 +39,7 @@ const tk::Registry& registry() {
 #ifdef PAPERBOAT_HAS_CONTROL
     tk::control::register_control(all);
 #endif
+    tk::load_plugins(all);  // installed toolkits, when they are plugins (pb#352)
     return all;
   }();
   return r;

@@ -4,6 +4,7 @@
 //   paperboat-toolkit update <name> [--no-build]
 //   paperboat-toolkit uninstall <name> [--no-build]
 
+#include "paperboat/toolkit/plugin.hpp"
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -35,6 +36,7 @@ const paperboat::toolkit::Registry& full_registry() {
 #ifdef PAPERBOAT_HAS_CONTROL
     paperboat::toolkit::control::register_control(all);
 #endif
+    paperboat::toolkit::load_plugins(all);  // installed toolkits, when they are plugins (pb#352)
     return all;
   }();
   return r;

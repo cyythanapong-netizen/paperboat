@@ -19,6 +19,7 @@ set(PAPERBOAT_TOOLKIT_CORE_SOURCES
   src/apps.cpp
   src/platform.cpp
   src/update.cpp
+  src/plugin.cpp
   # For domain code: solvers, Model (a station object of ODEs), scene builders.
   src/solve_param.cpp
   src/model.cpp
@@ -135,7 +136,7 @@ set(PAPERBOAT_SOLVER_SOURCES src/solve.cpp)
 if(PAPERBOAT_WITH_SUNDIALS)
   list(APPEND PAPERBOAT_SOLVER_SOURCES src/implicit.cpp)
 endif()
-add_library(paperboat_solvers STATIC ${PAPERBOAT_SOLVER_SOURCES})
+add_library(paperboat_solvers ${PAPERBOAT_LIB_TYPE} ${PAPERBOAT_SOLVER_SOURCES})
 add_library(paperboat::solvers ALIAS paperboat_solvers)
 target_include_directories(paperboat_solvers
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
@@ -145,13 +146,15 @@ if(PAPERBOAT_WITH_SUNDIALS)
   set_property(SOURCE src/solve.cpp APPEND PROPERTY COMPILE_DEFINITIONS PAPERBOAT_WITH_SUNDIALS)
 endif()
 
-add_library(paperboat_toolkit ${PAPERBOAT_TOOLKIT_CORE_SOURCES} ${package_sources} ${package_definition_sources}
+add_library(paperboat_toolkit ${PAPERBOAT_LIB_TYPE} ${PAPERBOAT_TOOLKIT_CORE_SOURCES} ${package_sources} ${package_definition_sources}
             "${package_registry_cpp}")
 add_library(paperboat::toolkit ALIAS paperboat_toolkit)
 # The headers are C++20. CMAKE_CXX_STANDARD covers only this directory tree, so say it as a usage
 # requirement: a toolkit built beside the engine (add_subdirectory) or on the installed SDK gets it too.
 # MSVC otherwise compiles such a toolkit as C++14 (GCC's default C++17 hid it).
 target_compile_features(paperboat_toolkit PUBLIC cxx_std_20)
+# The version a toolkit plugin is built against (plugin.hpp's PAPERBOAT_PLUGIN_ABI), in its own compile.
+target_compile_definitions(paperboat_toolkit PUBLIC PAPERBOAT_SDK_VERSION="${PAPERBOAT_VERSION}")
 
 target_include_directories(paperboat_toolkit
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
@@ -164,4 +167,5 @@ target_compile_definitions(paperboat_toolkit PRIVATE BOOST_MATH_STANDALONE=1)
 set_target_properties(paperboat_toolkit PROPERTIES EXPORT_NAME toolkit)
 target_link_libraries(paperboat_toolkit
   PUBLIC nlohmann_json::nlohmann_json paperboat::solvers  # variables.hpp takes the protocol's JSON
+  PRIVATE ${CMAKE_DL_LIBS}  # plugin.cpp's dlopen
   PRIVATE $<BUILD_INTERFACE:tomlplusplus::tomlplusplus> $<BUILD_INTERFACE:paperboat_eigen> paperboat_warnings)

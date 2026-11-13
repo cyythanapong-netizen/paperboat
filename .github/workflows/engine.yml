@@ -18,12 +18,16 @@ concurrency:
 
 jobs:
   engine:
-    name: Engine (C++ build and tests, SUNDIALS ${{ matrix.sundials }})
+    name: Engine (C++ build and tests, SUNDIALS ${{ matrix.sundials }}, shared libs ${{ matrix.shared }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: true  # one failing leg cancels the other: the run is red at the first failure
       matrix:
         sundials: ["ON", "OFF"]  # OFF compiles the implicit solvers out (`unknown solver`, not a missing symbol)
+        shared: ["OFF"]
+        include:  # shared engine libraries, the toolkits as plugins the hosts load (pb#352)
+          - sundials: "ON"
+            shared: "ON"
     env:
       CXX: g++-14
       CC: gcc-14
@@ -39,12 +43,12 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .ccache
-          key: ccache-${{ runner.os }}-engine-${{ matrix.sundials }}-${{ hashFiles('engine/**', 'protocol/**') }}
+          key: ccache-${{ runner.os }}-engine-${{ matrix.sundials }}-${{ matrix.shared }}-${{ hashFiles('engine/**', 'protocol/**') }}
           restore-keys: |
             ccache-${{ runner.os }}-engine-${{ matrix.sundials }}-
             ccache-${{ runner.os }}-engine-
       - name: Configure
-        run: cmake -S engine -B engine/build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPAPERBOAT_BUILD_TESTS=ON -DPAPERBOAT_WITH_SUNDIALS=${{ matrix.sundials }}
+        run: cmake -S engine -B engine/build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DPAPERBOAT_BUILD_TESTS=ON -DPAPERBOAT_WITH_SUNDIALS=${{ matrix.sundials }} -DPAPERBOAT_SHARED_LIBS=${{ matrix.shared }}
       - name: Build
         run: cmake --build engine/build
       - name: Test

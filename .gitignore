@@ -11,6 +11,7 @@ ARCHITECTURE.md
 
 # --- Builds ---
 build/
+build-*/
 dist/
 apps/cli/bundle/
 apps/web/e2e/test-results/

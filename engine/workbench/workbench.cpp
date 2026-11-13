@@ -1,9 +1,11 @@
 #include "workbench.hpp"
 
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <vector>
 
+#include "paperboat/toolkit/plugin.hpp"
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
 #endif
@@ -55,6 +57,8 @@ toolkit::Registry make_registry() {
 #ifdef PAPERBOAT_HAS_MESHOP
   toolkit::meshop::register_meshop(reg);
 #endif
+  for (const auto& p : toolkit::load_plugins(reg))  // installed toolkits, when they are plugins (pb#352)
+    if (!p.ok) std::cerr << "toolkit " << p.name << " not loaded: " << p.message << " (" << p.path.string() << ")\n";
   return reg;
 }
 

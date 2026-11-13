@@ -14,7 +14,7 @@ else()
   set(PAPERBOAT_PROCESS_SOURCE src/process.cpp)
 endif()
 
-add_library(paperboat_core
+add_library(paperboat_core ${PAPERBOAT_LIB_TYPE}
   src/station.cpp
   src/graph.cpp
   src/cache.cpp

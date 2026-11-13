@@ -35,6 +35,7 @@
 #include "paperboat/toolkit/platform.hpp"
 #include "paperboat/toolkit/update.hpp"
 #include "paperboat/toolkit/installer.hpp"
+#include "paperboat/toolkit/plugin.hpp"
 #ifdef PAPERBOAT_HAS_OPENCV
 #include "paperboat/toolkit/opencv.hpp"
 #endif
@@ -71,6 +72,8 @@ void add_optional_packages(tk::Registry& all) {
 #ifdef PAPERBOAT_HAS_CONTROL
   tk::control::register_control(all);
 #endif
+  for (const auto& p : tk::load_plugins(all))  // installed toolkits, when they are plugins (pb#352)
+    if (!p.ok) std::cerr << "toolkit " << p.name << " not loaded: " << p.message << " (" << p.path.string() << ")\n";
 }
 
 const tk::Registry& full_registry() {
