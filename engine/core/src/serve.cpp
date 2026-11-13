@@ -17,6 +17,7 @@
 #include <ixwebsocket/IXHttpServer.h>
 #include <ixwebsocket/IXNetSystem.h>
 
+#include "paperboat/toolkit/installer.hpp"
 #include "paperboat/toolkit/platform.hpp"
 #include "paperboat/core/backend.hpp"
 #include "paperboat/core/backend_manager.hpp"
@@ -100,6 +101,38 @@ int serve_files(const fs::path& dir, int port, const std::string& host) {
                        {"url", b.ws_url.empty() ? "ws://localhost:" + std::to_string(b.port) : b.ws_url}});
       }
       return respond(200, "application/json", out.dump());
+    }
+    // Toolkits installed into a release (pb#353): the web parts `toolkit install` bundled, which the
+    // app imports at startup, and their files.
+    const std::string tk_prefix = "/__paperboat/toolkits";
+    if (path == tk_prefix) {
+      nlohmann::json out = nlohmann::json::array();
+      std::error_code te;
+      for (const auto& d : fs::directory_iterator(toolkit::toolkits_dir(toolkit::find_repo_root()), te)) {
+        const std::string name = d.path().filename().string();
+        if (name.starts_with(".") || !fs::is_regular_file(d.path() / "web-dist" / "index.js", te)) continue;
+        nlohmann::json t = {{"name", name}, {"js", tk_prefix + "/" + name + "/index.js"}};
+        if (fs::is_regular_file(d.path() / "web-dist" / "index.css", te)) t["css"] = tk_prefix + "/" + name + "/index.css";
+        out.push_back(t);
+      }
+      return respond(200, "application/json", out.dump());
+    }
+    if (path.starts_with(tk_prefix + "/")) {
+      const std::string rest = path.substr(tk_prefix.size() + 1);  // <name>/<file>
+      const auto slash = rest.find('/');
+      std::error_code te;
+      if (slash != std::string::npos) {
+        const fs::path dist = fs::weakly_canonical(toolkit::toolkits_dir(toolkit::find_repo_root()) / rest.substr(0, slash) / "web-dist", te);
+        const fs::path file = fs::weakly_canonical(dist / rest.substr(slash + 1), te);
+        const auto in_dist = file.lexically_relative(dist);
+        if (!te && !in_dist.empty() && *in_dist.begin() != ".." && fs::is_regular_file(file, te)) {
+          std::ifstream in(file, std::ios::binary);
+          std::stringstream body;
+          body << in.rdbuf();
+          return respond(200, content_type(file), body.str());
+        }
+      }
+      return respond(404, "text/plain", "not found\n");
     }
     std::error_code e;
     fs::path file = fs::weakly_canonical(root / (path.size() > 1 ? path.substr(1) : "index.html"), e);

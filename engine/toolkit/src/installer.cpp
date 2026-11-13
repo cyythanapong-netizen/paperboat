@@ -18,6 +18,7 @@
 #include <toml++/toml.hpp>
 
 #include "paperboat/toolkit/descriptor.hpp"
+#include "paperboat/toolkit/apps.hpp"
 #include "paperboat/toolkit/platform.hpp"
 
 namespace paperboat::toolkit {
@@ -416,6 +417,34 @@ fs::path find_repo_root(const fs::path& hint) {
   return install_root();
 }
 
+fs::path toolkits_dir(const fs::path& root) {
+  // A checkout builds its toolkits into the engine; an installed paperboat keeps them per user and
+  // builds each one as a plugin against the installed SDK (pb#354): the root is then this binary's own
+  // share/paperboat.
+  if (const fs::path installed = install_root(); !installed.empty() && !root.empty()) {
+    std::error_code ec;
+    if (fs::equivalent(root, installed, ec)) return apps_dir().parent_path() / "toolkits";
+  }
+  return root / "engine" / "toolkit";
+}
+
+fs::path toolkit_dir(const fs::path& root, std::string_view name) { return toolkits_dir(root) / std::string(name); }
+
+fs::path sdk_dir() {
+  const fs::path exe = platform::exe_path();
+  if (exe.empty()) return {};
+  const fs::path prefix = exe.parent_path().parent_path();
+  std::error_code ec;
+  for (const char* lib : {"lib", "lib64"}) {
+    if (const fs::path dir = prefix / lib / "cmake" / "Paperboat"; fs::is_regular_file(dir / "PaperboatConfig.cmake", ec)) return dir;
+  }
+  // Debian puts libraries in lib/<multiarch>.
+  for (const auto& entry : fs::directory_iterator(prefix / "lib", ec)) {
+    if (const fs::path dir = entry.path() / "cmake" / "Paperboat"; fs::is_regular_file(dir / "PaperboatConfig.cmake", ec)) return dir;
+  }
+  return {};
+}
+
 std::vector<ToolkitEntry> parse_toolkits_manifest(std::string_view toml_text) {
   toml::table doc;
   try {
@@ -550,7 +579,7 @@ std::vector<ToolkitEntry> list_toolkits(const fs::path& repo_root,
   auto entries = load_toolkits_manifest(root / "toolkits.toml");
   const auto reqs = load_toolkit_requirements(backend_dir, entries);
   for (auto& e : entries) {
-    const fs::path target = root / "engine" / "toolkit" / e.name;
+    const fs::path target = toolkit_dir(root, e.name);
     e.installed = fs::is_regular_file(target / "toolkit.toml");
     e.required = std::ranges::find(reqs, e.name) != reqs.end();
     if (e.installed) {
@@ -611,7 +640,7 @@ ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requeste
   // Resolve target version and git ref. No version asked: stay on the channel it is on (main stays
   // main); "latest" moves it to releases.
   std::string version = std::string(requested_version);
-  if (version.empty() && read_marker_version(root / "engine" / "toolkit" / entry.name) == "dev") version = "dev";
+  if (version.empty() && read_marker_version(toolkit_dir(root, entry.name)) == "dev") version = "dev";
   if (version == "latest") version.clear();
   std::string git_ref;
 
@@ -640,8 +669,8 @@ ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requeste
 
   if (log) log("info", "installing toolkit \"" + entry.name + "\" version " + version + " (" + git_ref + ") from " + source_text + "…");
 
-  const fs::path target_dir = root / "engine" / "toolkit" / entry.name;
-  const fs::path stage_dir = root / ".toolkit-cache" / ("stage-" + entry.name);
+  const fs::path target_dir = toolkit_dir(root, entry.name);
+  const fs::path stage_dir = toolkits_dir(root) / ".toolkit-cache" / ("stage-" + entry.name);
   std::error_code ec;
   fs::remove_all(stage_dir, ec);
   fs::create_directories(stage_dir.parent_path(), ec);
@@ -653,7 +682,7 @@ ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requeste
     commit = "local";
   } else {
     std::string last;
-    std::vector<std::string> clone_cmd = {"git", "clone", "--depth", "1"};
+    std::vector<std::string> clone_cmd = {"git", "-c", "advice.detachedHead=false", "clone", "--depth", "1"};
     if (!git_ref.empty() && git_ref != "HEAD") {
       clone_cmd.push_back("--branch");
       clone_cmd.push_back(git_ref);
@@ -665,12 +694,12 @@ ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requeste
     if (clone_rc != 0 && (git_ref == "main" || git_ref == "dev")) {
       // Try master or default clone
       fs::remove_all(stage_dir, ec);
-      clone_rc = run_cmd({"git", "clone", "--depth", "1", source_text, stage_dir.string()}, root, log, &last);
+      clone_rc = run_cmd({"git", "-c", "advice.detachedHead=false", "clone", "--depth", "1", source_text, stage_dir.string()}, root, log, &last);
     } else if (clone_rc != 0 && git_ref.starts_with('v')) {
       // Try without 'v' prefix
       std::string fallback_ref = git_ref.substr(1);
       fs::remove_all(stage_dir, ec);
-      clone_rc = run_cmd({"git", "clone", "--depth", "1", "--branch", fallback_ref, source_text, stage_dir.string()}, root, log, &last);
+      clone_rc = run_cmd({"git", "-c", "advice.detachedHead=false", "clone", "--depth", "1", "--branch", fallback_ref, source_text, stage_dir.string()}, root, log, &last);
       if (clone_rc == 0) git_ref = fallback_ref;
     }
     if (clone_rc != 0) {
@@ -683,7 +712,7 @@ ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requeste
   }
 
   // Backup existing install if present
-  const fs::path prev_backup = root / ".toolkit-cache" / ("prev-" + entry.name);
+  const fs::path prev_backup = toolkits_dir(root) / ".toolkit-cache" / ("prev-" + entry.name);
   fs::remove_all(prev_backup, ec);
   if (fs::exists(target_dir)) {
     fs::rename(target_dir, prev_backup, ec);
@@ -706,7 +735,7 @@ bool toolkit_outdated(const ToolkitEntry& entry, const fs::path& repo_root) {
   const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
   json m;
   try {
-    std::ifstream in(root / "engine" / "toolkit" / entry.name / ".paperboat-toolkit.json");
+    std::ifstream in(toolkit_dir(root, entry.name) / ".paperboat-toolkit.json");
     m = json::parse(in);
   } catch (...) {
     return false;
@@ -718,10 +747,139 @@ bool toolkit_outdated(const ToolkitEntry& entry, const fs::path& repo_root) {
     const auto have = parse_version(version), best = releases.empty() ? std::nullopt : parse_version(releases.front());
     return have && best && *best > *have;
   }
-  std::string out;  // a dev install tracks main: outdated when the remote's main moved on
-  if (run_cmd({"git", "ls-remote", resolve_repo_url(entry, {}), "main"}, root, {}, nullptr, &out) != 0) return false;
+  std::string out;  // a dev install tracks the default branch: outdated when it moved on
+  if (run_cmd({"git", "ls-remote", resolve_repo_url(entry, {}), "HEAD"}, root, {}, nullptr, &out) != 0) return false;
   return !out.empty() && out.rfind(m.value("commit", ""), 0) != 0;
 }
+
+namespace {
+
+// An installed paperboat (no engine sources): build `entry` as a plugin, libpaperboat_plugin_<name> in
+// <toolkit>/lib, against the installed SDK, with the toolkits it requires built in beside it. Also
+// writes <toolkit>/lib/paperboat-toolkit.cmake, which PaperboatConfig.cmake includes so a C++ backend
+// can link paperboat::toolkit_<name> (pb#354).
+ToolkitResult build_plugin(const ToolkitEntry& entry, const std::vector<ToolkitEntry>& entries, const fs::path& root,
+                           const ToolkitLog& log) {
+  const fs::path sdk = sdk_dir();
+  if (sdk.empty()) return {false, "no paperboat SDK next to this binary (lib/cmake/Paperboat): reinstall paperboat"};
+  // The toolkit and everything it requires, requirements first.
+  std::vector<std::string> chain;
+  std::function<void(const std::string&)> add = [&](const std::string& n) {
+    if (std::ranges::find(chain, n) != chain.end()) return;
+    if (const ToolkitEntry* e = find_entry(entries, n))
+      for (const auto& req : e->needs) add(req);
+    chain.push_back(n);
+  };
+  add(entry.name);
+
+  const fs::path dir = toolkit_dir(root, entry.name);
+  const fs::path project = toolkits_dir(root) / ".build" / entry.name;
+  std::error_code ec;
+  fs::create_directories(project, ec);
+  const auto quoted = [](const fs::path& p) { return "\"" + p.generic_string() + "\""; };
+  {
+    std::ofstream cm(project / "CMakeLists.txt");
+    cm << "# Generated by `paperboat toolkit install " << entry.name << "`: the toolkit as a plugin.\n"
+       << "cmake_minimum_required(VERSION 3.24)\n"
+       << "project(paperboat_plugin_" << entry.name << " C CXX)\n"
+       << "set(PAPERBOAT_NO_INSTALLED_TOOLKITS ON)  # built from their sources below\n"
+       << "find_package(Paperboat REQUIRED CONFIG)\n"
+       << "set(CMAKE_POSITION_INDEPENDENT_CODE ON)\n"
+       << "set(PAPERBOAT_BUILD_TESTS OFF)\n"
+       << "set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)  # a toolkit's dependencies, seen from here\n"
+       << "add_library(paperboat_warnings INTERFACE)  # what a toolkit links inside the engine build\n"
+       << "target_link_libraries(paperboat_warnings INTERFACE paperboat::warnings)\n";
+    for (const auto& n : chain) cm << "add_subdirectory(" << quoted(toolkit_dir(root, n)) << " toolkit/" << n << ")\n";
+    std::string reqs;
+    for (const auto& n : chain)
+      if (n != entry.name) reqs += ";paperboat::toolkit_" + n;
+    const std::string tk = "paperboat_toolkit_" + entry.name, plugin = "paperboat_plugin_" + entry.name;
+    cm << "add_library(" << plugin << " SHARED plugin.cpp)\n"
+       << "target_link_libraries(" << plugin << " PRIVATE " << tk << ")\n"
+       << "set_target_properties(" << plugin << " PROPERTIES LIBRARY_OUTPUT_DIRECTORY " << quoted(dir / "lib")
+       << " RUNTIME_OUTPUT_DIRECTORY " << quoted(dir / "lib") << ")\n"
+       // The package a backend links (PaperboatConfig includes it): the plugin, the toolkit's headers, and the
+       // imported libraries it uses (OpenCV for opencv), which a backend including its header needs too.
+       << "set(_incs \"\")\nset(_libs \"\")\n"
+       << "get_target_property(_ll " << tk << " LINK_LIBRARIES)\nget_target_property(_il " << tk << " INTERFACE_LINK_LIBRARIES)\n"
+       << "foreach(_l IN LISTS _ll _il)\n"
+       << "  string(REGEX REPLACE \"^\\\\$<LINK_ONLY:(.*)>$\" \"\\\\1\" _l \"${_l}\")\n"
+       << "  if(TARGET \"${_l}\" AND NOT _l MATCHES \"^paperboat\")\n"
+       << "    get_target_property(_imported \"${_l}\" IMPORTED)\n    get_target_property(_type \"${_l}\" TYPE)\n"
+       << "    if(_imported)\n      list(APPEND _incs \"$<TARGET_PROPERTY:${_l},INTERFACE_INCLUDE_DIRECTORIES>\")\n"
+       << "      if(NOT _type STREQUAL \"INTERFACE_LIBRARY\")\n        list(APPEND _libs \"$<TARGET_FILE:${_l}>\")\n      endif()\n"
+       << "    endif()\n  endif()\nendforeach()\n"
+       << "list(REMOVE_DUPLICATES _incs)\nlist(REMOVE_DUPLICATES _libs)\nlist(JOIN _incs \";\" _incs)\nlist(JOIN _libs \";\" _libs)\n"
+       << "file(GENERATE OUTPUT " << quoted(dir / "lib" / "paperboat-toolkit.cmake") << " CONTENT \"if(NOT TARGET paperboat::toolkit_"
+       << entry.name << ")\n  add_library(paperboat::toolkit_" << entry.name << " SHARED IMPORTED)\n"
+       << "  set_target_properties(paperboat::toolkit_" << entry.name << " PROPERTIES IMPORTED_LOCATION \\\"$<TARGET_FILE:" << plugin << ">\\\"\n"
+       << "    INTERFACE_INCLUDE_DIRECTORIES \\\"" << (dir / "include").generic_string() << ";${_incs}\\\"\n"
+       << "    INTERFACE_LINK_LIBRARIES \\\"paperboat::toolkit" << reqs << ";${_libs}\\\")\nendif()\n\")\n";
+    std::ofstream(project / "plugin.cpp") << "#include <paperboat/toolkit/plugin.hpp>\n#include <paperboat/toolkit/" << entry.name
+                                         << ".hpp>\nPAPERBOAT_TOOLKIT_PLUGIN(paperboat::toolkit::" << entry.name
+                                         << "::register_" << entry.name << ")\n";
+  }
+  const fs::path bld = project / "build";
+  const std::string cmake = platform::cmake_command(bld);
+  std::string last;
+  if (log) log("info", "building toolkit \"" + entry.name + "\" as a plugin…");
+  std::vector<std::string> configure = {cmake, "-S", project.string(), "-B", bld.string(), "-DCMAKE_BUILD_TYPE=Release",
+                                        "-DPaperboat_DIR=" + sdk.string()};
+  if (!fs::exists(bld / "CMakeCache.txt") && run_cmd({"ninja", "--version"}, project, {}) == 0) configure.push_back("-GNinja");
+  // Quiet unless it fails; then the end of its output, which names the error.
+  const auto tail = [](const std::string& out) {
+    std::size_t from = out.size();
+    for (int lines = 0; from > 0 && lines < 15; ++lines) {
+      const auto nl = out.rfind('\n', from - 1);
+      from = nl == std::string::npos ? 0 : nl;
+    }
+    return out.substr(from);
+  };
+  std::string out;
+  if (run_cmd(configure, project, {}, &last, &out) != 0) return {false, "cmake configure failed:\n" + tail(out)};
+  if (run_cmd({cmake, "--build", bld.string(), "--parallel"}, project, {}, &last, &out) != 0)
+    return {false, "cmake build failed:\n" + tail(out)};
+
+  return {true, "built"};
+}
+
+// A toolkit's web part (web/index.ts(x), or <block>/web/index.ts(x)) bundled into <toolkit>/web-dist as
+// one ES module that `paperboat start` serves and the web app imports at startup, with React left to
+// the app (pb#353). Needs Node's npx; without it the blocks work and only their instruments are missing.
+void bundle_web(const ToolkitEntry& entry, const fs::path& root, const ToolkitLog& log) {
+  const fs::path dir = toolkit_dir(root, entry.name);
+  std::error_code ec;
+  std::vector<fs::path> parts;
+  for (fs::recursive_directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
+    const std::string n = it->path().filename().string();
+    if (it->is_directory(ec) && (n == "node_modules" || n == "lib" || n == "web-dist" || n.starts_with("."))) {
+      it.disable_recursion_pending();
+    } else if ((n == "index.ts" || n == "index.tsx") && it->path().parent_path().filename() == "web") {
+      parts.push_back(it->path());
+    }
+  }
+  fs::remove_all(dir / "web-dist", ec);
+  if (parts.empty()) return;
+  const fs::path entry_file = dir / ".web-entry.ts";
+  {
+    std::ofstream out(entry_file);
+    for (std::size_t i = 0; i < parts.size(); ++i)
+      out << "import * as m" << i << " from \"./" << fs::relative(parts[i], dir).generic_string() << "\";\n";
+    out << "export function register(host: unknown) {\n  for (const m of [";
+    for (std::size_t i = 0; i < parts.size(); ++i) out << (i ? ", " : "") << "m" << i;
+    out << "] as { register?: (h: unknown) => void }[]) m.register?.(host);\n}\n";
+  }
+  std::string out;
+  const int rc = run_cmd({"npx", "--yes", "esbuild@0.25.12", entry_file.string(), "--bundle", "--format=esm", "--jsx=automatic",
+                          "--minify", "--log-level=error", "--external:react", "--external:react/jsx-runtime",
+                          "--external:react-dom", "--outfile=" + (dir / "web-dist" / "index.js").string()},
+                         dir, {}, nullptr, &out);
+  fs::remove(entry_file, ec);
+  if (rc != 0 && log)
+    log("warn", "toolkit \"" + entry.name + "\": its web part did not bundle (needs Node's npx); its blocks work, its instruments will not show: " + trim_line(out));
+}
+
+}  // namespace
 
 ToolkitResult install_toolkit(std::string_view name,
                               std::string_view requested_version,
@@ -740,13 +898,13 @@ ToolkitResult install_toolkit(std::string_view name,
   const ToolkitEntry* entry = find_entry(entries, name);
   if (!entry) return {false, "unknown toolkit \"" + std::string(name) + "\""};
   if (entry->builtin) return {false, "cannot install built-in toolkit"};
-  if (!host.skip_rebuild && host.source_dir.empty() && !fs::is_regular_file(root / "engine" / "CMakeLists.txt"))
-    return {false, "toolkits are compiled into the engine: build paperboat from source to install one"};
+  // A checkout compiles toolkits into its engine; an installed paperboat builds each as a plugin (pb#354).
+  const bool checkout = toolkits_dir(root) == root / "engine" / "toolkit";
 
   // The toolkit and what it requires, each requirement first: control cannot be built without
   // optimization, and asking for that build step by hand is a trap.
   const auto installed = [&](const ToolkitEntry& e) {
-    return fs::is_regular_file(root / "engine" / "toolkit" / e.name / "toolkit.toml");
+    return fs::is_regular_file(toolkit_dir(root, e.name) / "toolkit.toml");
   };
   std::vector<const ToolkitEntry*> order;
   std::set<std::string> seen;
@@ -778,9 +936,24 @@ ToolkitResult install_toolkit(std::string_view name,
     names += e->name;
   }
 
-  const auto rb = rebuild_host(host, root, log);
-  if (!rb.ok) {
-    return {false, "toolkit" + std::string(order.size() > 1 ? "s " : " ") + names + " installed but rebuild failed: " + rb.message};
+  if (checkout || !host.source_dir.empty()) {
+    const auto rb = rebuild_host(host, root, log);
+    if (!rb.ok) {
+      return {false, "toolkit" + std::string(order.size() > 1 ? "s " : " ") + names + " installed but rebuild failed: " + rb.message};
+    }
+  } else if (!host.skip_rebuild) {
+    // Each one installed now, then every installed toolkit built on one of them (control carries
+    // optimization's code), so none keeps an old copy.
+    std::set<std::string> rebuilt;
+    std::vector<const ToolkitEntry*> todo(order.begin(), order.end());
+    for (std::size_t i = 0; i < todo.size(); ++i) {
+      if (!rebuilt.insert(todo[i]->name).second) continue;
+      if (const auto r = build_plugin(*todo[i], entries, root, log); !r.ok)
+        return {false, "toolkit \"" + todo[i]->name + "\" installed but its plugin did not build: " + r.message};
+      bundle_web(*todo[i], root, log);
+      for (const auto& other : entries)
+        if (installed(other) && std::ranges::find(other.needs, todo[i]->name) != other.needs.end()) todo.push_back(&other);
+    }
   }
 
   const std::string msg = "installed toolkit" + std::string(order.size() > 1 ? "s " : " ") + names + "; restart backend to load changes";
@@ -804,7 +977,7 @@ ToolkitResult uninstall_toolkit(std::string_view name,
   if (!entry) return {false, "unknown toolkit \"" + std::string(name) + "\""};
   if (entry->builtin) return {false, "cannot uninstall built-in toolkit"};
 
-  const fs::path target_dir = root / "engine" / "toolkit" / entry->name;
+  const fs::path target_dir = toolkit_dir(root, entry->name);
   if (!fs::exists(target_dir)) {
     if (log) log("info", "toolkit \"" + entry->name + "\" is not installed");
     return {true, "toolkit \"" + entry->name + "\" is not installed"};
@@ -814,7 +987,7 @@ ToolkitResult uninstall_toolkit(std::string_view name,
   for (const auto& other : entries) {
     if (other.name == entry->name || other.builtin) continue;
     if (std::ranges::find(other.needs, entry->name) == other.needs.end()) continue;
-    if (fs::is_regular_file(root / "engine" / "toolkit" / other.name / "toolkit.toml"))
+    if (fs::is_regular_file(toolkit_dir(root, other.name) / "toolkit.toml"))
       return {false, "toolkit \"" + entry->name + "\" is required by \"" + other.name + "\": uninstall that first"};
   }
 
@@ -822,6 +995,7 @@ ToolkitResult uninstall_toolkit(std::string_view name,
   std::error_code ec;
   fs::remove_all(target_dir, ec);
   if (ec) return {false, "failed to remove " + target_dir.string() + ": " + ec.message()};
+  fs::remove_all(toolkits_dir(root) / ".build" / entry->name, ec);  // its plugin build, on an installed paperboat
 
   const auto rb = rebuild_host(host, root, log);
   if (!rb.ok) return rb;

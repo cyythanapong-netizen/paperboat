@@ -114,6 +114,14 @@ bool toolkit_outdated(const ToolkitEntry& entry, const std::filesystem::path& re
 // Locate the Paperboat repository root (containing toolkits.toml and engine/toolkit).
 std::filesystem::path find_repo_root(const std::filesystem::path& hint = {});
 
+// Where toolkits are installed: <root>/engine/toolkit in a checkout (compiled into the engine), else
+// $PAPERBOAT_HOME/toolkits, where each is built as a plugin against the installed SDK (pb#354).
+std::filesystem::path toolkits_dir(const std::filesystem::path& root);
+std::filesystem::path toolkit_dir(const std::filesystem::path& root, std::string_view name);
+
+// The installed SDK next to this binary: <prefix>/lib*/cmake/Paperboat, or empty in a build tree (pb#177).
+std::filesystem::path sdk_dir();
+
 // Parse toolkits.toml text or file. Throws DescriptorError on invalid TOML or missing fields.
 std::vector<ToolkitEntry> parse_toolkits_manifest(std::string_view toml_text);
 std::vector<ToolkitEntry> load_toolkits_manifest(const std::filesystem::path& manifest_path);

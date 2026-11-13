@@ -2,12 +2,13 @@
 # Install or update paperboat for this user, with nothing but this script:
 #
 #   curl -fsSL https://raw.githubusercontent.com/paperboatlab/paperboat/HEAD/scripts/install.sh | sh
-#   curl -fsSL …/install.sh | sh -s -- --main      # build main from source (toolkits work)
+#   curl -fsSL …/install.sh | sh -s -- --main      # build the default branch from source
 #
 #   (no flag)    release: the newest GitHub release's prebuilt .tar.gz (prereleases included)
-#   --source     release, built from source at its tag: toolkits work (they compile into the engine)
+#   --source     release, built from source at its tag
 #   --main       the default branch (main or dev), built from source
 #   --version V  that release instead of the newest (with or without --source)
+#   --archive F  install this release .tar.gz instead of downloading one (offline, or CI)
 #   --check      say what is installed and what is available, change nothing
 #
 # Running it again updates along the same channel; a flag switches channel. `paperboat update` runs it.
@@ -21,13 +22,14 @@ BIN_DIR=${PAPERBOAT_BIN:-$HOME/.local/bin}
 SRC=$HOME_DIR/src/paperboat
 LINK=$BIN_DIR/paperboat
 
-mode="" version="" check=0
+mode="" version="" check=0 archive=""
 while [ $# -gt 0 ]; do
   case $1 in
     --source) mode=source ;;
     --main) mode=main ;;
     --release) mode=release ;;
     --version) version=${2#v}; shift ;;
+    --archive) archive=$2; mode=release; shift ;;
     --check) check=1 ;;
     -h|--help) sed -n '2,16p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "install.sh: unknown option $1" >&2; exit 2 ;;
@@ -68,6 +70,8 @@ was=$(current)
 if [ "$mode" = main ]; then
   want=main
 else
+  # paperboat-<version>-<OS>-<arch>.tar.gz
+  [ -z "$archive" ] || version=$(basename "$archive" | sed 's/^paperboat-\(.*\)-[^-]*-[^-]*\.tar\.gz$/\1/')
   want=${version:-$(latest)}
   [ -n "$want" ] || die "cannot read the releases of $REPO (offline, or rate limited)"
 fi
@@ -96,11 +100,15 @@ if [ "$mode" = release ]; then
   if [ "$was" = release ] && [ "$have" = "$want" ]; then say "paperboat $want is up to date"; exit 0; fi
   asset="paperboat-$want-$(uname -s)-$(uname -m).tar.gz"
   dest=$HOME_DIR/self/$want
-  say "downloading $asset…"
+  say "installing ${archive:-$asset}…"
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
-  fetch "https://github.com/$REPO/releases/download/v$want/$asset" > "$tmp/pb.tar.gz" ||
-    die "no $asset in release v$want (this platform may need --source)"
+  if [ -n "$archive" ]; then
+    cp "$archive" "$tmp/pb.tar.gz"
+  else
+    fetch "https://github.com/$REPO/releases/download/v$want/$asset" > "$tmp/pb.tar.gz" ||
+      die "no $asset in release v$want (this platform may need --source)"
+  fi
   mkdir -p "$tmp/x"
   tar xzf "$tmp/pb.tar.gz" -C "$tmp/x" --strip-components=1
   rm -rf "$dest"
@@ -109,6 +117,11 @@ if [ "$mode" = release ]; then
   link "$dest/bin/paperboat"
   # ponytail: older versions stay in self/ (a rollback is `ln -sfn`); prune by hand if disk matters.
   say "installed paperboat $want"
+  # Toolkit plugins are built for one paperboat version: rebuild the installed ones for this one.
+  if ls "$HOME_DIR"/toolkits/*/lib/paperboat-toolkit.cmake >/dev/null 2>&1; then
+    say "rebuilding the installed toolkits for $want…"
+    (cd / && "$dest/bin/paperboat" toolkit update --all) || say "some toolkits did not rebuild: paperboat toolkit update --all"
+  fi
   exit 0
 fi
 

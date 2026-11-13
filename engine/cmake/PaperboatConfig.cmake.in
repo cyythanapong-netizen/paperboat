@@ -12,6 +12,26 @@ endif()
 include("${CMAKE_CURRENT_LIST_DIR}/PaperboatTargets.cmake")
 check_required_components(Paperboat)
 
+# Toolkits installed with `paperboat toolkit install` (pb#354): each one's plugin library is
+# paperboat::toolkit_<name>, from $PAPERBOAT_HOME/toolkits (as the CLI finds it). A plugin build sets
+# PAPERBOAT_NO_INSTALLED_TOOLKITS: it builds the toolkits it needs from their sources.
+if(PAPERBOAT_NO_INSTALLED_TOOLKITS)
+  set(_paperboat_toolkits "")
+elseif(DEFINED ENV{PAPERBOAT_HOME} AND NOT "$ENV{PAPERBOAT_HOME}" STREQUAL "")
+  set(_paperboat_toolkits "$ENV{PAPERBOAT_HOME}/toolkits")
+elseif(DEFINED ENV{XDG_DATA_HOME} AND NOT "$ENV{XDG_DATA_HOME}" STREQUAL "")
+  set(_paperboat_toolkits "$ENV{XDG_DATA_HOME}/paperboat/toolkits")
+else()
+  set(_paperboat_toolkits "$ENV{HOME}/.local/share/paperboat/toolkits")
+endif()
+set(_paperboat_toolkit_files "")
+if(_paperboat_toolkits)
+  file(GLOB _paperboat_toolkit_files "${_paperboat_toolkits}/*/lib/paperboat-toolkit.cmake")
+endif()
+foreach(_file IN LISTS _paperboat_toolkit_files)  # a link to another toolkit resolves at generate time
+  include("${_file}")
+endforeach()
+
 # The Windows SDK is built with the static runtime (/MT, Release): a backend must use the same.
 set(_paperboat_msvc_runtime "@CMAKE_MSVC_RUNTIME_LIBRARY@")
 if(MSVC AND _paperboat_msvc_runtime AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)

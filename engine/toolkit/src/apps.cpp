@@ -336,7 +336,7 @@ ToolkitResult install(std::string_view name, std::string_view requested, const f
   std::string last, ref;
   bool cloned = false;
   for (const auto& r : refs) {
-    std::vector<std::string> cmd = {"git", "clone", "--depth", "1"};
+    std::vector<std::string> cmd = {"git", "-c", "advice.detachedHead=false", "clone", "--depth", "1"};
     if (!r.empty()) cmd.insert(cmd.end(), {"--branch", r});
     cmd.insert(cmd.end(), {url, dir.string()});
     fs::remove_all(dir, ec);
@@ -412,8 +412,8 @@ bool app_outdated(std::string_view name, const fs::path& repo_root) {
     const auto have = parse_version(version), best = newest ? parse_version(*newest) : std::nullopt;
     return have && best && *best > *have;
   }
-  std::string out;  // a dev install tracks main: outdated when the remote's main moved on
-  if (run_command({"git", "ls-remote", repo_url(*e), "main"}, {}, {}, nullptr, &out) != 0) return false;
+  std::string out;  // a dev install tracks the default branch: outdated when it moved on
+  if (run_command({"git", "ls-remote", repo_url(*e), "HEAD"}, {}, {}, nullptr, &out) != 0) return false;
   return !out.empty() && out.rfind(m.value("commit", ""), 0) != 0;
 }
 
