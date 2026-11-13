@@ -2,15 +2,16 @@ import type { InstrumentProps } from "@paperboat/host";
 import { readout } from "./readout";
 
 export function DisplayInstrument({ name, latest, vector, idle }: InstrumentProps) {
-  const { text, count } = readout(latest, vector);
+  const { dims, type, values } = readout(latest, vector);
   return (
     <figure className={`instrument display${idle ? " idle" : ""}`}>
       <div className="screen">
-        <output>{text}</output>
+        {dims && <span className="dims">{dims}</span>}
+        <output>{type ? `${type}: ${values}` : values}</output>
       </div>
       <figcaption>
         <span>{name}</span>
-        <span>{count === undefined ? "display" : `${count} ${count === 1 ? "value" : "values"}`}</span>
+        <span>display</span>
       </figcaption>
     </figure>
   );
