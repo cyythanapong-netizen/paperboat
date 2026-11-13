@@ -18,16 +18,46 @@ export function useToolkitInstall(
   const prevBusyToolkits = useRef<Map<string, string>>(new Map());
   const [missingDialog, setMissingDialog] = useState<ToolkitStatus[] | null>(null);
 
+  // What we asked for that the backend has not acknowledged yet, so the keys dim and say "installing…"
+  // on the press instead of a round trip later. One toolkit operation at a time: the backend runs
+  // them one after another, so a second click would only queue a request that fails (#341).
+  const [requested, setRequested] = useState<Record<string, "installing" | "uninstalling">>({});
+  const requestedRef = useRef(requested);
+  const request = (name: string, action: "installing" | "uninstalling") => {
+    if (Object.keys(requestedRef.current).length > 0) return false;
+    if (state.toolkits.some((t) => t.busy)) return false;
+    requestedRef.current = { [name]: action };
+    setRequested(requestedRef.current);
+    return true;
+  };
+  // Its `busy` word takes over as soon as it lands; a lost connection or a backend that never
+  // answers (a few seconds is well past a round trip) gives the keys back.
+  useEffect(() => {
+    if (Object.keys(requested).length === 0) return;
+    if (state.connection !== "open" || state.toolkits.some((t) => t.busy)) {
+      requestedRef.current = {};
+      setRequested({});
+      return;
+    }
+    const timer = setTimeout(() => {
+      requestedRef.current = {};
+      setRequested({});
+    }, 10_000);
+    return () => clearTimeout(timer);
+  }, [requested, state.connection, state.toolkits]);
+
   const restartBackend = useCallback(() => {
     log("info", "restarting backend…");
     send({ type: "backend.restart" });
   }, [log, send]);
   const installToolkit = useCallback(
     (name: string, version?: string) => {
+      if (!request(name, "installing")) return;
       log("info", `requesting install of toolkit "${name}"${version ? ` (${version})` : ""}…`);
       send({ type: "toolkit.install", name, version });
     },
-    [log, send],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- request() reads the latest state through the closure
+    [log, send, state.toolkits],
   );
   const toolkitVersions = useCallback(
     (name: string) => {
@@ -37,10 +67,12 @@ export function useToolkitInstall(
   );
   const uninstallToolkit = useCallback(
     (name: string) => {
+      if (!request(name, "uninstalling")) return;
       log("info", `requesting uninstall of toolkit "${name}"…`);
       send({ type: "toolkit.uninstall", name });
     },
-    [log, send],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- request() reads the latest state through the closure
+    [log, send, state.toolkits],
   );
   useEffect(() => {
     if (state.connection !== "open") return;
@@ -85,5 +117,5 @@ export function useToolkitInstall(
     }
   }, [state.toolkits, log]);
 
-  return { missingDialog, setMissingDialog, restartBackend, installToolkit, toolkitVersions, uninstallToolkit };
+  return { missingDialog, setMissingDialog, restartBackend, installToolkit, toolkitVersions, uninstallToolkit, requestedToolkits: requested };
 }

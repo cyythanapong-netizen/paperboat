@@ -31,6 +31,8 @@ type Props = {
   onRenameProject?: (name: string) => void;
   installToolkit: (name: string, version?: string) => void;
   uninstallToolkit: (name: string) => void;
+  /** Toolkit operations asked for and not yet acknowledged, so the row says "installing…" at once. */
+  requestedToolkits: Record<string, string>;
   restartBackend: () => void;
   toolkitVersions: (name: string) => void;
   errors: number;
@@ -51,7 +53,7 @@ type Props = {
   setThemeChoice: (t: Theme) => void;
 };
 
-export function AppHeader({ state, running, commands, solver, projectTitle, dirty, onRenameProject, installToolkit, uninstallToolkit, restartBackend, toolkitVersions, errors, consoleShown, onConsole, consoleRef, aboutShown, onAbout, mode, setMode, allowedModes, projectLock, locked, onLock, onBackend, themeChoice, setThemeChoice }: Props) {
+export function AppHeader({ state, running, commands, solver, projectTitle, dirty, onRenameProject, installToolkit, uninstallToolkit, requestedToolkits, restartBackend, toolkitVersions, errors, consoleShown, onConsole, consoleRef, aboutShown, onAbout, mode, setMode, allowedModes, projectLock, locked, onLock, onBackend, themeChoice, setThemeChoice }: Props) {
   return (
     <header className="bar">
       <Wordmark running={running} />
@@ -71,6 +73,7 @@ export function AppHeader({ state, running, commands, solver, projectTitle, dirt
       <ToolkitsButton
         toolkits={state.toolkits}
         connected={state.connection === "open"}
+        requested={requestedToolkits}
         onInstall={installToolkit}
         onUninstall={uninstallToolkit}
         onRestart={restartBackend}
