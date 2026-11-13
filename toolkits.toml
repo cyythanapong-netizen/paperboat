@@ -18,6 +18,8 @@ repo = "https://github.com/paperboatlab/paperboat-toolkit-control.git"
 description = "Control blocks: pid, integrator, lag, delay, and per-step mpc, lp_step, nmpc (needs optimization)."
 optional = true
 engine = ">=0.1"
+# Its CMake links the optimization toolkit's Workspace, so installing this one installs that first.
+requires = ["optimization"]
 blocks = ["pid", "integrator", "lag", "delay", "mpc", "lp_step", "nmpc",
           "transfer_fn", "state_space", "bode", "controllability", "observability"]
 

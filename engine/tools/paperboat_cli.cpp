@@ -1520,7 +1520,7 @@ int cmd_update(const std::vector<std::string_view>& args) {
                       touched(changed, "apps/", "package-lock.json");
     if (deps) step("npm ci", {"npm", "ci"}, root);
     if (deps || touched(changed, "apps/cli/")) step("npm run build:cli", {"npm", "run", "build:cli"}, root);
-    step("cmake --build", {"cmake", "--build", running_build_dir(root).string(), "--parallel"}, root);
+    step("cmake --build", {platform::cmake_command(running_build_dir(root)), "--build", running_build_dir(root).string(), "--parallel"}, root);
   }
 
   // 3. apps installed by `paperboat pkg`

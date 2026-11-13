@@ -19,6 +19,7 @@
 #include <nlohmann/json.hpp>
 
 #include "paperboat/toolkit/installer.hpp"
+#include "paperboat/toolkit/platform.hpp"
 
 namespace fs = std::filesystem;
 using paperboat::toolkit::HostBuild;
@@ -184,6 +185,69 @@ TEST_CASE("every toolkit in toolkits.toml installs, lists and uninstalls") {
       CHECK_FALSE(list_toolkits(fixture.root, fixture.backend)[1].installed);
     }
   }
+  fs::remove_all(tmp, ec);
+}
+
+TEST_CASE("a toolkit installs what it requires first, and cannot be uninstalled before it") {
+  const fs::path tmp = fs::temp_directory_path() / "paperboat_toolkit_needs";
+  std::error_code ec;
+  fs::remove_all(tmp, ec);
+  const fs::path root = tmp / "repo";
+
+  for (const std::string name : {"lib", "app"}) {
+    const fs::path source = tmp / ("source-" + name);
+    write_file(source / "toolkit.toml", "name = \"" + name + "\"\noptional = true\nregister = [\"register_" + name + "\"]\n");
+    write_file(source / "CMakeLists.txt", "add_library(paperboat_fixture_" + name + " INTERFACE)\n");
+  }
+  // `app` links `lib`, as the control toolkit links the optimization one: one press installs both.
+  write_file(root / "toolkits.toml",
+             "[[toolkits]]\nname = \"lib\"\nrepo = \"" + (tmp / "source-lib").generic_string() +
+                 "\"\noptional = true\nengine = \">=0.1\"\n"
+                 "[[toolkits]]\nname = \"app\"\nrepo = \"" + (tmp / "source-app").generic_string() +
+                 "\"\noptional = true\nengine = \">=0.1\"\nrequires = [\"lib\"]\n");
+
+  std::vector<std::string> log;
+  const auto logger = [&](std::string_view level, std::string_view text) {
+    log.emplace_back(std::string(level) + ": " + std::string(text));
+  };
+
+  const auto installed = install_toolkit("app", "local", root, no_rebuild(), logger);
+  CAPTURE(installed.message);
+  CHECK(installed.ok);
+  CHECK(fs::is_regular_file(root / "engine" / "toolkit" / "lib" / "toolkit.toml"));
+  CHECK(fs::is_regular_file(root / "engine" / "toolkit" / "app" / "toolkit.toml"));
+  const auto lib_at = std::ranges::find_if(log, [](const std::string& line) { return line.find("\"lib\"") != std::string::npos; });
+  const auto app_at = std::ranges::find_if(log, [](const std::string& line) { return line.find("\"app\"") != std::string::npos; });
+  CHECK(lib_at < app_at);  // the requirement is on disk before the toolkit that links it
+  CHECK(installed.message.find("lib, app") != std::string::npos);
+
+  // Removing the requirement first would break the next build: name what needs it.
+  const auto blocked = uninstall_toolkit("lib", root, no_rebuild(), logger);
+  CAPTURE(blocked.message);
+  CHECK_FALSE(blocked.ok);
+  CHECK(blocked.message.find("required by \"app\"") != std::string::npos);
+  CHECK(fs::is_regular_file(root / "engine" / "toolkit" / "lib" / "toolkit.toml"));
+
+  CHECK(uninstall_toolkit("app", root, no_rebuild(), logger).ok);
+  const auto removed = uninstall_toolkit("lib", root, no_rebuild(), logger);
+  CAPTURE(removed.message);
+  CHECK(removed.ok);
+  fs::remove_all(tmp, ec);
+}
+
+TEST_CASE("the cmake a build was made with is taken from its cache, not from PATH") {
+  const fs::path tmp = fs::temp_directory_path() / "paperboat_cmake_cache";
+  std::error_code ec;
+  fs::remove_all(tmp, ec);
+  const fs::path fake_cmake = tmp / "bin" / "cmake.exe";
+  write_file(fake_cmake, "// a cmake stand-in\n");
+  write_file(tmp / "build" / "CMakeCache.txt", "# This is the CMakeCache file.\nCMAKE_COMMAND:INTERNAL=" + fake_cmake.generic_string() +
+                                                   "\nCMAKE_GENERATOR:INTERNAL=Ninja\n");
+  CHECK(paperboat::platform::cmake_command(tmp / "build") == fake_cmake.generic_string());
+  // The cache above it is found too: a backend's own build folder often has none of its own.
+  CHECK(paperboat::platform::cmake_command(tmp / "build" / "Release") == fake_cmake.generic_string());
+  // Nothing recorded anywhere: whatever cmake the program itself was built with, or PATH's.
+  CHECK_FALSE(paperboat::platform::cmake_command(tmp / "elsewhere").empty());
   fs::remove_all(tmp, ec);
 }
 
