@@ -105,6 +105,7 @@ export function MissingToolkitsDialog({
 export function ToolkitsButton({
   toolkits,
   connected,
+  requested,
   onInstall,
   onUninstall,
   onRestart,
@@ -112,6 +113,8 @@ export function ToolkitsButton({
 }: {
   toolkits: ToolkitStatus[];
   connected: boolean;
+  /** What was asked for and not yet acknowledged (ink installs, web sends), so the row says so at once. */
+  requested: Record<string, string>;
   onInstall: (name: string, version?: string) => void;
   onUninstall: (name: string) => void;
   onRestart: () => void;
@@ -121,7 +124,8 @@ export function ToolkitsButton({
   const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
   const wrap = useRef<HTMLDivElement | null>(null);
   const items = toolkits.filter((t) => !t.builtin);
-  const anyBusy = items.some((t) => !!t.busy);
+  const busyOf = (t: ToolkitStatus) => t.busy ?? requested[t.name];
+  const anyBusy = items.some((t) => !!busyOf(t));
 
   useDismiss(wrap, () => setOpen(false), { enabled: open });
 
@@ -154,7 +158,8 @@ export function ToolkitsButton({
             </p>
           ) : (
             items.map((t) => {
-            const busy = t.busy;
+            const busy = busyOf(t);
+            const blocked = anyBusy && !busy; // another toolkit is being installed: this key waits
             const versions = t.versions ?? [];
             const installedVer = t.version && t.version !== "unknown" ? t.version : undefined;
             const curSelection =
@@ -192,7 +197,7 @@ export function ToolkitsButton({
                   <select
                     className="toolkit-version-select"
                     value={curSelection}
-                    disabled={!connected || !!busy}
+                    disabled={!connected || anyBusy}
                     onChange={(e) => setSelectedVersions((prev) => ({ ...prev, [t.name]: e.target.value }))}
                   >
                     {versions.map((v) => (
@@ -205,8 +210,14 @@ export function ToolkitsButton({
                   {!t.installed ? (
                     <button
                       className="key small"
-                      disabled={!connected || !!busy}
-                      title={connected ? `Install ${t.name} (${curSelection}) and rebuild` : "Connect to a backend first"}
+                      disabled={!connected || anyBusy}
+                      title={
+                        !connected
+                          ? "Connect to a backend first"
+                          : blocked
+                            ? "One toolkit operation at a time"
+                            : `Install ${t.name} (${curSelection}) and rebuild`
+                      }
                       onClick={() => onInstall(t.name, curSelection)}
                     >
                       {busy === "installing" ? (
@@ -221,11 +232,13 @@ export function ToolkitsButton({
                     <>
                       <button
                         className="key small"
-                        disabled={!connected || !!busy || (installedVer !== undefined && curSelection === installedVer)}
+                        disabled={!connected || anyBusy || (installedVer !== undefined && curSelection === installedVer)}
                         title={
-                          installedVer !== undefined && curSelection === installedVer
-                            ? `Version ${curSelection} already installed`
-                            : `Switch to ${curSelection} and rebuild`
+                          blocked
+                            ? "One toolkit operation at a time"
+                            : installedVer !== undefined && curSelection === installedVer
+                              ? `Version ${curSelection} already installed`
+                              : `Switch to ${curSelection} and rebuild`
                         }
                         onClick={() => onInstall(t.name, curSelection)}
                       >
@@ -240,9 +253,11 @@ export function ToolkitsButton({
                       {!t.builtin && (
                         <button
                           className="key small"
-                          disabled={!connected || !!busy || !!t.required}
+                          disabled={!connected || anyBusy || !!t.required}
                           title={
-                            t.required
+                            blocked
+                              ? "One toolkit operation at a time"
+                              : t.required
                                 ? "Required by this backend: it can't be removed"
                                 : `Remove ${t.name} and rebuild`
                           }
