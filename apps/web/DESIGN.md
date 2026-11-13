@@ -100,7 +100,9 @@ an Alt chord answers to its physical key, since Option types another character t
   canvas.
 - **Run dock** (`Dock.tsx`): Run, Cancel, the next run's length and speed, and where the
   run is, floating at the bottom of the pages. It is glass, because it floats over live
-  content (the one place glass is for). In Lookout it sits over the Board.
+  content (the one place glass is for). In Lookout it sits over the Board. The status word
+  exists only with a run (or after one) and reserves no room beside Cancel (#341): the dock
+  is its keys, never a blank patch where a key might go.
 - **Projects** (#82, `project.ts`, `ProjectUI.tsx`): File > Open (Ctrl+O), Save (Ctrl+S), Save as,
   Restore last session and Recent projects; a file dropped on the window opens too. Anything
   that needs a word first (another backend, unsaved changes, the offer to restore) is a
