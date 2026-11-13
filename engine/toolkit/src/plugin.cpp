@@ -118,7 +118,7 @@ std::vector<PluginLoad> load_plugins(Registry& registry, const std::vector<fs::p
       continue;
     }
     if (const std::string theirs = abi(); theirs != PAPERBOAT_PLUGIN_ABI) {
-      r.message = "built for " + theirs + ", this is " + PAPERBOAT_PLUGIN_ABI + "; reinstall the toolkit";
+      r.message = "built for " + theirs + ", this is " + PAPERBOAT_PLUGIN_ABI + "; rebuild it: paperboat toolkit update " + r.name;
       out.push_back(std::move(r));
       continue;
     }

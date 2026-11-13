@@ -109,6 +109,11 @@ if [ "$mode" = release ]; then
   link "$dest/bin/paperboat"
   # ponytail: older versions stay in self/ (a rollback is `ln -sfn`); prune by hand if disk matters.
   say "installed paperboat $want"
+  # Toolkit plugins are built for one paperboat version: rebuild the installed ones for this one.
+  if ls "$HOME_DIR"/toolkits/*/lib/paperboat-toolkit.cmake >/dev/null 2>&1; then
+    say "rebuilding the installed toolkits for $want…"
+    (cd / && "$dest/bin/paperboat" toolkit update --all) || say "some toolkits did not rebuild: paperboat toolkit update --all"
+  fi
   exit 0
 fi
 

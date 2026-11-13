@@ -682,7 +682,7 @@ ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requeste
     commit = "local";
   } else {
     std::string last;
-    std::vector<std::string> clone_cmd = {"git", "clone", "--depth", "1"};
+    std::vector<std::string> clone_cmd = {"git", "-c", "advice.detachedHead=false", "clone", "--depth", "1"};
     if (!git_ref.empty() && git_ref != "HEAD") {
       clone_cmd.push_back("--branch");
       clone_cmd.push_back(git_ref);
@@ -694,12 +694,12 @@ ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requeste
     if (clone_rc != 0 && (git_ref == "main" || git_ref == "dev")) {
       // Try master or default clone
       fs::remove_all(stage_dir, ec);
-      clone_rc = run_cmd({"git", "clone", "--depth", "1", source_text, stage_dir.string()}, root, log, &last);
+      clone_rc = run_cmd({"git", "-c", "advice.detachedHead=false", "clone", "--depth", "1", source_text, stage_dir.string()}, root, log, &last);
     } else if (clone_rc != 0 && git_ref.starts_with('v')) {
       // Try without 'v' prefix
       std::string fallback_ref = git_ref.substr(1);
       fs::remove_all(stage_dir, ec);
-      clone_rc = run_cmd({"git", "clone", "--depth", "1", "--branch", fallback_ref, source_text, stage_dir.string()}, root, log, &last);
+      clone_rc = run_cmd({"git", "-c", "advice.detachedHead=false", "clone", "--depth", "1", "--branch", fallback_ref, source_text, stage_dir.string()}, root, log, &last);
       if (clone_rc == 0) git_ref = fallback_ref;
     }
     if (clone_rc != 0) {

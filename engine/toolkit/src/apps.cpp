@@ -336,7 +336,7 @@ ToolkitResult install(std::string_view name, std::string_view requested, const f
   std::string last, ref;
   bool cloned = false;
   for (const auto& r : refs) {
-    std::vector<std::string> cmd = {"git", "clone", "--depth", "1"};
+    std::vector<std::string> cmd = {"git", "-c", "advice.detachedHead=false", "clone", "--depth", "1"};
     if (!r.empty()) cmd.insert(cmd.end(), {"--branch", r});
     cmd.insert(cmd.end(), {url, dir.string()});
     fs::remove_all(dir, ec);
