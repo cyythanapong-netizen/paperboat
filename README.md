@@ -186,7 +186,7 @@ paperboat update --check                 # paperboat, the apps and toolkits: wha
 paperboat update                         # update each along its channel, and rebuild what changed
 paperboat update --channel main          # switch paperboat itself (release | source | main)
 paperboat pkg install squero-studio-mx   # an app, at its newest release; @main tracks main, @latest goes back
-paperboat toolkit install optimization   # a toolkit (source and main channels), same @main / @latest
+paperboat toolkit install optimization   # a toolkit, built as a plugin; same @main / @latest
 ```
 
 An app or toolkit stays on the channel it was installed on: `update` moves a release to the newest

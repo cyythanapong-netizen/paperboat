@@ -2,10 +2,10 @@
 # Install or update paperboat for this user, with nothing but this script:
 #
 #   curl -fsSL https://raw.githubusercontent.com/paperboatlab/paperboat/HEAD/scripts/install.sh | sh
-#   curl -fsSL …/install.sh | sh -s -- --main      # build main from source (toolkits work)
+#   curl -fsSL …/install.sh | sh -s -- --main      # build the default branch from source
 #
 #   (no flag)    release: the newest GitHub release's prebuilt .tar.gz (prereleases included)
-#   --source     release, built from source at its tag: toolkits work (they compile into the engine)
+#   --source     release, built from source at its tag
 #   --main       the default branch (main or dev), built from source
 #   --version V  that release instead of the newest (with or without --source)
 #   --check      say what is installed and what is available, change nothing
