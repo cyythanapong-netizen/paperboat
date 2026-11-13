@@ -162,7 +162,9 @@ async def starter_and_cancel(ws: ClientConnection, starter: dict, monitors: set[
     signals = [m for m in msgs if m["type"] == "signal" and m["node"] in monitors]
     scene_updates = [m for m in msgs if m["type"] in ("scene", "scene.patch")]
     progress = max((m["fraction"] for m in msgs if m["type"] == "run.progress"), default=0)
-    check(msgs[-1]["status"] == "done", f"starter run status {msgs[-1]['status']}")
+    errors = [m for m in msgs if "error" in m["type"] or m.get("level") == "error" or m.get("error")]
+    check(msgs[-1]["status"] == "done",
+          f"starter run status {msgs[-1]['status']}: " + "; ".join(json.dumps(m)[:300] for m in (errors or msgs[-1:])))
     check({m["node"] for m in signals} == monitors, "not every monitor node got signals")
     check(len(scene_updates) >= 1, "run never updated the scene")
     if not infinite:
