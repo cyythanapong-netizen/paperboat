@@ -1,5 +1,6 @@
-# Release packages: .tar.gz (Linux x86_64, macOS arm64) and .zip (Windows x64) on a GitHub release, plus the Python
-# wheels. scripts/install.sh and `paperboat update` download the .tar.gz; one format per platform, one update path (pb#357).
+# Release packages on a GitHub release: the one-file paperboat (Linux x86_64, macOS arm64), which installs the rest
+# on its first run; the .tar.gz it installs (and that scripts/install.sh downloads); the .zip (Windows x64); the
+# Python wheels. scripts/install.sh and `paperboat update` download the .tar.gz; one format per platform, one update path (pb#357).
 # Every package ships the Python bindings (pb#223) in lib/paperboat/python, so a Python backend runs
 # with no pip step: paperboat._engine for CPython 3.11 and, through the stable ABI, for 3.12 and later
 # (scripts/build_python.sh). The same builds' wheels (paperboat-*.whl) go to the release too.
@@ -96,6 +97,14 @@ jobs:
         env:
           PYTHONS: ${{ steps.py311.outputs.python-path }} ${{ steps.py312.outputs.python-path }}
         run: CC=gcc-12 CXX=g++-12 WEB=OFF scripts/build_release.sh dist
+      # The one file a user downloads (pb#358): paperboat with no shared libraries and a static libstdc++, so it
+      # runs on its own. Its first run installs the runtime of its version (the .tar.gz) and hands over.
+      - name: The one-file paperboat
+        run: |
+          CC=gcc-12 CXX=g++-12 cmake -S engine -B engine/build-standalone -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DPAPERBOAT_SHARED_LIBS=OFF -DPAPERBOAT_STATIC_RUNTIME=ON -DPAPERBOAT_BUILD_TESTS=OFF
+          cmake --build engine/build-standalone --target paperboat
+          cp engine/build-standalone/tools/paperboat "dist/paperboat-${{ steps.version.outputs.version }}-Linux-x86_64"
       - name: The install tree, for the bundle check
         run: cmake --install engine/build --prefix "$RUNNER_TEMP/root"   # the binary, share/ and the SDK
       - name: No optional toolkit is bundled
@@ -132,13 +141,16 @@ jobs:
       # The promise (pb#358): one install, then paperboat manages the rest. On a clean machine with only the
       # usual tools: install.sh puts paperboat in ~/.local, and from there a toolkit (built as a plugin
       # against the SDK, no engine rebuild), its example, a library app and the update check.
-      - name: "One install: install.sh, then paperboat installs a toolkit, checks its example, installs an app, checks for updates"
+      - name: "One file: the downloaded paperboat installs itself, then installs a toolkit, checks its example, installs an app, checks for updates"
         run: |
-          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/scripts/install.sh:/install.sh:ro" fedora:latest sh -ec '
+          docker run --rm -v "$PWD/dist:/dist:ro" fedora:latest sh -ec '
             dnf install -y -q cmake gcc-c++ make git tar gzip curl nodejs npm python3-pip >/dev/null
             pip install -q websockets jsonschema
-            sh /install.sh --archive /dist/paperboat-*-Linux-x86_64.tar.gz
-            export PATH="$HOME/.local/bin:$PATH" && cd /tmp
+            cp /dist/paperboat-*-Linux-x86_64 /tmp/paperboat && chmod +x /tmp/paperboat && cd /tmp
+            # PAPERBOAT_ARCHIVE: this build'"'"'s .tar.gz, as the release does not exist yet (a user downloads it)
+            PAPERBOAT_ARCHIVE=$(ls /dist/paperboat-*-Linux-x86_64.tar.gz) /tmp/paperboat --version
+            PAPERBOAT_ARCHIVE=$(ls /dist/paperboat-*-Linux-x86_64.tar.gz) /tmp/paperboat pkg list
+            export PATH="$HOME/.local/bin:$PATH"
             paperboat --version
             paperboat toolkit install optimization
             paperboat toolkit list optimization | grep -q "optimization/qp"
@@ -205,10 +217,20 @@ jobs:
             -DPAPERBOAT_PYTHON_MODULES_DIR="$PWD/engine/build/python/modules"
           cmake --build engine/build
           engine/build/tests/paperboat_tests
-      - name: Package (.tar.gz)
+      - name: Package (.tar.gz, and the one-file paperboat)
         run: |
           (cd engine/build && cpack -G TGZ -B "$GITHUB_WORKSPACE/dist")
           cmake --install engine/build --prefix "$RUNNER_TEMP/root"
+          cmake -S engine -B engine/build-standalone -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
+            -DPAPERBOAT_SHARED_LIBS=OFF -DPAPERBOAT_BUILD_TESTS=OFF
+          cmake --build engine/build-standalone --target paperboat
+          cp engine/build-standalone/tools/paperboat "dist/paperboat-${{ steps.version.outputs.version }}-Darwin-arm64"
+      - name: The one-file paperboat installs itself and runs
+        run: |
+          cd "$RUNNER_TEMP"
+          export PAPERBOAT_HOME="$RUNNER_TEMP/one/home" PAPERBOAT_BIN="$RUNNER_TEMP/one/bin"
+          PAPERBOAT_ARCHIVE=$(ls "$GITHUB_WORKSPACE"/dist/paperboat-*-Darwin-arm64.tar.gz) "$GITHUB_WORKSPACE"/dist/paperboat-*-Darwin-arm64 pkg list
+          "$PAPERBOAT_BIN/paperboat" --version
       - name: No optional toolkit is bundled
         run: |
           python3 scripts/check_bundle.py --self-test
@@ -352,4 +374,4 @@ jobs:
           shopt -s nullglob
           case "$GITHUB_REF_NAME" in *-*) pre=--prerelease;; esac   # v0.1.0-alpha.1
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes $pre \
-            dist/*.tar.gz dist/*.zip dist/*.whl
+            dist/*.tar.gz dist/*.zip dist/*.whl dist/paperboat-*-Linux-x86_64 dist/paperboat-*-Darwin-arm64

@@ -683,7 +683,7 @@ ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requeste
   } else {
     std::string last;
     std::vector<std::string> clone_cmd = {"git", "-c", "advice.detachedHead=false", "clone", "--depth", "1"};
-    if (!git_ref.empty() && git_ref != "HEAD") {
+    if (!git_ref.empty() && git_ref != "HEAD" && git_ref != "main") {  // "main": the default branch, whatever its name
       clone_cmd.push_back("--branch");
       clone_cmd.push_back(git_ref);
     }
