@@ -133,21 +133,7 @@ std::vector<std::pair<std::string, std::string>> julia_env(const fs::path& dir) 
   return env;
 }
 
-// The installed SDK next to this binary: <prefix>/bin/paperboat, <prefix>/lib*/cmake/Paperboat (pb#177).
-fs::path sdk_dir() {
-  const fs::path exe = platform::exe_path();
-  if (exe.empty()) return {};
-  const fs::path prefix = exe.parent_path().parent_path();
-  std::error_code ec;
-  for (const char* lib : {"lib", "lib64"}) {
-    if (const fs::path dir = prefix / lib / "cmake" / "Paperboat"; fs::is_regular_file(dir / "PaperboatConfig.cmake", ec)) return dir;
-  }
-  // Debian puts libraries in lib/<multiarch>.
-  for (const auto& entry : fs::directory_iterator(prefix / "lib", ec)) {
-    if (const fs::path dir = entry.path() / "cmake" / "Paperboat"; fs::is_regular_file(dir / "PaperboatConfig.cmake", ec)) return dir;
-  }
-  return {};
-}
+using toolkit::sdk_dir;
 
 int64_t current_timestamp() {
   return std::chrono::duration_cast<std::chrono::seconds>(
@@ -992,7 +978,7 @@ fs::path BackendManager::resolve_backend_dir(const fs::path& path_or_domain) {
       return {};
     };
 
-    const fs::path toolkits = root / "engine" / "toolkit";
+    const fs::path toolkits = toolkit::toolkits_dir(root);
     if (fs::is_directory(toolkits, ec)) {
       for (const auto& toolkit : fs::directory_iterator(toolkits, ec)) {
         if (auto p = search_examples(toolkit.path() / "examples"); !p.empty()) return p;
@@ -1360,7 +1346,7 @@ std::vector<ExampleBackend> BackendManager::get_examples(const fs::path& example
     root = toolkit::find_repo_root();
   }
   if (!root.empty()) {
-    const fs::path toolkits = root / "engine" / "toolkit";
+    const fs::path toolkits = toolkit::toolkits_dir(root);
     if (fs::is_directory(toolkits, ec)) {
       for (const auto& toolkit : fs::directory_iterator(toolkits, ec)) {
         if (!toolkit.is_directory(ec)) continue;
@@ -1888,7 +1874,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   const auto known = toolkit::list_toolkits(repo_root);
   for (const auto& r : toolkit::load_toolkit_requirements(dir, known)) add_unique(required_toolkits, r);
   for (const auto& tk : required_toolkits) {
-    const fs::path tk_dir = repo_root / "engine" / "toolkit" / tk;
+    const fs::path tk_dir = toolkit::toolkit_dir(repo_root, tk);
     if (!fs::is_regular_file(tk_dir / "toolkit.toml")) {
       res.missing_toolkits.push_back(tk);
       res.warnings.push_back("missing required toolkit: " + tk);
@@ -1923,7 +1909,7 @@ CheckResult BackendManager::check_backend(const fs::path& path, bool fast, const
   if (has_all) {
     available_toolkits.push_back("__all__");
     for (const auto& k : known) {
-      const fs::path tk_dir = repo_root / "engine" / "toolkit" / k.name;
+      const fs::path tk_dir = toolkit::toolkit_dir(repo_root, k.name);
       if (fs::is_regular_file(tk_dir / "toolkit.toml")) add_unique(available_toolkits, k.name);
     }
   }

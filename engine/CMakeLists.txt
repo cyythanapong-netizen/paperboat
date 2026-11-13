@@ -16,12 +16,35 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Off when a backend pulls the engine in with add_subdirectory: it only needs the libraries.
 option(PAPERBOAT_BUILD_TESTS "Build the Catch2 tests" ${PROJECT_IS_TOP_LEVEL})
 option(PAPERBOAT_BUILD_TOOLS "Build paperboat-catalog" ${PROJECT_IS_TOP_LEVEL})
+include(GNUInstallDirs)
 option(PAPERBOAT_STATIC_RUNTIME "Link libstdc++ and libgcc statically, so a release binary needs only glibc" OFF)
+# Shared engine libraries (pb#352): one copy of the registry, the solvers' run defaults and the toolkit
+# code per process, so a toolkit is a plugin the hosts load at runtime and installs without an engine
+# rebuild. On for a standalone build on Linux and macOS; static when a backend or the Python module pulls
+# the engine in, and on Windows (its SDK uses the static MSVC runtime, #222).
+set(_pb_shared_default OFF)
+if(PROJECT_IS_TOP_LEVEL AND NOT WIN32)
+  set(_pb_shared_default ON)
+endif()
+option(PAPERBOAT_SHARED_LIBS "Build paperboat_core, paperboat_toolkit and paperboat_solvers as shared libraries" ${_pb_shared_default})
+if(PAPERBOAT_SHARED_LIBS AND PAPERBOAT_STATIC_RUNTIME AND NOT MSVC)
+  # A plugin and its host must share one C++ runtime: a statically linked libstdc++ in the binary
+  # would be a second copy beside the one the shared libraries and plugins use.
+  message(STATUS "PAPERBOAT_STATIC_RUNTIME is ignored with PAPERBOAT_SHARED_LIBS: the runtime is shared")
+  set(PAPERBOAT_STATIC_RUNTIME OFF)
+endif()
+if(PAPERBOAT_SHARED_LIBS)
+  # An installed binary and plugin find the engine libraries beside it, wherever the prefix is.
+  if(APPLE)
+    set(CMAKE_INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+  else()
+    set(CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+  endif()
+endif()
 # The SDK (pb#177): install paperboat::core, paperboat::toolkit and their headers, so a backend can
 # find_package(Paperboat) instead of building the engine from source.
 option(PAPERBOAT_INSTALL "Install the SDK (libraries, headers, CMake config)" ${PROJECT_IS_TOP_LEVEL})
 
-include(GNUInstallDirs)
 if(PAPERBOAT_INSTALL)
   # The libraries and their dependencies go to the "dev" component (paperboat-dev); bin/ and share/ name "runtime".
   set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME dev)
@@ -144,9 +167,6 @@ endif()
 # The host library is a shared object (Julia dlopens it), so the engine's archives it links
 # must be position independent; the Python module already builds them that way.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-# Shared engine libraries (pb#352): one copy of the registry, the solvers' run defaults and the
-# toolkit code per process, so a toolkit can be a plugin loaded at runtime. Off: static, as before.
-option(PAPERBOAT_SHARED_LIBS "Build paperboat_core, paperboat_toolkit and paperboat_solvers as shared libraries" OFF)
 if(PAPERBOAT_SHARED_LIBS)
   set(PAPERBOAT_LIB_TYPE SHARED)
   set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -182,8 +202,11 @@ endif()
 if(PAPERBOAT_INSTALL)
   include(CMakePackageConfigHelpers)
   set(PAPERBOAT_CMAKE_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/Paperboat)
-  install(TARGETS paperboat_core paperboat_toolkit paperboat_solvers paperboat_warnings EXPORT PaperboatTargets COMPONENT dev
-          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  # Shared, the libraries are the runtime's (the binary needs them); their link names and archives are the SDK's.
+  install(TARGETS paperboat_core paperboat_toolkit paperboat_solvers paperboat_warnings EXPORT PaperboatTargets
+          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT dev
+          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT runtime NAMELINK_COMPONENT dev
+          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT runtime)
   install(DIRECTORY core/include/ toolkit/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT dev)
   install(EXPORT PaperboatTargets NAMESPACE paperboat:: DESTINATION ${PAPERBOAT_CMAKE_DIR} COMPONENT dev)
   configure_package_config_file(cmake/PaperboatConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfig.cmake

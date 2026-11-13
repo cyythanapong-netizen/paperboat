@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Linux release build: scripts/build_release.sh [out-dir]   (default dist/)
-# A Release build with libstdc++ linked statically (the binary needs only glibc),
-# the unit tests, then cpack -> .deb, .rpm (when rpmbuild is installed) and .tar.gz.
+# A Release build with shared engine libraries (lib/libpaperboat_*.so beside bin/, found by rpath), so a
+# toolkit installs as a plugin (pb#352); libstdc++ is the system's, shared with the plugins (gcc 12's or
+# newer: Debian 12, Ubuntu 22.04, Fedora). Then the unit tests, and cpack -> .deb, .rpm (when rpmbuild is
+# installed) and .tar.gz.
 # PYTHONS="python3.11 python3.12" also builds the Python bindings with each (scripts/build_python.sh):
 # the packages ship them in lib/paperboat/python (pb#223), and their wheels go to the out-dir.
 # CI runs it on ubuntu-22.04; locally: podman run --rm -v <export>:/src:z debian:bookworm /src/scripts/build_release.sh
@@ -28,7 +30,6 @@ if [ -n "${PYTHONS:-}" ]; then
 fi
 
 cmake -S "$src/engine" -B "$build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-  -DPAPERBOAT_STATIC_RUNTIME=ON \
   -DPAPERBOAT_BUILD_TESTS="${TESTS:-ON}" \
   -DPAPERBOAT_PYTHON_MODULES_DIR="$python_modules"
 cmake --build "$build"

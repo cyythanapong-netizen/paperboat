@@ -138,15 +138,18 @@ jobs:
             pip install -q websockets jsonschema
             cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend
             python3 --version && cp -r /src-py /tmp/py-backend && cd /tmp && paperboat check /tmp/py-backend'
-      - name: "SDK: the .tar.gz on Fedora builds and checks a backend, and checks a Python backend"
+      - name: "SDK: the .tar.gz on Fedora builds and checks a backend, checks a Python backend, and installs a toolkit"
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" \
               -v "$PWD/engine/tests/sdk-backend-python:/src-py:ro" fedora:latest sh -ec '
-            dnf install -y -q cmake gcc-c++ make python3-pip tar gzip >/dev/null
+            dnf install -y -q cmake gcc-c++ make python3-pip tar gzip git >/dev/null
             pip install -q websockets jsonschema
             mkdir /opt/pb && tar xzf /dist/paperboat-*.tar.gz -C /opt/pb --strip-components=1
             cp -r /src /tmp/sdk-backend && /opt/pb/bin/paperboat build /tmp/sdk-backend && /opt/pb/bin/paperboat check /tmp/sdk-backend
-            cp -r /src-py /tmp/py-backend && cd /tmp && /opt/pb/bin/paperboat check /tmp/py-backend'
+            cp -r /src-py /tmp/py-backend && cd /tmp && /opt/pb/bin/paperboat check /tmp/py-backend
+            # A toolkit on a release install: built as a plugin against the SDK, loaded with no engine rebuild (pb#354).
+            /opt/pb/bin/paperboat toolkit install control
+            /opt/pb/bin/paperboat toolkit list control | grep -q "control/pid"'
       - name: "The wheel installs with pip and runs a Python backend"
         run: |
           python -m venv "$RUNNER_TEMP/whl" && "$RUNNER_TEMP/whl/bin/pip" install -q dist/paperboat-*-cp312-abi3-*.whl
