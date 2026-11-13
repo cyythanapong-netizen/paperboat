@@ -164,9 +164,36 @@ takes a range, `deps = ["paperboat-shared@0.1"]`, and installing the app:
   installed since that is outside the range.
 
 Versions order by SemVer (`0.1.0-alpha.2 < 0.1.0-alpha.10 < 0.1.0`); `pkg update` and a plain
-`pkg install` take releases only, a prerelease only when asked for with `@<version>`.
+`pkg install` take releases only, a prerelease only when asked for with `@<version>`. An app installed
+from main (`@main`, recorded as `dev`) stays on main through `pkg update`; `@latest` moves it to releases.
 
 ### Install
+
+One line, then everything else is `paperboat`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/paperboatlab/paperboat/HEAD/scripts/install.sh | sh             # newest release, prebuilt
+curl -fsSL https://raw.githubusercontent.com/paperboatlab/paperboat/HEAD/scripts/install.sh | sh -s -- --main  # the dev branch, built from source
+```
+
+It installs into `~/.local/share/paperboat` (or `$PAPERBOAT_HOME`) and links `~/.local/bin/paperboat`.
+Three channels: `release` (the default: the newest GitHub release's `.tar.gz`, prereleases included),
+`source` (that release built from source, so toolkits install) and `main` (the default branch, built from
+source; needs git, cmake, a C++20 compiler and Node.js 22). Then:
+
+```sh
+paperboat update --check                 # paperboat, the apps and toolkits: what is behind
+paperboat update                         # update each along its channel, and rebuild what changed
+paperboat update --channel main          # switch paperboat itself (release | source | main)
+paperboat pkg install squero-studio-mx   # an app, at its newest release; @main tracks main, @latest goes back
+paperboat toolkit install optimization   # a toolkit (source and main channels), same @main / @latest
+```
+
+An app or toolkit stays on the channel it was installed on: `update` moves a release to the newest
+release and a `main` install to the newest commit of main.
+
+Or from a package (these update with the package manager, or `paperboat update --channel release` moves
+to the per-user install above):
 
 ```sh
 npm install -g @paperboatlabs/cli        # Linux x64, macOS arm64 (Apple Silicon) and Windows x64. The native binary is an optional dependency

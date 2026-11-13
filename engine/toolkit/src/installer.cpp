@@ -608,8 +608,11 @@ ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requeste
   const bool local = fs::is_directory(source_path);
   const fs::path local_source = local ? fs::weakly_canonical(source_path) : fs::path{};
 
-  // Resolve target version and git ref
+  // Resolve target version and git ref. No version asked: stay on the channel it is on (main stays
+  // main); "latest" moves it to releases.
   std::string version = std::string(requested_version);
+  if (version.empty() && read_marker_version(root / "engine" / "toolkit" / entry.name) == "dev") version = "dev";
+  if (version == "latest") version.clear();
   std::string git_ref;
 
   if (local) {
@@ -697,6 +700,27 @@ ToolkitResult install_files(const ToolkitEntry& entry, std::string_view requeste
 
   write_marker(target_dir, version, git_ref, commit);
   return {true, {}};
+}
+
+bool toolkit_outdated(const ToolkitEntry& entry, const fs::path& repo_root) {
+  const fs::path root = repo_root.empty() ? find_repo_root() : repo_root;
+  json m;
+  try {
+    std::ifstream in(root / "engine" / "toolkit" / entry.name / ".paperboat-toolkit.json");
+    m = json::parse(in);
+  } catch (...) {
+    return false;
+  }
+  const std::string version = m.value("version", "");
+  if (version == "local") return false;
+  if (version != "dev") {
+    const auto releases = list_releases(entry);
+    const auto have = parse_version(version), best = releases.empty() ? std::nullopt : parse_version(releases.front());
+    return have && best && *best > *have;
+  }
+  std::string out;  // a dev install tracks main: outdated when the remote's main moved on
+  if (run_cmd({"git", "ls-remote", resolve_repo_url(entry, {}), "main"}, root, {}, nullptr, &out) != 0) return false;
+  return !out.empty() && out.rfind(m.value("commit", ""), 0) != 0;
 }
 
 ToolkitResult install_toolkit(std::string_view name,

@@ -108,6 +108,9 @@ std::vector<std::string> parse_release_tags(std::string_view ls_remote_output, b
 // Fetch release tags from remote repository.
 std::vector<std::string> list_releases(const ToolkitEntry& entry, const ToolkitLog& log = {});
 
+// An installed toolkit is outdated when a newer release exists, or, installed from main ("dev"), when main moved on.
+bool toolkit_outdated(const ToolkitEntry& entry, const std::filesystem::path& repo_root = {});
+
 // Locate the Paperboat repository root (containing toolkits.toml and engine/toolkit).
 std::filesystem::path find_repo_root(const std::filesystem::path& hint = {});
 

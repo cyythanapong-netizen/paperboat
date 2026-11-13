@@ -257,6 +257,9 @@ ToolkitResult install(std::string_view name, std::string_view requested, const f
   const auto needed_by = dependents(list, e->name, parent);
   std::string version(requested);
   if (version.starts_with('v')) version.erase(0, 1);
+  // No version asked: stay on the channel it is on (main stays main); "latest" moves it to releases.
+  if (version.empty() && parent.empty() && installed_version(e->name) == "dev") version = "dev";
+  if (version == "latest") version.clear();
   bool reachable = true;
   const auto tags = remote_versions(*e, &reachable);
   if (version.empty()) version = newest_fitting(tags, needed_by).value_or("dev");

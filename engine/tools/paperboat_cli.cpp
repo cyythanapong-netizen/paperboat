@@ -162,10 +162,11 @@ Optimization:
 #endif
   std::cout << R"(
 Updating:
-  update [--check] [--no-build]
-                             Pull this repository (fast-forward only), rebuild the engine and console
-                             when it changed, pull the sibling checkouts of the apps in apps.toml and
-                             rebuild them, and refresh installed apps. --check only reports.
+  update [--check] [--no-build] [--channel release|source|main]
+                             Update paperboat, its installed apps and toolkits, each on its channel.
+                             A per-user install (scripts/install.sh) downloads or rebuilds itself;
+                             --channel switches it. A checkout pulls (fast-forward only) with its
+                             sibling app checkouts and rebuilds what changed. --check only reports.
 
 Dependencies:
   deps install [path]        Create the backend's isolated environment and install its
@@ -1415,16 +1416,23 @@ fs::path running_build_dir(const fs::path& root) {
   return root / "engine" / "build";
 }
 
-// paperboat update [--check] [--no-build]: pull this repository (fast-forward only), the sibling
-// checkouts of the apps in apps.toml, and rebuild what changed; then refresh the apps `pkg` installed.
+// paperboat update [--check] [--no-build] [--channel release|source|main]: update paperboat itself, then
+// the apps `pkg` installed and the toolkits, each along the channel it is on.
+// paperboat itself: an install made by scripts/install.sh (under $PAPERBOAT_HOME) runs that script again,
+// which downloads the newest release or rebuilds the source checkout; a development checkout pulls
+// (fast-forward only) with the sibling checkouts of the apps in apps.toml and rebuilds what changed.
 int cmd_update(const std::vector<std::string_view>& args) {
   bool check_only = false;
   bool build = true;
-  for (const auto a : args) {
+  std::string channel;
+  for (std::size_t i = 0; i < args.size(); ++i) {
+    const auto a = args[i];
     if (a == "--check") check_only = true;
     else if (a == "--no-build") build = false;
+    else if (a == "--channel" && i + 1 < args.size() &&
+             (args[i + 1] == "release" || args[i + 1] == "source" || args[i + 1] == "main")) channel = std::string(args[++i]);
     else {
-      std::cerr << "usage: paperboat update [--check] [--no-build]\n";
+      std::cerr << "usage: paperboat update [--check] [--no-build] [--channel release|source|main]\n";
       return 2;
     }
   }
@@ -1480,13 +1488,31 @@ int cmd_update(const std::vector<std::string_view>& args) {
 
   // 1. this repository, then what it builds on
   std::vector<std::string> changed;
-  const bool checkout = fs::exists(root / ".git");
-  if (checkout) {
+  const std::string exe = platform::exe_path().string();
+  const bool managed = exe.starts_with(tk::apps_dir().parent_path().string() + "/");  // made by install.sh
+  const bool checkout = !managed && fs::exists(root / ".git");
+  const bool npm = exe.find("node_modules") != std::string::npos;
+  if (managed || (!channel.empty() && !checkout)) {
+    // install.sh is in the checkout's scripts/ and in a package's share/paperboat/scripts/.
+    std::vector<std::string> cmd = {"sh", (root / "scripts" / "install.sh").string()};
+    if (check_only) cmd.emplace_back("--check");
+    if (!channel.empty()) cmd.push_back("--" + channel);
+    std::cout << "paperboat\n";
+    if (const int rc = tk::run_command(cmd, {}, [](std::string_view, std::string_view t) { std::cout << "  " << t << '\n'; });
+        rc != 0) {
+      ++failed;
+    } else if (!check_only) {
+      pulled = true;
+    }
+  } else if (!channel.empty()) {
+    say("paperboat", "a development checkout: switch with git (git switch dev, git checkout v<version>)");
+    ++failed;
+  } else if (checkout) {
     sync("paperboat", root, changed);
   } else {  // an installed package: there is no repository to pull
-    const bool npm = platform::exe_path().string().find("node_modules") != std::string::npos;
     if (!npm) {
-      say("paperboat", std::string(tui::kVersion) + ", installed from a package: update it with your package manager");
+      say("paperboat", std::string(tui::kVersion) + ", installed from a system package: update it with your package manager,");
+      std::cout << std::string(20, ' ') << "or move to a per-user install that updates itself: paperboat update --channel release\n";
     } else {
       std::string latest;
       if (tk::run_command({"npm", "view", "@paperboatlabs/cli", "version"}, {}, {}, &latest) != 0) {
@@ -1533,6 +1559,25 @@ int cmd_update(const std::vector<std::string_view>& args) {
     say(app.name, "installed " + app.version + ", newer available");
     if (check_only) continue;
     if (const auto r = tk::install_app(app.name, {}, root, log); !r.ok) {
+      std::cerr << "paperboat update: " << r.message << '\n';
+      ++failed;
+    } else {
+      pulled = true;
+    }
+  }
+
+  // 4. toolkits: each one that moved on, rebuilt into the engine
+  // ponytail: one engine build per updated toolkit; batch them if several update at once often.
+  for (const auto& t : tk::list_toolkits(root)) {
+    if (!t.installed || t.builtin) continue;
+    if (!tk::toolkit_outdated(t, root)) {
+      say(t.name + " (toolkit)", (t.version.empty() ? "installed" : t.version) + ", up to date");
+      continue;
+    }
+    say(t.name + " (toolkit)", (t.version.empty() ? "installed" : t.version) + ", newer available");
+    if (check_only) continue;
+    const tk::HostBuild host{.source_dir = {}, .build_dir = {}, .skip_rebuild = !build};
+    if (const auto r = tk::install_toolkit(t.name, {}, root, host, log); !r.ok) {
       std::cerr << "paperboat update: " << r.message << '\n';
       ++failed;
     } else {
