@@ -126,8 +126,6 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .field input { font-size: var(--size-xs); padding: 0; width: 20ch; }
 .conn { font: var(--size-2xs) var(--font-mono); color: var(--text-muted); white-space: nowrap; }
 .run-status { font: 500 var(--size-2xs) var(--font-sans); color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-/* Empty between runs, the slot still holds its widest label, so Run and Cancel don't move. */
-.run-status-room { visibility: hidden; }
 .status-running { color: var(--signal-text); }
 .run-delay { color: var(--signal-text); font-weight: 600; }
 .status-failed { color: var(--danger-text); }
