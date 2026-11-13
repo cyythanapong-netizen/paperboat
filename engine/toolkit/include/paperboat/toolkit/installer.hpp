@@ -7,6 +7,7 @@
 #include <compare>
 #include <filesystem>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -15,6 +16,11 @@
 #include "paperboat/toolkit/registry.hpp"
 
 namespace paperboat::toolkit {
+
+// One cmake build at a time in this process: two that touch the same build folder at once fail on
+// each other's files. Hold this before configuring or building (the installer does, and so does
+// every backend build), so an install and a restart-triggered rebuild never overlap.
+std::unique_lock<std::mutex> lock_build();
 
 struct ToolkitEntry {
   std::string name;

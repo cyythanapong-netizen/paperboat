@@ -73,6 +73,13 @@ void set_restart_handler(std::function<void()> on_restart);
 void exec_remembered_args();
 bool restart_process();
 
+// A backend asked to restart while its launcher keeps it in a job (the CLI's kill-on-close job)
+// ends with this code instead of spawning a replacement, which the job would kill: the launcher
+// starts it again, so the rebuilt binary is the one that runs. Launchers set
+// `PAPERBOAT_BACKEND_SUPERVISED=1` in the backend's environment for that.
+inline constexpr int kRestartExit = 75;
+inline constexpr const char* kSupervisedEnv = "PAPERBOAT_BACKEND_SUPERVISED";
+
 // `--port N` from the command line, or `fallback` (parse_options reads every option).
 int port_arg(int argc, char** argv, int fallback);
 

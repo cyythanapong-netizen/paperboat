@@ -629,6 +629,8 @@ bool BackendManager::ensure_built(const fs::path& backend_dir,
                                   std::string* error_msg,
                                   double* elapsed_seconds) {
   auto start_time = std::chrono::steady_clock::now();
+  // One build at a time: a toolkit install may be rebuilding the same folder (and vice versa).
+  const auto build_guard = toolkit::lock_build();
   fs::path root = toolkit::find_repo_root(backend_dir);
   if (root.empty()) {
     root = toolkit::find_repo_root();
@@ -1163,7 +1165,15 @@ int BackendManager::run_backend(const fs::path& path_or_domain, const BackendRun
     append_vars(args, opts);
 
     std::cout << "paperboat running " << bin.filename().string() << " on " << ws_url(port) << std::endl;
-    return ProcessRunner::run_stream(args, dir, run_env(manifest, opts), log_cb);
+    // Say we supervise: the backend asks to be started again when it is rebuilt, instead of
+    // spawning a replacement that our kill-on-close job would take down with us.
+    std::vector<std::pair<std::string, std::string>> env = run_env(manifest, opts);
+    env.emplace_back(core::kSupervisedEnv, "1");
+    for (;;) {
+      const int code = ProcessRunner::run_stream(args, dir, env, log_cb);
+      if (code != core::kRestartExit) return code;
+      std::cout << "restarting " << bin.filename().string() << "…" << std::endl;
+    }
   } else if (kind == BackendKind::Julia) {
     fs::path server = dir / "server.jl";
     if (manifest.has_manifest && !manifest.run.empty() && fs::is_regular_file(dir / manifest.run)) {

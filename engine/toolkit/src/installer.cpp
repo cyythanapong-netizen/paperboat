@@ -177,6 +177,7 @@ ToolkitResult rebuild_host(const HostBuild& host, const fs::path& root, const To
     }
   }
   if (!src.empty() && !fs::is_directory(src)) return {false, "source directory not found at " + src.string()};
+  const auto build_guard = lock_build();  // one build at a time: a restart's rebuild may be waiting
   if (log) log("info", "reconfiguring build at " + bld.string() + "…");
   const std::string cmake = platform::cmake_command(bld);
   std::string last;
@@ -341,6 +342,14 @@ std::optional<ReleaseVersion> parse_version(std::string_view text) {
     v.prerelease = std::string(pre);
   }
   return v;
+}
+
+// One cmake build at a time in this process: two that touch the same build folder at once fail on
+// each other's files (MSBuild's .lib and .pdb), which is how a project broke during an install and
+// a restart build that overlapped. Take this before configuring or building.
+std::unique_lock<std::mutex> lock_build() {
+  static std::mutex builds;
+  return std::unique_lock<std::mutex>(builds);
 }
 
 bool valid_version_range(std::string_view range) { return !leading_numbers(range, 3).empty(); }

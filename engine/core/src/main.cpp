@@ -57,8 +57,11 @@ void exec_remembered_args() {
   }
   if (args.empty()) return;
 #if defined(_WIN32)
-  // Windows has no exec: start the same program again, detached, and end this one, so the binary
-  // that serves the port next is the one just rebuilt (a toolkit install asks for this).
+  // The CLI keeps its backend in a kill-on-close job: a process started here would die with the
+  // CLI when it sees us exit. Ask it to start us again instead, so the rebuilt binary runs.
+  if (const char* supervised = std::getenv(kSupervisedEnv); supervised && *supervised) std::exit(kRestartExit);
+  // Otherwise start the same program again, detached, and end this one, so the binary that serves
+  // the port next is the one just rebuilt (a toolkit install asks for this).
   std::string command;
   for (const auto& arg : args) {
     if (!command.empty()) command += ' ';

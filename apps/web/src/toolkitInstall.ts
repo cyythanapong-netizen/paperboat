@@ -15,7 +15,6 @@ export function useToolkitInstall(
   nodes: FlowNode[],
 ) {
   const promptedToolkits = useRef<string>("");
-  const prevBusyToolkits = useRef<Map<string, string>>(new Map());
   const [missingDialog, setMissingDialog] = useState<ToolkitStatus[] | null>(null);
 
   // What we asked for that the backend has not acknowledged yet, so the keys dim and say "installing…"
@@ -87,35 +86,6 @@ export function useToolkitInstall(
     promptedToolkits.current = key;
     setMissingDialog(missing);
   }, [state.connection, state.engine, state.toolkits, nodes, missingDialog]);
-
-  useEffect(() => {
-    const prev = prevBusyToolkits.current;
-    const finished: string[] = [];
-    const failed: string[] = [];
-    for (const t of state.toolkits) {
-      const was = prev.get(t.name);
-      if ((was === "installing" || was === "updating") && !t.busy) {
-        if (t.installed) {
-          finished.push(t.name);
-        } else {
-          failed.push(t.name);
-        }
-      }
-    }
-    const next = new Map<string, string>();
-    for (const t of state.toolkits) if (t.busy) next.set(t.name, t.busy);
-    prevBusyToolkits.current = next;
-
-    if (failed.length > 0) {
-      log("error", `Installing ${failed.join(", ")} failed. See the lines above for details.`);
-      return;
-    }
-
-    if (finished.length > 0) {
-      const names = finished.join(", ");
-      log("warn", `Toolkit ${names} ready: restart the backend so it loads the update.`);
-    }
-  }, [state.toolkits, log]);
 
   return { missingDialog, setMissingDialog, restartBackend, installToolkit, toolkitVersions, uninstallToolkit, requestedToolkits: requested };
 }
