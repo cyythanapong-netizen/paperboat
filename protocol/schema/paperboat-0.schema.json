@@ -933,6 +933,10 @@
           "minItems": 2,
           "maxItems": 2,
           "description": "The values that take the low and high ends of the colour scale; absent: the field's own min and max."
+        },
+        "colormap": {
+          "type": "string",
+          "description": "The field's colour map: parula, viridis, jet, hot, gray, cool, spring, summer, autumn, winter, bone, copper, pink (absent: viridis)."
         }
       },
       "required": [
@@ -2878,6 +2882,10 @@
           "minItems": 2,
           "maxItems": 2,
           "description": "The values that take the low and high ends of the colour scale; absent: the field's own min and max."
+        },
+        "colormap": {
+          "type": "string",
+          "description": "The field's colour map: parula, viridis, jet, hot, gray, cool, spring, summer, autumn, winter, bone, copper, pink (absent: viridis)."
         }
       }
     },
