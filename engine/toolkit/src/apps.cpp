@@ -318,7 +318,7 @@ ToolkitResult install(std::string_view name, std::string_view requested, const f
 
   // 3. clone and build it; candidates in order, "" is the remote's default branch
   const std::string url = repo_url(*e);
-  const std::vector<std::string> refs = version == "dev" ? std::vector<std::string>{"main", ""}
+  const std::vector<std::string> refs = version == "dev" ? std::vector<std::string>{""}  // the default branch, whatever its name
                                                          : std::vector<std::string>{"v" + version, version};
   if (log) log("info", "fetching \"" + e->name + "\" " + version + " from " + url + "…");
 

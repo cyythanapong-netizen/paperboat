@@ -2010,8 +2010,56 @@ int run_interactive_prompt() {
 
 }  // namespace
 
+extern const char* const kInstallSh;  // scripts/install.sh (install_sh.cpp, generated)
+
+namespace {
+
+// The one-file download (pb#358): a standalone paperboat with nothing installed around it (no checkout,
+// no share/paperboat beside it). It installs the runtime of its own version with the embedded install.sh
+// ($PAPERBOAT_HOME, ~/.local/bin/paperboat), then hands the command to the paperboat it installed. From
+// then on that one is used, and `paperboat update` keeps it current. $PAPERBOAT_ARCHIVE installs from a
+// local release archive instead of downloading it (offline, CI).
+std::optional<int> bootstrap(int argc, char** argv) {
+  if (!tk::find_repo_root().empty()) return std::nullopt;  // a checkout or an installed paperboat
+#ifdef _WIN32
+  std::cerr << "paperboat: no runtime beside this binary; unpack the paperboat .zip from the GitHub release\n";
+  return 1;
+#else
+  std::cout << "paperboat " << tui::kVersion << ": first run, installing paperboat for this user…\n";
+  const fs::path script = fs::temp_directory_path() / ("paperboat-install-" + std::to_string(::getpid()) + ".sh");
+  std::ofstream(script) << kInstallSh;
+  std::string cmd = "sh '" + script.string() + "'";
+  if (const char* a = std::getenv("PAPERBOAT_ARCHIVE"); a && *a) cmd += " --archive '" + std::string(a) + "'";
+  else cmd += " --version " + std::string(tui::kVersion);
+  const int rc = std::system(cmd.c_str());
+  std::error_code ec;
+  fs::remove(script, ec);
+  if (rc != 0) {
+    std::cerr << "paperboat: the install failed; this binary is unchanged, run it again to retry\n";
+    return 1;
+  }
+  const char* bin = std::getenv("PAPERBOAT_BIN");
+  const char* home = std::getenv("HOME");
+  const fs::path installed = (bin && *bin ? fs::path(bin) : fs::path(home ? home : ".") / ".local" / "bin") / "paperboat";
+  std::cout << "paperboat is installed: run `paperboat` from now on (this downloaded file can be deleted)\n";
+  if (argc < 2) return 0;
+  argv[0] = const_cast<char*>(installed.c_str());
+  ::execv(installed.c_str(), argv);  // the command you gave, by the installed paperboat
+  std::cerr << "paperboat: cannot run " << installed.string() << '\n';
+  return 1;
+#endif
+}
+
+}  // namespace
+
 int main(int argc, char** argv) {
   core::BackendManager::set_registry_extension(add_optional_packages);
+  if (argc >= 2 && (std::string_view(argv[1]) == "--version" || std::string_view(argv[1]) == "-v" ||
+                    std::string_view(argv[1]) == "--help" || std::string_view(argv[1]) == "-h")) {
+    // answered by this binary, installed or not
+  } else if (const auto rc = bootstrap(argc, argv)) {
+    return *rc;
+  }
   if (argc < 2) {
     launch_console({});
     return run_interactive_prompt();

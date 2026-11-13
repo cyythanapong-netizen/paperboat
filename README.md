@@ -169,7 +169,16 @@ from main (`@main`, recorded as `dev`) stays on main through `pkg update`; `@lat
 
 ### Install
 
-One line, then everything else is `paperboat`:
+Download one file, `paperboat-<version>-Linux-x86_64` or `paperboat-<version>-Darwin-arm64`, from the
+[latest release](https://github.com/paperboatlab/paperboat/releases), and run it. Everything else is `paperboat`:
+
+```sh
+chmod +x paperboat-*-Linux-x86_64 && ./paperboat-*-Linux-x86_64   # first run: installs paperboat for you
+paperboat pkg install squero-studio-om                            # then any app, toolkit or update
+```
+
+On its first run the file installs the runtime of its version (engine, web app, SDK) and hands over to the
+installed `paperboat`; the downloaded file can then be deleted. Or with one line, which does the same:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/paperboatlab/paperboat/HEAD/scripts/install.sh | sh             # newest release, prebuilt

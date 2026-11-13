@@ -36,7 +36,11 @@ add_library(paperboat_new STATIC paperboat_new.cpp ${CMAKE_CURRENT_BINARY_DIR}/n
 target_include_directories(paperboat_new PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(paperboat_new PRIVATE paperboat::toolkit paperboat_warnings)
 
-add_executable(paperboat paperboat_cli.cpp)
+# scripts/install.sh, embedded: a standalone paperboat (the one-file download) installs its runtime with it.
+file(READ ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/install.sh PAPERBOAT_INSTALL_SH)
+configure_file(install_sh.cpp.in ${CMAKE_CURRENT_BINARY_DIR}/install_sh.cpp @ONLY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/install.sh)
+add_executable(paperboat paperboat_cli.cpp ${CMAKE_CURRENT_BINARY_DIR}/install_sh.cpp)
 target_compile_definitions(paperboat PRIVATE PAPERBOAT_VERSION="${PAPERBOAT_VERSION}")
 if(PAPERBOAT_STATIC_RUNTIME AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   target_link_options(paperboat PRIVATE -static-libstdc++ -static-libgcc)
