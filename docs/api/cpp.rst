@@ -14,9 +14,10 @@ A backend builds against the engine in one of two ways:
 
 * **From a checkout**: ``add_subdirectory(<paperboat>/engine paperboat EXCLUDE_FROM_ALL)``.
 * **From an installed package**: ``find_package(Paperboat 0.1 CONFIG REQUIRED)``. The SDK is the
-  ``paperboat-dev`` ``.deb`` (``paperboat-devel`` ``.rpm``), or the ``lib/``, ``include/`` and ``lib/cmake/Paperboat`` parts of the
-  ``.tar.gz``, the ``.zip`` and the ``@paperboatlabs/cli`` platform package. It has static, Release libraries,
-  so nothing is rebuilt and nothing is downloaded at configure time.
+  ``lib/``, ``include/`` and ``lib/cmake/Paperboat`` parts of the ``.tar.gz`` and the ``.zip``. Its libraries
+  are Release builds (shared on Linux and macOS, static on Windows), so nothing is rebuilt and nothing
+  is downloaded at configure time. Toolkits installed with ``paperboat toolkit install`` come with it as
+  ``paperboat::toolkit_<name>``.
 
 Either way the targets are ``paperboat::core`` (links ``paperboat::toolkit``) and ``paperboat::warnings``
 (the engine's warning flags). The version check is ``SameMinorVersion``: a backend that asks for 0.1

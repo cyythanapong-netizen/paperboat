@@ -42,7 +42,7 @@ npm run build:python        # dev: builds paperboat/_engine*.so in place (PYTHON
 pip install ./python        # or install it (scikit-build-core)
 ```
 
-The packages (.deb, .rpm, .tar.gz, .zip, npm) need none of this: they ship the package in
+The packages (.tar.gz, .zip) need none of this: they ship the package in
 `<prefix>/lib/paperboat/python`, which the CLI puts on `PYTHONPATH` for a Python backend. The
 release builds it with `scripts/build_python.sh` (a wheel per interpreter): `_engine.abi3.so`
 (`.pyd` on Windows), nanobind's stable ABI, for every CPython from 3.12 on, and a module for 3.11

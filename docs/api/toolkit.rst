@@ -121,8 +121,8 @@ install and never downloads. Install from any repository or local folder with
 ``paperboat toolkit install <name> --repo <url>`` (or ``--path <dir>``).
 
 Optional toolkits never enter an artifact. The engine is Apache-2.0; an optional toolkit carries
-its own licence (the mesh toolkit is GPL-3.0). ``.deb``, ``.rpm``, ``.tar.gz``, ``.zip``, the npm
-packages, the Python wheel and the web bundle contain no file from ``engine/toolkit/<name>/``,
+its own licence (the mesh toolkit is GPL-3.0). The ``.tar.gz``, the ``.zip``, the Python wheel and
+the web bundle contain no file from ``engine/toolkit/<name>/``,
 ``share/paperboat/toolkit/`` or a ``*toolkit_<name>*`` library. ``scripts/check_bundle.py`` enforces
 this on an install tree and on every package (pb#297), the release script and CI run it, and the
 engine's ``ctest`` installs into a scratch prefix and checks that too. Installing one is the user's

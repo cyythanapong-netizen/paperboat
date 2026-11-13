@@ -1520,7 +1520,7 @@ std::vector<ExampleBackend> BackendManager::status_examples(const fs::path& exam
 
 bool BackendManager::start_app(int port, const std::string& host, bool daemon) {
   const fs::path root = toolkit::find_repo_root();
-  // An installed paperboat (.deb, .rpm, .tar.gz, .zip, npm) has no checkout to run `npm run dev`
+  // An installed paperboat (.tar.gz, .zip) has no checkout to run `npm run dev`
   // in: it serves the web app built into share/paperboat/web itself.
   if (root.empty() || !fs::is_regular_file(root / "apps" / "web" / "package.json")) {
     const fs::path exe = platform::exe_path();

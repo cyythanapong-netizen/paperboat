@@ -19,7 +19,7 @@ what they send.<br><br>
 | Web and console | typecheck, tests and build of `apps/web` and `apps/cli` | [![web](https://github.com/paperboatlab/paperboat/actions/workflows/web.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/web.yml?query=branch%3Adev) |
 | End to end | the web app in headless Chromium against a real engine backend | [![e2e](https://github.com/paperboatlab/paperboat/actions/workflows/e2e.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/e2e.yml?query=branch%3Adev) |
 | Journey | the CLI as a user drives it: `bin/paperboat`, the workbench, an example, a toolkit and its example (Linux, Windows, macOS) | [![journey](https://github.com/paperboatlab/paperboat/actions/workflows/journey.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/journey.yml?query=branch%3Adev) |
-| Release | `.deb`, `.rpm`, `.tar.gz`, `.zip` and the npm packages, built on a `v<version>` tag | [![release](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml/badge.svg)](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml) [![latest release](https://img.shields.io/github/v/release/paperboatlab/paperboat?include_prereleases&label=latest)](https://github.com/paperboatlab/paperboat/releases) |
+| Release | `.tar.gz` (Linux, macOS), `.zip` (Windows) and the Python wheels, built on a `v<version>` tag | [![release](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml/badge.svg)](https://github.com/paperboatlab/paperboat/actions/workflows/release.yml) [![latest release](https://img.shields.io/github/v/release/paperboatlab/paperboat?include_prereleases&label=latest)](https://github.com/paperboatlab/paperboat/releases) |
 | Docs | the [API reference](https://paperboatlab.github.io/paperboat/), warnings as errors | [![docs](https://github.com/paperboatlab/paperboat/actions/workflows/docs.yml/badge.svg?branch=dev)](https://github.com/paperboatlab/paperboat/actions/workflows/docs.yml?query=branch%3Adev) |
 
 On a pull request each workflow runs only when the change can affect it (its `paths`), and the
@@ -192,16 +192,17 @@ paperboat toolkit install optimization   # a toolkit, built as a plugin; same @m
 An app or toolkit stays on the channel it was installed on: `update` moves a release to the newest
 release and a `main` install to the newest commit of main.
 
-Or from a package (these update with the package manager, or `paperboat update --channel release` moves
-to the per-user install above):
+Or unpack a release archive by hand (it does not update itself; `paperboat update --channel release` moves
+it to the per-user install above). Windows has only this for now (#222):
 
 ```sh
-npm install -g @paperboatlabs/cli        # Linux x64, macOS arm64 (Apple Silicon) and Windows x64. The native binary is an optional dependency
-sudo apt install ./paperboat_<version>_amd64.deb   # Debian / Ubuntu, from the GitHub release
-sudo dnf install ./paperboat-<version>.x86_64.rpm  # Fedora / RHEL
-tar xzf paperboat-<version>-Darwin-arm64.tar.gz      # macOS 13+ on Apple Silicon, from the GitHub release
-Expand-Archive paperboat-<version>-Windows-AMD64.zip  # Windows x64 (PowerShell), from the GitHub release
+tar xzf paperboat-<version>-Linux-x86_64.tar.gz       # Linux x86_64 (glibc, libstdc++ of gcc 12 or newer)
+tar xzf paperboat-<version>-Darwin-arm64.tar.gz       # macOS 13+ on Apple Silicon
+Expand-Archive paperboat-<version>-Windows-AMD64.zip  # Windows x64 (PowerShell)
 ```
+
+The `.deb`, `.rpm` and npm packages stopped with 0.1.0-alpha.7 (pb#357): one format per platform, and
+one way to update it.
 
 A package install is the CLI and the apps: `paperboat` opens the console (needs `node`),
 `paperboat start` serves the web app on http://localhost:3047 (no npm, no checkout), and `pkg`,

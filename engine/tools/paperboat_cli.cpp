@@ -1494,7 +1494,6 @@ int cmd_update(const std::vector<std::string_view>& args) {
   const std::string exe = platform::exe_path().string();
   const bool managed = exe.starts_with(tk::apps_dir().parent_path().string() + "/");  // made by install.sh
   const bool checkout = !managed && fs::exists(root / ".git");
-  const bool npm = exe.find("node_modules") != std::string::npos;
   if (managed || (!channel.empty() && !checkout)) {
     // install.sh is in the checkout's scripts/ and in a package's share/paperboat/scripts/.
     std::vector<std::string> cmd = {"sh", (root / "scripts" / "install.sh").string()};
@@ -1512,22 +1511,9 @@ int cmd_update(const std::vector<std::string_view>& args) {
     ++failed;
   } else if (checkout) {
     sync("paperboat", root, changed);
-  } else {  // an installed package: there is no repository to pull
-    if (!npm) {
-      say("paperboat", std::string(tui::kVersion) + ", installed from a system package: update it with your package manager,");
-      std::cout << std::string(20, ' ') << "or move to a per-user install that updates itself: paperboat update --channel release\n";
-    } else {
-      std::string latest;
-      if (tk::run_command({"npm", "view", "@paperboatlabs/cli", "version"}, {}, {}, &latest) != 0) {
-        say("paperboat", std::string(tui::kVersion) + ", cannot read @paperboatlabs/cli from the npm registry (offline, or not published yet)");
-        ++failed;
-      } else if (latest == tui::kVersion) {
-        say("paperboat", std::string(tui::kVersion) + ", up to date (npm)");
-      } else {
-        say("paperboat", std::string(tui::kVersion) + ", " + latest + " is available (npm)");
-        if (!check_only) step("npm install -g @paperboatlabs/cli@latest", {"npm", "install", "-g", "@paperboatlabs/cli@latest"}, root);
-      }
-    }
+  } else {  // a package unpacked by hand (or an older .deb, .rpm or npm install): nothing here updates it
+    say("paperboat", std::string(tui::kVersion) + ", installed from a package; move to a per-user install that");
+    std::cout << std::string(20, ' ') << "updates itself: paperboat update --channel release\n";
   }
   for (const auto& app : tk::list_apps(root)) {  // after the pull, so a new apps.toml counts
     const fs::path dir = root.parent_path() / app.name;

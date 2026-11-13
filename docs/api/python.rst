@@ -10,7 +10,7 @@ are what the engine calls**. The classes a backend passes become the domain's pa
 (named after the descriptor's ``domain``), so the palette has them without the descriptor
 listing them.
 
-Install: nothing to do with a paperboat package (.deb, .rpm, .tar.gz, .zip, npm): it ships the
+Install: nothing to do with a paperboat package (.tar.gz, .zip): it ships the
 module in ``lib/paperboat/python`` and ``paperboat run`` / ``check`` put it on ``PYTHONPATH`` for
 the backend process. To ``import paperboat`` in a process the CLI did not start (an IDE, a
 service), install the wheel instead. It is

@@ -1,11 +1,10 @@
-# Release packages: .deb, .rpm and .tar.gz (Linux), .tar.gz (macOS arm64), .zip (Windows x64), npm packages (@paperboatlabs/cli + one per platform), a GitHub release.
+# Release packages: .tar.gz (Linux x86_64, macOS arm64) and .zip (Windows x64) on a GitHub release, plus the Python
+# wheels. scripts/install.sh and `paperboat update` download the .tar.gz; one format per platform, one update path (pb#357).
 # Every package ships the Python bindings (pb#223) in lib/paperboat/python, so a Python backend runs
 # with no pip step: paperboat._engine for CPython 3.11 and, through the stable ABI, for 3.12 and later
 # (scripts/build_python.sh). The same builds' wheels (paperboat-*.whl) go to the release too.
 # A tag v<version> publishes; pull requests and manual runs only build and check the packages.
 # The version is engine/CMakeLists.txt's project(paperboat VERSION ...); the tag must match it.
-# Publishing to npm needs the NPM_TOKEN secret (an automation token for the @paperboat scope); without it
-# the release is made and npm is skipped.
 name: release
 
 on:
@@ -13,9 +12,8 @@ on:
     tags: ["v*"]
   pull_request:
     paths:
-      - "npm/**"
       - "scripts/build_release.sh"
-      - "scripts/pack_npm.py"
+      - "scripts/install.sh"
       - "engine/CMakeLists.txt"
       - "engine/cmake/**"
       - "engine/tests/sdk-backend/**"
@@ -59,7 +57,7 @@ jobs:
           if-no-files-found: error
 
   linux:
-    name: Linux (.deb, .rpm, .tar.gz, npm)
+    name: Linux (.tar.gz)
     needs: web
     runs-on: ubuntu-22.04  # glibc 2.35: the binary runs on Debian 12, Ubuntu 22.04+, Fedora, ...
     outputs:
@@ -93,51 +91,35 @@ jobs:
         with:
           name: web-console
           path: apps
-      - run: sudo apt-get update && sudo apt-get install -y g++-12 ninja-build dpkg-dev rpm file
-      - name: Build, test, package (.deb, .rpm, .tar.gz, Python wheels)
+      - run: sudo apt-get update && sudo apt-get install -y g++-12 ninja-build file
+      - name: Build, test, package (.tar.gz, Python wheels)
         env:
           PYTHONS: ${{ steps.py311.outputs.python-path }} ${{ steps.py312.outputs.python-path }}
         run: CC=gcc-12 CXX=g++-12 WEB=OFF scripts/build_release.sh dist
-      - name: npm packages
-        run: |
-          v=${{ steps.version.outputs.version }}
-          cmake --install engine/build --prefix "$RUNNER_TEMP/root"   # the binary, share/ and the SDK
-          python3 scripts/pack_npm.py --version "$v" --out dist/npm --target linux-x64 --prefix "$RUNNER_TEMP/root"
-          python3 scripts/pack_npm.py --version "$v" --out dist/npm --main
+      - name: The install tree, for the bundle check
+        run: cmake --install engine/build --prefix "$RUNNER_TEMP/root"   # the binary, share/ and the SDK
       - name: No optional toolkit is bundled
         run: |
           python3 scripts/check_bundle.py --self-test
           python3 scripts/check_bundle.py --prefix "$RUNNER_TEMP/root"
           shopt -s nullglob
-          archives=(dist/*.tar.gz dist/*.deb dist/*.rpm dist/*.whl)
+          archives=(dist/*.tar.gz dist/*.whl)
           python3 scripts/check_bundle.py --archive "${archives[@]}"
-      - name: The .deb installs on a clean Debian 12 and runs
-        run: |
-          docker run --rm -v "$PWD/dist:/dist:ro" debian:bookworm sh -c '
-            apt-get update -qq && apt-get install -y -qq /dist/paperboat_*.deb curl >/dev/null &&
-            paperboat --version && paperboat pkg list && paperboat commands | grep -q pkg &&
-            test -f /usr/share/paperboat/cli/main.js &&
-            (paperboat start --port 3047 >/tmp/web.log 2>&1 &) && sleep 2 &&
-            curl -sf http://localhost:3047/ | grep -q "<div id=\"root\"" && echo "web app served"'
-      # The SDK (pb#177): with only the packages installed, a C++ backend builds and passes paperboat check.
-      - name: "SDK: paperboat + paperboat-dev on Debian 12 build and check a backend, one paperboat new writes, and check a Python backend"
+      # The SDK (pb#177): with only the .tar.gz, a C++ backend builds and passes paperboat check.
+      - name: "The .tar.gz on Debian 12: runs, serves the web app, builds and checks a backend, paperboat new writes, and checks a Python backend"
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" \
               -v "$PWD/engine/tests/sdk-backend-python:/src-py:ro" debian:bookworm sh -ec '
-            apt-get update -qq && apt-get install -y -qq /dist/paperboat_*.deb /dist/paperboat-dev_*.deb python3-pip >/dev/null
+            apt-get update -qq && apt-get install -y -qq cmake g++ make curl python3-pip >/dev/null
             pip install -q --break-system-packages websockets jsonschema
-            cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend
-            cd /tmp && paperboat new demo && paperboat build demo && paperboat check demo &&
-            python3 --version && cp -r /src-py /tmp/py-backend && paperboat check /tmp/py-backend'
-      - name: "SDK: the .rpms on Fedora: install, run, build and check a backend, and check a Python backend"
-        run: |
-          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" \
-              -v "$PWD/engine/tests/sdk-backend-python:/src-py:ro" fedora:latest sh -ec '
-            dnf install -y -q /dist/paperboat-[0-9]*.rpm /dist/paperboat-devel-*.rpm python3-pip >/dev/null
+            mkdir /opt/pb && tar xzf /dist/paperboat-*.tar.gz -C /opt/pb --strip-components=1 && export PATH=/opt/pb/bin:$PATH
             paperboat --version && paperboat pkg list && paperboat commands | grep -q pkg
-            pip install -q websockets jsonschema
+            test -f /opt/pb/share/paperboat/cli/main.js
+            (paperboat start --port 3047 >/tmp/web.log 2>&1 &) && sleep 2
+            curl -sf http://localhost:3047/ | grep -q "<div id=\"root\"" && echo "web app served"
             cp -r /src /tmp/sdk-backend && paperboat build /tmp/sdk-backend && paperboat check /tmp/sdk-backend
-            python3 --version && cp -r /src-py /tmp/py-backend && cd /tmp && paperboat check /tmp/py-backend'
+            cd /tmp && paperboat new demo && paperboat build demo && paperboat check demo
+            python3 --version && cp -r /src-py /tmp/py-backend && paperboat check /tmp/py-backend'
       - name: "SDK: the .tar.gz on Fedora builds and checks a backend, checks a Python backend, and installs a toolkit"
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/engine/tests/sdk-backend:/src:ro" \
@@ -155,25 +137,13 @@ jobs:
           python -m venv "$RUNNER_TEMP/whl" && "$RUNNER_TEMP/whl/bin/pip" install -q dist/paperboat-*-cp312-abi3-*.whl
           cp -r engine/tests/sdk-backend-python "$RUNNER_TEMP/whl-backend" && cd "$RUNNER_TEMP/whl-backend"
           "$RUNNER_TEMP/whl/bin/python" server.py --run | tail -1 | grep -q '"status":"done"' && echo "wheel runs"
-      - name: The npm packages install on a clean Node and run
-        run: |
-          prefix=$(mktemp -d)
-          npm install -g --prefix "$prefix" dist/npm/paperboatlabs-cli-linux-x64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz
-          "$prefix/bin/paperboat" --version
-          "$prefix/bin/paperboat" pkg list
-          pip install -q --upgrade websockets jsonschema   # the runner's jsonschema 3.2 predates Draft 2020-12
-          cp -r engine/tests/sdk-backend "$RUNNER_TEMP/sdk-backend" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
-          CXX=g++-12 "$prefix/bin/paperboat" build "$RUNNER_TEMP/sdk-backend"   # against the SDK in the platform package
-          "$prefix/bin/paperboat" check "$RUNNER_TEMP/sdk-backend"
-          cp -r "$GITHUB_WORKSPACE/engine/tests/sdk-backend-python" "$RUNNER_TEMP/py-backend"
-          "$prefix/bin/paperboat" check "$RUNNER_TEMP/py-backend"   # python3 3.12: the abi3 module
       - uses: actions/upload-artifact@v4
         with:
           name: linux
           path: dist/
 
   macos:
-    name: macOS arm64 (.tar.gz, npm)
+    name: macOS arm64 (.tar.gz)
     # macOS runners cost about ten Linux minutes and run in parallel, so they are checked on
     # pushes to dev and main; label a PR `ci:macos` to run them before merging.
     if: github.event_name != 'pull_request'
@@ -221,34 +191,28 @@ jobs:
             -DPAPERBOAT_PYTHON_MODULES_DIR="$PWD/engine/build/python/modules"
           cmake --build engine/build
           engine/build/tests/paperboat_tests
-      - name: Package (.tar.gz, npm)
+      - name: Package (.tar.gz)
         run: |
-          v=${{ steps.version.outputs.version }}
           (cd engine/build && cpack -G TGZ -B "$GITHUB_WORKSPACE/dist")
           cmake --install engine/build --prefix "$RUNNER_TEMP/root"
-          python3 scripts/pack_npm.py --version "$v" --out dist/npm --target darwin-arm64 --prefix "$RUNNER_TEMP/root"
-          python3 scripts/pack_npm.py --version "$v" --out dist/npm --main
       - name: No optional toolkit is bundled
         run: |
           python3 scripts/check_bundle.py --self-test
           python3 scripts/check_bundle.py --prefix "$RUNNER_TEMP/root"
           python3 scripts/check_bundle.py --archive dist/*.tar.gz
-      - name: The npm packages install on a clean Node, run, and build and check a backend
-        run: |
-          prefix=$(mktemp -d)
-          npm install -g --prefix "$prefix" dist/npm/paperboatlabs-cli-darwin-arm64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz
-          "$prefix/bin/paperboat" --version
-          "$prefix/bin/paperboat" pkg list
-          pip install -q websockets jsonschema
-          cp -r engine/tests/sdk-backend "$RUNNER_TEMP/sdk-backend" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
-          "$prefix/bin/paperboat" build "$RUNNER_TEMP/sdk-backend"   # against the SDK in the platform package
-          "$prefix/bin/paperboat" check "$RUNNER_TEMP/sdk-backend"
-          cp -r "$GITHUB_WORKSPACE/engine/tests/sdk-backend-python" "$RUNNER_TEMP/py-backend"
-          "$prefix/bin/paperboat" check "$RUNNER_TEMP/py-backend"   # python3 3.12: the abi3 module
-          rm "$GITHUB_WORKSPACE"/dist/npm/paperboatlabs-cli-[0-9]*.tgz   # the launcher is published from the Linux job
-      - name: "The .tar.gz checks a Python backend with Python 3.11 (PAPERBOAT_PYTHON: the cp311 module)"
+      - name: The .tar.gz runs, and builds and checks a backend
         run: |
           mkdir -p "$RUNNER_TEMP/pb" && tar xzf dist/paperboat-*.tar.gz -C "$RUNNER_TEMP/pb" --strip-components=1
+          "$RUNNER_TEMP/pb/bin/paperboat" --version
+          "$RUNNER_TEMP/pb/bin/paperboat" pkg list
+          pip install -q websockets jsonschema
+          cp -r engine/tests/sdk-backend "$RUNNER_TEMP/sdk-backend" && cd "$RUNNER_TEMP"   # outside the checkout: the SDK, not the sources
+          "$RUNNER_TEMP/pb/bin/paperboat" build "$RUNNER_TEMP/sdk-backend"
+          "$RUNNER_TEMP/pb/bin/paperboat" check "$RUNNER_TEMP/sdk-backend"
+          cp -r "$GITHUB_WORKSPACE/engine/tests/sdk-backend-python" "$RUNNER_TEMP/py-backend"
+          "$RUNNER_TEMP/pb/bin/paperboat" check "$RUNNER_TEMP/py-backend"   # python3 3.12: the abi3 module
+      - name: "The .tar.gz checks a Python backend with Python 3.11 (PAPERBOAT_PYTHON: the cp311 module)"
+        run: |
           py311="${{ steps.py311.outputs.python-path }}"
           "$py311" -m pip install -q websockets jsonschema
           cp -r engine/tests/sdk-backend-python "$RUNNER_TEMP/py-backend-311" && cd "$RUNNER_TEMP"
@@ -266,7 +230,7 @@ jobs:
 
   windows:
     needs: web
-    name: Windows (.zip, npm)
+    name: Windows (.zip)
     runs-on: windows-2022
     defaults:
       run:
@@ -321,12 +285,10 @@ jobs:
           "$exe" commands | grep -q pkg
           "$exe" pkg versions squero-studio-om || true   # git over the pipe layer
           "$exe" < /dev/null                              # the prompt: its banner runs git through the process layer
-      - name: Package (.zip, npm)
+      - name: Package (.zip)
         run: |
-          v=${{ steps.version.outputs.version }}
           (cd engine/build && cpack -G ZIP -C Release -B "$GITHUB_WORKSPACE/dist")
           cmake --install engine/build --config Release --prefix "$RUNNER_TEMP/root"
-          python scripts/pack_npm.py --version "$v" --out dist/npm --target win32-x64 --prefix "$RUNNER_TEMP/root"
       - name: No optional toolkit is bundled
         run: |
           python scripts/check_bundle.py --self-test
@@ -334,7 +296,6 @@ jobs:
           python scripts/check_bundle.py --archive dist/*.zip dist/*.whl
       - name: "SDK: the .zip builds and checks a backend"
         run: |
-          v=${{ steps.version.outputs.version }}
           pip install -q websockets jsonschema
           mkdir -p "$RUNNER_TEMP/pb" && unzip -q dist/paperboat-*.zip -d "$RUNNER_TEMP/pb"
           exe=$(ls "$RUNNER_TEMP"/pb/*/bin/paperboat.exe)
@@ -346,17 +307,6 @@ jobs:
           py311="${{ steps.py311.outputs.python-path }}"
           "$py311" -m pip install -q websockets jsonschema
           PAPERBOAT_PYTHON="$py311" "$exe" check "$RUNNER_TEMP/py-backend"   # the cp311 module
-          cd "$GITHUB_WORKSPACE" && python scripts/pack_npm.py --version "$v" --out dist/npm --main
-      - name: The npm packages install and run through the launcher
-        run: |
-          prefix=$(mktemp -d)
-          npm install -g --prefix "$prefix" dist/npm/paperboatlabs-cli-win32-x64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz
-          node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" --version
-          node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" pkg list
-          cd "$RUNNER_TEMP"   # outside the checkout, whose python/ the CLI would take (and build) instead
-          node "$prefix/node_modules/@paperboatlabs/cli/bin/paperboat.js" check "$RUNNER_TEMP/py-backend"
-          cd "$GITHUB_WORKSPACE"
-          rm dist/npm/paperboatlabs-cli-[0-9]*.tgz   # the launcher is published from the Linux job
       - name: The web app is served from the .zip, and stops
         run: |
           exe=$(ls "$RUNNER_TEMP"/pb/*/bin/paperboat.exe)
@@ -376,16 +326,11 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
-      id-token: write  # npm provenance
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -393,14 +338,4 @@ jobs:
           shopt -s nullglob
           case "$GITHUB_REF_NAME" in *-*) pre=--prerelease;; esac   # v0.1.0-alpha.1
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --generate-notes $pre \
-            dist/*.deb dist/*.rpm dist/*.tar.gz dist/*.zip dist/*.whl dist/npm/*.tgz
-      - name: npm (platform packages first, the launcher last)
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then echo "::notice::NPM_TOKEN is not set; skipping npm"; exit 0; fi
-          case "$GITHUB_REF_NAME" in *-*) tag=--tag=${GITHUB_REF_NAME#*-}; tag=${tag%%.*};; esac   # alpha.1 -> --tag alpha, never "latest"
-          for f in dist/npm/paperboatlabs-cli-linux-x64-*.tgz dist/npm/paperboatlabs-cli-darwin-arm64-*.tgz \
-                   dist/npm/paperboatlabs-cli-win32-x64-*.tgz dist/npm/paperboatlabs-cli-[0-9]*.tgz; do
-            npm publish "$f" --access public --provenance $tag
-          done
+            dist/*.tar.gz dist/*.zip dist/*.whl

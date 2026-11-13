@@ -2,10 +2,8 @@ cmake_minimum_required(VERSION 3.25)
 project(paperboat VERSION 0.1.0 LANGUAGES CXX)  # the one version: --version, packages, and the v<version> release tag
 set(PAPERBOAT_PRERELEASE "alpha.7")  # "" for a stable release; the tag is v<VERSION>[-<PRERELEASE>] (GUIDELINES §9, Versioning)
 set(PAPERBOAT_VERSION "${PROJECT_VERSION}")
-set(PAPERBOAT_DEB_VERSION "${PROJECT_VERSION}")
 if(PAPERBOAT_PRERELEASE)
   string(APPEND PAPERBOAT_VERSION "-${PAPERBOAT_PRERELEASE}")
-  string(APPEND PAPERBOAT_DEB_VERSION "~${PAPERBOAT_PRERELEASE}")  # dpkg sorts "~" before the release
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
@@ -215,7 +213,7 @@ if(PAPERBOAT_INSTALL)
   write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfigVersion.cmake COMPATIBILITY SameMinorVersion)
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/PaperboatConfigVersion.cmake
           DESTINATION ${PAPERBOAT_CMAKE_DIR} COMPONENT dev)
-  # Apache-2.0: the notice travels with every runtime package (deb, rpm, tar.gz, zip).
+  # Apache-2.0: the notice travels with every runtime package (tar.gz, zip).
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT runtime)
 endif()
 
@@ -255,11 +253,10 @@ endif()
 # Backends (examples/backends/*-cpp) are projects of their own that use the engine; the
 # engine never builds or reads them.
 
-# Packages (cpack -G DEB / RPM / TGZ / ZIP): the paperboat binary and the registries it reads (see tools/).
+# Packages (cpack -G TGZ, ZIP on Windows; pb#357): the paperboat binary and the registries it reads (see tools/).
 if(PROJECT_IS_TOP_LEVEL)
   set(CPACK_PACKAGE_NAME paperboat)
   set(CPACK_PACKAGE_VERSION ${PAPERBOAT_VERSION})
-  set(CPACK_DEBIAN_PACKAGE_VERSION ${PAPERBOAT_DEB_VERSION})
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Paperboat: a framework for engineering apps (scene, node graph, live results)")
   set(CPACK_PACKAGE_CONTACT "paperboat <noreply@github.com>")
   set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/paperboatlab/paperboat")
@@ -268,31 +265,8 @@ if(PROJECT_IS_TOP_LEVEL)
   if(WIN32)
     set(CPACK_GENERATOR ZIP)
   endif()
-  set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-  set(CPACK_DEBIAN_PACKAGE_SECTION science)
-  set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
-  set(CPACK_DEBIAN_PACKAGE_SUGGESTS "git, nodejs, npm")
-  # Two .debs: paperboat (bin, share) and paperboat-dev (the SDK). The .tar.gz and .zip hold both.
-  set(CPACK_DEB_COMPONENT_INSTALL ON)
+  # One archive holds both components: the runtime (bin, share, the engine libraries) and the SDK.
   set(CPACK_COMPONENTS_ALL runtime dev)
-  set(CPACK_DEBIAN_RUNTIME_PACKAGE_NAME paperboat)
-  set(CPACK_DEBIAN_DEV_PACKAGE_NAME paperboat-dev)
-  set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "paperboat (= ${PAPERBOAT_DEB_VERSION}), cmake (>= 3.25), g++ (>= 4:12)")
-  set(CPACK_DEBIAN_DEV_PACKAGE_SHLIBDEPS OFF)  # static libraries
-  set(CPACK_DEBIAN_DEV_PACKAGE_SECTION libdevel)
-  # Two .rpms the same way, in Fedora's names: paperboat and paperboat-devel. RPM sorts "~" before
-  # the release too (0.1.0~alpha.2 < 0.1.0); runtime libraries are found by rpm's auto-requires.
-  set(CPACK_RPM_COMPONENT_INSTALL ON)
-  set(CPACK_RPM_PACKAGE_VERSION ${PAPERBOAT_DEB_VERSION})
-  set(CPACK_RPM_PACKAGE_LICENSE "Apache-2.0")  # the LICENSE file at the repository root (as scripts/pack_npm.py)
-  set(CPACK_RPM_PACKAGE_GROUP "Applications/Engineering")
-  set(CPACK_RPM_PACKAGE_URL "https://github.com/paperboatlab/paperboat")
-  set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
-  set(CPACK_RPM_RUNTIME_PACKAGE_NAME paperboat)
-  set(CPACK_RPM_RUNTIME_PACKAGE_SUGGESTS "git, nodejs, npm")
-  set(CPACK_RPM_DEV_PACKAGE_NAME paperboat-devel)
-  set(CPACK_RPM_DEV_PACKAGE_REQUIRES "paperboat = ${PAPERBOAT_DEB_VERSION}, cmake >= 3.25, gcc-c++ >= 12")
-  set(CPACK_RPM_DEV_PACKAGE_AUTOREQ OFF)  # static libraries
   include(CPack)
 endif()
 
