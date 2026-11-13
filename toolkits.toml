@@ -15,13 +15,18 @@ blocks = ["qp", "lp", "nlp"]
 [[toolkits]]
 name = "control"
 repo = "https://github.com/paperboatlab/paperboat-toolkit-control.git"
-description = "Control blocks: pid, integrator, lag, delay, and per-step mpc, lp_step, nmpc (needs optimization)."
+description = "Control blocks: pid, transfer functions, filters, nonlinear and discrete blocks, lqr, observers and kalman, and per-step mpc, lp_step, nmpc (needs optimization)."
 optional = true
 engine = ">=0.1"
 # Its CMake links the optimization toolkit's Workspace, so installing this one installs that first.
 requires = ["optimization"]
 blocks = ["pid", "integrator", "lag", "delay", "mpc", "lp_step", "nmpc",
-          "transfer_fn", "state_space", "bode", "controllability", "observability"]
+          "transfer_fn", "state_space", "bode", "controllability", "observability",
+          "second_order", "zpk", "lead_lag", "derivative", "washout", "notch", "filter", "biquad",
+          "moving_average", "median", "ema",
+          "rate_limiter", "backlash", "quantizer", "relay", "friction",
+          "discrete_integrator", "zoh", "foh", "discrete_derivative", "tapped_delay",
+          "c2d", "lqr", "place", "kalman_gain", "state_feedback", "observer", "kalman"]
 
 [[toolkits]]
 name = "opencv"
