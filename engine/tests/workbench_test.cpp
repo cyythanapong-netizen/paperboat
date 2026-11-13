@@ -48,16 +48,13 @@ TEST_CASE("the workbench has the standard toolkits and only optional station obj
   CHECK(groups.contains("meshop"));
 #endif
   CHECK(catalog.missing_imports.empty());
-  // The station objects come from the optional packages that are linked in, and nothing else.
+  // The station objects come from the optional packages that are there (linked in or loaded as
+  // plugins), and nothing else.
   std::set<std::string> objects;
   for (const auto& object : catalog.objects) objects.insert(object.def.type);
   std::set<std::string> expected;
-#ifdef PAPERBOAT_HAS_OPENCV
-  expected.insert("image");
-#endif
-#ifdef PAPERBOAT_HAS_MESHOP
-  expected.insert("mesh");
-#endif
+  if (groups.contains("opencv")) expected.insert("image");
+  if (groups.contains("meshop")) expected.insert("mesh");
   CHECK(objects == expected);
   CHECK(catalog.station_view == "graph");  // no domain scene to draw
   CHECK_FALSE(catalog.station_visible);    // and nothing to show there

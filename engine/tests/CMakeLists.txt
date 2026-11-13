@@ -68,6 +68,23 @@ if(TARGET paperboat_toolkit_opencv)
 endif()
 target_compile_definitions(paperboat_tests
   PRIVATE PAPERBOAT_TEST_DATA="${CMAKE_CURRENT_SOURCE_DIR}/data")
+# Toolkit plugins (pb#352): two tiny ones, one built for another paperboat.
+if(PAPERBOAT_SHARED_LIBS)
+  foreach(plugin good bad)
+    set(plugin_name plugintest)
+    if(plugin STREQUAL "bad")
+      set(plugin_name badabi)
+    endif()
+    add_library(paperboat_plugin_${plugin_name} SHARED plugins/${plugin}.cpp)
+    target_link_libraries(paperboat_plugin_${plugin_name} PRIVATE paperboat::toolkit)
+    set_target_properties(paperboat_plugin_${plugin_name} PROPERTIES
+      LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins/${plugin}"
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins/${plugin}")
+    add_dependencies(paperboat_tests paperboat_plugin_${plugin_name})
+  endforeach()
+  target_sources(paperboat_tests PRIVATE plugin_test.cpp)
+  target_compile_definitions(paperboat_tests PRIVATE PAPERBOAT_TEST_PLUGINS="${CMAKE_CURRENT_BINARY_DIR}/plugins")
+endif()
 # `paperboat new` (tools/paperboat_new.cpp): only when the tools are built.
 if(TARGET paperboat_new)
   target_sources(paperboat_tests PRIVATE new_test.cpp)

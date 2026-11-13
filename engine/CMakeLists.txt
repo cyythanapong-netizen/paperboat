@@ -144,6 +144,15 @@ endif()
 # The host library is a shared object (Julia dlopens it), so the engine's archives it links
 # must be position independent; the Python module already builds them that way.
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+# Shared engine libraries (pb#352): one copy of the registry, the solvers' run defaults and the
+# toolkit code per process, so a toolkit can be a plugin loaded at runtime. Off: static, as before.
+option(PAPERBOAT_SHARED_LIBS "Build paperboat_core, paperboat_toolkit and paperboat_solvers as shared libraries" OFF)
+if(PAPERBOAT_SHARED_LIBS)
+  set(PAPERBOAT_LIB_TYPE SHARED)
+  set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+else()
+  set(PAPERBOAT_LIB_TYPE STATIC)
+endif()
 add_subdirectory(toolkit)
 add_subdirectory(core)
 add_subdirectory(host)
@@ -196,6 +205,18 @@ foreach(manifest IN LISTS optional_toolkit_manifests)
     get_filename_component(toolkit_name "${toolkit_dir}" NAME)
     if(NOT TARGET paperboat_toolkit_${toolkit_name})
       add_subdirectory("${toolkit_dir}" "toolkit/${toolkit_name}")
+    endif()
+    # Shared libs: the toolkit is also a plugin, <build>/toolkit/<name>/libpaperboat_plugin_<name>, which the
+    # hosts load at runtime (toolkit/plugin.hpp) instead of linking the toolkit in.
+    if(PAPERBOAT_SHARED_LIBS AND TARGET paperboat_toolkit_${toolkit_name} AND NOT TARGET paperboat_plugin_${toolkit_name})
+      set(plugin_cpp "${CMAKE_CURRENT_BINARY_DIR}/toolkit/${toolkit_name}/plugin.cpp")
+      file(WRITE "${plugin_cpp}" "#include <paperboat/toolkit/plugin.hpp>\n#include <paperboat/toolkit/${toolkit_name}.hpp>\n"
+                                 "PAPERBOAT_TOOLKIT_PLUGIN(paperboat::toolkit::${toolkit_name}::register_${toolkit_name})\n")
+      add_library(paperboat_plugin_${toolkit_name} SHARED "${plugin_cpp}")
+      target_link_libraries(paperboat_plugin_${toolkit_name} PRIVATE paperboat_toolkit_${toolkit_name})
+      set_target_properties(paperboat_plugin_${toolkit_name} PROPERTIES
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/toolkit/${toolkit_name}"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/toolkit/${toolkit_name}")
     endif()
   endif()
 endforeach()
