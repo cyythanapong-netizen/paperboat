@@ -66,8 +66,8 @@ if(PROJECT_IS_TOP_LEVEL)
           DESTINATION share/paperboat/protocol COMPONENT runtime)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../protocol/schema/paperboat-0.schema.json
           DESTINATION share/paperboat/protocol/schema COMPONENT runtime)
-  # paperboat pack and unpack run this, from <root>/scripts.
-  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/package_backend.py
+  # paperboat pack and unpack run package_backend.py, and paperboat update runs install.sh, from <root>/scripts.
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/package_backend.py ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/install.sh
           DESTINATION share/paperboat/scripts COMPONENT runtime)
   # The web app and the console, when built first (npm run build:release; scripts/build_release.sh
   # does): `paperboat start` serves share/paperboat/web, and the prompt is share/paperboat/cli/main.js.

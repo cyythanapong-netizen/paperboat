@@ -103,6 +103,13 @@ TEST_CASE("pkg lifecycle: deps first, versions from tags, update, uninstall guar
   CHECK_FALSE(fs::exists(tmp / "home" / "apps" / "ui"));
   CHECK_FALSE(tk::install_app("nope", {}, root).ok);
 
+  // The channel sticks: a main install stays on main through a plain update; "latest" moves it to releases.
+  CHECK(tk::install_app("lib", "main", root).ok);
+  CHECK(tk::install_app("lib", {}, root).ok);
+  CHECK(tk::list_apps(root)[0].version == "dev");
+  CHECK(tk::install_app("lib", "latest", root).ok);
+  CHECK(tk::list_apps(root)[0].version == "0.1.0");
+
   unsetenv("PAPERBOAT_HOME");
   fs::remove_all(tmp, ec);
 }
