@@ -15,6 +15,12 @@ export const VAR_DRAG = "application/x-paperboat-variable";
 const show = (v: unknown) => (typeof v === "number" ? String(+v.toPrecision(6)) : typeof v === "boolean" ? (v ? "on" : "off") : String(v ?? "–"));
 /** A live MX variable's value in full (the row's hover), or why MX sent none. */
 const live = (v: Variable) => (v.value === undefined ? (v.note ?? "–") : typeof v.value === "boolean" ? show(v.value) : String(v.value));
+/** A value short enough for a block face: a matrix ("1 2; 3 4") as its shape, "2×2". */
+const brief = (v: unknown, type?: string) => {
+  if (type !== "matrix" || typeof v !== "string") return show(v);
+  const rows = v.split(";");
+  return `${rows.length}×${rows[0].trim().split(/[\s,]+/).length}`;
+};
 
 // ---------------------------------------------------------------------------------------
 // Fields: a bound field's chip, "=" in a number field, and dropping a variable on a field.
@@ -73,7 +79,7 @@ function Bound({ def, value, set, disabled }: { def: ParamDef; value: Ref; set: 
         onClick={() => setOpen(!open)}
       >
         <span className={`ref${isVar ? "" : " f"}`}>{isVar ? value.var : value.expr}</span>
-        {isVar && <span className="val">{missing ? "?" : show(now ?? v?.value)}</span>}
+        {isVar && <span className="val">{missing ? "?" : brief(now ?? v?.value, v?.type)}</span>}
       </button>
       {open && (
         <div className="pop bound-pop nodrag nopan nowheel" role="dialog" aria-label="Bound field">
@@ -83,7 +89,7 @@ function Bound({ def, value, set, disabled }: { def: ParamDef; value: Ref; set: 
                 <div className="row">
                   <code>{v.name}</code>
                   <span className="grey">=</span>
-                  {v.source === "mx" ? <output className="bound-live">{live(v)}</output> : v.expr !== undefined && v.type !== "number" ? <output>{show(now)}</output> : <ValueField v={v} onChange={(x) => vars.setList(vars.list.map((y) => (y.name === v.name ? x : y)))} disabled={vars.locked && !v.tunable} />}
+                  {v.source === "mx" ? <output className="bound-live">{v.type === "matrix" ? live(v).replaceAll(";", "\n") : live(v)}</output> : v.expr !== undefined && v.type !== "number" ? <output>{show(now)}</output> : <ValueField v={v} onChange={(x) => vars.setList(vars.list.map((y) => (y.name === v.name ? x : y)))} disabled={vars.locked && !v.tunable} />}
                   {v.unit && <span className="grey mono">{v.unit}</span>}
                 </div>
                 <span className="grey small">
@@ -101,7 +107,7 @@ function Bound({ def, value, set, disabled }: { def: ParamDef; value: Ref; set: 
                 </button>
               )}
               <button type="button" className="key small" onClick={() => (setOpen(false), set(keep))}>
-                Unbind (keep {show(keep)})
+                Unbind (keep {brief(keep, v?.type)})
               </button>
             </div>
           </div>
