@@ -110,7 +110,8 @@ registers an optional package explicitly.
 
 An optional toolkit can ship 1–3 examples at its repository root. ``toolkits.toml`` gives it a
 ``prefix`` (``ocv``, ``opt``) and ``paperboat toolkit install <name>`` copies the examples to
-``engine/toolkit/<name>/examples/``; ``paperboat backends`` lists them and ``paperboat run ocv-01``
+``engine/toolkit/<name>/examples/`` (``$PAPERBOAT_HOME/toolkits/<name>/examples/`` on an installed
+paperboat); ``paperboat backends`` lists them and ``paperboat run ocv-01``
 starts the first one. The prefix keeps them distinct from the numbered ``paperboat-examples``
 curriculum.
 
@@ -204,9 +205,18 @@ the package's CMake file decides whether its dependency is available. The backen
 registers an optional package explicitly. Install one from any repository or local folder with
 ``paperboat toolkit install <name> --repo <url>``; the manifest's ``repo`` is only a suggestion.
 
+On an installed paperboat (a package, or ``scripts/install.sh``) there is no engine to rebuild:
+``toolkit install`` puts the toolkit in ``$PAPERBOAT_HOME/toolkits/<name>/`` (default
+``~/.local/share/paperboat``), builds it as a plugin against the installed SDK
+(``lib/libpaperboat_plugin_<name>``, loaded by the CLI and the backends at startup), bundles its
+``web/index.ts(x)`` into ``web-dist/`` for the web app (which imports it at startup from
+``/__paperboat/toolkits``), and writes ``lib/paperboat-toolkit.cmake``, through which
+``find_package(Paperboat)`` gives a backend ``paperboat::toolkit_<name>``.
+
 An optional toolkit can ship 1–3 examples at its repository root. ``toolkits.toml`` gives it a
 ``prefix`` (``ocv``, ``opt``) and ``paperboat toolkit install <name>`` copies the examples to
-``engine/toolkit/<name>/examples/``; ``paperboat backends`` lists them and ``paperboat run ocv-01``
+``engine/toolkit/<name>/examples/`` (``$PAPERBOAT_HOME/toolkits/<name>/examples/`` on an installed
+paperboat); ``paperboat backends`` lists them and ``paperboat run ocv-01``
 starts the first one. The prefix keeps them distinct from the numbered ``paperboat-examples``
 curriculum.
 

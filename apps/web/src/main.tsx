@@ -5,8 +5,10 @@ import "@xyflow/react/dist/style.css";
 import "./styles.css";
 import { App } from "./App";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { loadInstalledToolkits } from "./installedToolkits";
 
-createRoot(document.getElementById("root")!).render(
+// Installed toolkits register their instruments first, so the first dashboard has them (pb#353).
+void loadInstalledToolkits().finally(() => createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
       <ReactFlowProvider>
@@ -14,4 +16,4 @@ createRoot(document.getElementById("root")!).render(
       </ReactFlowProvider>
     </ErrorBoundary>
   </StrictMode>,
-);
+));

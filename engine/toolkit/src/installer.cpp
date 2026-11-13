@@ -786,13 +786,35 @@ ToolkitResult build_plugin(const ToolkitEntry& entry, const std::vector<ToolkitE
        << "find_package(Paperboat REQUIRED CONFIG)\n"
        << "set(CMAKE_POSITION_INDEPENDENT_CODE ON)\n"
        << "set(PAPERBOAT_BUILD_TESTS OFF)\n"
+       << "set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)  # a toolkit's dependencies, seen from here\n"
        << "add_library(paperboat_warnings INTERFACE)  # what a toolkit links inside the engine build\n"
        << "target_link_libraries(paperboat_warnings INTERFACE paperboat::warnings)\n";
     for (const auto& n : chain) cm << "add_subdirectory(" << quoted(toolkit_dir(root, n)) << " toolkit/" << n << ")\n";
-    cm << "add_library(paperboat_plugin_" << entry.name << " SHARED plugin.cpp)\n"
-       << "target_link_libraries(paperboat_plugin_" << entry.name << " PRIVATE paperboat_toolkit_" << entry.name << ")\n"
-       << "set_target_properties(paperboat_plugin_" << entry.name << " PROPERTIES LIBRARY_OUTPUT_DIRECTORY "
-       << quoted(dir / "lib") << " RUNTIME_OUTPUT_DIRECTORY " << quoted(dir / "lib") << ")\n";
+    std::string reqs;
+    for (const auto& n : chain)
+      if (n != entry.name) reqs += ";paperboat::toolkit_" + n;
+    const std::string tk = "paperboat_toolkit_" + entry.name, plugin = "paperboat_plugin_" + entry.name;
+    cm << "add_library(" << plugin << " SHARED plugin.cpp)\n"
+       << "target_link_libraries(" << plugin << " PRIVATE " << tk << ")\n"
+       << "set_target_properties(" << plugin << " PROPERTIES LIBRARY_OUTPUT_DIRECTORY " << quoted(dir / "lib")
+       << " RUNTIME_OUTPUT_DIRECTORY " << quoted(dir / "lib") << ")\n"
+       // The package a backend links (PaperboatConfig includes it): the plugin, the toolkit's headers, and the
+       // imported libraries it uses (OpenCV for opencv), which a backend including its header needs too.
+       << "set(_incs \"\")\nset(_libs \"\")\n"
+       << "get_target_property(_ll " << tk << " LINK_LIBRARIES)\nget_target_property(_il " << tk << " INTERFACE_LINK_LIBRARIES)\n"
+       << "foreach(_l IN LISTS _ll _il)\n"
+       << "  string(REGEX REPLACE \"^\\\\$<LINK_ONLY:(.*)>$\" \"\\\\1\" _l \"${_l}\")\n"
+       << "  if(TARGET \"${_l}\" AND NOT _l MATCHES \"^paperboat\")\n"
+       << "    get_target_property(_imported \"${_l}\" IMPORTED)\n    get_target_property(_type \"${_l}\" TYPE)\n"
+       << "    if(_imported)\n      list(APPEND _incs \"$<TARGET_PROPERTY:${_l},INTERFACE_INCLUDE_DIRECTORIES>\")\n"
+       << "      if(NOT _type STREQUAL \"INTERFACE_LIBRARY\")\n        list(APPEND _libs \"$<TARGET_FILE:${_l}>\")\n      endif()\n"
+       << "    endif()\n  endif()\nendforeach()\n"
+       << "list(REMOVE_DUPLICATES _incs)\nlist(REMOVE_DUPLICATES _libs)\nlist(JOIN _incs \";\" _incs)\nlist(JOIN _libs \";\" _libs)\n"
+       << "file(GENERATE OUTPUT " << quoted(dir / "lib" / "paperboat-toolkit.cmake") << " CONTENT \"if(NOT TARGET paperboat::toolkit_"
+       << entry.name << ")\n  add_library(paperboat::toolkit_" << entry.name << " SHARED IMPORTED)\n"
+       << "  set_target_properties(paperboat::toolkit_" << entry.name << " PROPERTIES IMPORTED_LOCATION \\\"$<TARGET_FILE:" << plugin << ">\\\"\n"
+       << "    INTERFACE_INCLUDE_DIRECTORIES \\\"" << (dir / "include").generic_string() << ";${_incs}\\\"\n"
+       << "    INTERFACE_LINK_LIBRARIES \\\"paperboat::toolkit" << reqs << ";${_libs}\\\")\nendif()\n\")\n";
     std::ofstream(project / "plugin.cpp") << "#include <paperboat/toolkit/plugin.hpp>\n#include <paperboat/toolkit/" << entry.name
                                          << ".hpp>\nPAPERBOAT_TOOLKIT_PLUGIN(paperboat::toolkit::" << entry.name
                                          << "::register_" << entry.name << ")\n";
@@ -818,21 +840,43 @@ ToolkitResult build_plugin(const ToolkitEntry& entry, const std::vector<ToolkitE
   if (run_cmd({cmake, "--build", bld.string(), "--parallel"}, project, {}, &last, &out) != 0)
     return {false, "cmake build failed:\n" + tail(out)};
 
-  // The CMake package a backend links: the plugin library, its headers, and the toolkits it requires.
-  std::ofstream t(dir / "lib" / "paperboat-toolkit.cmake");
-  const std::string target = "paperboat::toolkit_" + entry.name;
-  std::string links = "paperboat::toolkit";
-  for (const auto& n : chain)
-    if (n != entry.name) links += ";paperboat::toolkit_" + n;
-  fs::path lib;
-  for (const auto& f : fs::directory_iterator(dir / "lib", ec))
-    if (f.path().filename().string().find("paperboat_plugin_" + entry.name) != std::string::npos) lib = f.path();
-  t << "if(NOT TARGET " << target << ")\n"
-    << "  add_library(" << target << " SHARED IMPORTED)\n"
-    << "  set_target_properties(" << target << " PROPERTIES IMPORTED_LOCATION " << quoted(lib)
-    << " INTERFACE_INCLUDE_DIRECTORIES " << quoted(dir / "include") << " INTERFACE_LINK_LIBRARIES \"" << links << "\")\n"
-    << "endif()\n";
   return {true, "built"};
+}
+
+// A toolkit's web part (web/index.ts(x), or <block>/web/index.ts(x)) bundled into <toolkit>/web-dist as
+// one ES module that `paperboat start` serves and the web app imports at startup, with React left to
+// the app (pb#353). Needs Node's npx; without it the blocks work and only their instruments are missing.
+void bundle_web(const ToolkitEntry& entry, const fs::path& root, const ToolkitLog& log) {
+  const fs::path dir = toolkit_dir(root, entry.name);
+  std::error_code ec;
+  std::vector<fs::path> parts;
+  for (fs::recursive_directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec)) {
+    const std::string n = it->path().filename().string();
+    if (it->is_directory(ec) && (n == "node_modules" || n == "lib" || n == "web-dist" || n.starts_with("."))) {
+      it.disable_recursion_pending();
+    } else if ((n == "index.ts" || n == "index.tsx") && it->path().parent_path().filename() == "web") {
+      parts.push_back(it->path());
+    }
+  }
+  fs::remove_all(dir / "web-dist", ec);
+  if (parts.empty()) return;
+  const fs::path entry_file = dir / ".web-entry.ts";
+  {
+    std::ofstream out(entry_file);
+    for (std::size_t i = 0; i < parts.size(); ++i)
+      out << "import * as m" << i << " from \"./" << fs::relative(parts[i], dir).generic_string() << "\";\n";
+    out << "export function register(host: unknown) {\n  for (const m of [";
+    for (std::size_t i = 0; i < parts.size(); ++i) out << (i ? ", " : "") << "m" << i;
+    out << "] as { register?: (h: unknown) => void }[]) m.register?.(host);\n}\n";
+  }
+  std::string out;
+  const int rc = run_cmd({"npx", "--yes", "esbuild@0.25.12", entry_file.string(), "--bundle", "--format=esm", "--jsx=automatic",
+                          "--minify", "--log-level=error", "--external:react", "--external:react/jsx-runtime",
+                          "--external:react-dom", "--outfile=" + (dir / "web-dist" / "index.js").string()},
+                         dir, {}, nullptr, &out);
+  fs::remove(entry_file, ec);
+  if (rc != 0 && log)
+    log("warn", "toolkit \"" + entry.name + "\": its web part did not bundle (needs Node's npx); its blocks work, its instruments will not show: " + trim_line(out));
 }
 
 }  // namespace
@@ -906,6 +950,7 @@ ToolkitResult install_toolkit(std::string_view name,
       if (!rebuilt.insert(todo[i]->name).second) continue;
       if (const auto r = build_plugin(*todo[i], entries, root, log); !r.ok)
         return {false, "toolkit \"" + todo[i]->name + "\" installed but its plugin did not build: " + r.message};
+      bundle_web(*todo[i], root, log);
       for (const auto& other : entries)
         if (installed(other) && std::ranges::find(other.needs, todo[i]->name) != other.needs.end()) todo.push_back(&other);
     }

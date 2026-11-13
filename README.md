@@ -178,7 +178,7 @@ curl -fsSL https://raw.githubusercontent.com/paperboatlab/paperboat/HEAD/scripts
 
 It installs into `~/.local/share/paperboat` (or `$PAPERBOAT_HOME`) and links `~/.local/bin/paperboat`.
 Three channels: `release` (the default: the newest GitHub release's `.tar.gz`, prereleases included),
-`source` (that release built from source, so toolkits install) and `main` (the default branch, built from
+`source` (that release built from source) and `main` (the default branch, built from
 source; needs git, cmake, a C++20 compiler and Node.js 22). Then:
 
 ```sh
@@ -205,8 +205,11 @@ Expand-Archive paperboat-<version>-Windows-AMD64.zip  # Windows x64 (PowerShell)
 
 A package install is the CLI and the apps: `paperboat` opens the console (needs `node`),
 `paperboat start` serves the web app on http://localhost:3047 (no npm, no checkout), and `pkg`,
-`update`, `check`, `pack`. Building C++ backends
-and installing toolkits (they compile into the engine) need paperboat built from source.
+`update`, `check`, `pack`. C++ backends build against the SDK the package ships (`find_package(Paperboat)`).
+`paperboat toolkit install <name>` works on a package install too: the toolkit is built as a plugin
+against that SDK into `~/.local/share/paperboat/toolkits/<name>` (needs git, cmake and a C++20 compiler;
+no engine rebuild), its web part is bundled for the web app (needs Node's `npx`), and a backend links it
+as `paperboat::toolkit_<name>`. Toolkits never ship in a package: some carry another licence (pb#297).
 Python backends run through the CLI as they are: every package ships the `paperboat` module
 (in `lib/paperboat/python`, which `paperboat run`/`check` put on `PYTHONPATH`) for CPython 3.11
 and later; the CLI runs `python3`, or the backend's `.venv`, or `$PAPERBOAT_PYTHON`. A process
