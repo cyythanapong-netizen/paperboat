@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(paperboat VERSION 0.1.0 LANGUAGES CXX)  # the one version: --version, packages, and the v<version> release tag
+project(paperboat VERSION 0.1.1 LANGUAGES CXX)  # the one version: --version, packages, and the v<version> release tag
 set(PAPERBOAT_PRERELEASE "")  # "" for a stable release; the tag is v<VERSION>[-<PRERELEASE>] (GUIDELINES §9, Versioning)
 set(PAPERBOAT_VERSION "${PROJECT_VERSION}")
 if(PAPERBOAT_PRERELEASE)
