@@ -4,8 +4,7 @@
 import type { EngineState } from "./engine";
 import type { Command } from "./commands";
 import type { Ref } from "react";
-import { ProjectLabel } from "./ProjectUI";
-import { BarEnd, StatusPill, Switch, Wordmark, type Mode, type Theme } from "./Shell";
+import { BarEnd, ProjectLabel, StatusPill, Switch, Wordmark, type Mode, type Theme } from "./Shell";
 import { MenuBar } from "./Menus";
 import { ToolkitsButton } from "./Toolkits";
 import type { LockConfig } from "./lock";

@@ -59,13 +59,15 @@ function latestOf(state: EngineState, name: string): unknown {
 function Instrument({ name, kind, state, send, params, ...host }: { name: string; kind: string; state: EngineState; send?: (m: ClientMsg) => void; params?: Record<string, ParamValue> } & Pick<InstrumentProps, "size" | "inputs" | "sources" | "settings" | "onSettings" | "taps" | "onTap">) {
   const latest = latestOf(state, name);
   const idle = latest === undefined;
-  const vector = Array.isArray(latest)
+  // Every card re-renders each frame a run streams; the label is rebuilt only when its own value is new.
+  const components = state.vectorComponents[name];
+  const vector = useMemo(() => Array.isArray(latest)
     ? latest.map((v, i) => {
-        const component = state.vectorComponents[name]?.[i];
+        const component = components?.[i];
         const label = component?.id ?? String(i);
         return `${label}: ${v.toFixed(4)}${component?.unit ? ` ${component.unit}` : ""}`;
       }).join(", ")
-    : undefined;
+    : undefined, [latest, components]);
   const Renderer = instrumentFor(kind) ?? FallbackInstrument;
   return <Renderer name={name} kind={kind} latest={latest} idle={idle} vector={vector} state={state} send={send} params={params} {...host} />;
 }

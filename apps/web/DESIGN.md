@@ -6,8 +6,11 @@ type, black displays for output, and one colour that means "live". It takes its 
 Engineering's: honest, precise and quiet, with a little character in the type and the
 displays. Flat: no bevels, no indicator lights; shadows only on what floats.
 
-Tokens live in [`src/tokens.css`](src/tokens.css), the rules in [`src/styles.css`](src/styles.css),
-and the frame (view modes, rail, panels, switches) in [`src/Shell.tsx`](src/Shell.tsx).
+Tokens live in [`src/tokens.css`](src/tokens.css). What every app shares (page, keys, fields, the
+bar's right end, the project name, modals) is in `@paperboat/shared` (`base.css`, `plates.css`,
+`Shell.tsx`, `Modal.tsx`), the same in Squero Studio MX and OM; Paperboat's own rules are in
+[`src/styles.css`](src/styles.css), and the frame (view modes, rail, panels, switches) in
+[`src/Shell.tsx`](src/Shell.tsx).
 The direction and its history are in issue #48.
 
 ## Principles

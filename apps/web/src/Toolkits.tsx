@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { useDismiss } from "@paperboat/shared/components";
+import { useDismiss, useFocusReturn } from "@paperboat/shared/components";
 import { PackagePanel, PackageWindow } from "@paperboat/shared/packages";
 import { missingRequiredToolkits } from "./engine";
 import type { ToolkitStatus } from "./protocol";
-import { useFocusReturn } from "./ProjectUI";
 import { Spinner } from "./Spinner";
 
 export { missingRequiredToolkits };

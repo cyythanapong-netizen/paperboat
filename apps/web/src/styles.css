@@ -4,55 +4,6 @@
 @import "@paperboat/shared/plates.css";
 @import "@paperboat/shared/packages.css";
 
-* { box-sizing: border-box; }
-html, body, #root { margin: 0; height: 100%; }
-body {
-  font: 400 var(--size-sm) / 1.45 var(--font-sans);
-  color: var(--text);
-  background: var(--surface-ground);
-  -webkit-font-smoothing: antialiased;
-}
-[hidden] { display: none !important; }
-h2 { margin: 0; }
-:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-
-/* A label: small, grey, sentence case. Names things; never says what is selected. */
-.lbl, .muted { font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
-
-/* Keys: flat and outlined. Every button is one. */
-button {
-  font: 500 var(--size-xs) var(--font-sans);
-  color: var(--text);
-  background: var(--surface-raised);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-md);
-  padding: 4px 10px;
-  cursor: pointer;
-}
-button:hover:not(:disabled) { border-color: var(--line-ink); }
-button:active:not(:disabled) { background: var(--surface-panel); }
-button:disabled { color: var(--text-muted); opacity: 0.55; cursor: default; }
-.key { height: 30px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; flex: none; }
-.key.small { height: 24px; padding: 0 10px; font-size: var(--size-2xs); }
-.key.run { font-weight: 600; border-color: var(--line-ink); }
-
-input, select {
-  font: 400 var(--size-xs) var(--font-mono);
-  color: var(--text);
-  background: var(--surface-raised);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  padding: 2px 6px;
-}
-input:focus, select:focus { outline: none; border-color: var(--line-ink); box-shadow: 0 0 0 1px var(--line-ink); }
-
-/* Screens: black displays set into a panel, for values that change. */
-.screen { background: var(--surface-screen); color: var(--text-on-screen); border-radius: var(--radius-md); }
-.screen input, .screen select { background: transparent; border: 0; color: var(--text-on-screen); box-shadow: none; }
-/* Wells: recessed grey fields for what you type in on the bar. */
-.well { background: var(--surface-well); box-shadow: var(--well-shadow); color: var(--text); border-radius: var(--radius-md); }
-.well input, .well select { background: transparent; border: 0; color: var(--text); box-shadow: none; }
-
 /* ---- The frame -------------------------------------------------------------------- */
 .app {
   height: 100%;
@@ -69,9 +20,7 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 .bar, .rail, .panel { background: var(--surface-panel); border: 1px solid var(--line); border-radius: var(--radius-lg); }
 
 .bar { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-4); min-height: var(--bar-height); padding: var(--space-2) var(--space-4); min-width: 0; }
-.bar > * { flex: none; }
-.bar > .spacer { flex: 1 1 auto; }
-.wordmark { display: inline-flex; align-items: center; gap: var(--space-2); font: 600 var(--size-md) var(--font-sans); letter-spacing: -0.01em; }
+
 .logo { display: block; }
 .logo-light { fill: var(--text); }
 .logo-shade { fill: var(--text-muted); }
@@ -143,14 +92,6 @@ input:focus, select:focus { outline: none; border-color: var(--line-ink); box-sh
 }
 .run-options .run-duration.on::before { content: "["; margin-right: 3px; }
 .run-options .run-duration.on::after { content: "]"; margin-left: 3px; }
-
-/* Choice of one: the chosen option sits in brackets in bold ink; the others plain grey.
-   The brackets are always there (hidden when not chosen), so nothing shifts. */
-/* Gliding brackets (GlideBrackets in Shell.tsx): drawn once per group and moved to the chosen
-   option; the options' own glyphs only keep their room. */
-.glide { position: relative; }
-.glide .opt::before, .glide .opt::after { visibility: hidden !important; }
-.glide-bracket { position: absolute; display: flex; align-items: center; pointer-events: none; opacity: 0; white-space: pre; }
 
 /* Navigator's rail: the pages share its height and the current one sits in ink brackets, like
    a chosen option in a switch (`[ navigator ]`). Shell.tsx places them from the key's icon and
@@ -343,10 +284,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .help-pop dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 6px var(--space-4); font-size: var(--size-xs); }
 .help-pop dt { color: var(--text-muted); }
 .help-pop dd { margin: 0; color: var(--text); }
-.react-flow { background: transparent; --xy-background-pattern-dots-color-default: var(--dots); --xy-edge-stroke-default: var(--line-ink); }
-.react-flow__minimap { background: var(--surface-sunken); border: 1px solid var(--line-strong); border-radius: var(--radius-md); overflow: hidden; }
-.react-flow__attribution { background: transparent !important; }
-.react-flow__attribution a { color: var(--text-muted) !important; }
 
 .block {
   background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-md);
@@ -449,7 +386,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   color: var(--text); font: 400 var(--size-2xs) var(--font-mono); line-height: 1.4;
   resize: vertical; min-height: 38px; padding: 2px 0; outline: none;
 }
-
 
 .remove {
   display: grid; place-items: center;
@@ -589,7 +525,6 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .instrument.idle .screen { background: transparent; border: 1px dashed var(--line-strong); color: var(--text-muted); }
 .instrument.idle .screen output, .instrument.idle figcaption output { color: var(--text-muted); }
 
-
 /* ---- Adding things (#50): the Flow's tools, the collection window, quick add, drops ---- */
 .kbd { font: 500 var(--size-2xs) var(--font-mono); border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: var(--radius-sm); padding: 0 5px; color: var(--text); background: var(--surface-raised); }
 .flow-canvas { position: relative; flex: 1; min-height: 0; }
@@ -699,7 +634,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .fold { border: 1px solid var(--line-strong); background: transparent; border-radius: var(--radius-sm); height: 18px; padding: 0 6px; font: 400 var(--size-2xs) var(--font-sans); color: var(--text-muted); }
 .fold:hover { color: var(--text); border-color: var(--line-ink); }
 /* ---- Variables (#36): a sheet beside any page; bound fields; "=" binding ---------------- */
-.mono { font-family: var(--font-mono); }
+
 /* The sheet is a drawer at the pages' right edge in every mode: closed, a standing tab (as
    Lookout's side drawers); open, it slides out on the same --slide as every drawer. */
 .mode-navigator .pages { grid-template: minmax(0, 1fr) / minmax(0, 1fr) auto; }
@@ -842,13 +777,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 
 /* The run dock: glass, because it floats over live content (the pages). */
 .pages { position: relative; }
-.dock {
-  position: absolute; left: 50%; bottom: var(--space-4); transform: translateX(-50%); z-index: 6;
-  display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3);
-  max-width: calc(100% - 24px); white-space: nowrap;
-  background: var(--surface-float); -webkit-backdrop-filter: var(--float-blur); backdrop-filter: var(--float-blur);
-  border: 1px solid var(--line-strong); border-radius: var(--radius-lg);
-}
+
 /* Replay (#284): the transport bar in the dock, the needle over scopes, wire probes. */
 .replay-bar { display: inline-flex; align-items: center; gap: var(--space-2); }
 .replay-bar .replay-step { width: 28px; padding: 0; justify-content: center; }
@@ -896,20 +825,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .backend-note { margin: 0; padding: 0 var(--panel-pad) var(--panel-pad); }
 
 /* ---- Projects (#82): the name and the unsaved dot, notices, the undo toast ---------- */
-/* The project's name is the window's title, not a menu: in muted monospace, with no key-like weight;
-   the unsaved dot rides after it. It sits in the bar's flow after the menus, and ProjectLabel moves it
-   toward the bar's centre only as far as the room before the next key: centred on a wide bar, it slides
-   toward the menus as the bar narrows, then the name truncates (down to about ten characters), and then
-   the bar wraps. It never slides under a key. It takes the room it needs before the spacer gets any. */
-.bar > .proj {
-  flex: 1000 1 10ch; min-width: 0; max-width: max-content;
-  display: inline-flex; align-items: center; gap: var(--space-2);
-  font: 400 var(--size-xs) var(--font-mono); color: var(--text-muted); cursor: default;
-}
-.proj-name { min-width: 0; max-width: min(300px, 24vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.proj-edit { min-width: 8ch; max-width: min(300px, 24vw); height: 22px; padding: 0 6px; border: 0; border-radius: var(--radius-sm); background: var(--surface-well); box-shadow: var(--well-shadow); color: var(--text); font: 400 var(--size-xs) var(--font-mono); }
-.proj-edit:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
-.proj .dirty { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--signal); }
+
 .notice { height: auto; width: min(480px, calc(100vw - 32px)); }
 .notice-body { padding: var(--panel-pad) var(--panel-pad) var(--space-2); }
 .notice-body p { margin: 0 0 var(--space-2); max-width: 62ch; }
