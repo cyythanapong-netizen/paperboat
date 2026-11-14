@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useDismiss } from "@paperboat/shared/components";
+import { PackagePanel } from "@paperboat/shared/packages";
 import { missingRequiredToolkits } from "./engine";
 import type { ToolkitStatus } from "./protocol";
 import { useFocusReturn } from "./ProjectUI";
@@ -102,10 +103,17 @@ export function MissingToolkitsDialog({
   );
 }
 
+/**
+ * The Toolkits key and its panel: the shared package panel (@paperboat/shared/packages), as
+ * Squero MX shows Julia and Squero Studio OM its Modelica libraries. Paperboat is the runtime,
+ * the installed toolkits the environment, `toolkits.toml` the registry.
+ */
 export function ToolkitsButton({
   toolkits,
   connected,
   requested,
+  version,
+  backend,
   onInstall,
   onUninstall,
   onRestart,
@@ -115,186 +123,77 @@ export function ToolkitsButton({
   connected: boolean;
   /** What was asked for and not yet acknowledged (ink installs, web sends), so the row says so at once. */
   requested: Record<string, string>;
+  /** The Paperboat build serving the backend (hello.version). */
+  version?: string;
+  /** The backend's name (hello.engine). */
+  backend?: string;
   onInstall: (name: string, version?: string) => void;
   onUninstall: (name: string) => void;
   onRestart: () => void;
   onVersions?: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [selectedVersions, setSelectedVersions] = useState<Record<string, string>>({});
   const wrap = useRef<HTMLDivElement | null>(null);
   const items = toolkits.filter((t) => !t.builtin);
   const busyOf = (t: ToolkitStatus) => t.busy ?? requested[t.name];
-  const anyBusy = items.some((t) => !!busyOf(t));
+  const working = items.find((t) => !!busyOf(t));
+  const busy = working ? `${busyOf(working)} ${working.name}` : "";
 
   useDismiss(wrap, () => setOpen(false), { enabled: open });
 
   useEffect(() => {
     if (!open) return;
-    for (const t of items) {
-      if (!t.versions || t.versions.length === 0) {
-        onVersions?.(t.name);
-      }
-    }
+    for (const t of items) if (!t.versions || t.versions.length === 0) onVersions?.(t.name);
   }, [open, items, onVersions]);
 
+  const versionOf = (t: ToolkitStatus) => (t.version && t.version !== "unknown" ? t.version : undefined);
   return (
     <div ref={wrap} className="toolkits-wrap">
-      <button
-        className={`key small${open ? " on" : ""}`}
-        aria-expanded={open}
-        title="Toolkits: install, update, or uninstall"
-        onClick={() => setOpen(!open)}
-      >
-        {anyBusy && <Spinner label="Toolkit operation in progress" />}
+      <button className={`key small${open ? " on" : ""}`} aria-expanded={open} title="Toolkits: install, update, or uninstall" onClick={() => setOpen(!open)}>
+        {working && <Spinner label="Toolkit operation in progress" />}
         Toolkits
       </button>
       {open && (
         <section className="pop toolkits-pop" role="dialog" aria-label="Toolkits">
-          <div className="head">Toolkits</div>
-          {items.length === 0 ? (
-            <p className="toolkit-desc" style={{ padding: "8px 12px", margin: 0 }}>
-              No optional toolkits registered.
-            </p>
-          ) : (
-            items.map((t) => {
-            const busy = busyOf(t);
-            const blocked = anyBusy && !busy; // another toolkit is being installed: this key waits
-            const versions = t.versions ?? [];
-            const installedVer = t.version && t.version !== "unknown" ? t.version : undefined;
-            const curSelection =
-              selectedVersions[t.name] ??
-              installedVer ??
-              t.default ??
-              (versions.length > 0 ? versions[0] : "dev");
-            const statusText = busy
-              ? `${busy}…`
-              : t.installed
-                ? installedVer
-                  ? `installed ${installedVer}`
-                  : "installed"
-                : t.required
-                  ? "missing (required)"
-                  : "not installed";
-
-            return (
-              <div key={t.name} className="toolkit-item">
-                <div className="toolkit-head">
-                  <code>{t.name}</code>
-                  <span className={`toolkit-status${t.installed ? " on" : ""}${t.required && !t.installed ? " req" : ""}`}>
-                    {busy && <Spinner label={statusText} />}
-                    {statusText}
-                  </span>
-                </div>
-                {t.description && <p className="toolkit-desc">{t.description}</p>}
-                <div className="toolkit-actions">
-                  {!t.builtin && (
-                    <a className="toolkit-repo" href={t.repo.replace(/\.git$/, "")} target="_blank" rel="noreferrer">
-                      Repository
-                    </a>
-                  )}
-                  <span className="spacer" />
-                  <select
-                    className="toolkit-version-select"
-                    value={curSelection}
-                    disabled={!connected || anyBusy}
-                    onChange={(e) => setSelectedVersions((prev) => ({ ...prev, [t.name]: e.target.value }))}
-                  >
-                    {versions.map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                    <option value="dev">dev (main)</option>
-                  </select>
-                  {!t.installed ? (
-                    <button
-                      className="key small"
-                      disabled={!connected || anyBusy}
-                      title={
-                        !connected
-                          ? "Connect to a backend first"
-                          : blocked
-                            ? "One toolkit operation at a time"
-                            : `Install ${t.name} (${curSelection}) and rebuild`
-                      }
-                      onClick={() => onInstall(t.name, curSelection)}
-                    >
-                      {busy === "installing" ? (
-                        <>
-                          <Spinner /> Installing…
-                        </>
-                      ) : (
-                        "Install"
-                      )}
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        className="key small"
-                        disabled={!connected || anyBusy || (installedVer !== undefined && curSelection === installedVer)}
-                        title={
-                          blocked
-                            ? "One toolkit operation at a time"
-                            : installedVer !== undefined && curSelection === installedVer
-                              ? `Version ${curSelection} already installed`
-                              : `Switch to ${curSelection} and rebuild`
-                        }
-                        onClick={() => onInstall(t.name, curSelection)}
-                      >
-                        {busy === "installing" ? (
-                          <>
-                            <Spinner /> Installing…
-                          </>
-                        ) : (
-                          "Install selected"
-                        )}
-                      </button>
-                      {!t.builtin && (
-                        <button
-                          className="key small"
-                          disabled={!connected || anyBusy || !!t.required}
-                          title={
-                            blocked
-                              ? "One toolkit operation at a time"
-                              : t.required
-                                ? "Required by this backend: it can't be removed"
-                                : `Remove ${t.name} and rebuild`
-                          }
-                          onClick={() => onUninstall(t.name)}
-                        >
-                          {busy === "uninstalling" ? (
-                            <>
-                              <Spinner /> Uninstalling…
-                            </>
-                          ) : (
-                            "Uninstall"
-                          )}
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          }))}
-          <div className="foot toolkits-foot">
-            <span>
-              Restart the backend after installing or updating. Another source:{" "}
-              <code>paperboat toolkit install &lt;name&gt; --repo &lt;url&gt;</code>.
-            </span>
-            <button
-              className="key small"
-              disabled={!connected || anyBusy}
-              title="Restart the connected backend process"
-              onClick={() => {
-                setOpen(false);
-                onRestart();
-              }}
-            >
-              Restart backend
-            </button>
-          </div>
+          <PackagePanel
+            noun="toolkit"
+            busy={busy}
+            error={connected ? undefined : "Not connected to a backend: connect one to install toolkits."}
+            runtime={{
+              title: "paperboat",
+              tag: version,
+              hint: "Update Paperboat itself with `paperboat update`; toolkits install into the backend it serves.",
+            }}
+            environment={{
+              title: "toolkits",
+              tag: backend,
+              packages: items
+                .filter((t) => t.installed || busyOf(t))
+                .map((t) => ({
+                  name: t.name,
+                  version: versionOf(t),
+                  status: busyOf(t) ? `${busyOf(t)}…` : undefined,
+                  keep: t.required ? "Required by this backend: it can't be removed" : undefined,
+                })),
+              empty: "No optional toolkits installed. Add one from the registry.",
+              remove: connected ? (name) => onUninstall(name) : undefined,
+              actions: [{ label: "Restart backend", title: "Restart the backend after installing or updating", disabled: !connected, run: () => (setOpen(false), onRestart()) }],
+            }}
+            registry={{
+              title: "toolkits.toml",
+              items: items.map((t) => ({
+                name: t.name,
+                latest: versionOf(t) ?? t.default ?? t.versions?.[0],
+                description: t.description,
+                repo: t.repo,
+                versions: [...(t.versions ?? []), "dev"],
+                facts: t.required && !t.installed ? ["missing: required by this backend"] : undefined,
+              })),
+              itemsLabel: `${items.length} toolkit${items.length === 1 ? "" : "s"}`,
+              pickVersion: true,
+              add: (name, v) => connected && onInstall(name, v),
+            }}
+          />
         </section>
       )}
     </div>
