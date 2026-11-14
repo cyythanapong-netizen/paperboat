@@ -13,11 +13,14 @@ on:
       - "engine/core/**"
       - "engine/tools/**"
       - "engine/toolkit/src/installer.cpp"
+      - "engine/toolkit/src/apps.cpp"
+      - "engine/toolkit/include/paperboat/toolkit/apps.hpp"
       - "engine/workbench/**"
       - "apps/cli/**"
       - "python/**"
       - "protocol/smoke_test.py"
       - "toolkits.toml"
+      - "apps.toml"
       - "scripts/journey.py"
       - ".github/workflows/journey.yml"
   workflow_dispatch:
@@ -92,3 +95,52 @@ jobs:
         run: |
           [ "$RUNNER_OS" = Linux ] && export CXX=g++-14 CC=gcc-14
           python scripts/journey.py --examples "$GITHUB_WORKSPACE/paperboat-examples" --keep
+
+  fresh-apps:
+    name: Fresh pkg install (Squero Studio OM & MX)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: paperboat
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ninja-build g++-14
+      - name: Build paperboat CLI
+        run: |
+          export CXX=g++-14 CC=gcc-14
+          cmake -S engine -B engine/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build engine/build --target paperboat
+      - name: Missing prerequisites fail before fetching
+        run: |
+          export PAPERBOAT_HOME="$RUNNER_TEMP/pb-missing"
+          if PATH="" "$GITHUB_WORKSPACE/paperboat/engine/build/tools/paperboat" pkg install squero-studio-om; then
+            echo "expected prereq check to fail" >&2
+            exit 1
+          fi
+          [ ! -d "$PAPERBOAT_HOME/apps" ]
+      - name: Install and launch squero-studio-om
+        env:
+          PAPERBOAT_HOME: ${{ runner.temp }}/pb-fresh
+        run: |
+          pb="$GITHUB_WORKSPACE/paperboat/engine/build/tools/paperboat"
+          "$pb" pkg install squero-studio-om
+          cd "$RUNNER_TEMP"
+          "$pb" start squero-studio-om --daemon
+          for i in $(seq 60); do curl -sf http://127.0.0.1:59201/ >/dev/null && break; sleep 1; done
+          node "$PAPERBOAT_HOME/apps/squero-studio-om/test/launch/check.mjs" 59201 || { cat /tmp/paperboat-squero-studio-om.log; exit 1; }
+          "$pb" stop squero-studio-om
+      - name: Install and launch squero-studio-mx
+        env:
+          PAPERBOAT_HOME: ${{ runner.temp }}/pb-fresh
+        run: |
+          pb="$GITHUB_WORKSPACE/paperboat/engine/build/tools/paperboat"
+          "$pb" pkg install squero-studio-mx
+          cd "$RUNNER_TEMP"
+          "$pb" start squero-studio-mx --daemon
+          for i in $(seq 60); do curl -sf http://127.0.0.1:59301/ >/dev/null && break; sleep 1; done
+          node "$PAPERBOAT_HOME/apps/squero-studio-mx/test/launch/check.mjs" 59301 || { cat /tmp/paperboat-squero-studio-mx.log; exit 1; }
+          "$pb" stop squero-studio-mx

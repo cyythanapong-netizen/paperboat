@@ -167,6 +167,16 @@ Versions order by SemVer (`0.1.0-alpha.2 < 0.1.0-alpha.10 < 0.1.0`); `pkg update
 `pkg install` take releases only, a prerelease only when asked for with `@<version>`. An app installed
 from main (`@main`, recorded as `dev`) stays on main through `pkg update`; `@latest` moves it to releases.
 
+`pkg install` checks `apps.toml`'s `requires` for the app and its dependencies before cloning anything,
+and names any missing tool with how to install it:
+
+- `squero-studio-om`: `git`, Node.js 22+ (`npm`), `cmake`, `ninja`, a C++20 compiler, and either
+  OpenModelica (`omc`) or a container runtime (`podman` or `docker`, for the pinned `omc` image).
+- `squero-studio-mx`: `git`, Node.js 22+ (`npm`), and either a container runtime (`podman` or `docker`,
+  for the pinned Julia kernel image) or Julia 1.11 (`julia`, for the native kernel).
+- `git` runs non-interactively; if a repository is private or unreadable, give `git` credentials
+  (such as `gh auth setup-git`) or override it with `PAPERBOAT_APP_REPO_<NAME>`.
+
 ### Install
 
 Download one file, `paperboat-<version>-Linux-x86_64`, `paperboat-<version>-Darwin-arm64` or

@@ -62,6 +62,70 @@ repo = "https://example.com/plain.git"
   CHECK_THROWS(tk::parse_apps_manifest("[[apps]]\nname = \"x\"\nrepo = \"r\"\nkind = \"service\"\n"));
 }
 
+TEST_CASE("pkg checks an app's and its deps' prerequisites before it fetches anything") {
+  const fs::path tmp = fs::temp_directory_path() / "paperboat_apps_requires_test";
+  std::error_code ec;
+  fs::remove_all(tmp, ec);
+  fs::create_directories(tmp / "root" / "engine" / "toolkit");
+  const std::string manifest = R"(
+[tools]
+pb-no-such-tool = "get it from example.com"
+"pb-no-a|pb-no-b" = "either one, from example.com"
+[[apps]]
+name = "kernel.jl"
+repo = "/nonexistent/kernel.git"
+kind = "library"
+requires = ["git", "pb-no-a|pb-no-b"]
+[[apps]]
+name = "ui"
+repo = "/nonexistent/ui.git"
+deps = ["kernel.jl"]
+requires = ["pb-no-such-tool", "pb-no-such-tool-either|git", "pb-no-such-tool"]
+)";
+  const auto apps = tk::parse_apps_manifest(manifest);
+  REQUIRE(apps.size() == 2);
+  CHECK(apps[0].prerequisites == std::vector<std::string>{"git", "pb-no-a|pb-no-b"});
+  CHECK(tk::parse_tool_hints(manifest).at("pb-no-such-tool") == "get it from example.com");
+  for (const char* bad : {"\"\"", "\"a||b\"", "\"|a\"", "\"a|\""})
+    CHECK_THROWS(tk::parse_apps_manifest(std::string("[[apps]]\nname = \"x\"\nrepo = \"r\"\nrequires = [") + bad + "]\n"));
+
+  std::ofstream(tmp / "root" / "apps.toml") << manifest;
+  setenv("PAPERBOAT_HOME", (tmp / "home").c_str(), 1);
+  const fs::path root = tmp / "root";
+  const std::string missing = tk::missing_prerequisites("ui", root);
+  CHECK(missing.find("pb-no-such-tool (\"ui\"): get it from example.com") != std::string::npos);
+  CHECK(missing.find("one of pb-no-a or pb-no-b (\"kernel.jl\"): either one, from example.com") != std::string::npos);
+  CHECK(missing.find("pb-no-such-tool-either") == std::string::npos);  // git is there
+  CHECK(missing.find("pb-no-such-tool") == missing.rfind("pb-no-such-tool"));  // named once
+  CHECK(tk::missing_prerequisites("nope", root).empty());
+
+  const auto r = tk::install_app("ui", {}, root);
+  CHECK_FALSE(r.ok);
+  CHECK(r.message.find("needs what this machine lacks") != std::string::npos);
+  CHECK_FALSE(fs::exists(tmp / "home" / "apps"));  // nothing fetched
+
+  unsetenv("PAPERBOAT_HOME");
+  fs::remove_all(tmp, ec);
+}
+
+TEST_CASE("pkg never waits at a git prompt, and a failed clone says how to give access") {
+  const fs::path tmp = fs::temp_directory_path() / "paperboat_apps_clone_test";
+  std::error_code ec;
+  fs::remove_all(tmp, ec);
+  fs::create_directories(tmp / "root" / "engine" / "toolkit");
+  std::ofstream(tmp / "root" / "apps.toml") << "[[apps]]\nname = \"gone.jl\"\nrepo = \"" << (tmp / "missing.git").string()
+                                            << "\"\nkind = \"library\"\n";
+  setenv("PAPERBOAT_HOME", (tmp / "home").c_str(), 1);
+  const auto r = tk::install_app("gone.jl", {}, tmp / "root");
+  CHECK_FALSE(r.ok);
+  CHECK(r.message.find("cannot clone") != std::string::npos);
+  CHECK(r.message.find("PAPERBOAT_APP_REPO_GONE_JL") != std::string::npos);
+  REQUIRE(std::getenv("GIT_TERMINAL_PROMPT") != nullptr);
+  CHECK(std::string(std::getenv("GIT_TERMINAL_PROMPT")) == "0");
+  unsetenv("PAPERBOAT_HOME");
+  fs::remove_all(tmp, ec);
+}
+
 TEST_CASE("pkg lifecycle: deps first, versions from tags, update, uninstall guard") {
   const fs::path tmp = fs::temp_directory_path() / "paperboat_apps_test";
   std::error_code ec;

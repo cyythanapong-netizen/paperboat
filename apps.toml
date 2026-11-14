@@ -1,5 +1,6 @@
 # Apps that live in their own repositories. `paperboat pkg install <name>` clones one (a release tag,
-# or main) into the per-user store and builds it there. `deps` are installed first and sit next to the app (npm's file:../<dep>).
+# or main) into the per-user store and builds it there. `deps` are installed first and sit next to the app (npm's file:../<dep>,
+# Julia's path deps), so an app's name is also its folder name.
 # kind: program (start/stop it; `launch` is the command that runs it, `port` where it listens) or library.
 #
 # A dep is "name" or "name@range"; the range is the leading numbers of a version ("0.1": any 0.1.x).
@@ -9,19 +10,52 @@
 # outside the range fails the install (`--force` reinstalls it in range), and a dep version outside the
 # range of an installed app that needs it is refused. The install marker records the dep versions;
 # `paperboat pkg list` shows them.
+#
+# `requires` names the tools an app needs on PATH to build and run ("a|b" is either one). `pkg install`
+# checks them for the app and all its deps before it fetches anything, and names what is missing with
+# the line from [tools] that says how to get it.
+
+[tools]
+git = "https://git-scm.com/downloads (apt install git, dnf install git, brew install git)"
+npm = "Node.js 22 or newer with npm, https://nodejs.org (apt install nodejs npm, dnf install nodejs npm, brew install node)"
+cmake = "CMake 3.25 or newer, https://cmake.org/download (apt install cmake, dnf install cmake, brew install cmake)"
+ninja = "https://ninja-build.org (apt install ninja-build, dnf install ninja-build, brew install ninja)"
+"c++|g++|clang++|cl" = "a C++20 compiler: GCC 13+ or Clang 17+ (apt install g++, dnf install gcc-c++, xcode-select --install)"
+"podman|docker|julia" = "a container runtime for the Julia kernel image, https://podman.io/docs/installation (apt install podman, dnf install podman, brew install podman), or Julia 1.11 itself, https://julialang.org/install"
+"omc|podman|docker" = "OpenModelica's omc, https://openmodelica.org/download, or a container runtime for its image, https://podman.io/docs/installation (apt install podman, dnf install podman, brew install podman)"
+
 [[apps]]
 name = "paperboat-shared"
 repo = "https://github.com/paperboatlab/paperboat-shared.git"
 description = "The UI kit (@paperboat/shared) the apps build on."
 kind = "library"
+requires = ["git", "npm"]
 build = ["npm ci"]
+
+# The Julia kernel's own packages: path deps in its Manifest (../SqueroBase.jl, ../SqueroPlot.jl), so
+# they keep these folder names. Plain source, nothing to build.
+[[apps]]
+name = "SqueroBase.jl"
+repo = "https://github.com/paperboatlab/squero-mx-base.git"
+description = "SqueroBase: the kernel session and its Paperboat bridges (Julia package)."
+kind = "library"
+requires = ["git"]
+
+[[apps]]
+name = "SqueroPlot.jl"
+repo = "https://github.com/paperboatlab/SqueroPlot.jl.git"
+description = "SqueroPlot: the figures Squero Studio MX draws (Julia package)."
+kind = "library"
+requires = ["git"]
 
 [[apps]]
 name = "squero-julia-kernel"
 repo = "https://github.com/paperboatlab/squero-julia-kernel.git"
 description = "The Julia session behind Squero Studio MX (squero-kernel/0)."
 kind = "library"
-build = ["bin/build-image"]
+deps = ["SqueroBase.jl", "SqueroPlot.jl"]
+requires = ["git", "podman|docker|julia"]
+build = ["bin/build-image"]  # the pinned image with podman or docker, else a native Julia project
 
 [[apps]]
 name = "squero-studio-om"
@@ -31,7 +65,10 @@ kind = "program"
 launch = "bin/squero-om"  # `paperboat start squero-studio-om` runs its native launcher
 port = 59201  # squero-om's first free port (59201..59299)
 deps = ["paperboat-shared@0.1"]
-build = ["npm ci", "npm run build"]
+requires = ["git", "npm", "cmake", "ninja", "c++|g++|clang++|cl", "omc|podman|docker"]
+# the web app, the native server bin/squero-om runs, then omc: the pinned image in container mode
+# (a native omc is left to its package manager)
+build = ["npm ci", "npm run build", "npm run build:server", "server/build/squero-om update-omc"]
 output = "dist"
 
 [[apps]]
@@ -42,5 +79,6 @@ kind = "program"
 launch = "bin/squero-mx"  # `paperboat start squero-studio-mx` runs its native launcher
 port = 59301  # squero-mx's first free port (59301..59399)
 deps = ["paperboat-shared@0.1", "squero-julia-kernel"]
+requires = ["git", "npm"]
 build = ["npm ci", "npm run build"]
 output = "dist"
