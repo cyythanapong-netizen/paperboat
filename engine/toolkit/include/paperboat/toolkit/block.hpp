@@ -432,10 +432,10 @@ struct Context {
 // x' = A x + B u, y = C x + D u (x[k+1] = A x + B u when `discrete`). `inputs` and `outputs`
 // are its scalar signal ports, in the order of B's columns and C's rows; matrices row-major.
 struct LinearModel {
-  std::vector<std::string> inputs;
-  std::vector<std::string> outputs;
+  std::vector<std::string> inputs = {};
+  std::vector<std::string> outputs = {};
   std::size_t states = 0;
-  std::vector<double> A, B, C, D;  // n×n, n×m, p×n, p×m
+  std::vector<double> A = {}, B = {}, C = {}, D = {};  // n×n, n×m, p×n, p×m
   bool discrete = false;
   double sample_time = 0.0;  // discrete: its period, s
 };

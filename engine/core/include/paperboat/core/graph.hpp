@@ -99,6 +99,7 @@ struct Graph {
 // Wires must join ports of one type (step, signal, image…); a step output leads to one block;
 // signal wires may not loop (linked blocks have no feedthrough, so wires into them don't
 // count). Throws GraphError.
-Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station& station);
+// `loops`: allow algebraic loops (an analysis solves them; a run can't), blocks in one in graph order.
+Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station& station, bool loops = false);
 
 }  // namespace paperboat::core

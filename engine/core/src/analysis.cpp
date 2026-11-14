@@ -40,7 +40,7 @@ json analyse(const json& msg, const Backend& backend, const json& station, const
     const toolkit::Variables vars(msg.contains("variables") ? msg.at("variables") : variables);
     const json graph_json = toolkit::resolve_graph(msg.value("graph", json::object()), catalog, vars);
     Station objects = make_station(toolkit::resolve_station(station, catalog, vars), catalog);
-    Graph g = prepare_graph(graph_json, catalog, objects);
+    Graph g = prepare_graph(graph_json, catalog, objects, /*loops=*/true);  // the analysis solves them
 
     toolkit::AnalysisRequest request;
     request.dt = backend.run.dt;
