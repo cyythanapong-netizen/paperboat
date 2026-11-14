@@ -32,6 +32,8 @@ struct AppEntry {
   std::string kind = "program";    // "program" runs (start/stop it); "library" only builds
   std::string launch;              // what runs a program: a paperboat command or a binary path
   int port = 0;                    // where a running program listens (`stop` and `list` find it there)
+  // Tools it needs on PATH to build and run (apps.toml `requires`); "podman|docker|julia" is any one of them.
+  std::vector<std::string> prerequisites;
   bool installed = false;
   bool checkout = false;           // a sibling checkout of the app in the repository root's parent
   std::string version;             // installed: a release ("0.1.0") or "dev" (main)
@@ -44,6 +46,14 @@ std::filesystem::path apps_dir();
 
 // Parse apps.toml text or file. Throws DescriptorError on invalid TOML or a missing name/repo.
 std::vector<AppEntry> parse_apps_manifest(std::string_view toml_text);
+
+// apps.toml's [tools] table: a tool named in `requires` to the one line that says how to get it.
+std::map<std::string, std::string> parse_tool_hints(std::string_view toml_text);
+
+// What an app and its deps need that this machine lacks, one "; "-separated line naming each missing
+// tool and how to get it, or empty when nothing is missing (or the app is unknown). `install_app` checks
+// this before it fetches anything.
+std::string missing_prerequisites(std::string_view name, const std::filesystem::path& repo_root = {});
 
 // All apps from apps.toml with `installed` and `version` filled in.
 std::vector<AppEntry> list_apps(const std::filesystem::path& repo_root = {});

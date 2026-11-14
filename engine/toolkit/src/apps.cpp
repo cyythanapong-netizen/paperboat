@@ -11,6 +11,10 @@
 #include <nlohmann/json.hpp>
 #include <toml++/toml.hpp>
 
+#ifndef _WIN32
+#include <unistd.h>
+#endif
+
 #include "paperboat/toolkit/descriptor.hpp"
 
 namespace paperboat::toolkit {
@@ -53,12 +57,56 @@ std::string trimmed(std::string s) {
   return s;
 }
 
-// PAPERBOAT_APP_REPO_<NAME> (dashes as underscores) points one app at another repository, or a local one.
-std::string repo_url(const AppEntry& e) {
+// PAPERBOAT_APP_REPO_<NAME> (anything but letters and digits as underscores) points one app at another
+// repository, or a local one.
+std::string repo_env(std::string_view name) {
   std::string key = "PAPERBOAT_APP_REPO_";
-  for (char c : e.name) key += c == '-' ? '_' : static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-  if (const char* v = std::getenv(key.c_str()); v && *v) return v;
+  for (char c : name)
+    key += std::isalnum(static_cast<unsigned char>(c)) ? static_cast<char>(std::toupper(static_cast<unsigned char>(c))) : '_';
+  return key;
+}
+
+std::string repo_url(const AppEntry& e) {
+  if (const char* v = std::getenv(repo_env(e.name).c_str()); v && *v) return v;
   return e.repo;
+}
+
+// git must never stop at a username prompt nobody can answer: a repository it cannot read fails at once.
+void no_git_prompts() {
+#ifdef _WIN32
+  if (!std::getenv("GIT_TERMINAL_PROMPT")) _putenv_s("GIT_TERMINAL_PROMPT", "0");
+  if (!std::getenv("GCM_INTERACTIVE")) _putenv_s("GCM_INTERACTIVE", "never");
+#else
+  setenv("GIT_TERMINAL_PROMPT", "0", 0);
+  setenv("GCM_INTERACTIVE", "never", 0);
+#endif
+}
+
+// Is `tool` an executable on PATH (or a path to one)?
+bool on_path(const std::string& tool) {
+  std::error_code ec;
+  const auto runnable = [&](const fs::path& p) {
+    if (!fs::is_regular_file(p, ec)) return false;
+#ifdef _WIN32
+    return true;
+#else
+    return access(p.c_str(), X_OK) == 0;
+#endif
+  };
+#ifdef _WIN32
+  const std::vector<std::string> exts = {"", ".exe", ".cmd", ".bat"};
+  constexpr char sep = ';';
+#else
+  const std::vector<std::string> exts = {""};
+  constexpr char sep = ':';
+#endif
+  if (tool.find('/') != std::string::npos) return runnable(tool);
+  const char* path = std::getenv("PATH");
+  std::istringstream dirs(path ? path : "");
+  for (std::string dir; std::getline(dirs, dir, sep);)
+    for (const auto& ext : exts)
+      if (!dir.empty() && runnable(fs::path(dir) / (tool + ext))) return true;
+  return false;
 }
 
 json read_marker(const fs::path& dir) {
@@ -76,7 +124,9 @@ fs::path manifest_path(const fs::path& repo_root) {
   return root.empty() ? fs::path{} : root / "apps.toml";
 }
 
-std::vector<AppEntry> load(const fs::path& repo_root, std::string& error) {
+std::vector<AppEntry> load(const fs::path& repo_root, std::string& error,
+                           std::map<std::string, std::string>* hints = nullptr) {
+  no_git_prompts();  // every entry point loads the manifest before it runs git
   const fs::path file = manifest_path(repo_root);
   if (file.empty() || !fs::is_regular_file(file)) {
     error = "cannot find apps.toml in the repository root";
@@ -86,6 +136,7 @@ std::vector<AppEntry> load(const fs::path& repo_root, std::string& error) {
   std::stringstream text;
   text << in.rdbuf();
   try {
+    if (hints) *hints = parse_tool_hints(text.str());
     return parse_apps_manifest(text.str());
   } catch (const DescriptorError& e) {
     error = e.what();
@@ -206,9 +257,65 @@ std::vector<AppEntry> parse_apps_manifest(std::string_view toml_text) {
       e.deps.push_back(std::move(d));
     }
     e.build = strings(*t, "build");
+    e.prerequisites = strings(*t, "requires");
+    for (const auto& r : e.prerequisites)
+      if (r.empty() || r.front() == '|' || r.back() == '|' || r.find("||") != std::string::npos)
+        throw DescriptorError("apps[" + std::to_string(i) + "]: requires \"" + r + "\" must be a tool or tool|tool|…");
     if (e.name.empty() || e.repo.empty()) throw DescriptorError("apps[" + std::to_string(i) + "]: needs name and repo");
     out.push_back(std::move(e));
   }
+  return out;
+}
+
+std::map<std::string, std::string> parse_tool_hints(std::string_view toml_text) {
+  std::map<std::string, std::string> out;
+  try {
+    const toml::table doc = toml::parse(toml_text);
+    if (const auto* tools = doc["tools"].as_table())
+      for (const auto& [k, v] : *tools)
+        if (auto s = v.value<std::string>()) out[std::string(k.str())] = *s;
+  } catch (const toml::parse_error& err) {
+    throw DescriptorError("apps.toml: " + std::string(err.description()));
+  }
+  return out;
+}
+
+std::string missing_prerequisites(std::string_view name, const fs::path& repo_root) {
+  std::string error;
+  std::map<std::string, std::string> hints;
+  const auto list = load(repo_root, error, &hints);
+  // the app and every dep under it, each once
+  std::vector<const AppEntry*> todo{find(list, name)}, seen;
+  std::vector<std::string> missing;
+  while (!todo.empty()) {
+    const AppEntry* e = todo.back();
+    todo.pop_back();
+    if (!e || std::ranges::find(seen, e) != seen.end()) continue;
+    seen.push_back(e);
+    for (const auto& d : e->deps) todo.push_back(find(list, d.name));
+    for (const auto& req : e->prerequisites) {
+      std::vector<std::string> any;
+      std::istringstream parts(req);
+      for (std::string p; std::getline(parts, p, '|');) any.push_back(p);
+      if (std::ranges::any_of(any, on_path)) continue;
+      std::string what = any[0];  // "one of podman, docker or julia"
+      if (any.size() > 1) {
+        what = "one of ";
+        for (std::size_t i = 0; i < any.size(); ++i) what += (i == 0 ? "" : i + 1 == any.size() ? " or " : ", ") + any[i];
+      }
+      std::string hint;
+      for (const auto& a : any)
+        if (auto it = hints.find(a); it != hints.end()) {
+          hint = it->second;
+          break;
+        }
+      if (auto it = hints.find(req); it != hints.end()) hint = it->second;
+      const std::string line = what + " (\"" + e->name + "\")" + (hint.empty() ? "" : ": " + hint);
+      if (std::ranges::find(missing, line) == missing.end()) missing.push_back(line);
+    }
+  }
+  std::string out;
+  for (const auto& m : missing) out += (out.empty() ? "" : "; ") + m;
   return out;
 }
 
@@ -255,6 +362,10 @@ ToolkitResult install(std::string_view name, std::string_view requested, const f
   if (!error.empty()) return {false, error};
   const AppEntry* e = find(list, name);
   if (!e) return {false, "unknown app \"" + std::string(name) + "\""};
+  // 0. what the machine lacks, before anything is fetched (once, for the app and all its deps)
+  if (parent.empty())
+    if (const auto missing = missing_prerequisites(e->name, repo_root); !missing.empty())
+      return {false, "\"" + e->name + "\" needs what this machine lacks; install it, then run this again: " + missing};
 
   // 1. which version: the one asked for, else the newest release inside the ranges of the installed apps
   // that need this one, else main
@@ -352,7 +463,9 @@ ToolkitResult install(std::string_view name, std::string_view requested, const f
   }
   if (!cloned) {
     restore();
-    return {false, "cannot clone " + url + " at " + version + (last.empty() ? "" : ": " + last)};
+    return {false, "cannot clone " + url + " at " + version + (last.empty() ? "" : ": " + last) +
+                       " (if the repository is private, give git access to it, e.g. `gh auth setup-git`, or set " +
+                       repo_env(e->name) + " to a copy you can read)"};
   }
   std::string commit;
   run_command({"git", "-C", dir.string(), "rev-parse", "HEAD"}, {}, {}, nullptr, &commit);
