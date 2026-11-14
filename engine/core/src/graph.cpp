@@ -20,9 +20,10 @@ const toolkit::PortDef& port_def(const Node& node, const std::string& port, bool
 
 namespace {
 
-// Sort `ids` so each comes after the ones it depends on. Throws on a cycle.
+// Sort `ids` so each comes after the ones it depends on. Throws on a cycle, unless `loops`:
+// then what is left in one follows in graph order.
 std::vector<std::string> sorted(const std::vector<std::string>& ids, std::map<std::string, std::vector<std::string>>& deps,
-                                const std::string& where) {
+                                const std::string& where, bool loops = false) {
   std::vector<std::string> order;
   std::set<std::string> done;
   while (order.size() < ids.size()) {
@@ -30,6 +31,11 @@ std::vector<std::string> sorted(const std::vector<std::string>& ids, std::map<st
     for (const auto& id : ids) {
       if (done.contains(id)) continue;
       if (std::ranges::all_of(deps[id], [&](const std::string& d) { return done.contains(d); })) ready.push_back(id);
+    }
+    if (ready.empty() && loops) {
+      for (const auto& id : ids)
+        if (!done.contains(id)) order.push_back(id);
+      return order;
     }
     if (ready.empty()) {
       // What's left is in a loop, or waits for one: name a block that is in it.
@@ -121,7 +127,7 @@ toolkit::BlockDef story_def() {
 
 }  // namespace
 
-Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station& station) {
+Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station& station, bool loops) {
   Graph out;
   std::vector<std::string> ids;  // in graph order, so ties sort the same way every run
 
@@ -322,7 +328,7 @@ Graph prepare_graph(const json& graph, const toolkit::Catalog& catalog, Station&
     if (auto it = out.story_of.find(id); it != out.story_of.end()) inside[it->second].push_back(id);
     else outside.push_back(id);
   }
-  out.order = sorted(outside, deps, "");
+  out.order = sorted(outside, deps, "", loops);
   for (auto& [gid, story] : out.stories) story.order = sorted(inside[gid], deps, " in story " + gid);
   return out;
 }
