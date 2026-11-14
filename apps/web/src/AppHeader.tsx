@@ -1,11 +1,11 @@
-// The app's top bar: the menus, the project's name, toolkits, the Console, the view mode, the UI
-// lock, which backend, and the theme.
+// The app's top bar: the menus and the project's name, then the shared BarEnd (the same as the
+// Squero Studios'): Toolkits and Console, the view mode, the UI lock, which backend, the theme.
 
 import type { EngineState } from "./engine";
 import type { Command } from "./commands";
 import type { Ref } from "react";
 import { ProjectLabel } from "./ProjectUI";
-import { StatusPill, Switch, ThemeToggle, Wordmark, type Mode, type Theme } from "./Shell";
+import { BarEnd, StatusPill, Switch, Wordmark, type Mode, type Theme } from "./Shell";
 import { MenuBar } from "./Menus";
 import { ToolkitsButton } from "./Toolkits";
 import type { LockConfig } from "./lock";
@@ -69,52 +69,58 @@ export function AppHeader({ state, running, commands, solver, projectTitle, dirt
         </button>
       </div>
       <ProjectLabel name={projectTitle} dirty={dirty} onRename={onRenameProject} />
-      <span className="spacer" />
-      <ToolkitsButton
-        toolkits={state.toolkits}
-        connected={state.connection === "open"}
-        requested={requestedToolkits}
-        version={state.version}
-        backend={state.engine}
-        onInstall={installToolkit}
-        onUninstall={uninstallToolkit}
-        onRestart={restartBackend}
-        onVersions={toolkitVersions}
+      <BarEnd
+        keys={<>
+          <ToolkitsButton
+            toolkits={state.toolkits}
+            connected={state.connection === "open"}
+            requested={requestedToolkits}
+            version={state.version}
+            backend={state.engine}
+            onInstall={installToolkit}
+            onUninstall={uninstallToolkit}
+            onRestart={restartBackend}
+            onVersions={toolkitVersions}
+          />
+          <button
+            ref={consoleRef}
+            className={`key small${errors > 0 ? " err" : ""}${consoleShown ? " on" : ""}`}
+            aria-pressed={consoleShown}
+            title="Open the Console"
+            onClick={onConsole}
+          >
+            {errors > 0 ? count(errors, "error") : "Console"}
+          </button>
+        </>}
+        view={allowedModes.length > 1 && (
+          <Switch
+            label="View"
+            value={mode}
+            onChange={setMode}
+            options={MODE_OPTIONS.filter((o) => allowedModes.includes(o.value))}
+          />
+        )}
+        status={<>
+          {projectLock && (
+            <button
+              className={`chip${locked ? " on" : ""}`}
+              title={locked ? "UI is locked by project (click to unlock)" : "UI lock configured (unlocked)"}
+              onClick={onLock}
+            >
+              {locked ? "🔒 Locked" : "🔓 Lock"}
+            </button>
+          )}
+          <StatusPill
+            label={state.connection === "open" ? state.engine : state.connection}
+            labels={[state.engine, "connecting", "closed"]}
+            tone={CONN_TONE[state.connection]}
+            title="Which backend: File > Backend…"
+            onClick={onBackend}
+          />
+        </>}
+        theme={themeChoice}
+        onTheme={setThemeChoice}
       />
-      <button
-        ref={consoleRef}
-        className={`key small${errors > 0 ? " err" : ""}${consoleShown ? " on" : ""}`}
-        aria-pressed={consoleShown}
-        title="Open the Console"
-        onClick={onConsole}
-      >
-        {errors > 0 ? count(errors, "error") : "Console"}
-      </button>
-      {allowedModes.length > 1 && (
-        <Switch
-          label="View"
-          value={mode}
-          onChange={setMode}
-          options={MODE_OPTIONS.filter((o) => allowedModes.includes(o.value))}
-        />
-      )}
-      {projectLock && (
-        <button
-          className={`chip${locked ? " on" : ""}`}
-          title={locked ? "UI is locked by project (click to unlock)" : "UI lock configured (unlocked)"}
-          onClick={onLock}
-        >
-          {locked ? "🔒 Locked" : "🔓 Lock"}
-        </button>
-      )}
-      <StatusPill
-        label={state.connection === "open" ? state.engine : state.connection}
-        labels={[state.engine, "connecting", "closed"]}
-        tone={CONN_TONE[state.connection]}
-        title="Which backend: File > Backend…"
-        onClick={onBackend}
-      />
-      <ThemeToggle theme={themeChoice} onTheme={setThemeChoice} />
     </header>
   );
 }
