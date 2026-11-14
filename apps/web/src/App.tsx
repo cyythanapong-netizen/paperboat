@@ -33,7 +33,7 @@ import { count } from "./words";
 import { AppHeader } from "./AppHeader";
 import { StationView } from "./StationView";
 import { useBackendKeys } from "./backendKeys";
-import { MODES, PAGES, Panel, Rail, useTheme, type Drawer, type Mode, type Page, type Theme } from "./Shell";
+import { MODES, PAGES, Panel, Rail, useThemeChoice, type Drawer, type Mode, type Page } from "./Shell";
 import type { StationControls } from "./StationGraph";
 import { withObject } from "./StationPanel";
 import { BackendWindow, Dock } from "./Dock";
@@ -70,8 +70,7 @@ export function App() {
   // The Station page's visibility: the user's switch wins, else the backend's `station.visible`, else shown.
   const [stationChoice, setStationChoice] = remembered<"auto" | "shown" | "hidden">("paperboat.station", "auto", ["auto", "shown", "hidden"]);
   const [page, setPage] = remembered<Page>("paperboat.page", "flow", PAGE_IDS);
-  const [themeChoice, setThemeChoice] = remembered<Theme>("paperboat.theme", "auto", ["auto", "light", "dark"]);
-  const theme = useTheme(themeChoice);
+  const [themeChoice, setThemeChoice, theme] = useThemeChoice("paperboat.theme");
   const { projectLock, setProjectLock, unlocked, setUnlocked, lockModalOpen, setLockModalOpen, locked, lockedArrange, allowedPages, allowedModes } = useUiLock(arrange, setArrange, page, setPage, mode, setMode);
   const [solverOpen, setSolverOpen] = useState(false);
 

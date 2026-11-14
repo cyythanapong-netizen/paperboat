@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useDismiss } from "@paperboat/shared/components";
 import { generateSalt, hashPasscode, verifyPasscode, type LockConfig } from "./lock";
-import { useFocusReturn } from "./ProjectUI";
+import { useFocusReturn } from "@paperboat/shared/components";
 
 export function LockDialog({
   lock,
