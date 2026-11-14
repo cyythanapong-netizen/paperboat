@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useDismiss } from "@paperboat/shared/components";
-import { PackagePanel } from "@paperboat/shared/packages";
+import { PackagePanel, PackageWindow } from "@paperboat/shared/packages";
 import { missingRequiredToolkits } from "./engine";
 import type { ToolkitStatus } from "./protocol";
 import { useFocusReturn } from "./ProjectUI";
@@ -104,7 +104,7 @@ export function MissingToolkitsDialog({
 }
 
 /**
- * The Toolkits key and its panel: the shared package panel (@paperboat/shared/packages), as
+ * The Toolkits key and its window: the shared package window and panel (@paperboat/shared/packages), as
  * Squero MX shows Julia and Squero Studio OM its Modelica libraries. Paperboat is the runtime,
  * the installed toolkits the environment, `toolkits.toml` the registry.
  */
@@ -133,13 +133,10 @@ export function ToolkitsButton({
   onVersions?: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const wrap = useRef<HTMLDivElement | null>(null);
   const items = toolkits.filter((t) => !t.builtin);
   const busyOf = (t: ToolkitStatus) => t.busy ?? requested[t.name];
   const working = items.find((t) => !!busyOf(t));
   const busy = working ? `${busyOf(working)} ${working.name}` : "";
-
-  useDismiss(wrap, () => setOpen(false), { enabled: open });
 
   useEffect(() => {
     if (!open) return;
@@ -148,13 +145,13 @@ export function ToolkitsButton({
 
   const versionOf = (t: ToolkitStatus) => (t.version && t.version !== "unknown" ? t.version : undefined);
   return (
-    <div ref={wrap} className="toolkits-wrap">
+    <>
       <button className={`key small${open ? " on" : ""}`} aria-expanded={open} title="Toolkits: install, update, or uninstall" onClick={() => setOpen(!open)}>
         {working && <Spinner label="Toolkit operation in progress" />}
         Toolkits
       </button>
       {open && (
-        <section className="pop toolkits-pop" role="dialog" aria-label="Toolkits">
+        <PackageWindow title="Toolkits" tags={[version && `paperboat ${version}`, backend].filter((t): t is string => !!t)} onClose={() => setOpen(false)}>
           <PackagePanel
             noun="toolkit"
             busy={busy}
@@ -194,8 +191,8 @@ export function ToolkitsButton({
               add: (name, v) => connected && onInstall(name, v),
             }}
           />
-        </section>
+        </PackageWindow>
       )}
-    </div>
+    </>
   );
 }

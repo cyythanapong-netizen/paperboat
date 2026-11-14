@@ -920,8 +920,6 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 .deco-station-fallback { display: grid; place-items: center; height: 100%; color: var(--text-muted); font-size: var(--text-sm); }
 
 /* ---- Optional toolkits (#118): bar key, popover, and inline spinner ---------------- */
-.toolkits-wrap { position: relative; display: inline-flex; }
-.toolkits-pop { width: min(400px, calc(100vw - 32px)); max-height: min(640px, calc(100vh - 96px)); display: flex; padding: 0; }
 .toolkit-item { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); }
 .toolkit-item:first-of-type { border-top: 0; }
 .toolkit-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
