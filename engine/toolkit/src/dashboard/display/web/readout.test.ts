@@ -21,9 +21,24 @@ test("a long vector shows its first values and its full size", () => {
   assert.equal(values.split(",").length, SHOWN + 1);
 });
 
-test("a matrix or point list keeps its size and shown values, however big", () => {
-  assert.deepEqual(readout("2 × 2 matrix: 0, 1, -2, -3"), { dims: "2 × 2", type: "matrix", values: "0, 1, -2, -3" });
-  assert.deepEqual(readout("1000 × 1000 matrix: 1, 2, 3, 4, 5, 6, …"), { dims: "1000 × 1000", type: "matrix", values: "1, 2, 3, 4, 5, 6, …" });
+test("a bigger card lists more of a long vector", () => {
+  const long = Array.from({ length: 100 }, (_, i) => i);
+  assert.equal(readout(long, undefined, "large").values.split(",").length, 17);
+  assert.equal(readout(long, undefined, "xlarge").values.split(",").length, 33);
+});
+
+test("a matrix reads its corner as rows, and a one-line preview of its first values", () => {
+  assert.deepEqual(readout("2 × 2 matrix: 0, 1; -2, -3"), {
+    dims: "2 × 2", type: "matrix", values: "0, 1, -2, -3",
+    grid: { rows: [["0", "1"], ["-2", "-3"]], moreColumns: false, moreRows: false },
+  });
+  const big = readout("1000 × 1000 matrix: 1, 2, …; 3, 4, …; …");
+  assert.equal(big.dims, "1000 × 1000");
+  assert.equal(big.values, "1, 2, 3, 4, …");
+  assert.deepEqual(big.grid, { rows: [["1", "2"], ["3", "4"]], moreColumns: true, moreRows: true });
+});
+
+test("a point list keeps its size and shown values", () => {
   assert.deepEqual(readout("5 points: (0, 1), (1, 2), …"), { dims: "5", type: "points", values: "(0, 1), (1, 2), …" });
   assert.deepEqual(readout("1 point: (0, 1)"), { dims: "1", type: "points", values: "(0, 1)" });
 });

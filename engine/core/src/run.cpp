@@ -133,7 +133,9 @@ std::string points_text(const toolkit::Table& points) {
   return out;
 }
 
-// A matrix as a readout: its shape and the first few values (a display, not a plot).
+// A matrix as a readout: its shape and its top-left corner, up to 8 × 8, row by row ("1, 2; 3, 4").
+// A row cut short ends ", …", a corner with rows left out ends "; …". The Display shows as much of
+// it as its card holds (a display, not a plot).
 std::string matrix_text(const toolkit::Table& matrix) {
   const auto number = [](double v) {
     char buf[32];
@@ -142,15 +144,14 @@ std::string matrix_text(const toolkit::Table& matrix) {
   };
   const std::size_t columns = matrix.empty() ? 0 : matrix.front().size();
   std::string out = std::to_string(matrix.size()) + " × " + std::to_string(columns) + " matrix";
-  constexpr std::size_t kShown = 6;
-  std::size_t shown = 0;
-  for (const auto& row : matrix)
-    for (const double value : row) {
-      if (shown == kShown) { out += ", …"; return out; }
-      out += shown == 0 ? ": " : ", ";
-      out += number(value);
-      ++shown;
-    }
+  constexpr std::size_t kShown = 8;
+  for (std::size_t r = 0; r < matrix.size() && r < kShown; ++r) {
+    out += r == 0 ? ": " : "; ";
+    const auto& row = matrix[r];
+    for (std::size_t c = 0; c < row.size() && c < kShown; ++c) out += (c ? ", " : "") + number(row[c]);
+    if (row.size() > kShown) out += ", …";
+  }
+  if (matrix.size() > kShown) out += "; …";
   return out;
 }
 
