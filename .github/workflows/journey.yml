@@ -141,6 +141,6 @@ jobs:
           "$pb" pkg install squero-studio-mx
           cd "$RUNNER_TEMP"
           "$pb" start squero-studio-mx --daemon
-          for i in $(seq 60); do curl -sf http://127.0.0.1:59301/ >/dev/null && break; sleep 1; done
-          node "$PAPERBOAT_HOME/apps/squero-studio-mx/test/launch/check.mjs" 59301 || { cat /tmp/paperboat-squero-studio-mx.log; exit 1; }
+          for i in $(seq 60); do curl -sf http://127.0.0.1:59202/ >/dev/null && break; sleep 1; done
+          node "$PAPERBOAT_HOME/apps/squero-studio-mx/test/launch/check.mjs" 59202 || { cat /tmp/paperboat-squero-studio-mx.log; exit 1; }
           "$pb" stop squero-studio-mx
