@@ -4,8 +4,7 @@
 import type { EngineState } from "./engine";
 import type { Command } from "./commands";
 import type { Ref } from "react";
-import { BarEnd, ProjectLabel, StatusPill, Switch, Wordmark, type Mode, type Theme } from "./Shell";
-import { MenuBar } from "./Menus";
+import { AppBar, BarEnd, StatusPill, Switch, Wordmark, type Mode, type Theme } from "./Shell";
 import { ToolkitsButton } from "./Toolkits";
 import type { LockConfig } from "./lock";
 import { count } from "./words";
@@ -54,20 +53,13 @@ type Props = {
 
 export function AppHeader({ state, running, commands, solver, projectTitle, dirty, onRenameProject, installToolkit, uninstallToolkit, requestedToolkits, restartBackend, toolkitVersions, errors, consoleShown, onConsole, consoleRef, aboutShown, onAbout, mode, setMode, allowedModes, projectLock, locked, onLock, onBackend, themeChoice, setThemeChoice }: Props) {
   return (
-    <header className="bar">
-      <Wordmark running={running} />
-      <div className="menubar-group" data-own-keys>
-        <MenuBar commands={commands} menuLabels={solver ? { run: `Run (${solver})` } : undefined} />
-        <button
-          className="menu-title"
-          aria-expanded={aboutShown}
-          title="About Paperboat"
-          onClick={onAbout}
-        >
-          About
-        </button>
-      </div>
-      <ProjectLabel name={projectTitle} dirty={dirty} onRename={onRenameProject} />
+    <AppBar
+      brand={<Wordmark running={running} />}
+      commands={commands}
+      menuLabels={solver ? { run: `Run (${solver})` } : undefined}
+      about={{ title: "About Paperboat", shown: aboutShown, onOpen: onAbout }}
+      project={{ name: projectTitle, dirty, onRename: onRenameProject }}
+    >
       <BarEnd
         keys={<>
           <ToolkitsButton
@@ -120,6 +112,6 @@ export function AppHeader({ state, running, commands, solver, projectTitle, dirt
         theme={themeChoice}
         onTheme={setThemeChoice}
       />
-    </header>
+    </AppBar>
   );
 }

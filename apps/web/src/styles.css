@@ -894,7 +894,6 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 }
 
 /* The bar's menus and the About title sit as one row, the same 2px apart. */
-.menubar-group { display: flex; align-items: center; gap: 2px; }
 
 /* Selects draw their own chevron (#281). The native one sits a fixed 3–4 px from the right edge
    (Chromium on macOS), whatever the padding, while the text starts 8–12 px in. This one is drawn
