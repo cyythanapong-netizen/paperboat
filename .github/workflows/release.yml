@@ -229,7 +229,9 @@ jobs:
         run: |
           cd "$RUNNER_TEMP"
           export PAPERBOAT_HOME="$RUNNER_TEMP/one/home" PAPERBOAT_BIN="$RUNNER_TEMP/one/bin"
-          PAPERBOAT_ARCHIVE=$(ls "$GITHUB_WORKSPACE"/dist/paperboat-*-Darwin-arm64.tar.gz) "$GITHUB_WORKSPACE"/dist/paperboat-*-Darwin-arm64 pkg list
+          # As a download: outside the checkout, which the binary would otherwise find and act as its binary.
+          cp "$GITHUB_WORKSPACE"/dist/paperboat-*-Darwin-arm64 "$RUNNER_TEMP/paperboat"
+          PAPERBOAT_ARCHIVE=$(ls "$GITHUB_WORKSPACE"/dist/paperboat-*-Darwin-arm64.tar.gz) "$RUNNER_TEMP/paperboat" pkg list
           "$PAPERBOAT_BIN/paperboat" --version
       - name: No optional toolkit is bundled
         run: |
@@ -332,8 +334,9 @@ jobs:
           cd "$RUNNER_TEMP"
           one="$RUNNER_TEMP/one"   # Windows paths for PowerShell (install.ps1), POSIX ones for this shell
           export PAPERBOAT_HOME=$(cygpath -w "$one/home") PAPERBOAT_BIN=$(cygpath -w "$one/bin")
-          PAPERBOAT_ARCHIVE=$(cygpath -w "$(ls "$GITHUB_WORKSPACE"/dist/paperboat-*.zip)") \
-            "$GITHUB_WORKSPACE"/dist/paperboat-*-Windows-AMD64.exe pkg list
+          # As a download: outside the checkout, which the exe would otherwise find and act as its binary.
+          cp "$GITHUB_WORKSPACE"/dist/paperboat-*-Windows-AMD64.exe "$RUNNER_TEMP/paperboat.exe"
+          PAPERBOAT_ARCHIVE=$(cygpath -w "$(ls "$GITHUB_WORKSPACE"/dist/paperboat-*.zip)") "$RUNNER_TEMP/paperboat.exe" pkg list
           exe=$(ls "$one"/home/self/*/bin/paperboat.exe)
           "$exe" --version
           "$exe" update --check
