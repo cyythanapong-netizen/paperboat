@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import type { EngineState } from "./engine";
 import type { ClientMsg, InstrumentSettings, ParamValue } from "./protocol";
 import type { Size } from "./dashboardLayout";
+import { registerAnalysis } from "./analyses";
 
 /** An output a monitor can be wired to ("+ tap"): an id the host understands, and what to show. */
 export type TapPort = { id: string; label: string; unit?: string };
@@ -68,7 +69,12 @@ export function instrumentFor(kind: string): InstrumentRenderer | undefined {
 /** What the web app hands a toolkit's `web/index.ts(x)`: the registries it may extend. */
 export interface ToolkitWebHost {
   registerInstrument: typeof registerInstrument;
+  /** A panel for one of the toolkit's analyses (pb#370): see analyses.ts. */
+  registerAnalysis: typeof registerAnalysis;
 }
+
+/** The host every toolkit web part gets. */
+export const toolkitWebHost: ToolkitWebHost = { registerInstrument, registerAnalysis };
 
 /**
  * Toolkit UI (pb#172): a block's folder may hold `web/index.ts(x)` exporting `register(host)` (a
@@ -86,6 +92,6 @@ const toolkitWeb = import.meta.glob<{ register?: (host: ToolkitWebHost) => void 
   { eager: true },
 );
 for (const [path, mod] of Object.entries(toolkitWeb)) {
-  if (typeof mod.register === "function") mod.register({ registerInstrument });
+  if (typeof mod.register === "function") mod.register(toolkitWebHost);
   else console.warn(`${path}: a toolkit's web/index must export register(host)`);
 }

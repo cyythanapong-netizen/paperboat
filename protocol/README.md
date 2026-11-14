@@ -36,6 +36,7 @@ Default address: `ws://localhost:8765`.
 | `log`          | `level: "info" \| "warn" \| "error"`, `text`, `node?: string` | any time. `node`: the block or station object that wrote it, or that failed |
 | `toolkits.status` | `toolkits: ToolkitStatus[]`              | when an optional toolkit's installation or busy state changes. `ToolkitStatus.blocks` lists the block types a toolkit provides (from `toolkits.toml`), so the UI names the toolkit to install for a missing block |
 | `run.finished` | `run: string`, `status: "done" \| "failed" \| "cancelled"` | when a run ends |
+| `analysis.result` | `id: string`, `analysis: string`, `result?: unknown`, `error?: string` | the answer to `analysis.request` (pb#370): the analysis's own result (its toolkit's panel reads it), or why there is none |
 
 ## UI → Backend
 
@@ -52,6 +53,7 @@ Default address: `ws://localhost:8765`.
 | `toolkit.versions` | `name: string` (requests available release tags for the named toolkit) |
 | `toolkit.update`  | `name: string` (updates the named toolkit from its repository and rebuilds the engine) |
 | `toolkit.uninstall` | `name: string` (removes the named toolkit and rebuilds the engine) |
+| `analysis.request` | `id: string`, `analysis: string` (an `AnalysisDef` name from `catalog.analyses`), `graph: { nodes, edges }` (the part to analyse: its blocks and the wires between them), `inputs` / `outputs: [node, port][]` (its boundary: u fed from outside, y read outside), `options?` (the analysis's own), `variables?`. Answered with `analysis.result`, outside any run (pb#370) |
 
 ## Shapes
 

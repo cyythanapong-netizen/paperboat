@@ -28,6 +28,17 @@ void Registry::add_connector(std::string package, std::string name, nlohmann::js
   connectors_.push_back({.package = std::move(package), .name = std::move(name), .def = std::move(def)});
 }
 
+void Registry::add(AnalysisTemplate t) {
+  if (find_analysis(t.name)) throw std::invalid_argument("duplicate analysis: " + t.name);
+  if (t.name.find('/') == std::string::npos) throw std::invalid_argument("analysis \"" + t.name + "\": name it <package>/<analysis>");
+  analyses_.push_back(std::move(t));
+}
+
+const AnalysisTemplate* Registry::find_analysis(std::string_view name) const {
+  auto it = std::ranges::find(analyses_, name, &AnalysisTemplate::name);
+  return it == analyses_.end() ? nullptr : &*it;
+}
+
 const StationTemplate* Registry::find_object(std::string_view name) const {
   auto it = std::ranges::find(objects_, name, &StationTemplate::name);
   return it == objects_.end() ? nullptr : &*it;
@@ -43,6 +54,14 @@ std::vector<const StationTemplate*> Registry::objects(std::string_view package) 
   std::vector<const StationTemplate*> out;
   for (const auto& t : objects_) {
     if (in_package(t.name, package)) out.push_back(&t);
+  }
+  return out;
+}
+
+std::vector<const AnalysisTemplate*> Registry::analyses(std::string_view package) const {
+  std::vector<const AnalysisTemplate*> out;
+  for (const auto& a : analyses_) {
+    if (in_package(a.name, package)) out.push_back(&a);
   }
   return out;
 }
@@ -86,6 +105,7 @@ std::vector<std::string> Registry::packages() const {
   for (const auto& c : connectors_) {
     if (std::ranges::find(out, c.package) == out.end()) out.push_back(c.package);
   }
+  for (const auto& a : analyses_) note(a.name);
   std::ranges::sort(out);
   return out;
 }

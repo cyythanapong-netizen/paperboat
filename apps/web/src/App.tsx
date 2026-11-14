@@ -46,6 +46,8 @@ import { MissingToolkitsDialog } from "./Toolkits";
 import { useUndo } from "./undo";
 import { LockDialog } from "./LockDialog";
 import { SolverDialog } from "./SolverDialog";
+import { AnalysisDrawer } from "./AnalysisDrawer";
+import { analysisTarget, offeredAnalyses } from "./analyses";
 
 /** The glass dock floats over the canvas's bottom, and the minimap over its corner: fit leaves room for both. */
 const FIT_PADDING = { top: "16px", right: "16px", bottom: "96px", left: "16px" } as const;
@@ -75,6 +77,8 @@ export function App() {
 
   const [url, setUrl] = useState(DEFAULT_URL);
   const [searchOpen, setSearchOpen] = useState(false); // the command search (Ctrl+K)
+  // A toolkit analysis of a subsystem or a selection (pb#370): what was picked, and which analysis.
+  const [analysing, setAnalysing] = useState<{ ids: string[]; label: string; name: string } | null>(null);
   const [backendOpen, setBackendOpen] = useState(false); // File > Backend…
   const flow = useRef<FlowControls | null>(null); // the canvas's actions, for the menus
   const stationCanvas = useRef<StationControls | null>(null);
@@ -430,8 +434,24 @@ export function App() {
   });
   useShortcuts(commands);
 
+  // Analyses (pb#370): analysesOffered only when the backend lists one and a toolkit's web part shows it.
+  const analysesOffered = offeredAnalyses(state.analyses);
+  const analyse = analysesOffered.length ? (ids: string[], label: string) => setAnalysing({ ids, label, name: analysing?.name && analysesOffered.some((a) => a.name === analysing.name) ? analysing.name : analysesOffered[0].name }) : undefined;
+  const analysis = useMemo(() => {
+    if (!analysing || !analysesOffered.some((a) => a.name === analysing.name)) return null;
+    const live = state.remoteVariables ?? [];
+    const graph = toGraph(nodes, edges);
+    try {
+      graph.nodes = graph.nodes.map((n) => (n.params ? { ...n, params: inlineLive(n.params, live) } : n));
+    } catch {
+      // a live variable without a value: the backend names it in its answer
+    }
+    return { target: analysisTarget(nodes, edges, analysing.ids, analysing.label), graph };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `analysesOffered` follows state.analyses
+  }, [analysing, nodes, edges, state.analyses, state.remoteVariables]);
+
   return (
-    <div className={`app mode-${mode}${stationShown ? "" : " no-station"}`}>
+    <div className={`app mode-${mode}${stationShown ? "" : " no-station"}${analysis ? " analysing" : ""}`}>
       <AppHeader
         state={state}
         running={running}
@@ -516,6 +536,7 @@ export function App() {
               mixed={canMix}
               probes={probes}
               fitPadding={mode === "navigator" && page === "flow" ? FIT_PADDING_MINIMAP : FIT_PADDING}
+              onAnalyse={analyse}
             />
           </RunStates.Provider>
           )}
@@ -534,6 +555,19 @@ export function App() {
           <Dashboard state={state} monitors={monitors} taps={taps} onTap={tap} arrange={arrange} onBlock={showBlock} saved={dashSaved} onSave={saveDash} url={url} subscribe={subscribe} send={send} gridOn={gridOn} />
         </Panel>
         </div>
+        {analysis && analysing && (
+          <AnalysisDrawer
+            offered={analysesOffered}
+            name={analysing.name}
+            onPick={(name) => setAnalysing({ ...analysing, name })}
+            target={analysis.target}
+            graph={analysis.graph}
+            variables={projectVars}
+            send={send}
+            subscribe={subscribe}
+            onClose={() => setAnalysing(null)}
+          />
+        )}
         <VariablesSheet
           sheetOpen={varsShown === "open"}
           onShowSheet={() => setVarsShown("open")}

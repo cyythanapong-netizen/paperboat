@@ -75,6 +75,8 @@ struct Catalog {
   // False hides it in the UI: the backend's default, which the user can change in View.
   bool station_visible = true;
   std::vector<std::string> missing_imports;
+  // What the imported packages can analyse outside the flows (pb#370), in import order.
+  std::vector<const AnalysisTemplate*> analyses;
   // The flow types the domain offers (#9): what a sheet may be, sent in hello. The
   // descriptor's top-level `flows`, else a Signal flow and every flow type a block of the
   // catalog names (flow_types() order).

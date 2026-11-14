@@ -273,6 +273,16 @@ void Session::on_message(const std::string& text) {
     } catch (const std::exception& err) {
       s.log("error", std::string("invalid variables: ") + err.what());
     }
+  } else if (type == "analysis.request") {
+    // Linear algebra on a handful of blocks: answered here, between socket messages.
+    // ponytail: on the socket thread; a worker per request if an analysis gets slow.
+    json station, variables;
+    {
+      std::lock_guard lock(s.mutex);
+      station = s.station;
+      variables = s.variables;
+    }
+    s.emit(analyse(msg, s.backend, station, variables));
   } else if (type == "run.cancel") {
     s.run.request_stop();
   } else if (type == "run.speed") {

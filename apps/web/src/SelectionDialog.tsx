@@ -30,9 +30,11 @@ type Props = {
   /** The open subsystem or story, and the one block picked in it: its ports can be exposed on the group. */
   levelGroup?: GroupNode;
   pickedBlock?: BlockNode;
+  /** Analyse the picked blocks and groups (pb#370); absent when no toolkit offers an analysis. */
+  analyse?: () => void;
 };
 
-export function SelectionDialog({ pickedNodes, pickedBlocks, pickedWires, pickedFrames, isVisible, roomAbove, allCommented, kept, canGroup, canFrame, canStory, toggleComment, removePicked, group, ungroup, update, levelGroup, pickedBlock }: Props) {
+export function SelectionDialog({ pickedNodes, pickedBlocks, pickedWires, pickedFrames, isVisible, roomAbove, allCommented, kept, canGroup, canFrame, canStory, toggleComment, removePicked, group, ungroup, update, levelGroup, pickedBlock, analyse }: Props) {
   const counted = (n: number, one: string) => (n ? [`${n} ${one}${n === 1 ? "" : "s"}`] : []);
   const summary = [
     ...counted(pickedNodes.filter(isBlock).length, "block"),
@@ -99,6 +101,16 @@ export function SelectionDialog({ pickedNodes, pickedBlocks, pickedWires, picked
       >
         Ungroup
       </button>
+      {analyse && (
+        <button
+          className="key small"
+          disabled={pickedBlocks.length + pickedFrames.length === 0}
+          title="Analyse the selection outside the flow: its inputs fed from outside, its outputs read outside"
+          onClick={analyse}
+        >
+          Analyse
+        </button>
+      )}
       {levelGroup && pickedBlock && <ExposeMenu block={pickedBlock} group={levelGroup} set={(expose) => update(levelGroup.id, { expose })} />}
       {kept > 0 && (
         <span className="lbl kept" title="Linked blocks come from the backend's own graph">

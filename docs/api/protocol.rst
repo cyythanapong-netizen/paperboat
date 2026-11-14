@@ -83,40 +83,43 @@ Message Quick Reference
 Backend → UI
 ------------
 
-=================  =====================================================================
-``hello``          ``protocol``, ``engine``, ``version`` (the Paperboat build), ``station: {view, page?}``, ``flows?``. On connect
-``catalog``        ``blocks``, ``objects?``. On connect
-``scene``          ``entities``, ``view?``. On connect, after a station edit, after a run-once
-``graph.load``     ``graph``: the starter. On connect
-``station.load``   ``station``: the starter station. On connect, if there is one
-``scene.patch``    ``entities`` (changed fields). During a run
-``run.started``    ``run``
-``run.progress``   ``run``, ``fraction`` (0–1)
-``run.speed``      ``run``, ``speed``: the run took a new speed (below) and goes on at it
-``signal``         ``node``, ``t``, ``v`` (number, text or vector), ``components?``, ``port?`` (a Scope's input). A monitor's sample
-``node.state``     ``node``, ``state``: ``queued``, ``running``, ``done``, ``cached``, ``failed``
-``node.progress``  ``node``, ``fraction`` (0–1). A block's long step, at most ~20 a second
-``metric``         ``node``, ``series``, ``x``, ``y``, ``unit?``. ``Context::metric``
-``monitor.state``  ``node``, ``state``: ``ok``, ``warn``, ``trip``; ``t``, ``v?``, ``port?``. On a change
-``frame``          ``node``, ``t``, ``view?``, ``shapes?``, ``field?``. ``Context::frame``
-``log``            ``level``, ``text``, ``node?``
-``run.finished``   ``run``, ``status``: ``done``, ``failed``, ``cancelled``
-=================  =====================================================================
+======================  =====================================================================
+``hello``               ``protocol``, ``engine``, ``version`` (the Paperboat build), ``station: {view, page?}``, ``flows?``. On connect
+``catalog``             ``blocks``, ``objects?``, ``analyses?``. On connect
+``scene``               ``entities``, ``view?``. On connect, after a station edit, after a run-once
+``graph.load``          ``graph``: the starter. On connect
+``station.load``        ``station``: the starter station. On connect, if there is one
+``scene.patch``         ``entities`` (changed fields). During a run
+``run.started``         ``run``
+``run.progress``        ``run``, ``fraction`` (0–1)
+``run.speed``           ``run``, ``speed``: the run took a new speed (below) and goes on at it
+``signal``              ``node``, ``t``, ``v`` (number, text or vector), ``components?``, ``port?`` (a Scope's input). A monitor's sample
+``node.state``          ``node``, ``state``: ``queued``, ``running``, ``done``, ``cached``, ``failed``
+``node.progress``       ``node``, ``fraction`` (0–1). A block's long step, at most ~20 a second
+``metric``              ``node``, ``series``, ``x``, ``y``, ``unit?``. ``Context::metric``
+``monitor.state``       ``node``, ``state``: ``ok``, ``warn``, ``trip``; ``t``, ``v?``, ``port?``. On a change
+``frame``               ``node``, ``t``, ``view?``, ``shapes?``, ``field?``. ``Context::frame``
+``log``                 ``level``, ``text``, ``node?``
+``run.finished``        ``run``, ``status``: ``done``, ``failed``, ``cancelled``
+``analysis.result``     ``id``, ``analysis``, ``result?`` or ``error?``: the answer to ``analysis.request``
+======================  =====================================================================
 
 UI → Backend
 ------------
 
-=================  =====================================================================
-``graph.run``      ``graph`` (``nodes``, ``edges``, ``groups?``), ``station?``, ``settings?``
-                   (``duration``, ``dt``, ``speed``, ``solver``, ``solver_options``: over
-                   ``hello.run``'s; the solver is what ``auto`` solvers use)
-``station.set``    ``station``: an edit on the Station page; answered with ``scene``
-``run.cancel``     —
-``run.speed``      ``speed`` (times real time, 0 as fast as it can): during a run, its new speed.
-                   The run goes on from where it is; ignored between runs, refused (a ``log``
-                   error) out of range
-``input``          ``key`` (a ``KeyboardEvent.code``), ``down``
-=================  =====================================================================
+======================  =====================================================================
+``graph.run``           ``graph`` (``nodes``, ``edges``, ``groups?``), ``station?``, ``settings?``
+                        (``duration``, ``dt``, ``speed``, ``solver``, ``solver_options``: over
+                        ``hello.run``'s; the solver is what ``auto`` solvers use)
+``station.set``         ``station``: an edit on the Station page; answered with ``scene``
+``run.cancel``          —
+``run.speed``           ``speed`` (times real time, 0 as fast as it can): during a run, its new speed.
+                        The run goes on from where it is; ignored between runs, refused (a ``log``
+                        error) out of range
+``input``               ``key`` (a ``KeyboardEvent.code``), ``down``
+``analysis.request``    ``id``, ``analysis``, ``graph`` (the part), ``inputs``, ``outputs``, ``options?``, ``variables?``:
+                        a toolkit's analysis of a subsystem or selection, outside any run
+======================  =====================================================================
 
 Over HTTP, on the same port, a backend with a web station serves its page's folder and
 ``/paperboat/station.js`` (:doc:`station`).

@@ -241,6 +241,27 @@ app names the package::
      host.registerInstrument("image", ImageInstrument, { size: "large", order: 1 });
    }
 
+**Analyses** (pb#370). Some results describe a part of the graph, not a signal at time t: a
+control loop's poles and margins, say. A package offers one in two halves, and the app owns the
+entry point (**Analyse** in the selection dialog, **analyse** on a subsystem's head) and the
+drawer. The engine half registers a ``toolkit::AnalysisTemplate`` (``analysis.hpp``):
+``name`` (``"<package>/<analysis>"``), ``def`` (``label``, ``description``) and
+``run(const AnalysisRequest&) → json``. The request holds the part's signal blocks made as a run
+makes them (variables resolved), the wires between them, its ``inputs`` (u: inputs nothing in the
+part feeds) and ``outputs`` (y: outputs read outside it, by a monitor, or not at all), the panel's
+``options`` and the run step ``dt``; throw to report what is wrong. The catalog lists the analyses
+of the packages a descriptor imports. The web half registers the panel that draws the result:
+``host.registerAnalysis(name, Panel)``; ``Panel`` gets ``analysis``, ``target``, ``result``,
+``error``, ``busy``, ``options`` and ``setOptions``, and the drawer asks again whenever the part,
+its params, the variables or the options change. An analysis is offered only when both halves are
+there, so the entry points appear only with a toolkit that provides one. A block can help a linear
+analysis with ``Block::linearize(in)``, its ``LinearModel`` (A, B, C, D) at an operating point::
+
+   registry.add(toolkit::AnalysisTemplate{
+       .name = "control/linear",
+       .def = {.label = "Linear analysis", .description = "Poles, zeros, Bode, margins, step"},
+       .run = [](const toolkit::AnalysisRequest& req) { return analyse_linear(req); }});
+
 ``web/`` also holds the package's components, CSS, tests (``*.test.ts``, run by the web app's
 ``npm test``) and a ``package.json`` naming its own npm dependencies (the folder is an npm
 workspace; the dashboard's names ``uplot``). The entries are bundled at build time: after installing

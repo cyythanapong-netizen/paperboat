@@ -58,6 +58,8 @@ type Props = {
   fitPadding?: { top?: `${number}px`; right?: `${number}px`; bottom?: `${number}px`; left?: `${number}px` };
   /** Upload a record's samples into the replay (#284): what each monitor input carried at the playhead. */
   probes?: ReadonlyMap<string, string> | null;
+  /** Analyse these blocks and groups (pb#370), named so; absent: no toolkit offers an analysis. */
+  onAnalyse?: (ids: string[], label: string) => void;
 };
 
 /**
@@ -96,7 +98,7 @@ export type FlowControls = {
 const NO_CONNECTORS: Connectors = {};
 
 /** Blocks by palette group, groups in catalog order. */
-export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls, sheetFlow, mixed, fitPadding, probes = null }: Props) {
+export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, minimap, level: wanted, setLevel, locked, controls, sheetFlow, mixed, fitPadding, probes = null, onAnalyse }: Props) {
   const states = useContext(RunStates);
   // ---- Levels (#68): a subsystem or story opens on the canvas; the way back is the breadcrumb ----
   const { level, go, path } = useFlowLevels(wanted, setLevel, nodes, edges, setNodes, setEdges);
@@ -300,7 +302,14 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
   const commentedOut = useMemo(() => commentedOutIds(nodes), [nodes]);
 
   return (
-    <GroupActions.Provider value={{ ...actions, enter: go, stateOf }}>
+    <GroupActions.Provider
+      value={{
+        ...actions,
+        enter: go,
+        stateOf,
+        ...(onAnalyse ? { analyse: (id: string) => onAnalyse([id], (nodes.find((n) => n.id === id) as GroupNode | undefined)?.data.label ?? id) } : {}),
+      }}
+    >
     <HotWire.Provider value={hint?.plan.kind === "insert" ? hint.plan.wire.id : null}>
     <ProbeValues.Provider value={probes}>
     <Lit.Provider value={lit}>
@@ -393,6 +402,14 @@ export function FlowEditor({ blocks, connectors = NO_CONNECTORS, nodes, edges, s
             update={actions.update}
             levelGroup={levelGroup}
             pickedBlock={pickedBlock}
+            {...(onAnalyse
+              ? {
+                  analyse: () => {
+                    const picked = [...pickedBlocks.map((n) => n.id), ...pickedFrames.map((n) => n.id)];
+                    onAnalyse(picked, picked.length === 1 ? picked[0] : `${picked.length} picked`);
+                  },
+                }
+              : {})}
           />
         </ReactFlow>
         </WireDragContext.Provider>

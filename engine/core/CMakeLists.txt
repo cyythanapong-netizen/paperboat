@@ -21,6 +21,7 @@ add_library(paperboat_core ${PAPERBOAT_LIB_TYPE}
   src/run.cpp
   src/executors.cpp
   src/session.cpp
+  src/analysis.cpp
   src/serve.cpp
   src/record.cpp
   src/main.cpp

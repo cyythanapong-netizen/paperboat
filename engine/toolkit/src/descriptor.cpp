@@ -665,7 +665,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
   std::vector<std::string> imports;
   if (!catalog.domain.empty() &&
       (!registry.package(catalog.domain).empty() || !registry.objects(catalog.domain).empty() ||
-       !registry.connectors(catalog.domain).empty()))
+       !registry.connectors(catalog.domain).empty() || !registry.analyses(catalog.domain).empty()))
     imports.push_back(catalog.domain);
 
   auto add_import_name = [&](const std::string& name) {
@@ -700,7 +700,8 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
     const auto templates = registry.package(package);
     const auto station = registry.objects(package);
     const auto conns = registry.connectors(package);
-    if (templates.empty() && station.empty() && conns.empty()) {
+    const auto analyses = registry.analyses(package);
+    if (templates.empty() && station.empty() && conns.empty() && analyses.empty()) {
       if (std::ranges::find(options.optional_imports, package) != options.optional_imports.end()) {
         catalog.missing_imports.push_back(package);
         continue;
@@ -722,6 +723,7 @@ Catalog load_descriptor(std::string_view toml_text, const Registry& registry, co
       if (!catalog.connectors.is_object()) catalog.connectors = nlohmann::json::object();
       catalog.connectors[c->name] = c->def;
     }
+    for (const AnalysisTemplate* a : analyses) catalog.analyses.push_back(a);
   }
   if (doc.contains("connectors")) {
     const json& ctable = doc.at("connectors");
@@ -946,6 +948,15 @@ std::string catalog_message(const Catalog& catalog, int indent) {
   if (catalog.connectors.is_object() && !catalog.connectors.empty())
     msg["connectors"] = json::parse(catalog.connectors.dump());
   if (!catalog.dashboard.empty()) msg["dashboard"] = json::parse(catalog.dashboard);
+  if (!catalog.analyses.empty()) {
+    json analyses = json::array();
+    for (const AnalysisTemplate* a : catalog.analyses) {
+      json item = {{"name", a->name}, {"label", a->def.label}, {"group", a->name.substr(0, a->name.find('/'))}};
+      if (!a->def.description.empty()) item["description"] = a->def.description;
+      analyses.push_back(std::move(item));
+    }
+    msg["analyses"] = std::move(analyses);
+  }
   if (!catalog.objects.empty()) {
     json objects = json::array();
     for (const auto& o : catalog.objects) {
