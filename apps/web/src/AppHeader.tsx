@@ -74,6 +74,8 @@ export function AppHeader({ state, running, commands, solver, projectTitle, dirt
         toolkits={state.toolkits}
         connected={state.connection === "open"}
         requested={requestedToolkits}
+        version={state.version}
+        backend={state.engine}
         onInstall={installToolkit}
         onUninstall={uninstallToolkit}
         onRestart={restartBackend}

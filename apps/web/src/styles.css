@@ -2,6 +2,7 @@
    rules in apps/web/DESIGN.md. Only tokens here, no raw colours. */
 @import "./tokens.css";
 @import "@paperboat/shared/plates.css";
+@import "@paperboat/shared/packages.css";
 
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; }
@@ -920,16 +921,11 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
 
 /* ---- Optional toolkits (#118): bar key, popover, and inline spinner ---------------- */
 .toolkits-wrap { position: relative; display: inline-flex; }
-.toolkits-pop { width: min(440px, calc(100vw - 32px)); padding: var(--space-2) 0; }
+.toolkits-pop { width: min(400px, calc(100vw - 32px)); max-height: min(640px, calc(100vh - 96px)); display: flex; padding: 0; }
 .toolkit-item { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3); border-top: 1px solid var(--line); }
 .toolkit-item:first-of-type { border-top: 0; }
 .toolkit-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
-.toolkit-status { display: inline-flex; align-items: center; gap: 6px; font: var(--size-2xs) var(--font-mono); color: var(--text-muted); }
-.toolkit-status.on { color: var(--text); font-weight: 500; }
-.toolkit-status.req { color: var(--signal-text); font-weight: 500; }
 .toolkit-desc { margin: 0; font-size: var(--size-2xs); color: var(--text-muted); line-height: 1.4; }
-.toolkit-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); margin-top: var(--space-1); }
-.toolkit-version-select { height: 24px; padding: 0 6px; font: 400 var(--size-2xs) var(--font-mono); color: var(--text); background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); }
 .toolkit-repo { font: var(--size-2xs) var(--font-sans); color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; }
 .toolkit-repo:hover { color: var(--text); }
 .toolkits-foot { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); padding-top: var(--space-2); }
@@ -992,7 +988,7 @@ button.link { border: 0; background: none; height: auto; padding: 0; font: inher
    rule that sets a background or padding, so this one comes after them and wins. */
 select,
 .screen select, .well select, .run-options select, .param select, .popover .param select,
-.var-row select.var-value, .var-control select.var-value, .toolkit-version-select, .scope-row select.well {
+.var-row select.var-value, .var-control select.var-value, .scope-row select.well {
   -webkit-appearance: none;
   appearance: none;
   padding-right: 22px;
