@@ -59,6 +59,11 @@ struct Backend {
   std::string initial_project_name = "";
 };
 
+// analysis.request (pb#370): the part of the graph it names, made as a run makes it, given to
+// the catalog's analysis of that name. Returns the analysis.result message: its result, or the
+// error that stopped it. `station` and `variables`: the session's, unless the request has its own.
+json analyse(const json& request, const Backend& backend, const json& station, const json& variables);
+
 using Emit = std::function<void(const json& message)>;
 using KeysNow = std::function<toolkit::KeySet()>;  // keys held down in the UI right now
 // The variables list the UI last sent, if it sent one since the last call (#75); read between steps.

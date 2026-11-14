@@ -1250,6 +1250,13 @@
         },
         "dashboard": {
           "$ref": "#/$defs/DashboardLayout"
+        },
+        "analyses": {
+          "type": "array",
+          "description": "What the imported toolkits can analyse outside the flows (pb#370): offered on a subsystem or a selection.",
+          "items": {
+            "$ref": "#/$defs/AnalysisDef"
+          }
         }
       },
       "required": [
@@ -1828,7 +1835,8 @@
             "monitor.state",
             "frame",
             "log",
-            "toolkits.status"
+            "toolkits.status",
+            "analysis.result"
           ]
         }
       },
@@ -2108,6 +2116,18 @@
           "then": {
             "$ref": "#/$defs/toolkits.status"
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "analysis.result"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/analysis.result"
+          }
         }
       ],
       "description": "Every message a backend sends."
@@ -2131,7 +2151,8 @@
             "toolkit.install",
             "toolkit.versions",
             "toolkit.update",
-            "toolkit.uninstall"
+            "toolkit.uninstall",
+            "analysis.request"
           ]
         }
       },
@@ -2266,6 +2287,18 @@
           },
           "then": {
             "$ref": "#/$defs/toolkit.uninstall"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "analysis.request"
+              }
+            }
+          },
+          "then": {
+            "$ref": "#/$defs/analysis.request"
           }
         }
       ],
@@ -3451,6 +3484,119 @@
         "type",
         "source",
         "variables"
+      ],
+      "additionalProperties": false
+    },
+    "AnalysisDef": {
+      "type": "object",
+      "description": "An analysis a toolkit offers (pb#370): something it computes about a part of the graph on request, outside any run.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "\"<package>/<analysis>\", e.g. \"control/linear\"."
+        },
+        "label": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "group": {
+          "type": "string",
+          "description": "The package (toolkit) that provides it."
+        }
+      },
+      "required": [
+        "name",
+        "label"
+      ],
+      "additionalProperties": false
+    },
+    "analysis.request": {
+      "type": "object",
+      "description": "Analyse a part of the graph (pb#370): `graph` holds its blocks and the wires between them; the backend answers with analysis.result.",
+      "properties": {
+        "type": {
+          "const": "analysis.request"
+        },
+        "id": {
+          "type": "string",
+          "description": "The caller's id, echoed in the result: a newer request makes an older answer stale."
+        },
+        "analysis": {
+          "type": "string",
+          "description": "An AnalysisDef's name, e.g. \"control/linear\"."
+        },
+        "graph": {
+          "$ref": "#/$defs/Graph"
+        },
+        "inputs": {
+          "type": "array",
+          "description": "Its inputs fed from outside it (u), as [node, port].",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "description": "Its outputs read outside it (y), as [node, port].",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "options": {
+          "type": "object",
+          "description": "The analysis's own settings, from its panel."
+        },
+        "variables": {
+          "$ref": "#/$defs/Variables",
+          "description": "The variables its params use; absent: the last ones set."
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "analysis",
+        "graph",
+        "inputs",
+        "outputs"
+      ],
+      "additionalProperties": false
+    },
+    "analysis.result": {
+      "type": "object",
+      "description": "The answer to analysis.request: the analysis's own result, or why there is none.",
+      "properties": {
+        "type": {
+          "const": "analysis.result"
+        },
+        "id": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "result": {
+          "description": "The analysis's own shape, read by its toolkit's panel."
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "id",
+        "analysis"
       ],
       "additionalProperties": false
     }

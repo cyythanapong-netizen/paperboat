@@ -70,6 +70,8 @@ export const GroupActions = createContext<{
   enter: (id: string) => void;
   /** What is happening inside a group: its most urgent block's state. */
   stateOf: (id: string) => "failed" | "running" | undefined;
+  /** Analyse a subsystem (pb#370); absent when no toolkit offers an analysis. */
+  analyse?: (id: string) => void;
 }>({ update: () => {}, ungroup: () => {}, enter: () => {}, stateOf: () => undefined });
 
 const HEAD = 34;
@@ -125,7 +127,7 @@ function Frame({ id, data, selected }: NodeProps<GroupNode>) {
 
 /** A subsystem or story from outside: one block, its ports movable like a block's. */
 function Subsystem({ id, data, selected }: NodeProps<GroupNode>) {
-  const { update, ungroup, enter, stateOf } = useContext(GroupActions);
+  const { update, ungroup, enter, stateOf, analyse } = useContext(GroupActions);
   const story = data.kind === "story";
   const inputs = [...(story ? STORY_DEF.inputs : []), ...(data.ports?.inputs ?? [])];
   const outputs = [...(story ? STORY_DEF.outputs : []), ...(data.ports?.outputs ?? [])];
@@ -156,6 +158,11 @@ function Subsystem({ id, data, selected }: NodeProps<GroupNode>) {
         <button className="fold nodrag" title="Open: show what is inside (double-click)" onClick={() => enter(id)}>
           open
         </button>
+        {analyse && !story && (
+          <button className="fold nodrag" title="Analyse it outside the flow: its In ports are the inputs, its Out ports the outputs" onClick={() => analyse(id)}>
+            analyse
+          </button>
+        )}
         <button className="remove nodrag" title="Ungroup: put its blocks back here" onClick={() => ungroup(id)}>
           ⊟
         </button>

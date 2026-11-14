@@ -195,6 +195,10 @@ Grouping and Subsystems
 - **Subsystems**: Collapse a group into a single compact block with clean external ports.
   Double-click a subsystem block to navigate into its internal sheet. Use the breadcrumb bar
   at the top or press :kbd:`Escape` (or :kbd:`Alt` + :kbd:`↑`) to pop back up.
+- **Analyses**: when an installed toolkit offers one (the control toolkit's linear analysis, say),
+  a subsystem's head has an **analyse** key and the selection dialog an **Analyse** key. The
+  Analysis drawer opens beside the page with the toolkit's results for that part of the flow:
+  its inputs are the wires coming in, its outputs the wires going out. It follows your edits.
 
 Commenting and Annotating Blocks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

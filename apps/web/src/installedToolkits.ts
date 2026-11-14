@@ -5,7 +5,7 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import * as JsxRuntime from "react/jsx-runtime";
-import { registerInstrument } from "./instruments";
+import { toolkitWebHost, type ToolkitWebHost } from "./instruments";
 import { linkShared } from "./linkShared";
 
 type Listed = { name: string; js: string; css?: string };
@@ -47,8 +47,8 @@ export async function loadInstalledToolkits(): Promise<void> {
       }
       const source = await (await fetch(t.js)).text();
       const url = URL.createObjectURL(new Blob([linkShared(source, urls)], { type: "text/javascript" }));
-      const mod = (await import(/* @vite-ignore */ url)) as { register?: (host: { registerInstrument: typeof registerInstrument }) => void };
-      if (typeof mod.register === "function") mod.register({ registerInstrument });
+      const mod = (await import(/* @vite-ignore */ url)) as { register?: (host: ToolkitWebHost) => void };
+      if (typeof mod.register === "function") mod.register(toolkitWebHost);
     } catch (error) {
       console.warn(`toolkit ${t.name}: its web part did not load`, error);
     }

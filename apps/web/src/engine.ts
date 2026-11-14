@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { TraceStore } from "./traces.ts";
 import { ReplayStore, type ReplayRecord, type ReplayState } from "./replay.ts";
-import type { BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, FlowType, Graph, MonitorState, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
+import type { AnalysisDef, BlockDef, ClientMsg, Connectors, DashboardLayout, Entity, FlowType, Graph, MonitorState, ObjectDef, RunSettings, RunStatus, ServerMsg, Station, StationView, ToolkitStatus, Variables, VectorComponent, View } from "./protocol";
 
 /** The run the backend is on, or last ran. */
 export type RunState = {
@@ -35,6 +35,8 @@ export type EngineState = {
   objects: ObjectDef[];
   /** The backend's default Dashboard layout (from catalog), if it shipped one. */
   dashboard?: DashboardLayout;
+  /** What the imported toolkits can analyse outside the flows (catalog, pb#370). */
+  analyses: AnalysisDef[];
   entities: Record<string, Entity>;
   view: View;
   /** Last graph the backend asked the UI to load. */
@@ -90,6 +92,7 @@ export const initial: EngineState = {
   blocks: [],
   connectors: {},
   objects: [],
+  analyses: [],
   entities: {},
   view: { mode: "3d" },
   loaded: null,
@@ -212,7 +215,7 @@ export function reduce(s: EngineState, m: Action): EngineState {
     case "toolkits.status":
       return { ...s, toolkits: m.toolkits };
     case "catalog":
-      return { ...s, blocks: m.blocks, connectors: m.connectors ?? {}, objects: m.objects ?? [], dashboard: m.dashboard };
+      return { ...s, blocks: m.blocks, connectors: m.connectors ?? {}, objects: m.objects ?? [], dashboard: m.dashboard, analyses: m.analyses ?? [] };
     case "scene":
       return { ...s, entities: Object.fromEntries(m.entities.map((e) => [e.id, e])), view: m.view ?? s.view };
     case "graph.load":

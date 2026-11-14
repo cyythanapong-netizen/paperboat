@@ -428,6 +428,18 @@ struct Context {
   }
 };
 
+// A block's linear model at an operating point (pb#370), for analyses outside the flows:
+// x' = A x + B u, y = C x + D u (x[k+1] = A x + B u when `discrete`). `inputs` and `outputs`
+// are its scalar signal ports, in the order of B's columns and C's rows; matrices row-major.
+struct LinearModel {
+  std::vector<std::string> inputs;
+  std::vector<std::string> outputs;
+  std::size_t states = 0;
+  std::vector<double> A, B, C, D;  // n×n, n×m, p×n, p×m
+  bool discrete = false;
+  double sample_time = 0.0;  // discrete: its period, s
+};
+
 // One instance of a block in a running graph. It owns its state (an integral, the
 // previous error), so two PIDs in one graph never share anything.
 class Block {
@@ -450,6 +462,10 @@ class Block {
   // clock alone. The run then takes a param change by making it again with the new params,
   // and a run-once may reuse its outputs (unless its BlockDef::cacheable says otherwise).
   virtual bool stateless() const { return false; }
+  // Its linear model at the operating inputs `in` (pb#370: a toolkit's linear analysis reads
+  // it). The default is none: an analysis may linearize a stateless block by differences of
+  // step(), and names any other block it can't.
+  virtual std::optional<LinearModel> linearize(const Values& /*in*/) const { return std::nullopt; }
 };
 
 // One instance of a block on a Step flow's path (a block with step ports). A path is at

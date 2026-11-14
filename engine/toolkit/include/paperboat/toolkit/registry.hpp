@@ -10,6 +10,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "paperboat/toolkit/analysis.hpp"
 #include "paperboat/toolkit/block.hpp"
 #include "paperboat/toolkit/station.hpp"
 
@@ -55,6 +56,10 @@ class Registry {
   void add(Template t);  // throws std::invalid_argument on a duplicate name
   void add(StationTemplate t);
   void add_connector(std::string package, std::string name, nlohmann::json def);
+  void add(AnalysisTemplate t);  // throws std::invalid_argument on a duplicate name
+  const AnalysisTemplate* find_analysis(std::string_view name) const;
+  // The analyses of one package, in the order they were added.
+  std::vector<const AnalysisTemplate*> analyses(std::string_view package) const;
   const Template* find(std::string_view name) const;
   const StationTemplate* find_object(std::string_view name) const;
   // The station templates of one package, in the order they were added.
@@ -73,6 +78,7 @@ class Registry {
   std::vector<Template> templates_;
   std::vector<StationTemplate> objects_;
   std::vector<ConnectorEntry> connectors_;
+  std::vector<AnalysisTemplate> analyses_;
 };
 
 // Defining a block or station object in code: a domain's own, or a package's. `B` derives
