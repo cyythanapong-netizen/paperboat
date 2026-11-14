@@ -30,6 +30,7 @@ void add_text(Registry& registry) {
     return std::make_unique<TextValue>(it == config.end() ? "" : it->second);
   };
   text.def.cacheable = true;  // a pure function of its params and inputs (a run-once reuses it)
+  text.def.view = {.compact = true, .value = "{value}", .icon = nlohmann::json::parse(R"({"w":1,"h":1,"g":[{"t":"text","x":50,"y":50,"s":"“T”","size":15,"font":"mono"}]})")};  // literal text, in quotes
   registry.add(std::move(text));
 }
 

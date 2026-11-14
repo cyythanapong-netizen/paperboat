@@ -10,6 +10,7 @@ description = "A smooth wave: amplitude, frequency, phase."
 label = "Sine"
 params = { amplitude = 1, frequency = 1, phase = 0, offset = 0 }
 config = { f = "offset + amplitude * sin(2 * pi * frequency * t + phase)" }
+view = { compact = true, value = "{amplitude} · {frequency} Hz", icon = { w = 1, h = 1, g = [{ t = "line", p = [[10, 50], [90, 50]], stroke = "muted", weight = "thin" }, { t = "line", p = [[10, 50], [15, 35], [20, 20], [25, 15], [30, 10], [35, 15], [40, 20], [45, 35], [50, 50], [55, 65], [60, 80], [65, 85], [70, 90], [75, 85], [80, 80], [85, 65], [90, 50]] }] } }
 
 [[blocks]]
 use = "signal/generator"
@@ -18,6 +19,7 @@ description = "Jumps to a value at a time."
 label = "Step"
 params = { at = 1, value = 1 }
 config = { f = "t >= at ? value : 0" }
+view = { compact = true, value = "at {at} s", icon = { w = 1, h = 1, g = [{ t = "line", p = [[10, 80], [90, 80]], stroke = "muted", weight = "thin" }, { t = "line", p = [[10, 15], [10, 80]], stroke = "muted", weight = "thin" }, { t = "line", p = [[10, 75], [45, 75], [45, 25], [90, 25]] }] } }
 
 [[blocks]]
 use = "signal/generator"
@@ -26,6 +28,7 @@ description = "Rises steadily from a start."
 label = "Ramp"
 params = { start = 0, slope = 1 }
 config = { f = "slope * max(0, t - start)" }
+view = { compact = true, value = "slope {slope}", icon = { w = 1, h = 1, g = [{ t = "line", p = [[10, 80], [90, 80]], stroke = "muted", weight = "thin" }, { t = "line", p = [[10, 15], [10, 80]], stroke = "muted", weight = "thin" }, { t = "line", p = [[10, 75], [25, 75], [85, 20]] }] } }
 
 [[blocks]]
 use = "signal/generator"
@@ -38,6 +41,8 @@ config = { f = "frac(frequency * t) < 0.5 ? amplitude : -amplitude" }
 # Ease: shapes a progress (0 to 1) so it starts and/or ends gently. Feed it a step's
 # `progress` and wire it back into the step's `curve`. `shape` is an enum: in f it is its
 # index in the options (0 in-out, 1 in, 2 out, 3 linear).
+view = { compact = true, value = "{amplitude} · {frequency} Hz", icon = { w = 1, h = 1, g = [{ t = "line", p = [[10, 50], [90, 50]], stroke = "muted", weight = "thin" }, { t = "line", p = [[10, 50], [10, 25], [30, 25], [30, 75], [50, 75], [50, 25], [70, 25], [70, 75], [90, 75], [90, 50]] }] } }
+
 [[blocks]]
 use = "signal/generator"
 type = "ease"
@@ -51,9 +56,12 @@ config = { f = """
   : clamp(t, 0, 1)""" }
 
 # f(t): type the function on the block (a text param); its free names are its inputs.
+view = { compact = true, value = "{shape}", icon = { w = 1, h = 1, g = [{ t = "line", p = [[10, 80], [90, 80]], stroke = "muted", weight = "thin" }, { t = "line", p = [[10, 15], [10, 80]], stroke = "muted", weight = "thin" }, { t = "line", p = [[15, 75], [20, 75], [25, 70], [30, 70], [35, 65], [40, 60], [45, 55], [50, 50], [55, 40], [60, 35], [65, 30], [70, 25], [75, 25], [80, 20], [85, 20]] }] } }
+
 [[blocks]]
 use = "signal/generator"
 type = "function"
 description = "Any f(t) you type."
 label = "f(t)"
 params = { f = "sin(t)" }
+view = { compact = true, value = "{f}", icon = { w = 1, h = 1, g = [{ t = "text", x = 50, y = 50, s = "f(t)", size = 15, font = "mono" }] } }

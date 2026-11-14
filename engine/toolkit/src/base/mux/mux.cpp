@@ -35,6 +35,7 @@ void add_mux(Registry& registry) {
       return Values{{"y", std::move(y)}};
     });
   };
+  mux.def.view = {.compact = true, .value = "{names}", .icon = nlohmann::json::parse(R"({"w":1,"h":1,"g":[{"t":"line","p":[[10,25],[35,25],[55,50]]},{"t":"line","p":[[10,50],[55,50]]},{"t":"line","p":[[10,75],[35,75],[55,50]]},{"t":"line","p":[[55,50],[90,50]],"weight":"wire"},{"t":"line","p":[[55,40],[90,40]],"weight":"thin"}]})")};  // lines merging into one vector
   registry.add(std::move(mux));
 }
 
