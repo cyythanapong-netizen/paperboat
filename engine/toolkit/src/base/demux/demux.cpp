@@ -33,6 +33,7 @@ void add_demux(Registry& registry) {
       return out;
     });
   };
+  demux.def.view = {.compact = true, .value = "{names}", .icon = nlohmann::json::parse(R"({"w":1,"h":1,"g":[{"t":"line","p":[[10,50],[45,50]],"weight":"wire"},{"t":"line","p":[[10,40],[45,40]],"weight":"thin"},{"t":"line","p":[[45,50],[65,25],[90,25]]},{"t":"line","p":[[45,50],[90,50]]},{"t":"line","p":[[45,50],[65,75],[90,75]]}]})")};  // one vector fanning out
   registry.add(std::move(demux));
 }
 

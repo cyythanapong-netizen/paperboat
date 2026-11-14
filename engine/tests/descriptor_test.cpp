@@ -378,7 +378,7 @@ TEST_CASE("a block's view: built-in for simple maths, inherited, overridden one 
     return nlohmann::json{};
   };
   // Simple maths blocks are compact plates by default…
-  const auto base = msg("[[blocks]]\nuse = \"math/gain\"\n[[blocks]]\nuse = \"math/sum\"\n[[blocks]]\nuse = \"signal/sine\"\n");
+  const auto base = msg("[[blocks]]\nuse = \"math/gain\"\n[[blocks]]\nuse = \"math/sum\"\n[[blocks]]\nuse = \"base/comment\"\n");
   CHECK(block(base, "gain")["view"]["compact"] == true);
   CHECK(block(base, "gain")["view"]["glyph"] == "gain");
   CHECK(block(base, "gain")["view"]["value"] == "{k}");
@@ -387,7 +387,7 @@ TEST_CASE("a block's view: built-in for simple maths, inherited, overridden one 
   CHECK(block(base, "sum")["view"]["glyph"] == "plus");
   CHECK(block(base, "sum")["view"].contains("icon"));
   // …and a block with no view is the normal card: the key is absent.
-  CHECK_FALSE(block(base, "sine").contains("view"));
+  CHECK_FALSE(block(base, "comment").contains("view"));
 
   // A definition inherits its parent's view and overrides single keys of it.
   const auto child = msg("[[blocks]]\nuse = \"math/gain\"\ntype = \"half\"\ndefaults = { k = 0.5 }\nview = { glyph = \"plus\" }\n");

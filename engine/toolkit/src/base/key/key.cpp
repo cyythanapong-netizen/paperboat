@@ -24,6 +24,7 @@ void add_key(Registry& registry) {
     return std::make_unique<Key>(it == config.end() ? "Space" : it->second);
   };
   t.def.cacheable = false;  // reads the keys held in the UI: never reused from an earlier run
+  t.def.view = {.compact = true, .icon = nlohmann::json::parse(R"({"w":1,"h":1,"g":[{"t":"rect","x":5,"y":25,"w":90,"h":50,"corner":"sm"},{"t":"line","p":[[10,65],[90,65]],"weight":"thin"},{"t":"text","x":50,"y":45,"s":"{key}","size":12,"font":"mono"}]})")};  // a keycap with the key's name
   registry.add(std::move(t));
 }
 
